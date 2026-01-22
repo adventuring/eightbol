@@ -1,0 +1,24 @@
+# Backup files
+*~
+*#
+.#*
+DEADJOE
+.DS_Store
+*.orig
+*.tiled-session
+.mscbackup
+*.backup
+
+# Generated/output files
+*.fasl
+
+# IDE temp files
+.emacs.desktop
+.emacs.desktop.lock
+*slime-notes*
+.#*#
+*.mscz.autosave
+.~lock.*
+
+lib/system-index.txt
+.aider*

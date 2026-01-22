@@ -1,0 +1,1408 @@
+\input texinfo @c -*-texinfo-*-
+@c %**start of header
+@setfilename EIGHTBOL.info
+@settitle EIGHTBOL Compiler Manual
+@documentencoding UTF-8
+@documentlanguage en
+@c %**end of header
+
+@copying
+Copyright @copyright{} 2026 Interworldly Adventuring, LLC.
+
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the MIT License, which can be found at
+@url{https://opensource.org/licenses/MIT}.
+@end copying
+
+@titlepage
+@title EIGHTBOL Compiler Manual
+@subtitle An EIGHTBOL for 8-bit and 16-bit Microprocessors
+@subtitle Edition 0.1, for EIGHTBOL version 0.1
+@author Bruce-Robert Pocock
+
+@page
+@vskip 0pt plus 1filll
+@insertcopying
+@end titlepage
+
+@contents
+
+@ifnottex
+@node Top
+@top EIGHTBOL Compiler Manual
+
+This  manual documents  EIGHTBOL, a  EIGHTBOL compiler  that generates
+assembly code  for multiple  8-bit and 16-bit  microprocessors including
+the 6502, Z80, cp1610, and m68k.
+
+@insertcopying
+@end ifnottex
+
+@menu
+* Introduction::                What is EIGHTBOL?
+* Installation::                Getting EIGHTBOL up and running
+* Quick Start::                 Your first EIGHTBOL program
+* Language Reference::          EIGHTBOL features supported
+* CPU Backends::                Target processor specifics
+* Examples::                    Complete example programs
+* Troubleshooting::             Common issues and solutions
+* Index::                       Complete index
+@end menu
+
+@node Introduction
+@chapter Introduction
+
+@cindex introduction
+@cindex EIGHTBOL compiler
+@cindex 8-bit programming
+@cindex retro computing
+
+Welcome to EIGHTBOL, your friendly guide to programming classic video game
+consoles and computers! If you've ever wanted to create your own games for
+systems like the Atari 7800, Nintendo Entertainment System, or even the
+Intellivision, you're in the right place.
+
+@section What is Programming?
+
+Before we dive into EIGHTBOL, let's take a moment to understand
+what programming really is. Imagine you're giving instructions to a very
+patient but not very bright friend. You need to break down every single
+step of what you want them to do.
+
+For example, if you want your friend to make a peanut butter sandwich:
+
+@enumerate
+@item Go to the kitchen
+@item Open the bread bag
+@item Take out 2 slices of bread
+@item Put them on a plate
+@item Open the peanut butter jar
+@item Get a knife
+@item Scoop peanut butter onto one slice
+@item Spread it evenly
+@item Put the knife down
+@item Put the other slice on top
+@item Give me the sandwich
+@end enumerate
+
+Programming is  exactly like  this! You write  step-by-step instructions
+that  tell  a computer  exactly  what  to  do.  The difference  is  that
+computers are incredibly fast and never get bored or distracted.
+
+@section Meet EIGHTBOL
+
+EIGHTBOL is based on COBOL (COmmon  Business Oriented Language)  was created in 1959  to help
+businesses process  data and  generate reports. Unlike  many programming
+languages  that use  cryptic symbols,  EIGHTBOL was  designed to  read like
+English sentences.
+
+Here's what a simple EIGHTBOL instruction looks like:
+
+@example
+ADD 1 TO Counter.
+@end example
+
+See how it reads almost like a sentence? That's the beauty of EIGHTBOL!
+
+@section What is EIGHTBOL?
+
+EIGHTBOL is  an EIGHTBOL variant designed for creating  games on
+classic 8-bit  and 16-bit computers.  It takes EIGHTBOL programs  you write
+and  converts  them  into  the low-level  instructions  that  these  old
+computers understand.
+
+Think  of EIGHTBOL  as  a translator  between  human-friendly EIGHTBOL  and
+machine-friendly assembly language.
+
+@section Why Learn EIGHTBOL?
+
+Creating games  for classic systems teaches  you fundamental programming
+concepts that apply to all programming:
+
+@itemize
+@item @strong{Problem Solving}: Breaking complex problems into small steps
+@item @strong{Logic}: Making decisions and controlling program flow
+@item @strong{Data Management}: Organizing and manipulating information
+@item @strong{Performance}: Writing efficient code for limited hardware
+@end itemize
+
+Plus, you'll have the satisfaction of creating games that run on real
+vintage hardware!
+
+@section Your First Mental Model
+
+Imagine your program as a recipe book. Each recipe (procedure) contains
+step-by-step instructions. Your data is like the ingredients stored in
+the pantry (memory).
+
+When you run a program, it's like following a recipe: you get ingredients
+from storage, follow the steps, and create something new.
+
+@section What You'll Learn
+
+By the end of this manual, you'll be able to:
+
+@itemize
+@item Write complete EIGHTBOL programs
+@item Create variables to store data
+@item Use arithmetic and logic operations
+@item Control program flow with conditions and loops
+@item Organize code into reusable procedures
+@item Debug and fix common programming errors
+@item Compile programs for multiple classic game systems
+@end itemize
+
+@section Target Platforms
+
+EIGHTBOL generates assembly code for these CPU architectures:
+
+@table @asis
+@item 6502
+MOS Technology 6502 8-bit processor
+@item Z80
+Zilog Z80 8-bit processor
+@item CP1610
+General Instrument CP1610 16-bit processor
+@item M68K
+Motorola 68000 series 16-bit/32-bit processors
+@end table
+
+@section Ready to Start?
+
+Programming can seem intimidating at first, but remember: every expert
+programmer was once a beginner. We'll take it one small step at a time,
+and you'll be surprised how quickly concepts start to click.
+
+Let's begin your programming journey!
+
+@node Installation
+@chapter Installation
+
+@cindex installation
+@cindex setup
+@cindex requirements
+
+@section System Requirements
+
+EIGHTBOL requires:
+@itemize
+@item Common Lisp implementation (SBCL recommended)
+@item ASDF system definition facility
+@item Texinfo (for documentation)
+@end itemize
+
+@section Loading EIGHTBOL
+
+To use EIGHTBOL in your Lisp environment:
+
+@example
+(ql:quickload :eightbol)
+@end example
+
+Or manually:
+
+@example
+(asdf:load-system :eightbol)
+@end example
+
+@section Integration with Phantasia
+
+EIGHTBOL is automatically available when using the Skyline Tool:
+
+@example
+(ql:quickload :skyline-tool)
+@end example
+
+@section Running Tests
+
+To run the EIGHTBOL test suite:
+
+@example
+(asdf:test-system :eightbol)
+@end example
+
+Tests cover the lexer, parser, AST structure, unsupported-statement errors,
+STRING BLT with reference modification, and all CPU backends.
+
+@node Quick Start
+@chapter Quick Start
+
+@cindex quick start
+@cindex hello world
+@cindex first program
+
+Congratulations! You're about to write your first computer program. We'll
+start with something simple but complete. By the end of this chapter,
+you'll have a working program that you can compile and run.
+
+@section Understanding Program Structure
+
+Before we write code, let's understand how EIGHTBOL programs are organized.
+Think of an EIGHTBOL program like a recipe book with specific sections:
+
+@table @asis
+@item IDENTIFICATION DIVISION
+The title page - tells us what this program is
+@item ENVIRONMENT DIVISION
+The kitchen setup - tells us what tools we need
+@item DATA DIVISION
+The ingredient list - defines our data storage
+@item PROCEDURE DIVISION
+The cooking instructions - the actual program logic
+@end table
+
+@section Your First Object: Score Counter
+
+Let's create a simple object that manages a score counter. This will teach us
+about classes, methods, and data management in EIGHTBOL.
+
+Create a file called @file{ScoreCounter.cob} with this content:
+
+@example
+IDENTIFICATION DIVISION.
+CLASS-ID. ScoreCounter.
+
+OBJECT.
+    DATA DIVISION.
+        COPY WorkingStorage.
+
+    PROCEDURE DIVISION.
+
+        METHOD-ID. "Initialize".
+            PROCEDURE DIVISION.
+            MOVE 0 TO Current-Score.
+            EXIT METHOD.
+        END METHOD "Initialize".
+
+        METHOD-ID. "Increment".
+            PROCEDURE DIVISION.
+            IF Current-Score < Max-Score THEN
+                ADD 1 TO Current-Score
+            END-IF.
+            EXIT METHOD.
+        END METHOD "Increment".
+
+        METHOD-ID. "GetScore".
+            PROCEDURE DIVISION.
+            GOBACK GIVING Current-Score.
+        END METHOD "GetScore".
+
+        METHOD-ID. "IsComplete".
+            PROCEDURE DIVISION.
+            IF Current-Score >= Max-Score THEN
+                GOBACK GIVING 1
+            ELSE
+                GOBACK GIVING 0
+            END-IF.
+        END METHOD "IsComplete".
+END OBJECT.
+
+END CLASS ScoreCounter.
+@end example
+
+Let's break this down line by line:
+
+@table @code
+@item IDENTIFICATION DIVISION.
+This marks the beginning of our object's identity section
+@item CLASS-ID. ScoreCounter.
+We name our class "ScoreCounter"
+@item OBJECT.
+This defines the object structure
+@item DATA DIVISION.
+Here we define our object's data storage
+@item COPY WorkingStorage.
+Includes system-provided data definitions
+@item METHOD-ID. "Initialize".
+A method to set up the object
+@item MOVE 0 TO Current-Score.
+Reset the score to 0
+@item METHOD-ID. "Increment".
+A method to increase the score
+@item IF Current-Score < Max-Score THEN
+Only increment if we haven't reached the maximum
+@item METHOD-ID. "GetScore".
+A method to retrieve the current score
+@item GOBACK GIVING Current-Score.
+Return the current score value
+@end table
+
+@section Compiling Your Program
+
+Now let's turn this EIGHTBOL program into assembly code that a computer can
+understand.
+
+In your Lisp environment, load EIGHTBOL and compile:
+
+@example
+;; Load EIGHTBOL
+(asdf:load-system :eightbol)
+
+;; Compile for the 6502 processor (Atari 7800/NES)
+;; Include copybook directories for COPY statements
+(eightbol:compile-file "counter.cob" :cpu 6502
+                       :include '("Source/Generated" "Source/Classes"))
+@end example
+
+This creates a file called @file{counter.s} containing 6502 assembly code.
+
+@section Running Your Program
+
+The assembly code needs to be assembled into machine code and run on
+the target platform. This usually involves:
+
+@enumerate
+@item Using an assembler (like 64tass for 6502)
+@item Linking with system libraries
+@item Running on an emulator or real hardware
+@end enumerate
+
+For learning purposes, you can examine the generated assembly code to
+see how your EIGHTBOL translates to machine instructions.
+
+@section Try This!
+
+Modify the counter program to count down from 10 to 1 instead of up.
+Hint: Use SUBTRACT instead of ADD, and change the UNTIL condition.
+
+@section What You Learned
+
+In this chapter, you learned:
+
+@itemize
+@item How EIGHTBOL programs are structured into divisions
+@item How to declare variables with PIC clauses
+@item How to use PERFORM for looping
+@item How to display output
+@item How to compile EIGHTBOL to assembly
+@end itemize
+
+Great job on your first program! In the next chapter, we'll dive deeper
+into variables and data types.
+
+@node Language Reference
+@chapter Language Reference
+
+@cindex language reference
+@cindex syntax
+@cindex EIGHTBOL features
+
+Now that you understand the basics, let's explore EIGHTBOL's features in detail.
+We'll build your understanding step by step, with examples you can try.
+
+@section The Recipe Book: Program Structure
+
+Imagine an EIGHTBOL program as a cookbook. Just like a cookbook has sections
+for ingredients and instructions, an EIGHTBOL program has divisions that
+organize different types of information.
+
+@example
+IDENTIFICATION DIVISION.      @c What is this object?
+CLASS-ID. Player.
+
+OBJECT.
+    DATA DIVISION.            @c What data do we need?
+        COPY PlayerData.
+
+    PROCEDURE DIVISION.       @c What methods do we have?
+
+        METHOD-ID. "AddPoints".
+            PROCEDURE DIVISION USING Points-To-Add.
+            ADD Points-To-Add TO Player-Score.
+            EXIT METHOD.
+        END METHOD "AddPoints".
+
+        METHOD-ID. "GetScore".
+            PROCEDURE DIVISION.
+            GOBACK GIVING Player-Score.
+        END METHOD "GetScore".
+END OBJECT.
+
+END CLASS Player.
+@end example
+
+Each division has a specific purpose:
+
+@table @asis
+@item IDENTIFICATION DIVISION
+Like the title page - tells us what this class is
+@item CLASS-ID
+Names our class (like a blueprint for objects)
+@item OBJECT
+Defines the object structure and behavior
+@item DATA DIVISION
+Like the ingredient list - defines our object's data storage
+@item PROCEDURE DIVISION
+Like the methods - defines our object's behavior
+@end itemize
+
+@section Naming Your Class
+
+Every EIGHTBOL class needs an identity. This is like giving your blueprint
+a name and author.
+
+@example
+IDENTIFICATION DIVISION.
+CLASS-ID. Space-Invaders-Clone.
+AUTHOR. Your Name Here.
+DATE-WRITTEN. 2026.
+@end example
+
+The @code{CLASS-ID} is required and must be unique. Think of it as
+your class's name.
+
+EIGHTBOL supports object-oriented programming with:
+
+@table @code
+@item CLASS-ID. name.
+Defines a class (like a blueprint for objects)
+@item METHOD-ID. name.
+Defines a method within a class
+@item OBJECT.
+Contains the data and methods for the class
+@end table
+
+@example
+IDENTIFICATION DIVISION.
+CLASS-ID. Player-Character.
+AUTHOR. Game Developer.
+DATE-WRITTEN. 2024.
+@end example
+
+@section Storing Information: Variables
+
+Variables are like containers that hold data. In EIGHTBOL, we declare
+variables in the DATA DIVISION, just like listing ingredients before
+cooking.
+
+@subsection Understanding PIC Clauses
+
+PIC (Picture) clauses describe what kind of data a variable can hold.
+Think of them as labels on storage containers.
+
+@example
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01 Player-Name PIC X(20).        @c Up to 20 letters
+01 Player-Score PIC 9(5).        @c 5-digit number (0-99999)
+01 Game-Over-Flag PIC X.         @c Single character: 'Y' or 'N'
+01 Bonus-Multiplier PIC 9V9.     @c Decimal number: 1.5, 2.0, etc.
+@end example
+
+@table @code
+@item PIC X
+Single character (letter or symbol)
+@item PIC X(n)
+String of n characters
+@item PIC 9
+Single digit (0-9)
+@item PIC 9(n)
+n-digit number
+@item PIC 9V9
+Decimal number (like 1.5)
+@end table
+
+@strong{Important:} EIGHTBOL doesn't support string variables (PIC X).
+Use byte arrays or numeric variables instead.
+
+@subsection Try This: Variable Declaration
+
+Create variables for a simple game character:
+
+@example
+DATA DIVISION.
+COPY CharacterData.
+@end example
+
+What happens if you try to store "SuperLongCharacterName" in Character-Name?
+
+@subsection Arrays: Storing Lists
+
+Sometimes you need to store collections of data, like high scores or
+inventory items.
+
+@example
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01 High-Scores PIC 9(5) OCCURS 10 TIMES.
+01 Inventory PIC X(20) OCCURS 50 TIMES.
+
+PROCEDURE DIVISION.
+Store-High-Score.
+    MOVE Player-Score TO High-Scores(1).
+    GOBACK.
+@end example
+
+Access array elements with parentheses: @code{Array-Name(index)}
+
+@strong{Note:} EIGHTBOL arrays are 1-based (start at 1, not 0 like some languages).
+
+@section Making Your Program Do Things: Procedures
+
+The PROCEDURE DIVISION is where the action happens - this is your
+program's recipe steps. Here you write the instructions that tell
+the computer what to do.
+
+@subsection Basic Statements
+
+EIGHTBOL statements read like English sentences. Here are the most common:
+
+@table @code
+@item MOVE source TO destination
+Copy data from one place to another
+@item ADD amount TO variable
+Add numbers together
+@item SUBTRACT amount FROM variable
+Subtract numbers
+@item COMPUTE result = expression
+Perform calculations
+@item STRING source DELIMITED BY SIZE INTO dest
+Block transfer (BLT): copy bytes from source to dest. Supports reference
+modification: @code{name(start:length)} for partial buffer copy.
+@end table
+
+@example
+    METHOD-ID. "Copy".
+        PROCEDURE DIVISION.
+        STRING SrcBuf(1:64) DELIMITED BY SIZE INTO DstBuf(1:64).
+        GOBACK.
+    END METHOD "Copy".
+@end example
+
+@strong{Note:} STRING with character delimiter is not supported; use
+@code{DELIMITED BY SIZE} for block transfer only.
+
+@subsection Unsupported Statements (compile-time error)
+
+The following COBOL statements are not implemented and signal a compile-time
+error: DIVIDE, MULTIPLY, UNSTRING, INSPECT (all forms), GOTO/GO TO,
+EVALUATE, and SET forms other than @code{SET identifier TO expression}.
+
+@example
+    METHOD-ID. "Initialize".
+        PROCEDURE DIVISION.
+        MOVE 100 TO Player-Health.
+        MOVE "Ready Player One" TO Game-Status.
+        EXIT METHOD.
+    END METHOD "Initialize".
+@end example
+
+@subsection Including Code: COPY Statements
+
+Sometimes you want to reuse the same data definitions across multiple
+programs. COBOL's COPY statement lets you include copybook files:
+
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. Game-Logic.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+COPY Game-Constants.     @c Include constants
+COPY Player-Data.        @c Include player definitions
+
+PROCEDURE DIVISION.
+    MOVE Max-Health TO Player-Health
+    GOBACK.
+@end example
+
+Copybooks use the WORKING-STORAGE SECTION with EXTERNAL data items
+and USAGE BINARY for proper byte alignment:
+
+@example
+WORKING-STORAGE SECTION.
+01  WS-SHARED-DATA EXTERNAL.
+    05  Decal-XH USAGE BINARY 1.
+    05  Player-Score USAGE BINARY 2.
+@end example
+
+Copybooks are searched for in the directories specified by the
+@code{:include} parameter when compiling:
+
+@example
+(eightbol:compile-file "game-logic.cob"
+                       :include '("Source/Generated" "Source/Classes"))
+@end example
+
+@subsection Organizing Code: Procedures
+
+Procedures are like sub-recipes. Break complex tasks into smaller,
+manageable pieces.
+
+@example
+PROCEDURE DIVISION.
+
+Main-Game-Loop.
+    PERFORM Handle-Input
+    PERFORM Update-Game-State
+    PERFORM Render-Screen
+    PERFORM Check-Game-Over
+    GOBACK.
+
+Handle-Input.
+    IF Button-A-Pressed THEN
+        PERFORM Player-Jump
+    END-IF
+    GOBACK.
+
+Player-Jump.
+    ADD Jump-Power TO Player-Velocity-Y
+    GOBACK.
+@end example
+
+Each procedure ends with GOBACK, which returns to the caller.
+
+@subsection Making Decisions: IF Statements
+
+Programs need to make choices based on conditions.
+
+@example
+IF Health-Points < 20 THEN
+    MOVE 1 TO Low-Health-Flag
+END-IF.
+@end example
+
+EIGHTBOL's IF statements read like English. You can include ELSE for alternatives:
+
+@example
+IF Enemy-Strength > Player-Level THEN
+    PERFORM Run-Away
+ELSE
+    PERFORM Attack-Enemy
+END-IF.
+@end example
+
+@subsection Repeating Actions: Loops
+
+Games often repeat actions, like updating all enemies.
+
+@table @code
+@item PERFORM procedure
+Call a procedure once
+@item PERFORM procedure UNTIL condition
+Repeat until condition is true
+@item PERFORM procedure VARYING var FROM start BY step UNTIL end
+Count through a range
+@end table
+
+@example
+PERFORM Update-All-Enemies.
+
+PERFORM Process-Game-Turn UNTIL Game-Over = 1.
+
+PERFORM Check-Enemy VARYING I FROM 1 BY 1 UNTIL I > Enemy-Count.
+@end example
+
+@subsection Multiple Choices: EVALUATE
+
+When you have many options, EVALUATE is cleaner than nested IFs:
+
+@example
+EVALUATE Player-Choice
+    WHEN 1
+        PERFORM Start-New-Game
+    WHEN 2
+        PERFORM Load-Saved-Game
+    WHEN 3
+        PERFORM Show-Options
+    WHEN OTHER
+        MOVE 1 TO Invalid-Choice-Flag
+END-EVALUATE.
+@end example
+
+@subsection Game Programming Extensions
+
+EIGHTBOL includes special features for game development:
+
+@table @code
+@item property OF object
+Access object properties (like Player.Health)
+@item INVOKE object "method"
+Call object methods
+@item CALL subroutine IN BANK bank
+Banked memory calls
+@item LOG FAULT "code"
+Log fault condition (uses LogFault)
+@item BREAK FOR FAULT "code"
+Break execution on fault (uses DebugBreak)
+@end table
+
+@example
+INVOKE Player "TakeDamage" USING 25.
+
+IF Health OF Player < 10 THEN
+    LOG FAULT "LOWH"
+END-IF.
+
+BREAK FOR FAULT "CRIT" WHEN Health OF Player <= 0.
+@end example
+
+@section Expressions and Conditions
+
+@cindex expressions
+@cindex conditions
+@cindex operators
+
+EIGHTBOL expressions compare values and combine conditions.
+
+@subsection Comparison Operators
+
+EIGHTBOL uses words for comparisons, making them readable:
+
+@table @code
+@item A = B
+A equals B
+@item A <> B
+A is not equal to B
+@item A < B
+A is less than B
+@item A > B
+A is greater than B
+@item A <= B
+A is less than or equal to B
+@item A >= B
+A is greater than or equal to B
+@end table
+
+@example
+IF Player-Score >= High-Score THEN
+    MOVE Player-Name TO Champion-Name
+END-IF.
+@end example
+
+@subsection Logical Operators
+
+Combine conditions with AND, OR, and NOT:
+
+@table @code
+@item AND
+Both conditions must be true
+@item OR
+At least one condition must be true
+@item NOT
+Reverse the condition
+@end table
+
+@example
+IF Health > 0 AND Mana > 10 THEN
+    MOVE 1 TO Spell-Ready-Flag
+END-IF.
+
+IF NOT Game-Over THEN
+    PERFORM Continue-Game
+END-IF.
+@end example
+
+@subsection Complex Conditions
+
+You can combine multiple conditions:
+
+@example
+IF Player-Level >= 5 AND Has-Magic-Sword = 'Y' OR Is-Cheat-Mode = 1 THEN
+    PERFORM Unlock-Secret-Level
+END-IF.
+@end example
+
+@strong{Remember:} AND is evaluated before OR. Use parentheses if needed.
+
+@section Doing Math: Arithmetic
+
+EIGHTBOL provides several ways to calculate:
+
+@example
+ADD 100 TO Player-Score.
+
+SUBTRACT Damage FROM Health-Points.
+
+MULTIPLY Attack-Power BY 2 GIVING Total-Damage.
+
+COMPUTE Final-Score = Base-Score + (Bonus * Multiplier).
+@end example
+
+@subsection Arithmetic Operations
+
+@table @asis
+@item ADD source TO destination
+Add to existing value
+@item ADD source TO destination GIVING result
+Add and store in new variable
+@item SUBTRACT source FROM destination
+Subtract from existing value
+@item MULTIPLY source BY destination
+Multiply values
+@item DIVIDE source INTO destination
+Divide values
+@item COMPUTE result = expression
+Complex calculations
+@end table
+
+@subsection Try This: Score Calculation
+
+@example
+COMPUTE Final-Score = Base-Score + (Time-Bonus * 10) - Penalties.
+
+COMPUTE Average-Damage = Total-Damage / Hit-Count.
+@end example
+
+@section Built-in Functions
+
+@cindex functions
+@cindex RANDOM
+@cindex WHEN-COMPILED
+
+EIGHTBOL provides special functions for game programming:
+
+@table @code
+@item RANDOM
+Generate a random number (0-255)
+@item RANDOM(seed)
+Generate seeded random number
+@item WHEN-COMPILED
+Get compilation timestamp
+@end table
+
+@example
+COMPUTE Random-Direction = RANDOM.
+
+IF RANDOM > 128 THEN
+    PERFORM Move-Right
+ELSE
+    PERFORM Move-Left
+END-IF.
+@end example
+
+@section Common Programming Patterns
+
+Here are patterns you'll use frequently:
+
+@subsection Game Loop Pattern
+
+@example
+PROCEDURE DIVISION.
+Main-Loop.
+    PERFORM Read-Input
+    PERFORM Update-Objects
+    PERFORM Draw-Screen
+    IF NOT Game-Over THEN
+        GO TO Main-Loop
+    END-IF
+    PERFORM Show-Game-Over
+    GOBACK.
+@end example
+
+@subsection State Machine Pattern
+
+@example
+EVALUATE Game-State
+    WHEN 1  @c Title Screen
+        PERFORM Show-Title
+    WHEN 2  @c Playing
+        PERFORM Run-Game
+    WHEN 3  @c Game Over
+        PERFORM Show-Results
+END-EVALUATE.
+@end example
+
+@subsection Input Handling Pattern
+
+@example
+Check-Input.
+    IF Left-Pressed THEN
+        SUBTRACT 1 FROM Player-X
+    END-IF
+    IF Right-Pressed THEN
+        ADD 1 TO Player-X
+    END-IF
+    IF Jump-Pressed AND On-Ground THEN
+        MOVE 'Y' TO Is-Jumping
+    END-IF
+    GOBACK.
+@end example
+
+@section Best Practices
+
+As you write more EIGHTBOL, follow these guidelines:
+
+@enumerate
+@item Use descriptive variable names (Player-Health, not PH)
+@item Add comments explaining complex logic
+@item Break large procedures into smaller ones
+@item Initialize variables with VALUE clauses
+@item Test procedures individually before combining
+@item Use PERFORM instead of GO TO when possible
+@item Keep procedures under 50 lines when practical
+@end enumerate
+
+@node CPU Backends
+@chapter CPU Backends
+
+@cindex CPU backends
+@cindex target processors
+@cindex assembly generation
+@cindex ABI
+@cindex calling convention
+
+EIGHTBOL generates optimized assembly code for multiple CPU architectures.
+Each backend documents its ABI (Application Binary Interface): register usage,
+calling conventions, and procedure entry/exit. Hand-written assembly that
+calls or is called by EIGHTBOL-generated code must follow these conventions.
+
+@section 6502 Backend
+
+@cindex 6502
+@cindex MOS 6502
+
+The 6502 backend generates code for the MOS 6502 processor family (6502, 65c02,
+65c816, HuC6280, RP2A03). Output uses 64tass assembler syntax.
+
+@subsection Registers
+@table @code
+@item A
+Accumulator; holds byte results and operands
+@item X
+X index register; used for indexing
+@item Y
+Y index register; used for slot offsets (ldy #Slot, lda (Self),y)
+@end table
+
+@subsection ABI and Calling Conventions
+@table @asis
+@item Procedure call (PERFORM / CALL)
+@code{jsr} to procedure label. Caller and callee share same bank.
+@item Return
+@code{rts}. No return value in registers.
+@item INVOKE Self @code{"Method"}
+@code{jsr Invoke@var{Class}@var{Method}}
+@item INVOKE variable @code{"Method"}
+@code{.CallMethod Call@var{Type}@var{Method}, @var{Type}Class, @var{Var}}
+@item Slot access
+@code{ldy #@var{OriginClass}@var{Slot}; lda (Self),y} for slot OF Self
+@item Caller-saved
+A, X, Y may be clobbered by any call
+@end table
+
+@subsection Memory Access
+6502 uses zero-page and absolute addressing. Variables map to direct addresses.
+
+@section Z80 Backend
+
+@cindex Z80
+@cindex Zilog Z80
+
+Z80 code generation. Output: lowercase Z80 assembly (ld a,(hl), etc.)
+
+@subsection Registers
+@table @code
+@item A
+Accumulator (8-bit); byte results
+@item HL
+16-bit accumulator; word results, pointer for slot/array access
+@item BC
+Count register; loop counters, array indexing
+@item DE
+Destination pointer; block copy dest, temp for slot math
+@item B
+Temp for comparisons and bit ops
+@end table
+
+@subsection ABI and Calling Conventions
+@table @asis
+@item Procedure call
+@code{call @var{label}}. Return with @code{ret}.
+@item Return value
+Byte: in A. Word: in HL.
+@item INVOKE Self
+@code{call Invoke@var{Class}@var{Method}}
+@item INVOKE variable
+@code{call Call@var{Type}@var{Method}}
+@item Caller-saved
+A, HL, BC, DE, B may be clobbered. IX, IY not used by backend.
+@end table
+
+@section SM83 Backend (Game Boy)
+
+@cindex SM83
+@cindex Game Boy
+
+SM83 (Sharp) is the Game Boy CPU, Z80/8080-like. Output: RGBDS syntax.
+
+@subsection Registers
+Same allocation as Z80: A=accumulator, HL=ptr, BC=count, DE=dest-ptr.
+
+@subsection ABI and Calling Conventions
+@code{call} / @code{ret}. Byte return in A, word in HL. Same INVOKE
+conventions as Z80.
+
+@section CP1610 Backend (Intellivision)
+
+@cindex CP1610
+@cindex Intellivision
+
+General Instrument CP1610, 16-bit RISC. Output: as1600 assembler syntax.
+
+@subsection Registers
+@table @code
+@item R0
+Accumulator; 8-bit values use low byte
+@item R1-R4
+General purpose
+@item R5
+Return address for @code{JSR R5,addr}; @code{JR R5} returns
+@item R6
+Stack pointer
+@item R7
+Program counter
+@end table
+
+@subsection ABI and Calling Conventions
+@table @asis
+@item Procedure call
+@code{JSR R5, @var{label}}. Return address in R5; callee returns with @code{JR R5}.
+@item Return value
+In R0 (byte or word)
+@item Caller-saved
+R0-R4 may be clobbered. R5, R6 must be preserved.
+@end table
+
+@section M68K Backend (68000)
+
+@cindex M68K
+@cindex Motorola 68000
+
+Motorola 68000. Output: GAS/AT&T syntax (move.b, move.w).
+
+@subsection Registers
+@table @code
+@item D0
+Accumulator; byte/word results
+@item D1
+Temp for expressions
+@item A0
+Address temp, slot/array base
+@item A7
+Stack pointer
+@end table
+
+@subsection ABI and Calling Conventions
+@table @asis
+@item Procedure call
+@code{jsr @var{label}}. Return with @code{rts}.
+@item Return value
+Byte/word in D0
+@item Caller-saved
+D0, D1, A0 may be clobbered. A1-A6, D2-D7 callee-saved if used.
+@end table
+
+@section i286 Backend (Intel 80286)
+
+@cindex i286
+@cindex 80286
+@cindex Intel
+
+Intel 80286, 16-bit. Output: Intel syntax (.286, .model small).
+
+@subsection Registers
+@table @code
+@item AL/AX
+Accumulator; AL for byte, AX for word
+@item BL/BX
+Temp; byte or word
+@item CX
+Temp for bit ops, loop count (STRING)
+@item SI
+Index for array/subscript access
+@item DI
+Destination pointer for block copy
+@end table
+
+@subsection ABI and Calling Conventions
+@table @asis
+@item Procedure call
+@code{call @var{label}}. Return with @code{ret}.
+@item Return value
+Byte in AL, word in AX
+@item INVOKE
+@code{call Invoke@var{Class}@var{Method}} or @code{call Call@var{Type}@var{Method}}
+@item Caller-saved
+AX, BX, CX, SI, DI may be clobbered. BP, SP preserved.
+@end table
+
+@section ARM7 Backend (ARM7TDMI)
+
+@cindex ARM7
+@cindex ARM7TDMI
+
+ARM7TDMI. Output: Thumb-mode GAS assembly.
+
+@subsection Registers
+@table @code
+@item R0
+Accumulator; byte/word results
+@item R1
+Temp, dest pointer
+@item R2
+Source pointer, temp
+@item R13 (SP)
+Stack pointer
+@item R14 (LR)
+Link register; @code{bx lr} returns
+@end table
+
+@subsection ABI and Calling Conventions
+@table @asis
+@item Procedure call
+@code{bl @var{label}}. Return with @code{bx lr}.
+@item Return value
+In R0
+@item Caller-saved
+R0, R1, R2 may be clobbered. R4-R11 callee-saved.
+@end table
+
+@node Examples
+@chapter Examples
+
+@cindex examples
+@cindex sample programs
+
+Let's learn by doing! This chapter provides complete, working examples
+you can compile and run. Start with simple programs and build up to
+more complex ones.
+
+@section Your First Object: Game Manager
+
+@example
+IDENTIFICATION DIVISION.
+CLASS-ID. GameManager.
+
+OBJECT.
+    PROCEDURE DIVISION.
+
+        METHOD-ID. "ShowWelcome".
+            PROCEDURE DIVISION.
+            MOVE "Welcome to EIGHTBOL Gaming!" TO Message.
+            MOVE "Ready Player One..." TO Subtitle.
+            EXIT METHOD.
+        END METHOD "ShowWelcome".
+END OBJECT.
+
+END CLASS GameManager.
+@end example
+
+@strong{Try This:} Create a GameManager object and call its ShowWelcome method.
+
+@section Simple Calculator Object
+
+Let's create a calculator object that performs basic math:
+
+@example
+IDENTIFICATION DIVISION.
+CLASS-ID. Calculator.
+
+OBJECT.
+    DATA DIVISION.
+        COPY CalculatorData.
+
+    PROCEDURE DIVISION.
+
+        METHOD-ID. "Add".
+            PROCEDURE DIVISION.
+            ADD Number-A TO Number-B GIVING Result.
+            GOBACK GIVING Result.
+        END METHOD "Add".
+
+        METHOD-ID. "Subtract".
+            PROCEDURE DIVISION.
+            SUBTRACT Number-B FROM Number-A GIVING Result.
+            GOBACK GIVING Result.
+        END METHOD "Subtract".
+
+        METHOD-ID. "Multiply".
+            PROCEDURE DIVISION.
+            MULTIPLY Number-A BY Number-B GIVING Result.
+            GOBACK GIVING Result.
+        END METHOD "Multiply".
+END OBJECT.
+
+END CLASS Calculator.
+@end example
+
+@strong{Modify It:} Add a division method and change the numbers.
+
+@section Simple Game Character
+
+Let's create a character that can take damage:
+
+@example
+IDENTIFICATION DIVISION.
+CLASS-ID. Game-Character INHERITS Basic-Object.
+
+OBJECT.
+    DATA DIVISION.
+    COPY CharacterInstanceData.
+
+    PROCEDURE DIVISION.
+
+        METHOD-ID. "Take-Damage".
+        DATA DIVISION.
+        LINKAGE SECTION.
+        01 Damage-Amount PIC 9(3).
+        PROCEDURE DIVISION USING BY VALUE Damage-Amount.
+            SUBTRACT Damage-Amount FROM Health-Points
+            IF Health-Points < 1 THEN
+                INVOKE SELF "Die"
+            ELSE
+                MOVE 1 TO Damage-Taken-Flag
+            END-IF
+            EXIT METHOD.
+        END METHOD "Take-Damage".
+
+        METHOD-ID. "Heal".
+        DATA DIVISION.
+        LINKAGE SECTION.
+        01 Heal-Amount PIC 9(3).
+        PROCEDURE DIVISION USING BY VALUE Heal-Amount.
+            ADD Heal-Amount TO Health-Points
+            IF Health-Points > Max-Health THEN
+                MOVE Max-Health TO Health-Points
+            END-IF
+            MOVE 1 TO Healed-Flag
+            EXIT METHOD.
+        END METHOD "Heal".
+
+        METHOD-ID. "Die".
+        PROCEDURE DIVISION.
+            MOVE 1 TO Dead-Flag
+            LOG FAULT "DEAD"
+            EXIT METHOD.
+        END METHOD "Die".
+END OBJECT.
+
+END CLASS Game-Character.
+@end example
+
+@section Complete Game: Number Guessing
+
+Here's a complete, playable game:
+
+@example
+IDENTIFICATION DIVISION.
+CLASS-ID. Number-Guessing-Game.
+
+OBJECT.
+    DATA DIVISION.
+        COPY GuessingGameData.
+
+    PROCEDURE DIVISION.
+
+        METHOD-ID. "Initialize".
+            PROCEDURE DIVISION.
+            COMPUTE Secret-Number = RANDOM.
+            MOVE 0 TO Guess-Count.
+            MOVE 'N' TO Game-Over.
+            EXIT METHOD.
+        END METHOD "Initialize".
+
+        METHOD-ID. "MakeGuess".
+            PROCEDURE DIVISION USING Guess-Value.
+            MOVE Guess-Value TO Player-Guess.
+            ADD 1 TO Guess-Count.
+
+            IF Player-Guess = Secret-Number THEN
+                MOVE 3 TO Guess-Result  @c Correct!
+                MOVE 'Y' TO Game-Over
+            ELSE
+                IF Player-Guess < Secret-Number THEN
+                    MOVE 1 TO Guess-Result  @c Too low
+                ELSE
+                    MOVE 2 TO Guess-Result  @c Too high
+                END-IF
+            END-IF.
+            EXIT METHOD.
+        END METHOD "MakeGuess".
+
+        METHOD-ID. "GetResult".
+            PROCEDURE DIVISION.
+            GOBACK GIVING Guess-Result.
+        END METHOD "GetResult".
+
+        METHOD-ID. "IsGameOver".
+            PROCEDURE DIVISION.
+            IF Game-Over = 'Y' THEN
+                GOBACK GIVING 1
+            ELSE
+                GOBACK GIVING 0
+            END-IF.
+        END METHOD "IsGameOver".
+END OBJECT.
+
+END CLASS Number-Guessing-Game.
+@end example
+
+@section Tips for Writing Your Own Objects
+
+As you write more EIGHTBOL programs, here are some helpful tips:
+
+@enumerate
+@item Start simple - get one feature working at a time
+@item Test methods individually before combining them
+@item Keep methods short and focused on one task
+@item Use meaningful variable and method names
+@item Use COPY statements for data definitions
+@item Comment complex logic
+@item Use return values to communicate results
+@item Experiment with different approaches
+@end enumerate
+
+@strong{Remember:} Every expert programmer started as a beginner. The key
+is to practice regularly and learn from each program you write!
+
+@node Troubleshooting
+@chapter Troubleshooting
+
+@cindex troubleshooting
+@cindex errors
+@cindex debugging
+
+Common issues and their solutions.
+
+@section Compilation Errors
+
+@subsection Undefined Variable
+@code{MOVE 1 TO UndefinedVar} generates an error because the variable
+isn't declared in DATA DIVISION.
+
+@strong{Solution:} Declare all variables in WORKING-STORAGE SECTION.
+
+@subsection Invalid PIC Clause
+String variables (PIC X) are not supported.
+
+@strong{Solution:} Use byte arrays or numeric variables instead.
+
+@section Runtime Issues
+
+@subsection Stack Overflow
+Deep recursion can cause stack overflow on 8-bit systems.
+
+@strong{Solution:} Use iteration instead of recursion where possible.
+
+@subsection Memory Limits
+8-bit systems have limited RAM.
+
+@strong{Solution:} Minimize variable usage and optimize data structures.
+
+@section Platform-Specific Issues
+
+@subsection 6502 Zero Page
+6502 code uses zero-page addressing for efficiency.
+
+@subsection Z80 Memory Banking
+Z80 systems may require bank switching for large programs.
+
+@node Index
+@chapter Index
+
+@cindex index
+
+@printindex cp
+
+@bye
