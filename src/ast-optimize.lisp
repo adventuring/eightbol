@@ -11,9 +11,7 @@
 ;; reading any location; subscripted accesses with variable indices may alias.
 (in-package :eightbol)
 
-;;; ---------------------------------------------------------------
 ;;; Location extraction (for data-flow analysis)
-;;; ---------------------------------------------------------------
 
 (defun location-key (expr)
   "Return a comparable key for a storage location, or NIL if not a storable location.
@@ -127,9 +125,7 @@
 (defun stmt-list-reads (stmts)
   (mapcan (lambda (s) (stmt-reads-from s)) (ensure-list stmts)))
 
-;;; ---------------------------------------------------------------
 ;;; Terminal / control-flow
-;;; ---------------------------------------------------------------
 
 (defun terminal-statement-p (stmt)
   "True if STMT unconditionally exits the current flow (no successor)."
@@ -141,9 +137,7 @@
   (and (listp stmt)
        (member (first stmt) '(:if :perform :goto :call :invoke))))
 
-;;; ---------------------------------------------------------------
 ;;; Tail call detection
-;;; ---------------------------------------------------------------
 
 (defun annotate-tail-calls-in-list (stmts)
   "Mark INVOKE/CALL as :tail-call-p t when they are the last statement before return.
@@ -169,9 +163,7 @@
             (t
              (append (annotate-tail-calls-in-list (butlast lst)) (list last))))))))
 
-;;; ---------------------------------------------------------------
 ;;; Unreachable code elimination
-;;; ---------------------------------------------------------------
 
 (defun eliminate-unreachable-in-list (stmts)
   "Remove statements after the first terminal in STMTS.
@@ -193,9 +185,7 @@
         (t (push s result))))
     (nreverse result)))
 
-;;; ---------------------------------------------------------------
 ;;; Dead store elimination
-;;; ---------------------------------------------------------------
 
 (defun dead-store-elim-in-flat-block (stmts)
   "Within a flat list (no nested :if/:perform), remove stores that are
@@ -257,9 +247,7 @@
       (flush-block))
     result))
 
-;;; ---------------------------------------------------------------
 ;;; Top-level entry point
-;;; ---------------------------------------------------------------
 
 (defun optimize-ast (ast)
   "Apply dead code elimination to AST. Returns a new AST (structure is copied)."

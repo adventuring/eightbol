@@ -139,51 +139,23 @@ Returns one of:
                 :pic-frac-bits pic-frac-bits))))
     nil))
 
-(defun load-copybook-tables (class-id &key (root-dir *eightbol-root-directory*))
-  "Read all copybooks relevant to CLASS-ID and return eight hash-tables:
-  SLOT-TABLE       — slot-name (string) → origin-class (string)
-  TYPE-TABLE       — variable-name (string) → object-reference class (string)
-  CONST-TABLE      — constant-name (string) → integer value
-  SERVICE-BANK-TABLE — service-name (string) → bank-name (string)  (from * Service bank X Y)
-  USAGE-TABLE      — variable-name (string) → :bcd or :binary  (from USAGE BCD/DECIMAL / USAGE BINARY)
-  SIGN-TABLE       — variable-name (string) → t  (from PIC S99, SIGN LEADING/TRAILING, SIGNED)
-  PIC-SIZE-TABLE   — variable-name (string) → integer  (from PIC X(n))
-  PIC-WIDTH-TABLE  — variable-name (string) → byte width 1,2,3,...  (from PIC 99, 9999, 9(6), etc.)
-  PIC-FRAC-BITS-TABLE — variable-name (string) → fractional bits  (from USAGE BINARY WITH nVm BITS)
-
-Looks in:
-  {root}/Source/Generated/Classes/{ClassId}-Slots.cpy  (own class slots)
-  *copybook-paths*  (all configured paths)        (Phantasia-Globals, 7800-Service-Banks etc.)"
-    (let ((slot-table        (make-hash-table :test 'equal))
-          (type-table        (make-hash-table :test 'equal))
-          (const-table       (make-hash-table :test 'equal))
-          (service-bank-table (make-hash-table :test 'equal))
-          (usage-table       (make-hash-table :test 'equal))
-          (sign-table        (make-hash-table :test 'equal))
-          (pic-size-table    (make-hash-table :test 'equal))
-          (pic-width-table   (make-hash-table :test 'equal))
-          (pic-frac-bits-table (make-hash-table :test 'equal))
-          (paths (list)))
-    ;; Collect .cpy files to read
-    (when root-dir
-      (let ((class-cpy (merge-pathnames
-                         (make-pathname
-                          :directory '(:relative "Source" "Generated" "Classes")
-                          :name (format nil "~a-Slots" (class-id-to-copybook-filename class-id)) :type "cpy")
-                         root-dir)))
-        (when (probe-file class-cpy)
-          (push class-cpy paths))))
-    (dolist (dir *copybook-paths*)
-      (let ((d (if (pathnamep dir) dir (pathname dir))))
-        (dolist (cpy (directory (merge-pathnames (make-pathname :name :wild :type "cpy") d)))
-          (pushnew cpy paths :test #'equal))))
+(defun load-copybook (copybook-name)
+  "Loads a copybook COPYBOOK-NAME when commanded"
+  (let ((path (block find-path
+                (dolist (dir *copybook-paths*)
+                  (let ((copybook (make-pathname
+                                   :name (title-case copybook-name)
+                                   :type "cpy"
+                                   :directory dir)))
+                    (when (probe-file copybook)
+                      (return-from find-path copybook))))
+                (error "Could not find copybook ~a.cpy on path ~s" (title-case copybook-name) *copybook-paths*))))
     ;; Parse each file
-    (dolist (path paths)
-      (let ((current-origin nil))
+     (let ((current-origin nil))
         (handler-case
             (with-open-file (stream path :direction :input)
               (loop for line = (read-line stream nil nil) while line do
-                    (let ((parsed (parse-cpy-line line)))
+                (let ((parsed (parse-eig)))
                       (when parsed
                         (ecase (first parsed)
                           (:section-comment
@@ -226,8 +198,7 @@ Looks in:
                              (when (and service bank)
                                (setf (gethash service service-bank-table) bank)))))))))
           (file-error (e)
-            (error "EIGHTBOL: could not read copybook ~a: ~a" path e)))))
-    (values slot-table type-table const-table service-bank-table usage-table sign-table pic-size-table pic-width-table)))
+            (error "EIGHTBOL: could not read copybook ~a: ~a" path e))))))
 
 (defun usage-bcd-p (name)
   "True if NAME is a BCD variable (USAGE BCD or PACKED-DECIMAL) in *USAGE-TABLE*."

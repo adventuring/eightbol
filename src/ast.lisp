@@ -40,9 +40,7 @@
 
 (in-package :eightbol)
 
-;;; ---------------------------------------------------------------
 ;;; Constructors
-;;; ---------------------------------------------------------------
 
 (defun make-program-node (class-id &key data methods identification environment)
   "Build a :program AST node."
@@ -59,9 +57,7 @@
         :method-id  method-id
         :statements (or statements '())))
 
-;;; ---------------------------------------------------------------
 ;;; Accessors
-;;; ---------------------------------------------------------------
 
 (defun ast-node-type (node)
   "Return the node type keyword (:program, :method, :move, …)."
@@ -82,9 +78,7 @@
 (defun ast-method-statements (method-node)
   (getf (rest method-node) :statements))
 
-;;; ---------------------------------------------------------------
 ;;; S-expression I/O
-;;; ---------------------------------------------------------------
 
 (defun write-ast (ast output-stream)
   "Write AST to OUTPUT-STREAM as a readable S-expression."
@@ -99,36 +93,3 @@
   "Read and return an AST S-expression from INPUT-STREAM."
   (read input-stream))
 
-;;; ---------------------------------------------------------------
-;;; Validation helpers
-;;; ---------------------------------------------------------------
-
-
-;;; ---------------------------------------------------------------
-;;; Assembly symbol name transformation
-;;; ---------------------------------------------------------------
-
-(defun to-pascal-case (name)
-  "Convert a hyphen-separated EIGHTBOL or assembly identifier to PascalCase,
-regardless of the original case of letters.
-
-Examples:
-  \"Play-Song\"               → \"PlaySong\"
-  \"SOME-SYMBOL\"             → \"SomeSymbol\"
-  \"some-symbol\"             → \"SomeSymbol\"
-  \"Service-Compose-Character\" → \"ServiceComposeCharacter\"
-  \"Bank-Setup\"              → \"BankSetup\"
-  \"HP\"                     → \"Hp\"     (single-word names are title-cased)
-  \"Self\"                    → \"Self\"
-  \"CurrentCourse\"           → \"Currentcourse\"  (no hyphens → just title-case first)
-
-Note: this function down-cases the entire word then capitalises only the first
-letter of each hyphen-separated component, following the Phantasia/OOPS assembly
-naming convention."
-  (let ((str (if (stringp name) name (format nil "~a" name))))
-    (with-output-to-string (out)
-      (dolist (word (split-sequence:split-sequence #\- str :remove-empty-subseqs t))
-        (when (plusp (length word))
-          (let ((lc (string-downcase word)))
-            (write-char (char-upcase (char lc 0)) out)
-                    (write-string (subseq lc 1) out)))))))

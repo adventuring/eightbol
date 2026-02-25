@@ -1,20 +1,16 @@
 ;; src/parser.lisp
 (in-package :eightbol)
 
-;;; ---------------------------------------------------------------
 ;;; Source-location tracking for error reporting
-;;; ---------------------------------------------------------------
 
 (defvar *current-token-location* nil
   "Plist (:source-file :source-line :source-sequence) of the token most
-recently consumed by the YACC lexer thunk.  Set by STREAM-CODE.")
+recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
 
 ;;; source-error is defined in conditions.lisp
 
-;;; ---------------------------------------------------------------
 ;;; Token list — every terminal used anywhere in the grammar must
 ;;; appear here so the lexer produces the right token type.
-;;; ---------------------------------------------------------------
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (defun token-list ()
     '(|(| |)| |:| |,| + - * / |.| /= < <= = > >= ≠ ≤ ≥
@@ -39,8 +35,8 @@ recently consumed by the YACC lexer thunk.  Set by STREAM-CODE.")
       packed-decimal petscii pic picture pointer positive process
       procedure procedure-pointer program
       redefines reference remainder renames replacing returning right run
-      search section security self sentence sentences service set shift-left shift-right sign signed size
-      subtract
+      search section security self sentence sentences service set
+      shift-left shift-right sign signed size subtract
       source-computer special-names stop string super symbol
       sync synchronized
       tallying test than then through thru times title to trailing true
@@ -49,9 +45,7 @@ recently consumed by the YACC lexer thunk.  Set by STREAM-CODE.")
       when with working-storage
       zero zeroes)))
 
-;;; ---------------------------------------------------------------
 ;;; Parser action functions
-;;; ---------------------------------------------------------------
 
 (defun parse/class-file (c1* id c2*
                          env c2a*
@@ -109,7 +103,7 @@ recently consumed by the YACC lexer thunk.  Set by STREAM-CODE.")
   struct)
 
 (defun parse/class-id (_id _div _stop1
-                       _cid  _stop2 class-id _stop3
+                       _cid _stop2 class-id _stop3
                        body)
   (declare (ignore _id _div _cid _stop1 _stop2 _stop3))
   (append (ensure-list body) (list :class-id class-id)))
@@ -171,7 +165,7 @@ recently consumed by the YACC lexer thunk.  Set by STREAM-CODE.")
 
 (defun parse/identifier-subscript (rp-val sub lp-val name)
   "Action for: data-name |(| subscript |)| — subscripted identifier.
-   YACC passes vals in reverse stack order: (|)| subscript |(| data-name)."
+ YACC passes vals in reverse stack order: (|)| subscript |(| data-name)."
   (declare (ignore rp-val lp-val))
   (list :subscript name sub))
 
@@ -277,17 +271,17 @@ recently consumed by the YACC lexer thunk.  Set by STREAM-CODE.")
   (list :call :target target :bank nil))
 
 (defun parse/call-service (_call _service target)
-  "CALL SERVICE target.  — service-dispatch call; bank must be specified at link time."
+  "CALL SERVICE target. — service-dispatch call; bank must be specified at link time."
   (declare (ignore _call _service))
   (list :call :service target :bank nil))
 
 (defun parse/call-in-service (_call target _in _service bank)
-  "CALL target IN SERVICE bank.  — service-dispatch call with explicit bank."
+  "CALL target IN SERVICE bank. — service-dispatch call with explicit bank."
   (declare (ignore _call _in _service))
   (list :call :service target :bank bank))
 
 (defun parse/call-in-bank (_call target _in _bank bank)
-  "CALL target IN BANK bank.  — far call to an explicit bank."
+  "CALL target IN BANK bank. — far call to an explicit bank."
   (declare (ignore _call _in _bank))
   (list :call :target target :bank bank))
 
@@ -305,8 +299,8 @@ Generates a near jsr (no bank switch) regardless of the library name."
 (defun parse/if-then-else (_if condition _then then-stmts _else else-stmts _end_if)
   (declare (ignore _if _then _else _end_if))
   (list :if :condition condition
-        :then (or then-stmts '())
-        :else (or else-stmts '())))
+            :then (or then-stmts '())
+            :else (or else-stmts '())))
 
 (defun parse/goback () (list :goback))
 (defun parse/exit-method (_exit _method) (declare (ignore _exit _method)) (list :exit-method))
@@ -356,45 +350,43 @@ Generates a near jsr (no bank switch) regardless of the library name."
   (declare (ignore _stop _run))
   (list :stop-run))
 
-;;; ---------------------------------------------------------------
 ;;; Unsupported-statement: signal compile-time error
 ;;;
 ;;; Statement forms that parse but are not implemented signal
 ;;; EIGHTBOL-SOURCE-ERROR at compile time.
 ;;;
 ;;; INSPECT — all 3 forms unsupported:
-;;;   • INSPECT id TALLYING expr FOR CHARACTERS
-;;;   • INSPECT id CONVERTING expr TO expr
-;;;   • INSPECT id REPLACING CHARACTERS BY expr
+;;; • INSPECT id TALLYING expr FOR CHARACTERS
+;;; • INSPECT id CONVERTING expr TO expr
+;;; • INSPECT id REPLACING CHARACTERS BY expr
 ;;;
 ;;; GOTO — all 4 forms unsupported:
-;;;   • GO TO procedure-name
-;;;   • GO procedure-name
-;;;   • GO TO procedure-name DEPENDING ON expression
-;;;   • GO procedure-name DEPENDING ON expression
+;;; • GO TO procedure-name
+;;; • GO procedure-name
+;;; • GO TO procedure-name DEPENDING ON expression
+;;; • GO procedure-name DEPENDING ON expression
 ;;;
 ;;; EVALUATE — unsupported (entire statement):
-;;;   • EVALUATE subject WHEN phrases stmts [WHEN OTHER stmts] [END-EVALUATE]
-;;;   All eval-subject, when-clause, and evaluate-phrases variants.
+;;; • EVALUATE subject WHEN phrases stmts [WHEN OTHER stmts] [END-EVALUATE]
+;;; All eval-subject, when-clause, and evaluate-phrases variants.
 ;;;
 ;;; SET — implemented: SET identifier TO expression only.
-;;;   Unsupported forms:
-;;;   • SET identifier UP BY expression
-;;;   • SET identifier DOWN BY expression
-;;;   • SET condition-name TO TRUE
-;;;   • SET identifier TO ADDRESS OF identifier
-;;;   • SET identifier TO NULL
-;;;   • SET identifier TO NULLS
-;;;   • SET identifier TO SELF
-;;; ---------------------------------------------------------------
+;;; Unsupported forms:
+;;; • SET identifier UP BY expression
+;;; • SET identifier DOWN BY expression
+;;; • SET condition-name TO TRUE
+;;; • SET identifier TO ADDRESS OF identifier
+;;; • SET identifier TO NULL
+;;; • SET identifier TO NULLS
+;;; • SET identifier TO SELF
 
 (defun unsupported-statement (message)
   "Signal EIGHTBOL-SOURCE-ERROR for an unsupported statement at current token location."
   (error 'source-error
-         :source-file     (getf *current-token-location* :source-file)
-         :source-line     (getf *current-token-location* :source-line)
+         :source-file (getf *current-token-location* :source-file)
+         :source-line (getf *current-token-location* :source-line)
          :source-sequence (getf *current-token-location* :source-sequence)
-         :message         message))
+         :message message))
 
 ;;; DIVIDE — all 5 forms unsupported
 (defun parse/divide-unsupported (&rest _) (declare (ignore _))
@@ -509,9 +501,7 @@ Generates a near jsr (no bank switch) regardless of the library name."
 (defun parse/set-self-unsupported (&rest _) (declare (ignore _))
   (unsupported-statement "SET ... TO SELF is not supported"))
 
-;;; ---------------------------------------------------------------
 ;;; YACC grammar definition
-;;; ---------------------------------------------------------------
 (eval `(yacc:define-parser *eightbol-parser*
          (:start-symbol eightbol-program)
          (:terminals (,@(token-list) number string symbol bareword picture-sequence))
@@ -520,34 +510,35 @@ Generates a near jsr (no bank switch) regardless of the library name."
 
          ;; Top-level: a class file
          (eightbol-program
-          (eightbol-class-definition-structure comments* #'parse/eightbol-program)
           eightbol-class-definition-structure)
 
          (eightbol-class-definition-structure
           (comments* class-identification-division
-           comments* environment-division
-           comments* class-data-division
-           comments* object |.|
-           comments* data-division
-           comments* object-procedure-division
-           comments* end object |.|
-           comments* end class end-class-name |.|
-           comments*
-           #'parse/class-file))
+                     comments* environment-division
+                     comments* class-data-division
+                     comments* object |.|
+                     comments* data-division
+                     comments* object-procedure-division
+                     comments* end object |.|
+                     comments* end class end-class-name |.|
+                     comments*
+                     #'parse/class-file))
 
-         ;; Class-level DATA DIVISION (WORKING-STORAGE) — globals, not object instance data
+         ;; Class-level DATA  DIVISION (WORKING-STORAGE) —  globals, not
+         ;; object instance data
          (class-data-division
           ()
           (data division |.| working-storage section |.| data-item-description-entries))
-
-         ;; Optional terminals (noise words / repetitions)
-         ;; NOTE: ebol-comment is a non-terminal wrapping the COMMENT terminal.
-         ;; It is named ebol-comment (not comment) to avoid a T/NT symbol collision
-         ;; with the COMMENT keyword terminal in the :terminals list, which would
-         ;; corrupt the LALR GOTO table.
-         (comments* () ebol-comment (comments* ebol-comment))
-         (ebol-comment (ebol-comment bareword) (ebol-comment symbol) comment)
-
+         
+         ;; Optional  terminals   (noise  words  /   repetitions)  NOTE:
+         ;; eightbol-comment   is  a   non-terminal  wrapping   the  COMMENT
+         ;; terminal. It  is named  eightbol-comment (not comment)  to avoid
+         ;; a T/NT symbol collision with the COMMENT keyword terminal in
+         ;; the   :terminals  list,   which  would   corrupt  the   LALR
+         ;; GOTO table.
+         (comments* () eightbol-comment (comments* eightbol-comment))
+         (eightbol-comment (eightbol-comment bareword) (eightbol-comment symbol) comment)
+         
          ;; ID / IDENTIFICATION interchangeable
          (id* (id (constantly 'identification)) (identification #'identity))
 
@@ -602,7 +593,7 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (date-written |.| comment-entry |.| #'parse/id-field)
           (date-compiled |.| comment-entry |.| #'parse/id-field)
           (security |.| comment-entry |.| #'parse/id-field)
-          ebol-comment)
+          eightbol-comment)
 
          (comment-entry
           literal symbol bareword
@@ -660,7 +651,7 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (working-storage section |.| data-item-description-entries)
           (linkage section |.| data-item-description-entries)
           ;; OOP COBOL OBJECT DATA DIVISION: items may appear without a section header
-          ;; (e.g. COPY-expanded copybooks in DATA DIVISION.).  Requires at least one
+          ;; (e.g. COPY-expanded copybooks in DATA DIVISION.). Requires at least one
           ;; entry to stay unambiguous with data-division-sections → ().
           (data-item-description-entry data-item-description-entries))
 
@@ -690,7 +681,7 @@ Generates a near jsr (no bank switch) regardless of the library name."
                         value-clause date-format-clause |.|)
           (level-number filler picture-clause sign-clause |.|)
           copy-statement
-          ebol-comment)
+          eightbol-comment)
 
          ;; level-number covers the full EIGHTBOL range: 01-49, 66, 77, 78, 88.
          ;; Special-purpose levels (66=RENAMES, 77=independent, 78=constant, 88=condition)
@@ -753,22 +744,22 @@ Generates a near jsr (no bank switch) regardless of the library name."
 
          (usage-clause
           (usage is binary (lambda (&rest _) (declare (ignore _)) (list :usage :binary)))
-          (usage binary    (lambda (&rest _) (declare (ignore _)) (list :usage :binary)))
-          ;; USAGE BINARY n  (explicit byte-count extension)
+          (usage binary (lambda (&rest _) (declare (ignore _)) (list :usage :binary)))
+          ;; USAGE BINARY n (explicit byte-count extension)
           (usage is binary number
                  (lambda (_u _is _b n) (declare (ignore _u _is _b)) (list :usage :binary :size n)))
           (usage binary number
                  (lambda (_u _b n) (declare (ignore _u _b)) (list :usage :binary :size n)))
-          (usage is native  (lambda (&rest _) (declare (ignore _)) (list :usage :native)))
-          (usage native     (lambda (&rest _) (declare (ignore _)) (list :usage :native)))
+          (usage is native (lambda (&rest _) (declare (ignore _)) (list :usage :native)))
+          (usage native (lambda (&rest _) (declare (ignore _)) (list :usage :native)))
           (usage is display (lambda (&rest _) (declare (ignore _)) (list :usage :display)))
-          (usage display    (lambda (&rest _) (declare (ignore _)) (list :usage :display)))
+          (usage display (lambda (&rest _) (declare (ignore _)) (list :usage :display)))
           (usage is packed-decimal (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
-          (usage packed-decimal    (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
-          (usage is decimal       (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
-          (usage decimal          (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
-          (usage is pointer        (lambda (&rest _) (declare (ignore _)) (list :usage :pointer)))
-          (usage pointer           (lambda (&rest _) (declare (ignore _)) (list :usage :pointer)))
+          (usage packed-decimal (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
+          (usage is decimal (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
+          (usage decimal (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
+          (usage is pointer (lambda (&rest _) (declare (ignore _)) (list :usage :pointer)))
+          (usage pointer (lambda (&rest _) (declare (ignore _)) (list :usage :pointer)))
           (usage is procedure-pointer
                  (lambda (&rest _) (declare (ignore _)) (list :usage :procedure-pointer)))
           (usage procedure-pointer
@@ -839,7 +830,7 @@ Generates a near jsr (no bank switch) regardless of the library name."
          (stmt-item
           (statement |.| #'parse/stmt-item-with-dot)
           (statement (lambda (s) s))
-          (ebol-comment (lambda (c) (declare (ignore c)) nil)))
+          (eightbol-comment (lambda (c) (declare (ignore c)) nil)))
 
          ;; Identifiers and expressions
          (identifier
@@ -992,15 +983,15 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (add expression to identifier #'parse/add-to))
 
          (call-statement
-          ;; CALL SERVICE Target.  — service dispatch, bank resolved at link time
+          ;; CALL SERVICE Target. — service dispatch, bank resolved at link time
           (call service call-target #'parse/call-service)
-          ;; CALL Target IN SERVICE BankName.  — service dispatch with explicit bank (.FarCall)
+          ;; CALL Target IN SERVICE BankName. — service dispatch with explicit bank (.FarCall)
           (call call-target in service bank-identifier #'parse/call-in-service)
-          ;; CALL Target IN BANK BankName.  — far call to explicit bank (.FarJSR)
+          ;; CALL Target IN BANK BankName. — far call to explicit bank (.FarJSR)
           (call call-target in bank bank-identifier #'parse/call-in-bank)
-          ;; CALL Target IN LIBRARY LibraryName.  — near jsr (LastBank is always resident)
+          ;; CALL Target IN LIBRARY LibraryName. — near jsr (LastBank is always resident)
           (call call-target in library bank-identifier #'parse/call-in-library)
-          ;; CALL Target.  — local jsr
+          ;; CALL Target. — local jsr
           (call call-target #'parse/call))
 
          (call-target identifier literal symbol)
@@ -1060,10 +1051,10 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (stmt-item (lambda (item) (list item))))
 
          (exit-statement (exit (constantly (list :exit))))
-         (exit-method-statement  (exit method  #'parse/exit-method))
+         (exit-method-statement (exit method #'parse/exit-method))
          (exit-program-statement (exit program #'parse/exit-program))
-         (goback-statement  (goback  (constantly (list :goback))))
-         (stop-statement    (stop run #'parse/stop-run))
+         (goback-statement (goback (constantly (list :goback))))
+         (stop-statement (stop run #'parse/stop-run))
 
          (goto-statement
           (go to procedure-name #'parse/goto)
@@ -1156,9 +1147,7 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (unstring identifier delimited by expression
                     into identifier #'parse/unstring-unsupported))))
 
-;;; ---------------------------------------------------------------
 ;;; Lexer → token stream adapter
-;;; ---------------------------------------------------------------
 (defun stream-code (lexer-tokens)
   "Return a YACC lexer thunk that pops tokens from LEXER-TOKENS list.
 The lexval passed to parser action functions is (second token), i.e. the raw
@@ -1167,14 +1156,14 @@ As a side effect, each consumed token's source location is stored in
 *CURRENT-TOKEN-LOCATION* for use in error reporting."
   (lambda ()
     (loop
-      (unless lexer-tokens (return (values nil nil)))
-      (let ((token (pop lexer-tokens)))
-        (when token
-          (setf *current-token-location*
-                (list :source-file     (getf token :source-file)
-                      :source-line     (getf token :source-line)
-                      :source-sequence (getf token :source-sequence)))
-          (return (values (first token) (second token))))))))
+       (unless lexer-tokens (return (values nil nil)))
+       (let ((token (pop lexer-tokens)))
+         (when token
+           (setf *current-token-location*
+                 (list :source-file (getf token :source-file)
+                       :source-line (getf token :source-line)
+                       :source-sequence (getf token :source-sequence)))
+           (return (values (first token) (second token))))))))
 
 (defun parse-eightbol-string (string &optional (pathname "<String>"))
   (with-input-from-string (stream string)
@@ -1183,8 +1172,9 @@ As a side effect, each consumed token's source location is stored in
 
 (defun parse-eightbol (stream)
   "Lex STREAM (with COPY expansion) and parse with YACC, returning AST plist.
-Parse errors are caught and re-signalled as EIGHTBOL-SOURCE-ERROR conditions
-that include the source file, line number, and sequence number."
+Parse  errors  are  caught  and  re-signalled  as  EIGHTBOL-SOURCE-ERROR
+conditions   that   include   the   source  file,   line   number,   and
+sequence number."
   (let ((tokens (lex-with-copy-expansion stream))
         (*current-token-location* nil))
     (handler-case
@@ -1192,18 +1182,18 @@ that include the source file, line number, and sequence number."
          (stream-code tokens)
          *eightbol-parser*)
       (yacc:yacc-parse-error (e)
-        (let* ((loc   *current-token-location*)
-               (term  (yacc:yacc-parse-error-terminal e))
-               (val   (yacc:yacc-parse-error-value e))
-               (exp   (yacc:yacc-parse-error-expected-terminals e))
-               (msg   (format nil
-                        "Unexpected token ~a~@[ (~s)~].~%~10tExpected one of: ~{~a~^, ~}"
-                        term val exp)))
+        (let* ((loc *current-token-location*)
+               (term (yacc:yacc-parse-error-terminal e))
+               (val (yacc:yacc-parse-error-value e))
+               (exp (yacc:yacc-parse-error-expected-terminals e))
+               (msg (format nil
+                            "Unexpected token ~a~@[ (~s)~].~%~10tExpected one of: ~{~a~^, ~}"
+                            term val exp)))
           (error 'source-error
-                 :source-file     (getf loc :source-file)
-                 :source-line     (getf loc :source-line)
+                 :source-file (getf loc :source-file)
+                 :source-line (getf loc :source-line)
                  :source-sequence (getf loc :source-sequence)
-                 :terminal        term
-                 :token-value     val
-                 :expected        exp
-                 :message         msg))))))
+                 :terminal term
+                 :token-value val
+                 :expected exp
+                 :message msg))))))

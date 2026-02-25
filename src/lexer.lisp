@@ -19,12 +19,12 @@
 
 (defun parse-keyword (token)
   "Parse keyword token"
-  (list :type :keyword :value (intern token)))
+  (list :type :keyword :value (intern (string-upcase token) :keyword)))
 
 (defun minichar-code (char)
   (digit-char-p char 36))
 
-(defun parse-number (number-string)
+(defun parse-eightbol-number (number-string)
   "Parse number token. Supports: x'9'|x'99'|x'9999'|x'9999,9999', o'...', d'...',
 b'...', plain decimal. w'XXXX'|w\"XXXX\" produces string token for assembler.
 Signals error on invalid digit sequences."
@@ -159,10 +159,10 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
       (let* ((left-str  (string-trim " " (subseq token-str 0 colon-pos)))
              (right-str (string-trim " " (subseq token-str (1+ colon-pos))))
              (left-tok  (if (every #'digit-char-p left-str)
-                            (list 'number (parse-number left-str))
+                            (list 'number (parse-eightbol-number left-str))
                             (list 'symbol left-str)))
              (right-tok (if (every #'digit-char-p right-str)
-                             (list 'number (parse-number right-str))
+                             (list 'number (parse-eightbol-number right-str))
                              (list 'symbol right-str))))
         (list (append left-tok meta)
               (append (list '|:| ":") meta)
@@ -183,10 +183,10 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
               (let* ((left-str  (string-trim " " (subseq sub 0 colon-pos)))
                      (right-str (string-trim " " (subseq sub (1+ colon-pos))))
                      (left-tok  (if (every #'digit-char-p left-str)
-                                    (list 'number (parse-number left-str))
+                                    (list 'number (parse-eightbol-number left-str))
                                     (list 'symbol left-str)))
                      (right-tok (if (every #'digit-char-p right-str)
-                                    (list 'number (parse-number right-str))
+                                    (list 'number (parse-eightbol-number right-str))
                                     (list 'symbol right-str))))
                 (list (append (list 'symbol name) meta)
                       (append (list '|(| "(") meta)
@@ -198,7 +198,7 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
               (list (append (list 'symbol name) meta)
                     (append (list '|(| "(") meta)
                     (append (if (every #'digit-char-p sub)
-                                (list 'number (parse-number sub))
+                                (list 'number (parse-eightbol-number sub))
                                 (list 'symbol sub))
                             meta)
                     (append (list '|)| ")") meta)))))))
@@ -233,7 +233,7 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
                                :test #'string-equal)
                        (list (intern (string-upcase token) :eightbol) token))
                       ((every #'digit-char-p token)
-                       (list 'number (parse-number (coerce token 'string))))
+                       (list 'number (parse-eightbol-number (coerce token 'string))))
                       ((and (< 2 (length token)) (or (char= (char token 0) #\")
                                                      (char= (char token 0) #\apostrophe))
                             (char= (char token 0) (char token (1- (length token))))) 
@@ -254,7 +254,7 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
                             (member (char token 0) '(#\d #\o #\b #\x) :test #'char-equal) 
                             (or (char= (char token 1) #\") (char= (char token 1) #\apostrophe))
                             (char= (char token 1) (char token (1- (length token)))))
-                       (list 'number (parse-number token)))
+                       (list 'number (parse-eightbol-number token)))
                       ((string= token ".")
                        (list '|.| "."))
                       ((every #'constituent-char-p token)
@@ -263,13 +263,22 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
                     meta))))
           (push tok result))))))
 
-(defvar *copybook-paths* nil)
+(defvar *copybook-paths* nil
+  "Directories in which to search for copybooks")
+
 (defvar *copybook-dependencies* nil
   "When bound to a list, expand-copy-tokens pushes each resolved copybook path
 (truename) onto it. Used by compile-eightbol-class to emit Makefile .d files.")
-(defvar *source-file-pathname* nil)
-(defvar *source-line-number* nil)
-(defvar *source-sequence-number* nil)
+
+(defvar *source-file-pathname* nil
+  "Current input file being processed")
+
+(defvar *source-line-number* nil
+  "Current input file line being processed")
+
+(defvar *source-sequence-number* nil
+  "Current input file line source sequence “number” being processed.")
+
 (defvar *line-zone-start* nil)
 
 (defun lex-file (input-file)
@@ -283,8 +292,9 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
   (let* ((pn (if (pathnamep p) p (pathname p)))
          (name (pathname-name pn))
          (type (pathname-type pn)))
-    ;; If the pathname has a name/type component it was parsed as a file.
-    ;; Re-parse with a trailing slash so merge-pathnames treats it as a dir.
+    ;; If  the pathname  has  a  name/type component  it  was parsed  as
+    ;; a file. Re-parse with a  trailing slash so merge-pathnames treats
+    ;; it as a dir.
     (if (and (or name type)
              (not (equal name :unspecific))
              (not (null name)))
@@ -295,39 +305,39 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
   "True if NAME is safe for use as a copybook identifier (no path traversal)."
   (and (stringp name)
        (plusp (length name))
-       (not (find #\/ name))
-       (not (find #\\ name))
-       (not (eql (char name 0) #\.))))
+       (every (lambda (ch)
+                (or (char= ch #\-)
+                    (alphanumericp ch)))
+              name)
+       (alpha-char-p (char name 0))
+       (not (char= (last-elt name) #\-))
+       (not (search "--" name))))
 
 (defun find-copybook (name &optional library)
-  "Search *COPYBOOK-PATHS* for NAME.cpy or NAME.cob; return pathname or NIL.
+  "Search *COPYBOOK-PATHS* for NAME.cpy; return pathname or NIL.
 When LIBRARY is specified (from COPY Name OF Library or COPY Name IN Library),
 search first in {path}/{library}/ subdirectory, then in {path}/.
 Rejects names containing path separators or leading dot."
   (unless (valid-copybook-name-p name)
-    (error "Invalid COPY name ~s: must not contain /, \\, or start with ." name))
+    (error "Invalid COPY name ~s: must be Hyphenated-Alphanumeric" name))
   (when library
     (unless (valid-copybook-name-p (string library))
-      (error "Invalid COPY library ~s: must not contain /, \\, or start with ." library)))
+      (error "Invalid COPY library ~s: must be Hyphenamed-Alphanumeric" library)))
   (flet ((try (dir-pn)
            (let ((path (merge-pathnames
                         (make-pathname :name name :type "cpy")
-                        dir-pn)))
-             (when (probe-file path) (return-from find-copybook path)))
-           (let ((path (merge-pathnames
-                        (make-pathname :name name :type "cob")
                         dir-pn)))
              (when (probe-file path) (return-from find-copybook path)))))
     (dolist (dir *copybook-paths*)
       (let ((dir-pn (ensure-directory-pathname dir)))
         ;; When library specified: try {dir}/{library}/ first
-        (when library
-          (let ((lib-dir (merge-pathnames
-                          (make-pathname :directory `(:relative ,(format nil "~a" library)))
-                          dir-pn)))
-            (try lib-dir)))
-        ;; Then try {dir}/ directly
-        (try dir-pn))))
+        (if library
+            (let ((lib-dir (merge-pathnames
+                            (make-pathname :directory `(:relative ,library))
+                            dir-pn)))
+              (try lib-dir))
+            ;; else try {dir}/ directly
+            (try dir-pn)))))
   nil)
 
 (defun lex-with-copy-expansion (stream)
@@ -340,45 +350,46 @@ Rejects names containing path separators or leading dot."
   "Walk TOKENS; when a (COPY ...) sequence is found, replace it with the
    lexed contents of the referenced copybook file."
   (let (result)
-    (loop while tokens do
-      (let ((tok (pop tokens)))
-        (cond
-          ;; COPY Name .  — expand the copybook inline
-          ;; COPY Name OF Library .  or  COPY Name IN Library .
-          ((and (listp tok) (eq (first tok) 'copy))
-           (let* ((next (pop tokens))
-                  (name (if (and (listp next)
-                                 (member (first next) '(symbol bareword)))
-                             (second next)
-                             (progn (push next tokens) nil)))
-                  ;; consume optional OF/IN library and the full stop
-                  (after (pop tokens))
-                  library)
-             (when (and (listp after)
-                        (member (first after) '(of in)))
-               (let ((lib-tok (pop tokens)))
-                 (setf library (and (listp lib-tok)
-                                    (member (first lib-tok) '(symbol bareword))
-                                    (second lib-tok)))
-                 (setf after (pop tokens))))
-             (unless (and (listp after) (eq (first after) '|.|))
-               (push after tokens))
-             (if name
-                 (let ((path (find-copybook name library)))
-                   (if path
-                       (progn
-                         (when (boundp '*copybook-dependencies*)
-                           (pushnew (truename path) *copybook-dependencies*
-                                    :test #'equalp))
-                         (let ((cb-tokens (lex-file path)))
-                           (setf tokens (append (expand-copy-tokens cb-tokens) tokens))))
-                       (error 'copybook-not-found
-                              :message "cannot find copybook; COPY is required"
-                              :copybook-name name
-                              :library library)))
-                 (error "EIGHTBOL: COPY without a name"))))
-          (t (push tok result)))))
-  (nreverse result)))
+    (loop while tokens
+          for tok = (pop tokens)
+          do
+             (cond
+               ;; COPY Name .  — expand the copybook inline
+               ;; COPY Name OF Library .  or  COPY Name IN Library .
+               ((and (listp tok) (eq (first tok) 'copy))
+                (let* ((next (pop tokens))
+                       (name (if (and (listp next)
+                                      (member (first next) '(symbol bareword)))
+                                 (second next)
+                                 (progn (push next tokens) nil)))
+                       ;; consume optional OF/IN library and the full stop
+                       (after (pop tokens))
+                       library)
+                  (when (and (listp after)
+                             (member (first after) '(of in)))
+                    (let ((lib-tok (pop tokens)))
+                      (setf library (and (listp lib-tok)
+                                         (member (first lib-tok) '(symbol bareword))
+                                         (second lib-tok)))
+                      (setf after (pop tokens))))
+                  (unless (and (listp after) (eq (first after) '|.|))
+                    (push after tokens))
+                  (if name
+                      (let ((path (find-copybook name library)))
+                        (if path
+                            (progn
+                              (when (boundp '*copybook-dependencies*)
+                                (pushnew (truename path) *copybook-dependencies*
+                                         :test #'equalp))
+                              (let ((cb-tokens (lex-file path)))
+                                (setf tokens (append (expand-copy-tokens cb-tokens) tokens))))
+                            (error 'copybook-not-found
+                                   :message "cannot find copybook; COPY is required"
+                                   :copybook-name name
+                                   :library library)))
+                      (error "EIGHTBOL: COPY without a name"))))
+               (t (push tok result))))
+    (nreverse result)))
 
 (defun lexer (stream)
   (loop for *source-line-number* from 1
@@ -390,14 +401,17 @@ Rejects names containing path separators or leading dot."
         do (let* ((parsed-line (split-line line))
                   (*source-sequence-number*
                     (let ((s (when (getf parsed-line :sequence-number)
-                               (string-trim #(#\Space #\Tab) (getf parsed-line :sequence-number)))))
+                               (string-trim #(#\Space #\Tab)
+                                            (getf parsed-line :sequence-number)))))
                       (when (plusp (length s))
                         s)))
                   (*line-zone-start* (getf parsed-line :zone)))
              (when *source-sequence-number*
                (when (and last-source-sequence-number
-                          (string-not-greaterp *source-sequence-number* last-source-sequence-number))
-                 (warn "EIGHTBOL: sequence number ~s (line ~:d) is not greater than previous ~s — must be strictly increasing"
+                          (not (string-greaterp *source-sequence-number*
+                                                last-source-sequence-number)))
+                 (warn "EIGHTBOL: sequence number ~s (line ~:d) is ~
+not greater than previous ~s — must be strictly increasing"
                        *source-sequence-number* *source-line-number* last-source-sequence-number))
                (setf last-source-sequence-number *source-sequence-number*))
              (when *line-zone-start*

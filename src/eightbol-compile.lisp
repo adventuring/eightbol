@@ -8,51 +8,45 @@
 ;;      where {cpu} uses case-preserving names (6502, 65c02, HuC6280, cp1610, RP2A03, Z80, 65c816, m68k, i286, etc.)
 (in-package :eightbol)
 
-;;; All supported CPU keywords, in order of increasing complexity.
-;;; Use plain keywords (no pipe escaping); display case is in *cpu-display-names*.
-(defparameter *supported-cpus*
-  '(:6502 :65c02 :65c816 :cp1610 :huc6280 :rp2a03 :z80 :sm83 :m68k :i286 :arm7))
+;;; Case-preserving display  labels for UI (help  text, error messages).
+;;; Input matching is case-insensitive (string-equal); display preserves
+;;; intended case.
+(define-constant +cpu-display-names+
+    '((:6502 . "6502")
+      (:65c02 . "65c02")
+      (:65c816 . "65c816")
+      (:cp1610 . "cp1610")
+      (:huc6280 . "HuC6280")
+      (:rp2a03 . "RP2A03")
+      (:z80 . "Z80")
+      (:sm83 . "SM83")
+      (:m68k . "m68k")
+      (:i286 . "i286")
+      (:arm7 . "ARM7"))
+  :test 'equalp)
 
-;;; Case-preserving display labels for UI (help text, error messages).
-;;; Input matching is case-insensitive (string-equal); display preserves intended case.
-(defparameter *cpu-display-names*
-  '((:6502 . "6502")
-    (:65c02 . "65c02")
-    (:65c816 . "65c816")
-    (:cp1610 . "cp1610")
-    (:huc6280 . "HuC6280")
-    (:rp2a03 . "RP2A03")
-    (:z80 . "Z80")
-    (:sm83 . "SM83")
-    (:m68k . "m68k")
-    (:i286 . "i286")
-    (:arm7 . "ARM7")))
+;;; All  supported  CPU keywords,  in  order  of increasing  complexity.
+;;; Use  plain  keywords   (no  pipe  escaping);  display   case  is  in
+;;; +cpu-display-names+.
+(define-constant +supported-cpus+
+    (mapcar #'first +cpu-display-names+)
+  :test 'equal)
 
 (defun cpu-display-name (cpu)
   "Return the case-preserving UI label for CPU."
-  (or (rest (assoc cpu *cpu-display-names*)) (symbol-name cpu)))
+  (rest (assoc cpu +cpu-display-names+)))
 
-(defun cpu-directory-name (cpu)
+(defun cpu-directory-name (&optional (cpu *cpu*))
   "Return the canonical output directory component for a CPU keyword.
 Uses display names: cp1610, 65c02, RP2A03, m68k, i286, Z80, etc."
   (cpu-display-name cpu))
 
 (defun default-copybook-paths (root-directory)
   "Return the default list of copybook search paths relative to ROOT-DIRECTORY.
-  Order: Source/Generated/{port}/Classes (platform copybooks), Source/Generated/Classes/,
-  Source/Classes/. Discovers port dirs (7800, Lynx, etc.) under Source/Generated/."
-  (let ((generated (merge-pathnames #p"Source/Generated/" root-directory))
-        (paths (list (merge-pathnames #p"Source/Generated/Classes/" root-directory)
-                     (merge-pathnames #p"Source/Classes/" root-directory))))
-    (when (uiop:directory-exists-p generated)
-      (dolist (ent (directory (merge-pathnames
-                               (make-pathname :directory '(:relative :wild) :name :wild :type :wild)
-                               generated)))
-        (when (and (pathnamep ent) (uiop:directory-exists-p ent))
-          (let ((classes (merge-pathnames #p"Classes/" ent)))
-            (when (uiop:directory-exists-p classes)
-              (pushnew classes paths :test #'equal))))))
-    (nreverse paths)))
+  Path: Source/Generated/Classes/{cpu}"
+  (list (make-pathname :defaults root-directory
+                  :directory (list :relative "Source" "Generated"
+                                   "Classes" (cpu-directory-name)))))
 
 (defun write-copybook-deps (input-file class-id cpus root-directory output-file
                             copybook-deps)
@@ -87,8 +81,8 @@ rebuilding the compiler triggers recompilation of all .s outputs."
                 (mapcar #'namestring deps))))))
 
 (defun compile-eightbol-class
-    (input-file
-     &key (cpus *supported-cpus*)
+    (input-files
+     &key (cpus '(:6502))
           copybook-paths
           (root-directory (truename "."))
           output-file)
@@ -96,7 +90,7 @@ rebuilding the compiler triggers recompilation of all .s outputs."
    1. Parse to AST and write to  {root}/Object/Classes/{ClassName}.eightbol
    2. For each cpu in CPUS compile to
       {root}/Source/Generated/Classes/{cpu}/{ClassName}Class.s
-      (or OUTPUT-FILE for the first CPU when specified)
+      (or OUTPUT-FILE for the single CPU when specified)
    3. Write {root}/Source/Generated/Classes/{ClassName}.d for Makefile includes
 Returns the AST plist."
   (let ((*eightbol-root-directory* root-directory)
@@ -104,24 +98,25 @@ Returns the AST plist."
                               (default-copybook-paths root-directory)))
         (*copybook-dependencies* ()))
     ;; ── Phase 1: parse ──────────────────────────────────────────
-    (let ((ast (handler-case
-                   (with-open-file (stream input-file :direction :input)
-                     (let ((*source-file-pathname* (pathname-name input-file)))
-                       (parse-eightbol stream)))
-                 (source-error (e)
-                   ;; Re-signal with file context filled in if the lexer didn't
-                   ;; already capture the source pathname.
-                   (when (and (null (eightbol-error-file e))
-                              input-file)
-                     (error 'source-error
-                            :source-file     (pathname-name input-file)
-                            :source-line     (eightbol-error-line e)
-                            :source-sequence (eightbol-error-sequence e)
-                            :terminal        (eightbol-error-terminal e)
-                            :token-value     (eightbol-error-value e)
-                            :expected        (eightbol-error-expected e)
-                            :message         (eightbol-error-message e)))
-                   (error e)))))
+    (let ((ast (dolist (input-file input-files)
+                 (handler-case
+                     (with-open-file (stream input-file :direction :input)
+                       (let ((*source-file-pathname* (enough-namestring input-file)))
+                         (parse-eightbol stream)))
+                   (source-error (e)
+                     ;; Re-signal with file context filled in if the lexer didn't
+                     ;; already capture the source pathname.
+                     (when (and (null (eightbol-error-file e))
+                                input-file)
+                       (error 'source-error
+                              :source-file     (pathname-name input-file)
+                              :source-line     (eightbol-error-line e)
+                              :source-sequence (eightbol-error-sequence e)
+                              :terminal        (eightbol-error-terminal e)
+                              :token-value     (eightbol-error-value e)
+                              :expected        (eightbol-error-expected e)
+                              :message         (eightbol-error-message e)))
+                     (error e))))))
       (unless (and (listp ast) (eq (first ast) :program))
         (error "EIGHTBOL: parse of ~a did not yield a :program node" input-file))
       (setf ast (optimize-ast ast))
