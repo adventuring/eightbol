@@ -43,6 +43,29 @@
   (is (string= "Non-Player-Character" (skyline-tool::pascal-to-copybook-filename "NonPlayerCharacter"))))
 
 ;;;; ---------------------------------------------------------------
+;;;; classes-defs-comment-line-p (oops — Classes.Defs parsing)
+;;;; ---------------------------------------------------------------
+
+(test classes-defs-comment-line-p/semicolon
+  "Lines starting with ; are comments (Lisp/Emacs style)."
+  (is (skyline-tool::classes-defs-comment-line-p ";;; Class Definitions"))
+  (is (skyline-tool::classes-defs-comment-line-p "; single semicolon"))
+  (is (skyline-tool::classes-defs-comment-line-p ";;;; -*- fundamental -*-"))
+  (is (not (skyline-tool::classes-defs-comment-line-p "Entity < BasicObject"))))
+
+(test classes-defs-comment-line-p/asterisk
+  "Lines starting with * are comments (COBOL style)."
+  (is (skyline-tool::classes-defs-comment-line-p "* Own slots (Character):"))
+  (is (skyline-tool::classes-defs-comment-line-p "* Inherited from BasicObject:")))
+
+(test classes-defs-comment-line-p/blank-and-content
+  "Blank lines and content lines are not comments."
+  (is (not (skyline-tool::classes-defs-comment-line-p "")))
+  (is (not (skyline-tool::classes-defs-comment-line-p "   ")))
+  (is (not (skyline-tool::classes-defs-comment-line-p ".Decal 1")))
+  (is (not (skyline-tool::classes-defs-comment-line-p "#GetBounds"))))
+
+;;;; ---------------------------------------------------------------
 ;;;; parse-asm-annotation (globals-copybook — per-platform)
 ;;;; ---------------------------------------------------------------
 
@@ -219,6 +242,69 @@
     (is (search "NAME-LENGTH" pic))))
 
 ;;;; ---------------------------------------------------------------
+;;;; class-ancestry-chain (oops)
+;;;; ---------------------------------------------------------------
+
+(test class-ancestry-chain/single
+  "Single class returns singleton list."
+  (let ((bases (make-hash-table :test 'equal)))
+    (setf (gethash "BasicObject" bases) nil)
+    (is (equal '("BasicObject")
+              (skyline-tool::class-ancestry-chain "BasicObject" bases)))))
+
+(test class-ancestry-chain/inheritance
+  "Chain from root to leaf."
+  (let ((bases (make-hash-table :test 'equal)))
+    (setf (gethash "BasicObject" bases) nil
+          (gethash "Entity" bases) "BasicObject"
+          (gethash "Actor" bases) "Entity"
+          (gethash "Character" bases) "Actor")
+    (is (equal '("BasicObject" "Entity" "Actor" "Character")
+              (skyline-tool::class-ancestry-chain "Character" bases)))))
+
+;;;; ---------------------------------------------------------------
+;;;; compute-class-size-during-parse (oops — uses dynamics)
+;;;; ---------------------------------------------------------------
+
+(test compute-class-size-during-parse/basic-object
+  "BasicObject returns 0 (no parent)."
+  (let ((*class-bases* (make-hash-table :test 'equal))
+        (*class-size* (make-hash-table :test 'equal))
+        (*slot-sizes* (make-hash-table :test 'equal))
+        (*class-slots-order* (make-hash-table :test 'equal)))
+    (setf (gethash "BasicObject" *class-bases*) nil)
+    (is (= 0 (skyline-tool::compute-class-size-during-parse "BasicObject")))))
+
+(test compute-class-size-during-parse/with-slots
+  "Child with slots sums parent + own."
+  (let ((*class-bases* (make-hash-table :test 'equal))
+        (*class-size* (make-hash-table :test 'equal))
+        (*slot-sizes* (make-hash-table :test 'equal))
+        (*class-slots-order* (make-hash-table :test 'equal)))
+    (setf (gethash "BasicObject" *class-bases*) nil
+          (gethash "Entity" *class-bases*) "BasicObject"
+          (gethash "Entity" *class-slots-order*) '("ClassID" "Decal")
+          (gethash "Entity" *slot-sizes*)
+          (let ((h (make-hash-table :test 'equal)))
+            (setf (gethash "ClassID" h) 1 (gethash "Decal" h) 1) h)))
+    (is (= 2 (skyline-tool::compute-class-size-during-parse "Entity")))))
+
+(test compute-class-size-during-parse/nil-slot-sizes
+  "Class with no *slot-sizes* entry (child that adds no own slots) does not signal TYPE-ERROR.
+Regression: gethash with nil hash-table signaled. Fix: use (or (gethash ...) (make-hash-table))."
+  (let ((*class-bases* (make-hash-table :test 'equal))
+        (*class-size* (make-hash-table :test 'equal))
+        (*slot-sizes* (make-hash-table :test 'equal))
+        (*class-slots-order* (make-hash-table :test 'equal)))
+    (setf (gethash "BasicObject" *class-bases*) nil
+          (gethash "BasicObject" *class-size*) 1
+          (gethash "Entity" *class-bases*) "BasicObject"
+          (gethash "Entity" *class-slots-order*) '()
+          ;; No *slot-sizes* for Entity — previously caused (gethash s nil 0) TYPE-ERROR
+          )
+    (is (= 1 (skyline-tool::compute-class-size-during-parse "Entity")))))
+
+;;;; ---------------------------------------------------------------
 ;;;; pointer-size-for-machine (architecture-specific @ slot sizes)
 ;;;; ---------------------------------------------------------------
 
@@ -242,3 +328,68 @@
   (is (member 7800 *test-platforms*))
   (dolist (m *test-platforms*)
     (is (integerp m) "Platform should be machine number")))
+
+(test make-classes-for-oops/completes-with-minimal-defs
+  "make-classes-for-oops completes without TYPE-ERROR when *class-bases* etc. are in scope.
+Regression: ClassInheritance/ClassSizes blocks were outside the let binding *class-bases*."
+  (uiop:with-temporary-file (:pathname tmp :directory (uiop:pathname-directory-pathname
+                                                       (asdf:system-source-directory :eightbol)))
+    (let ((defs (merge-pathnames "Classes.Defs" (uiop:pathname-parent-pathname tmp))))
+      (with-open-file (out defs :direction :output :if-exists :supersede)
+        (write-line ";;; Minimal" out)
+        (write-line "Entity < BasicObject" out)
+        (write-line ".Decal 1" out))
+      (let ((skyline-tool::*machine* 7800))
+        (finish-output)
+        (is (not (null (nth-value 1 (ignore-errors
+                                     (skyline-tool:make-classes-for-oops defs))))))
+        "make-classes-for-oops completes (or signals non-TYPE-ERROR)"))))
+
+(test make-classes-for-oops/requires-machine
+  "make-classes-for-oops needs *machine* set (via load-project.json or --port).
+When *machine* is unbound, pointer-size-for-machine and machine-directory-name fail.
+Make rules export PLATFORM when invoking bin/skyline-tool."
+  (let ((skyline-tool::*machine* 7800))
+    (is (= 7800 skyline-tool::*machine*) "*machine* bound for 7800")
+    (is (= 2 (skyline-tool::pointer-size-for-machine))
+        "pointer-size-for-machine uses *machine* when no arg")
+    (is (string= "7800" (skyline-tool::machine-directory-name))
+        "machine-directory-name uses *machine* when no arg")))
+
+;;;; ---------------------------------------------------------------
+;;;; make-globals-copybook game-name (TDD: regression fix for NIL-Globals.cpy)
+;;;; ---------------------------------------------------------------
+
+(test make-globals-copybook/game-name-override
+  "When :game-name is passed, output filename uses it (not *game*).
+Regression: nil game name produced NIL-Globals.cpy."
+  (uiop:with-temporary-file (:pathname out :type "cpy")
+    (let ((skyline-tool::*machine* 7800)
+          (skyline-tool::*game* nil))
+      (let ((result (skyline-tool:make-globals-copybook
+                     :game-name "Phantasia"
+                     :output-path out
+                     :root-dir (asdf:system-source-directory :eightbol))))
+        (is (equal (pathname-name result) "Phantasia-Globals")
+            "Output pathname should be Phantasia-Globals.cpy, not NIL-Globals.cpy")
+        (is (probe-file result) "Result file should exist")))))
+
+(test make-globals-copybook/game-name-from-json
+  "When *game* is bound (from JSON :*game key) and :game-name not passed, uses it."
+  (uiop:with-temporary-file (:pathname out :type "cpy")
+    (let ((skyline-tool::*machine* 7800)
+          (skyline-tool::*game* "Phantasia"))
+      (let ((result (skyline-tool:make-globals-copybook
+                     :output-path out
+                     :root-dir (asdf:system-source-directory :eightbol))))
+        (is (equal (pathname-name result) "Phantasia-Globals")
+            "Output pathname should be Phantasia-Globals.cpy")
+        (is (probe-file result) "Result file should exist")))))
+
+(test make-globals-copybook/game-name-nil-signals-error
+  "When game name is nil (missing :*game key in JSON), signals error (not NIL-Globals.cpy)."
+  (let ((skyline-tool::*machine* 7800)
+        (skyline-tool::*game* nil))
+    (signals error
+      (skyline-tool:make-globals-copybook
+       :root-dir (asdf:system-source-directory :eightbol)))))
