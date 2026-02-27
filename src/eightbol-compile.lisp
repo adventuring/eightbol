@@ -32,6 +32,13 @@
     (mapcar #'first +cpu-display-names+)
   :test 'equal)
 
+;;; Default CPU list for compile-eightbol-class-from-ast and tests.
+(defvar *supported-cpus* +supported-cpus+
+  "List of supported CPU keywords. Defaults to +supported-cpus+.")
+
+(defvar *cpu* nil
+  "Current target CPU keyword; bound during compile-to-assembly.")
+
 (defun cpu-display-name (cpu)
   "Return the case-preserving UI label for CPU."
   (rest (assoc cpu +cpu-display-names+)))

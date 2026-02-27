@@ -17,8 +17,8 @@ EightBol is an EIGHTBOL compiler for 8-bit and 16-bit systems. It produces assem
 
 ## Supported / Unsupported
 
-- **Supported:** MOVE, ADD, SUBTRACT, COMPUTE, IF/THEN/ELSE, PERFORM, INVOKE, STRING DELIMITED BY SIZE (BLT), SET identifier TO expression, CALL, GOBACK, EXIT METHOD, LOG FAULT, BREAK
-- **Unsupported (compile-time error):** DIVIDE, MULTIPLY, UNSTRING, INSPECT, GOTO, EVALUATE, STRING with character delimiter, SET variants (UP BY, DOWN BY, TO NULL, etc.)
+- **Supported:** MOVE, ADD, SUBTRACT, COMPUTE, IF/THEN/ELSE, PERFORM, INVOKE, STRING DELIMITED BY SIZE (BLT), SET identifier TO expression, CALL, GOBACK, EXIT METHOD, LOG FAULT, BREAK, INSPECT (TALLYING, CONVERTING, REPLACING CHARACTERS), EVALUATE (WHEN clauses), subscripted access
+- **Unsupported (compile-time error):** DIVIDE, MULTIPLY, UNSTRING, GOTO, STRING with character delimiter, SET variants (UP BY, DOWN BY, TO NULL, etc.)
 
 ## Testing
 
@@ -41,4 +41,4 @@ EightBol is an EIGHTBOL compiler for 8-bit and 16-bit systems. It produces assem
 
 ## Build Plan
 
-See `.cursor/rules/eightbol-build-plan.mdc` in the Phantasia project for testing and no-regression policy.
+See `.cursor/rules/eightbol-build-plan.mdc` in the Phantasia project root for build targets, testing, and no-regression policy.

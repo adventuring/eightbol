@@ -345,6 +345,29 @@ Regression: ClassInheritance/ClassSizes blocks were outside the let binding *cla
                                      (skyline-tool:make-classes-for-oops defs))))))
         "make-classes-for-oops completes (or signals non-TYPE-ERROR)"))))
 
+(test make-eightbol-copybooks/generates-basic-object-slots
+  "make-eightbol-copybooks generates Basic-Object-Slots.cpy for BasicObject.
+Regression: BasicObject was seeded but not in all-classes, so Basic-Object-Slots.cpy was never written."
+  (let* ((tmp (uiop:ensure-directory-pathname
+               (merge-pathnames (format nil "basic-object-slots-test-~a/" (get-internal-real-time))
+                               (uiop:temporary-directory))))
+         (defs (merge-pathnames "Source/Classes/Classes.Defs" tmp))
+         (out-dir (merge-pathnames "Source/Generated/7800/Classes/" tmp))
+         (basic-slots (merge-pathnames (make-pathname :name "Basic-Object-Slots" :type "cpy") out-dir)))
+    (ensure-directories-exist defs)
+    (with-open-file (out defs :direction :output :if-exists :supersede)
+      (write-line ";;; Minimal" out)
+      (write-line "Entity < BasicObject" out)
+      (write-line ".Decal 1" out))
+    (unwind-protect
+         (let ((skyline-tool::*machine* 7800))
+           (uiop:call-with-current-directory tmp
+             (lambda ()
+               (skyline-tool:make-eightbol-copybooks defs)
+               (is (probe-file basic-slots)
+                   "Basic-Object-Slots.cpy must exist after make-eightbol-copybooks")))
+      (uiop:delete-directory-tree tmp :validate t :if-does-not-exist :ignore))))
+
 (test make-classes-for-oops/requires-machine
   "make-classes-for-oops needs *machine* set (via load-project.json or --port).
 When *machine* is unbound, pointer-size-for-machine and machine-directory-name fail.

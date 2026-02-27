@@ -56,6 +56,162 @@ Used by backends to locate generated copybook files.")
 (defvar *pic-frac-bits-table* nil
   "Variable-name → fractional bits (0..n). From USAGE BINARY WITH nVm BITS (m = fractional).")
 
+;;; In-memory service→bank LUT for CALL SERVICE resolution (no copybook file).
+;;; Populated by build-service-bank-lut-from-banks when scanning Source/Code/{machine}/Banks.
+(defvar *service-bank-lut* (make-hash-table :test 'equal)
+  "In-memory LUT: service name (string) → bank symbol (string). Used for CALL SERVICE target.")
+
+(defun build-service-bank-lut-from-banks (root-dir machine-dir)
+  "Scan Source/Code/{MACHINE-DIR}/Banks/**/*.s and Common/Enums.s.
+Populate *service-bank-lut* with service→bank mappings. MACHINE-DIR is e.g. \"7800\"."
+  (clrhash *service-bank-lut*)
+  (let* ((common (merge-pathnames
+                  (make-pathname :directory `(:relative "Source" "Code" ,machine-dir "Common"))
+                  root-dir))
+         (enums-path (merge-pathnames "Enums.s" common))
+         (banks-dir (merge-pathnames
+                     (make-pathname :directory `(:relative "Source" "Code" ,machine-dir "Banks"))
+                     root-dir))
+         (bank-num->symbol ()))
+    ;; Parse Enums.s for BankXxx = $YY
+    (when (probe-file enums-path)
+      (with-open-file (stream enums-path :direction :input)
+        (loop for line = (read-line stream nil nil) while line do
+              (cl-ppcre:register-groups-bind (sym hex)
+                  ("^\\s*\\b(Bank[A-Za-z0-9]+)\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
+                (when (and sym hex)
+                  (push (cons (parse-integer hex :radix 16) sym) bank-num->symbol))))))
+    ;; Scan bank .s files for BANK = $NN and .Dispatch ServiceXxx, Label
+    (when (and (probe-file banks-dir) bank-num->symbol)
+      (setf bank-num->symbol (nreverse bank-num->symbol))
+      (let ((bank-num->symbol-alist bank-num->symbol))
+        (loop for n from 0 to 31
+              for subdir = (merge-pathnames
+                            (make-pathname :directory `(:relative ,(format nil "Bank~2,'0x" n)))
+                            banks-dir)
+              when (probe-file subdir)
+                do (dolist (path (directory (merge-pathnames
+                                            (make-pathname :name :wild :type "s")
+                                            subdir)))
+                     (let ((bank-num nil)
+                           (bank-sym nil))
+                       (handler-case
+                           (with-open-file (stream path :direction :input)
+                             (loop for line = (read-line stream nil nil) while line do
+                                   (cl-ppcre:register-groups-bind (hex)
+                                       ("^\\s*BANK\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
+                                     (when hex
+                                       (setf bank-num (parse-integer hex :radix 16))
+                                       (setf bank-sym (cdr (assoc bank-num bank-num->symbol-alist)))))
+                                   (cl-ppcre:register-groups-bind (service)
+                                       ("^\\s*\\.Dispatch\\s+(Service[A-Za-z0-9]+)\\s*," line)
+                                     (when (and service bank-sym)
+                                       (setf (gethash service *service-bank-lut*) bank-sym))))))
+                         (file-error () nil)))))))
+    *service-bank-lut*)
+
+(defun infer-machine-from-copybook-paths ()
+  "Infer machine directory (e.g. 7800) from *copybook-paths*.
+Looks for .../Generated/NNNN/Classes or .../7800/Classes in paths."
+  (when *copybook-paths*
+    (dolist (dir *copybook-paths*)
+      (let* ((p (if (pathnamep dir) dir (pathname dir)))
+             (path (pathname-directory (merge-pathnames p (or *eightbol-root-directory* (truename "."))))))
+        (when (listp path)
+          (let ((pos (position "Generated" path :test #'equal)))
+            (when (and pos (< (1+ pos) (length path)))
+              (let ((cand (nth (1+ pos) path)))
+                (when (and (stringp cand) (plusp (length cand))
+                           (every (lambda (c) (or (digit-char-p c) (char-equal c #\.))) cand))
+                  (return-from infer-machine-from-copybook-paths cand)))))))))
+  nil)
+
+(defun load-copybook-tables (class-id &key root-dir)
+  "Load copybooks for CLASS-ID and return 8 tables: slot, type, const, service-bank,
+usage, sign, pic-size, pic-width. Uses *copybook-paths* and *eightbol-root-directory*.
+Merges *service-bank-lut* (built from bank files) into service-bank-table so CALL SERVICE
+resolves without a Service-Banks copybook."
+  (let* ((root (or root-dir *eightbol-root-directory* (truename ".")))
+         (paths (or *copybook-paths* (list (merge-pathnames
+                                           (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
+                                           root))))
+         (slot-table (make-hash-table :test 'equal))
+         (type-table (make-hash-table :test 'equal))
+         (const-table (make-hash-table :test 'equal))
+         (service-bank-table (make-hash-table :test 'equal))
+         (usage-table (make-hash-table :test 'equal))
+         (sign-table (make-hash-table :test 'equal))
+         (pic-size-table (make-hash-table :test 'equal))
+         (pic-width-table (make-hash-table :test 'equal)))
+    ;; Populate service-bank-table from in-memory LUT (scanned from bank files)
+    (let ((machine (infer-machine-from-copybook-paths)))
+      (when machine
+        (build-service-bank-lut-from-banks root machine))
+      (maphash (lambda (k v) (setf (gethash k service-bank-table) v)) *service-bank-lut*))
+    ;; Load copybooks: Class-Slots and *-Globals
+    (flet ((load-one-copybook (base-name)
+             (let ((path (block find-path
+                           (dolist (dir paths)
+                             (let ((p (merge-pathnames
+                                       (make-pathname :name base-name :type "cpy")
+                                       (if (pathnamep dir) dir (pathname dir)))))
+                               (when (probe-file p)
+                                 (return-from find-path p))))
+                           (return-from load-one-copybook nil))))
+               (when path
+                 (let ((current-origin nil))
+                   (with-open-file (stream path :direction :input)
+                     (loop for line = (read-line stream nil nil) while line do
+                           (let ((parsed (parse-cpy-line line)))
+                             (when parsed
+                               (ecase (first parsed)
+                                 (:section-comment
+                                  (setf current-origin
+                                        (or (getf (rest parsed) :origin-class)
+                                            (getf (rest parsed) :own-class))))
+                                 (:data-item
+                                  (let ((name (getf (rest parsed) :name))
+                                        (type-cls (getf (rest parsed) :type-class))
+                                        (constp (getf (rest parsed) :constant-p))
+                                        (value (getf (rest parsed) :value))
+                                        (usage-bcd (getf (rest parsed) :usage-bcd))
+                                        (usage-signed (getf (rest parsed) :usage-signed))
+                                        (pic-size (getf (rest parsed) :pic-size))
+                                        (pic-width (getf (rest parsed) :pic-width)))
+                                    (when current-origin
+                                      (setf (gethash name slot-table) current-origin))
+                                    (when type-cls
+                                      (setf (gethash name type-table) type-cls))
+                                    (when (and constp value)
+                                      (setf (gethash name const-table) value))
+                                    (when usage-bcd
+                                      (setf (gethash name usage-table) :bcd))
+                                    (when usage-signed
+                                      (setf (gethash name sign-table) t))
+                                    (when pic-size
+                                      (setf (gethash name pic-size-table) pic-size))
+                                    (when pic-width
+                                      (setf (gethash name pic-width-table) pic-width))))
+                                 (:service-bank
+                                  (let ((service (getf (rest parsed) :service))
+                                        (bank (getf (rest parsed) :bank)))
+                                    (when (and service bank)
+                                      (setf (gethash service service-bank-table) bank)))))))))))
+      (load-one-copybook (format nil "~a-Slots" (class-id-to-copybook-filename class-id)))
+      ;; Load first *-Globals.cpy found in paths
+      (block load-globals
+        (dolist (dir paths)
+          (let ((dir-p (if (pathnamep dir) dir (pathname dir))))
+            (when (probe-file dir-p)
+              (dolist (f (directory (merge-pathnames
+                                    (make-pathname :name :wild :type "cpy")
+                                    dir-p)))
+                (when (cl-ppcre:scan "-Globals$" (pathname-name f))
+                  (load-one-copybook (pathname-name f))
+                  (return-from load-globals))))))))
+      (values slot-table type-table const-table service-bank-table
+              usage-table sign-table pic-size-table pic-width-table))))))
+
 (defun pic-digits-to-width (pic-rest)
   "From PIC clause rest, return byte width (1–8).
 Examples: 1 byte = S9/99 USAGE DECIMAL or BINARY, S99 USAGE BINARY;
