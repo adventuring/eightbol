@@ -13,8 +13,8 @@
 (in-package :eightbol)
 
 (defun m68k-symbol (name)
-  "Convert EIGHTBOL identifier to m68k assembly symbol (PascalCase)."
-  (to-pascal-case (format nil "~a" name)))
+  "Convert EIGHTBOL identifier to m68k assembly symbol (PascalCase). COBOL stabby-case supported."
+  (cobol-id-to-assembly-symbol (format nil "~a" name)))
 
 (defmethod compile-to-assembly (ast (cpu (eql :m68k)) output-stream)
   (unless (and (listp ast) (eq (first ast) :program))
@@ -44,6 +44,26 @@
       (compile-m68k-statement out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (format out "~&~10trts")))
 
+(defun compile-m68k-goto (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
+  "Emit m68k GOTO: unconditional @code{jmp}, or @code{cmp}/@code{beq} chain when @code{:depending-on} is set."
+  (declare (ignore pic-size-table))
+  (let ((target (getf (rest stmt) :target))
+        (targets (getf (rest stmt) :targets))
+        (dep (getf (rest stmt) :depending-on)))
+    (if dep
+        (let ((tgt-list (or targets (when target (list target)))))
+          (when tgt-list
+            (compile-m68k-load out dep class-id slot-table const-table pic-width-table 1)
+            (let ((n (length tgt-list)))
+              (loop for i from 1 below n
+                    do (format out "~&~10tcmp.b   #~d, %d0" i)
+                       (format out "~&~10tbeq     ~a"
+                               (m68k-symbol (format nil "~a" (nth (1- i) tgt-list)))))
+              (format out "~&~10tjmp     ~a"
+                      (m68k-symbol (format nil "~a" (nth (1- n) tgt-list)))))))
+        (format out "~&~10tjmp     ~a"
+                (m68k-symbol (format nil "~a" (or target (first targets))))))))
+
 (defun compile-m68k-statement (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
   (unless (and (listp stmt) (first stmt)) (return-from compile-m68k-statement))
   (ecase (first stmt)
@@ -65,7 +85,7 @@
     (:perform (compile-m68k-perform out stmt class-id slot-table type-table const-table pic-width-table))
     (:string-blt (compile-m68k-string-blt out stmt class-id slot-table const-table))
     (:goto
-     (format out "~&~10tjmp     ~a" (m68k-symbol (format nil "~a" (or (getf (rest stmt) :target) (first (getf (rest stmt) :targets)))))))
+     (compile-m68k-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:paragraph
      (let ((name (or (getf (rest stmt) :paragraph) (second stmt))))
        (when name (format out "~&~a:" (m68k-symbol (format nil "~a" name))))))
@@ -450,26 +470,72 @@
 (defun compile-m68k-set (out stmt class-id slot-table const-table pic-width-table)
   (let ((target (getf (rest stmt) :target))
         (value (getf (rest stmt) :value))
-        (w (operand-width target pic-width-table))
+        (up-by (getf (rest stmt) :up-by))
+        (down-by (getf (rest stmt) :down-by))
+        (by-expr (getf (rest stmt) :by))
+        (address-of (getf (rest stmt) :address-of))
+        (to-self (getf (rest stmt) :to-self))
+        (w (operand-width (or target to-self up-by down-by) pic-width-table))
         (sz (m68k-size-suffix w)))
-    (compile-m68k-load out value class-id slot-table const-table pic-width-table)
     (cond
-      ((stringp target)
-       (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol target)))
-      ((and (listp target) (eq (first target) :of))
-       (let ((slot (second target)) (obj (third target)))
-         (when (member obj '(:self "Self" self) :test #'equal)
-           (format out "~&~10tmove.l  Self, %a0")
-           (format out "~&~10tmove~a  %d0, ~a(%a0)"
-                   sz (slot-symbol slot slot-table class-id)))))
-      ((and (listp target) (eq (first target) :subscript))
-       (format out "~&~10tmove~a  %d0, %d1" sz)
-       (compile-m68k-load out (third target) class-id slot-table const-table pic-width-table 1)
-       (when (= (or w 1) 2)
-         (format out "~&~10tadd.w   %d0, %d0"))
-       (format out "~&~10tmove.l  #~a, %a0" (m68k-symbol (format nil "~a" (second target))))
-       (format out "~&~10tmove~a  %d1, (%a0,%d0.w)" sz))
-      (t (format out "~&~10t| Unsupported set ~s" target)))))
+      (up-by
+       (compile-m68k-add out (list :add :from by-expr :to up-by :giving nil) class-id slot-table const-table pic-width-table))
+      (down-by
+       (compile-m68k-subtract out (list :subtract :from by-expr :from-target down-by :giving nil) class-id slot-table const-table pic-width-table))
+      ((and address-of target)
+       (let ((src address-of) (dest target))
+         (cond
+           ((slot-of-self-p src)
+            (format out "~&~10tmove.l  Self, %a0")
+            (format out "~&~10tlea.l   ~a(%a0), %a0"
+                    (slot-symbol (second (slot-of-expr src)) class-id))
+            (format out "~&~10tmove.l  %a0, %d0"))
+           ((stringp src)
+            (format out "~&~10tlea.l   ~a, %a0" (m68k-symbol src))
+            (format out "~&~10tmove.l  %a0, %d0"))
+           (t (format out "~&~10t| Unsupported SET ADDRESS OF source ~s" src)))
+         (cond
+           ((stringp dest)
+            (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol dest)))
+           ((and (listp dest) (eq (first dest) :of))
+            (let ((slot (second dest)) (obj (third dest)))
+              (when (member obj '(:self "Self" self) :test #'equal)
+                (format out "~&~10tmove.l  Self, %a0")
+                (format out "~&~10tmove~a  %d0, ~a(%a0)"
+                        sz (slot-symbol slot class-id)))))
+           (t (format out "~&~10t| Unsupported SET ADDRESS OF target ~s" dest)))))
+      (to-self
+       (format out "~&~10tmove.l  Self, %a0")
+       (format out "~&~10tmove.l  %a0, %d0")
+       (cond
+         ((stringp to-self)
+          (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol to-self)))
+         ((and (listp to-self) (eq (first to-self) :of))
+          (let ((slot (second to-self)) (obj (third to-self)))
+            (when (member obj '(:self "Self" self) :test #'equal)
+              (format out "~&~10tmove.l  Self, %a0")
+              (format out "~&~10tmove~a  %d0, ~a(%a0)"
+                      sz (slot-symbol slot class-id)))))
+         (t (format out "~&~10t| Unsupported SET TO SELF destination ~s" to-self)))))
+      (t
+       (compile-m68k-load out value class-id slot-table const-table pic-width-table)
+       (cond
+         ((stringp target)
+          (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol target)))
+         ((and (listp target) (eq (first target) :of))
+          (let ((slot (second target)) (obj (third target)))
+            (when (member obj '(:self "Self" self) :test #'equal)
+              (format out "~&~10tmove.l  Self, %a0")
+              (format out "~&~10tmove~a  %d0, ~a(%a0)"
+                      sz (slot-symbol slot class-id)))))
+         ((and (listp target) (eq (first target) :subscript))
+          (format out "~&~10tmove~a  %d0, %d1" sz)
+          (compile-m68k-load out (third target) class-id slot-table const-table pic-width-table 1)
+          (when (= (or w 1) 2)
+            (format out "~&~10tadd.w   %d0, %d0"))
+          (format out "~&~10tmove.l  #~a, %a0" (m68k-symbol (format nil "~a" (second target))))
+          (format out "~&~10tmove~a  %d1, (%a0,%d0.w)" sz))
+         (t (format out "~&~10t| Unsupported set ~s" target))))))
 
 (defun compile-m68k-perform (out stmt class-id slot-table type-table const-table pic-width-table)
   (let ((proc (getf (rest stmt) :procedure))

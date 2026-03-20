@@ -14,8 +14,8 @@
 ;;; ---------------------------------------------------------------
 
 (defun i286-symbol (name)
-  "Convert EIGHTBOL identifier to i286 assembly symbol (PascalCase)."
-  (to-pascal-case (format nil "~a" name)))
+  "Convert EIGHTBOL identifier to i286 assembly symbol (PascalCase). COBOL stabby-case supported."
+  (cobol-id-to-assembly-symbol (format nil "~a" name)))
 
 ;;; ---------------------------------------------------------------
 ;;; Top-level entry point
@@ -57,6 +57,26 @@
     (format out "~&Method~a~a endp"
             (i286-symbol class-id) (i286-symbol (format nil "~a" method-id)))))
 
+(defun compile-i286-goto (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
+  "Emit i286 GOTO: unconditional @code{jmp}, or @code{cmp}/@code{je} chain when @code{:depending-on} is set."
+  (declare (ignore pic-size-table))
+  (let ((target (getf (rest stmt) :target))
+        (targets (getf (rest stmt) :targets))
+        (dep (getf (rest stmt) :depending-on)))
+    (if dep
+        (let ((tgt-list (or targets (when target (list target)))))
+          (when tgt-list
+            (compile-i286-load out dep class-id slot-table const-table pic-width-table 1)
+            (let ((n (length tgt-list)))
+              (loop for i from 1 below n
+                    do (format out "~&~8tcmp     al, ~d" i)
+                       (format out "~&~8tje      ~a"
+                               (i286-symbol (format nil "~a" (nth (1- i) tgt-list)))))
+              (format out "~&~8tjmp     ~a"
+                      (i286-symbol (format nil "~a" (nth (1- n) tgt-list)))))))
+        (format out "~&~8tjmp     ~a"
+                (i286-symbol (format nil "~a" (or target (first targets))))))))
+
 ;;; ---------------------------------------------------------------
 ;;; Statement dispatch
 ;;; ---------------------------------------------------------------
@@ -82,7 +102,7 @@
     (:perform (compile-i286-perform out stmt class-id slot-table type-table const-table pic-width-table))
     (:string-blt (compile-i286-string-blt out stmt class-id slot-table const-table))
     (:goto
-     (format out "~&~8tjmp     ~a" (i286-symbol (format nil "~a" (or (getf (rest stmt) :target) (first (getf (rest stmt) :targets)))))))
+     (compile-i286-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:paragraph
      (let ((name (or (getf (rest stmt) :paragraph) (second stmt))))
        (when name (format out "~&~a:" (i286-symbol (format nil "~a" name))))))
@@ -137,7 +157,7 @@
          (when (member obj '(:self "Self" self) :test #'equal)
            (format out "~&~8tmov     bx, offset Self")
            (format out "~&~8tmov     bx, [bx]")
-           (format out "~&~8tmov     ~a, [bx+~a]" reg (slot-symbol slot slot-table class-id)))))
+           (format out "~&~8tmov     ~a, [bx+~a]" reg (slot-symbol slot class-id)))))
       ((and (listp expr) (eq (first expr) :subscript))
        (let ((arr-name (second expr)) (idx-expr (third expr)))
          (compile-i286-load out idx-expr class-id slot-table const-table pic-width-table 1)
@@ -205,7 +225,7 @@
          (when (member obj '(:self "Self" self) :test #'equal)
            (format out "~&~8tmov     bx, offset Self")
            (format out "~&~8tmov     bx, [bx]")
-           (format out "~&~8tmov     [bx+~a], ~a" (slot-symbol slot slot-table class-id) reg))))
+           (format out "~&~8tmov     [bx+~a], ~a" (slot-symbol slot class-id) reg))))
       ((and (listp to) (eq (first to) :subscript))
        (let ((arr-name (second to)) (idx-expr (third to)))
          (format out "~&~8tmov     ~a, ~a" (i286-temp-reg to-w) reg)
@@ -549,29 +569,73 @@
 (defun compile-i286-set (out stmt class-id slot-table const-table pic-width-table)
   (let ((target (getf (rest stmt) :target))
         (value (getf (rest stmt) :value))
-        (w (operand-width target pic-width-table))
+        (up-by (getf (rest stmt) :up-by))
+        (down-by (getf (rest stmt) :down-by))
+        (by-expr (getf (rest stmt) :by))
+        (address-of (getf (rest stmt) :address-of))
+        (to-self (getf (rest stmt) :to-self))
+        (w (operand-width (or target to-self up-by down-by) pic-width-table))
         (reg (i286-reg w)))
-    (compile-i286-load out value class-id slot-table const-table pic-width-table)
     (cond
-      ((stringp target)
-       (format out "~&~8tmov     ~a, ~a" (i286-symbol target) reg))
-      ((and (listp target) (eq (first target) :of))
-       (let ((slot (second target)) (obj (third target)))
-         (when (member obj '(:self "Self" self) :test #'equal)
-           (format out "~&~8tmov     bx, offset Self")
-           (format out "~&~8tmov     bx, [bx]")
-           (format out "~&~8tmov     [bx+~a], ~a" (slot-symbol slot slot-table class-id) reg))))
-      ((and (listp target) (eq (first target) :subscript))
-       (let ((arr-name (second target)) (idx-expr (third target)))
-         (format out "~&~8tmov     ~a, ~a" (i286-temp-reg w) reg)
-         (compile-i286-load out idx-expr class-id slot-table const-table pic-width-table 1)
-         (format out "~&~8tmov     ah, 0")
-         (format out "~&~8tmov     si, offset ~a" (i286-symbol (format nil "~a" arr-name)))
-         (when (= (or w 1) 2)
-           (format out "~&~8tshl     ax, 1"))
-         (format out "~&~8tadd     si, ax")
-         (format out "~&~8tmov     [si], ~a" (i286-temp-reg w))))
-      (t (format out "~&~8t; Unsupported set ~s" target)))))
+      (up-by
+       (compile-i286-add out (list :add :from by-expr :to up-by :giving nil) class-id slot-table const-table pic-width-table))
+      (down-by
+       (compile-i286-subtract out (list :subtract :from by-expr :from-target down-by :giving nil) class-id slot-table const-table pic-width-table))
+      ((and address-of target)
+       (let ((src address-of) (dest target))
+         (cond
+           ((slot-of-self-p src)
+            (format out "~&~8tmov     bx, offset Self")
+            (format out "~&~8tmov     bx, [bx]")
+            (format out "~&~8tadd     bx, ~a" (slot-symbol (second (slot-of-expr src)) class-id))
+            (format out "~&~8tmov     ax, bx"))
+           ((stringp src)
+            (format out "~&~8tmov     ax, offset ~a" (i286-symbol src)))
+           (t (format out "~&~8t; Unsupported SET ADDRESS OF source ~s" src)))
+         (cond
+           ((stringp dest)
+            (format out "~&~8tmov     ~a, ax" (i286-symbol dest)))
+           ((and (listp dest) (eq (first dest) :of))
+            (let ((slot (second dest)) (obj (third dest)))
+              (when (member obj '(:self "Self" self) :test #'equal)
+                (format out "~&~8tmov     bx, offset Self")
+                (format out "~&~8tmov     bx, [bx]")
+                (format out "~&~8tmov     [bx+~a], ax" (slot-symbol slot class-id))))
+           (t (format out "~&~8t; Unsupported SET ADDRESS OF target ~s" dest)))))
+      (to-self
+       (format out "~&~8tmov     bx, offset Self")
+       (format out "~&~8tmov     bx, [bx]")
+       (format out "~&~8tmov     ax, bx")
+       (cond
+         ((stringp to-self)
+          (format out "~&~8tmov     ~a, ax" (i286-symbol to-self)))
+         ((and (listp to-self) (eq (first to-self) :of))
+          (let ((slot (second to-self)) (obj (third to-self)))
+            (when (member obj '(:self "Self" self) :test #'equal)
+              (format out "~&~8tmov     [bx+~a], ax" (slot-symbol slot class-id))))
+         (t (format out "~&~8t; Unsupported SET TO SELF destination ~s" to-self)))))
+      (t
+       (compile-i286-load out value class-id slot-table const-table pic-width-table)
+       (cond
+         ((stringp target)
+          (format out "~&~8tmov     ~a, ~a" (i286-symbol target) reg))
+         ((and (listp target) (eq (first target) :of))
+          (let ((slot (second target)) (obj (third target)))
+            (when (member obj '(:self "Self" self) :test #'equal)
+              (format out "~&~8tmov     bx, offset Self")
+              (format out "~&~8tmov     bx, [bx]")
+              (format out "~&~8tmov     [bx+~a], ~a" (slot-symbol slot class-id) reg))))
+         ((and (listp target) (eq (first target) :subscript))
+          (let ((arr-name (second target)) (idx-expr (third target)))
+            (format out "~&~8tmov     ~a, ~a" (i286-temp-reg w) reg)
+            (compile-i286-load out idx-expr class-id slot-table const-table pic-width-table 1)
+            (format out "~&~8tmov     ah, 0")
+            (format out "~&~8tmov     si, offset ~a" (i286-symbol (format nil "~a" arr-name)))
+            (when (= (or w 1) 2)
+              (format out "~&~8tshl     ax, 1"))
+            (format out "~&~8tadd     si, ax")
+            (format out "~&~8tmov     [si], ~a" (i286-temp-reg w))))
+         (t (format out "~&~8t; Unsupported set ~s" target))))))))
 
 ;;; ---------------------------------------------------------------
 ;;; PERFORM
