@@ -1,3 +1,7 @@
+# -----------------------------------------------------------------------------
+# Policy: Do not commit generated or build outputs (fasls, heap images, indexes).
+# -----------------------------------------------------------------------------
+
 # Backup files
 *~
 *#
@@ -8,9 +12,16 @@ DEADJOE
 *.tiled-session
 .mscbackup
 *.backup
+*.bak
 
 # Generated/output files
 *.fasl
+*.fas
+*.dfsl
+*.lx32fsl
+*.lx64fsl
+*.x86f
+*.x86_64f
 
 # IDE temp files
 .emacs.desktop
@@ -21,4 +32,6 @@ DEADJOE
 .~lock.*
 
 lib/system-index.txt
+# SBCL / build root (not lib/)
+/system-index.txt
 .aider*

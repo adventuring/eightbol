@@ -848,12 +848,17 @@ Y index register; used for slot offsets (ldy #Slot, lda (Self),y)
 @table @asis
 @item Procedure call (PERFORM / CALL)
 @code{jsr} to procedure label. Caller and callee share same bank. No parameters passed.
+Near @code{CALL} to a local label uses @code{jsr}; a tail @code{CALL} immediately before
+@code{GOBACK}/@code{EXIT@dots{}} may use @code{jmp}.  Service, library, and bank-switched
+forms use @code{.FarCall}, @code{.FarJSR}, or @code{jsr Lib.@dots{}} as appropriate.
 @item Procedure entry
 No prologue; callee assumes caller has set up bank.
 @item Procedure exit
 @code{rts}. No return value in registers.
 @item INVOKE Self @code{"Method"}
-@code{jsr Invoke@var{Class}@var{Method}}. Self object in zero-page @code{Self} (indirect).
+@code{.CallMethod Call@var{Class}@var{Method}, @var{Class}Class}. Self object in zero-page
+@code{Self} (indirect); same Phantasia @code{CallMethod} macro as for @code{INVOKE} on a typed
+object reference (dispatches via @code{DoCallMethod}).
 @item INVOKE variable @code{"Method"}
 @code{.CallMethod Call@var{Type}@var{Method}, @var{Type}Class, @var{Var}}. Object address in variable.
 @item Slot access (slot OF Self)

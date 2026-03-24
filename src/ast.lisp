@@ -40,6 +40,11 @@
 
 (in-package :eightbol)
 
+(defun safe-getf (plist key)
+  "Return (getf plist key) when plist is a proper plist; otherwise nil."
+  (when (and plist (listp plist) (evenp (length plist)))
+    (getf plist key)))
+
 ;;; Constructors
 
 (defun make-program-node (class-id &key data methods identification environment)
@@ -64,19 +69,19 @@
   (and (listp node) (first node)))
 
 (defun ast-class-id (program-node)
-  (getf (rest program-node) :class-id))
+  (safe-getf (rest program-node) :class-id))
 
 (defun ast-methods (program-node)
-  (getf (rest program-node) :methods))
+  (safe-getf (rest program-node) :methods))
 
 (defun ast-data (program-node)
-  (getf (rest program-node) :data))
+  (safe-getf (rest program-node) :data))
 
 (defun ast-method-name (method-node)
-  (getf (rest method-node) :method-id))
+  (safe-getf (rest method-node) :method-id))
 
 (defun ast-method-statements (method-node)
-  (getf (rest method-node) :statements))
+  (safe-getf (rest method-node) :statements))
 
 ;;; S-expression I/O
 

@@ -13,8 +13,8 @@
 ;;; Shared helpers (symbol naming)
 
 (defun cp1610-symbol (name)
-  "Convert EIGHTBOL identifier to cp1610 assembly symbol (PascalCase)."
-  (to-pascal-case (format nil "~a" name)))
+  "Convert EIGHTBOL identifier to cp1610 assembly symbol (PascalCase). COBOL stabby-case supported."
+  (cobol-id-to-assembly-symbol (format nil "~a" name)))
 
 ;;; Top-level entry point
 
@@ -48,6 +48,7 @@
 
 (defun compile-cp1610-statement (out stmt class-id &optional method-id)
   (unless (and (listp stmt) (first stmt)) (return-from compile-cp1610-statement))
+  (emit-statement-source-comment out stmt)
   (ecase (first stmt)
     (:goback
      (format out "~&~10tJR      R5"))
@@ -131,7 +132,7 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
      (compile-cp1610-load out (third expr) class-id 1)
      (when (= (or width 1) 2)
        (format out "~&~10tSLL     ~a, 1" reg))
-     (format out "~&~10tMVII    #~a, R4" (cp1610-symbol (format nil "~a" (second expr))))
+     (format out "~&~10tMVII    #~a, R4" (bare-data-assembly-symbol (second expr) class-id))
      (format out "~&~10tADDR    ~a, R4" reg)
      (format out "~&~10tMVI@    R4, ~a" reg))
     ((and (listp expr) (eq (first expr) :shift-left))
@@ -193,7 +194,7 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
        (compile-cp1610-load out (third to-dest) class-id 1)
        (when (= (or to-w 1) 2)
          (format out "~&~10tSLL     R0, 1"))
-       (format out "~&~10tMVII    #~a, R4" (cp1610-symbol (format nil "~a" (second to-dest))))
+       (format out "~&~10tMVII    #~a, R4" (bare-data-assembly-symbol (second to-dest) class-id))
        (format out "~&~10tADDR    R0, R4")
        (format out "~&~10tMOVR    R1, R0")
        (format out "~&~10tMVO@    R0, R4"))
@@ -471,10 +472,32 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
          (format out "~&~10tMVO@    R0, R4")))
       (t (format out "~&~10tMVO     R0, ~a" (cp1610-symbol (format nil "~a" dest)))))))
 
+(defun cp1610-store-r0-to-set-target (out target target-w class-id)
+  "Store R0 into SET destination TARGET (identifier, @code{:of}, or @code{:subscript})."
+  (cond
+    ((stringp target)
+     (format out "~&~10tMVO     R0, ~a" (cp1610-symbol target)))
+    ((and (listp target) (eq (first target) :of))
+     (let ((slot (second target)) (obj (third target)))
+       (when (member obj '(:self "Self" self) :test #'equal)
+         (format out "~&~10tMVII    #~a, R4" (slot-symbol slot class-id))
+         (format out "~&~10tADD     Self, R4")
+         (format out "~&~10tMVO@    R0, R4"))))
+    ((and (listp target) (eq (first target) :subscript))
+     (format out "~&~10tMOVR    R0, R1")
+     (compile-cp1610-load out (third target) class-id 1)
+     (when (= (or target-w 1) 2)
+       (format out "~&~10tSLL     R0, 1"))
+     (format out "~&~10tMVII    #~a, R4" (cp1610-symbol (format nil "~a" (second target))))
+     (format out "~&~10tADDR    R0, R4")
+     (format out "~&~10tMOVR    R1, R0")
+     (format out "~&~10tMVO@    R0, R4"))
+    (t (format out "~&~10t;; Unsupported set ~s" target))))
+
 (defun compile-cp1610-compute (out stmt class-id)
-  (let ((target (getf (rest stmt) :target))
-        (expr (getf (rest stmt) :expression))
-        (target-w (operand-width (getf (rest stmt) :target))))
+  (let* ((target (getf (rest stmt) :target))
+         (expr (getf (rest stmt) :expression))
+         (target-w (operand-width target)))
     (compile-cp1610-load out expr class-id)
     (cond
       ((stringp target)
@@ -491,29 +514,37 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
       (t (format out "~&~10tMVO     R0, ~a" (cp1610-symbol (format nil "~a" target)))))))
 
 (defun compile-cp1610-set (out stmt class-id)
-  (let ((target (getf (rest stmt) :target))
-        (value (getf (rest stmt) :value))
-        (target-w (operand-width (getf (rest stmt) :target))))
-    (compile-cp1610-load out value class-id)
+  (let* ((target (getf (rest stmt) :target))
+         (value (getf (rest stmt) :value))
+         (up-by (getf (rest stmt) :up-by))
+         (down-by (getf (rest stmt) :down-by))
+         (by-expr (getf (rest stmt) :by))
+         (address-of (getf (rest stmt) :address-of))
+         (to-self (getf (rest stmt) :to-self))
+         (target-w (operand-width (or target to-self up-by down-by))))
     (cond
-      ((stringp target)
-       (format out "~&~10tMVO     R0, ~a" (cp1610-symbol target)))
-      ((and (listp target) (eq (first target) :of))
-       (let ((slot (second target)) (obj (third target)))
-         (when (member obj '(:self "Self" self) :test #'equal)
-           (format out "~&~10tMVII    #~a, R4" (slot-symbol slot class-id))
-           (format out "~&~10tADD     Self, R4")
-           (format out "~&~10tMVO@    R0, R4"))))
-      ((and (listp target) (eq (first target) :subscript))
-       (format out "~&~10tMOVR    R0, R1")
-       (compile-cp1610-load out (third target) class-id 1)
-       (when (= (or target-w 1) 2)
-         (format out "~&~10tSLL     R0, 1"))
-       (format out "~&~10tMVII    #~a, R4" (cp1610-symbol (format nil "~a" (second target))))
-       (format out "~&~10tADDR    R0, R4")
-       (format out "~&~10tMOVR    R1, R0")
-       (format out "~&~10tMVO@    R0, R4"))
-      (t (format out "~&~10t;; Unsupported set ~s" target)))))
+      (up-by
+       (compile-cp1610-add out (list :add :from by-expr :to up-by :giving nil) class-id))
+      (down-by
+       (compile-cp1610-subtract out (list :subtract :from by-expr :from-target down-by :giving nil) class-id))
+      ((and address-of target)
+       (let ((src address-of) (dest target))
+         (cond
+           ((and (listp src) (eq :of (first src))
+                 (member (third src) '(:self "Self" self) :test #'equal))
+            (format out "~&~10tMVII    #~a, R4" (slot-symbol (second src) class-id))
+            (format out "~&~10tADD     Self, R4")
+            (format out "~&~10tMOVR    R4, R0"))
+           ((stringp src)
+            (format out "~&~10tMVII    #~a, R0" (cp1610-symbol src)))
+           (t (format out "~&~10t;; Unsupported SET ADDRESS OF source ~s" src)))
+         (cp1610-store-r0-to-set-target out dest target-w class-id)))
+      (to-self
+       (format out "~&~10tMOVR    Self, R0")
+       (cp1610-store-r0-to-set-target out to-self target-w class-id))
+      (t
+       (compile-cp1610-load out value class-id)
+       (cp1610-store-r0-to-set-target out target target-w class-id)))))
 
 ;;; PERFORM
 
@@ -560,7 +591,9 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
   (cp1610-symbol (format nil "~a_~a_~a" class-id (or method-id "") name)))
 
 (defun compile-cp1610-paragraph (out stmt class-id method-id)
-  (let ((name (or (getf (rest stmt) :paragraph) (second stmt))))
+  (let ((name (if (eq (first stmt) :paragraph)
+                  (second stmt)
+                  (or (getf (rest stmt) :paragraph) (second stmt)))))
     (when name
       (format out "~&~a:" (cp1610-para-label (format nil "~a" name) class-id method-id)))))
 
@@ -573,28 +606,32 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
           (compile-cp1610-load out dep class-id)
           (when target-list
             (format out "~&~10t;; GO DEPENDING ON (CMP/BEQ chain)")
-            (loop for target in (butlast target-list) for i from 1
+            (loop for tgt in (butlast target-list) for i from 1
                   do (format out "~&~10tCMPI    #~d, R0" i)
-                     (format out "~&~10tBEQ     ~a" (cp1610-para-label (format nil "~a" target) class-id method-id)))
+                     (format out "~&~10tBEQ     ~a" (cp1610-para-label (format nil "~a" tgt) class-id method-id)))
             (format out "~&~10tB ~a" (cp1610-para-label (or target (first targets)) class-id method-id))))
         (format out "~&~10tB ~a"
                 (cp1610-para-label (or target (first targets)) class-id method-id)))))
-  
-  (defun compile-cp1610-string-blt (out stmt class-id)
-    "Emit cp1610 block copy loop. Uses R2=src, R3=dest (R5 is return-addr for JSR)."
-    (let* ((source (getf (rest stmt) :source))
-           (dest (getf (rest stmt) :dest))
-       (length (getf (rest stmt) :length))
-       (len (min (and (listp source) (getf source :length))
-                 (and (listp dest) (getf dest :length))
-                 length
-                 64))
-       (label (cp1610-label "blt")))
-(format out "~&~10tMVII    #~a, R2" (cp1610-string-operand-address source))
-(format out "~&~10tMVII    #~a, R3"  (cp1610-string-operand-address dest))
-(format out "~&~10tMVII    #~d, R1" len)
-(format out "~&~a:" label)
-(format out "~&~10tMVI@    R2, R0")
-(format out "~&~10tMVO@    R0, R3")
-(format out "~&~10tDECR    R1")
-(format out "~&~10tBNEQ    ~a" label)))
+
+(defun %cp1610-string-blt-length-expr (operand stmt)
+  "Length for STRING BLT: @code{LENGTH} clause, else @code{:length} from @code{:refmod} plist."
+  (or (getf (rest stmt) :length)
+      (when (and (listp operand) (eq (first operand) :refmod))
+        (getf (rest operand) :length))))
+
+(defun compile-cp1610-string-blt (out stmt class-id)
+  "Emit cp1610 block copy loop. Uses R2=src, R3=dest (R5 is return-addr for JSR)."
+  (let* ((source (getf (rest stmt) :source))
+         (dest (getf (rest stmt) :dest))
+         (len-expr (or (%cp1610-string-blt-length-expr source stmt)
+                       (%cp1610-string-blt-length-expr dest stmt)))
+         (len (if (integerp len-expr) len-expr 64))
+         (label (cp1610-label "blt")))
+    (format out "~&~10tMVII    #~a, R2" (cp1610-string-operand-address source))
+    (format out "~&~10tMVII    #~a, R3" (cp1610-string-operand-address dest))
+    (format out "~&~10tMVII    #~d, R1" len)
+    (format out "~&~a:" label)
+    (format out "~&~10tMVI@    R2, R0")
+    (format out "~&~10tMVO@    R0, R3")
+    (format out "~&~10tDECR    R1")
+    (format out "~&~10tBNEQ    ~a" label)))

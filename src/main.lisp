@@ -2,125 +2,81 @@
 (in-package :eightbol)
 
 (defun parse-arguments (args)
-  "Parse command line arguments.
-Recognised options:
- --version print version and exit
- --help print usage and exit
- -I <path> add copybook include path
- -o <file> write first-CPU assembly output to <file>
- (default: Source/Generated/Classes/{cpu}/{class}.s)
- -m <cpu> target CPU: <cpu> or 'all' for all backends
- CPUs: 6502, 65c02, 65c816, cp1610, HuC6280, RP2A03, Z80, SM83, m68k, i286, ARM7
- <file> EIGHTBOL source file to compile"
-  (let (last-wants-arg result)
-    (dolist (arg args)
-      (cond
-        ((string= arg "--version") (push :version result) (push t result))
-        ((string= arg "--help") (push :help result) (push t result))
-        ((string= arg "-I") (setf last-wants-arg :include-path))
-        ((string= arg "-o") (setf last-wants-arg :object-file))
-        ((string= arg "-m") (setf last-wants-arg :cpu))
-        ((and (string-prefix-p "-" arg) (not (string= arg "-")))
-         (error "Unknown option: ~a" arg))
-        (last-wants-arg
-         (cond
-           ((eq last-wants-arg :cpu)
-            ;; convert cpu name string to keyword or :all; only one -m allowed
-            (if (string-equal arg "all")
-                (setf (getf result :cpu) :all)
-                (let ((kw (find arg +supported-cpus+
-                                :key #'cpu-display-name
-                                :test #'string-equal)))
-                  (unless kw
-                    (error "Unknown CPU ~s; known: ~{~a~^, ~}, all"
-                           arg (mapcar #'cpu-display-name +supported-cpus+)))
-                  (appendf (getf result :cpu) (list kw)))))
-           (t
-            (push last-wants-arg result)
-            (push arg result)))
-         (setf last-wants-arg nil))
-        (t
-         (push :input-file result)
-         (push arg result))))
-    (when last-wants-arg
-      (error "Dangling option flag at end of arguments: missing ~a" last-wants-arg))
-    (nreverse result)))
+  "Parse command line arguments."
+  (let ((argv (remove nil (flatten (loop for arg in args
+                                         with last-wants-arg-p = nil
+                                         collect (cond
+                                                   ((string= arg "--version")
+                                                    '(:version t))
+                                                   ((string= arg "--help")
+                                                    '(:help t))
+                                                   ((string= arg "-I")
+                                                    (setf last-wants-arg-p :include-path)
+                                                    nil)
+                                                   ((string= arg "-m")
+                                                    (setf last-wants-arg-p :machine)
+                                                    nil)
+                                                   ((string= arg "-o")
+                                                    (setf last-wants-arg-p :object-file)
+                                                    nil)
+                                                   ((and (string-prefix-p "-" arg) (not (string= arg "-")))
+                                                    (error 'unknown-option-error :option arg))
+                                                   (t
+                                                    (if last-wants-arg-p
+                                                        (prog1
+                                                            (list last-wants-arg-p arg)
+                                                          (setf last-wants-arg-p nil))
+                                                        (list :input-file arg)))))))))
+    (when (keywordp (lastcar argv))
+      (error "Looks like a dangling option ends arguments: missing ~a" (lastcar argv)))
+    argv))
 
-(define-constant +format-time-date+
-    '((:day 2) #\space :short-month #\space (:year 4))
-  :documentation "Format list for local-time: \"DD Mon YYYY\" (e.g. 10 Feb 2026)."
-  :test 'equalp)
 
 (defun format-date (&optional (universal-time (get-universal-time)))
-  "Format UNIVERSAL-TIME as \"DD Mon YYYY\" (e.g. 10 Feb 2026)."
   (local-time:format-timestring nil
-                                (local-time:universal-to-timestamp universal-time)
-                                :format +format-time-date+))
+    (local-time:universal-to-timestamp universal-time)
+    :format '(:year #\- (:month 2) #\- (:day 2))))
 
-(defun main (argv)
-  "Main entry point for the EIGHTBOL compiler.
-ARGV is the full POSIX argv list (argv[0] is the program name)."
-  (handler-case
-      (let ((options (parse-arguments (rest argv)))) ; skip argv[0]
-        (cond
-          ((getf options :version)
-           (format t "~2&EIGHTBOL Compiler version 0.3~%"))
-          ((getf options :help)
-           (format t "~&Usage: eightbol [OPTIONS] input-file.cob
-Options:
-~2t-I <path>~20tAdd <path> to copybook include search path
-~2t-o <file>~20tWrite first CPU output to <file>
-~12t(default: Source/Generated/Classes/{cpu}/{class}.s)
-~2t-m <cpu>~20tTarget CPU: <cpu> or 'all' (default: all)
-~12tValid: ~{~a~^, ~}, all
-~2t--version~20tPrint compiler version
-~2t--help~20tPrint this message~%"
-                   (mapcar #'cpu-display-name +supported-cpus+)))
-          ((getf options :input-file)
-           (let* ((input-files
-                    (loop for (k v) on options by #'cddr
-                          when (eq k :input-file) collect v))
-                  (input-file (first input-files))
-                  (include-paths
-                    (loop for (k v) on options by #'cddr
-                          when (eq k :include-path) collect v))
-                  (selected-cpus
-                    (loop for (k v) on options by #'cddr
-                          when (eq k :cpu) collect v)))
-             (unless input-files
-               (error "no input file specified. Try 'eightbol --help' for usage."))
-             (dolist (p include-paths)
-               (unless (uiop:directory-exists-p p)
-                 (error "include path ~s does not exist or is not a directory" p)))
-             (let ((out (getf options :object-file)))
-               (when (and out (not (string= out "")))
-                 (let ((parent (uiop:pathname-directory-pathname (pathname out))))
-                   (ensure-directories-exist parent))))
-             (format t "~2&EIGHTBOL: compiling ~{~a~^, ~}…" input-files)
-             (let ((root (truename "."))
-                   (copybook-paths (append (or include-paths nil)
-                                           (default-copybook-paths root))))
-               (compile-eightbol-class input-files
-                                       :cpus selected-cpus
-                                       :copybook-paths copybook-paths
-                                       :root-directory root
-                                       :output-file (getf options :object-file)))
-             (fresh-line)))
-          (t
-           (error
-            "no input file specified. ~
-Try 'eightbol --help' for usage information."))))
-    (source-error (e)
-                                        ;y; GCC-style: file:line: error: message
-      (format *error-output* "~2&~@[~a:~]~@[~a:~] error: [~a] ~a~%"
-              (eightbol-error-file e)
-              (eightbol-error-line e)
-              (eightbol-error-sequence e)
-              (eightbol-error-message e))
-      2)
-    (copybook-not-found (e)
-      (format *error-output* "~2&error: ~a~%" e)
-      3)
-    (error (e)
-      (format *error-output* "~2&eightbol: ~a~%" e)
-      1)))
+(defun main (&rest args)
+  "Main entry point for the compiler.
+Buildapp passes argv as single argument; use uiop:command-line-arguments when available."
+  (let ((argv (if (and (listp args) (= 1 (length args)) (listp (first args)))
+                  (rest (first args)) ; buildapp: (main argv), skip program name
+                  (uiop:command-line-arguments))))
+    (let ((options (parse-arguments argv))
+          (start-time (get-universal-time)))
+    (cond
+      ((safe-getf options :version)
+       (format t "EIGHTBOL Compiler version 0.3~%"))
+      ((safe-getf options :help)
+       (let ((cpus (append (mapcar #'cdr +cpu-display-names+)
+                           (list "all"))))
+         (format t "Usage: eightbol [OPTIONS] input-file.cob~%Options:~%
+                -I <path>    Add <path> to include path for copybooks
+                -m <cpu>     Target CPU: ~{~a~^, ~}~%
+                -o <file>    Output to <file>
+                --version    Print the version of the compiler~%
+                --help       Print this help message~%"
+                 cpus)))
+      ((safe-getf options :input-file)
+       (let* ((input-file (safe-getf options :input-file))
+              (output-file (safe-getf options :object-file))
+              (cpu-opt (safe-getf options :cpu))
+              (cpus (cond ((null cpu-opt) (list :6502))
+                          ((eq cpu-opt :all) +supported-cpus+)
+                          (t (list cpu-opt))))
+              (copybook-paths (loop for (key value) on options by #'cddr
+                                   when (and (eql key :include-path)
+                                              (or (stringp value) (pathnamep value)))
+                                     collect (uiop:ensure-directory-pathname
+                                              (merge-pathnames (pathname value) (truename "."))))))
+         (unless (probe-file input-file)
+           (error "Can't find input file ~a" input-file))
+         (format t "~&Compiling ~a to ~a" input-file (or output-file "standard output"))
+         (compile-eightbol-class (list input-file)
+                                :cpus cpus
+                                :copybook-paths (when copybook-paths copybook-paths)
+                                :output-file (when output-file (pathname output-file))
+                                :root-directory (truename "."))))
+      (t
+       (error 'usage-error :message "No input file specified. Use --help for usage information."))))))

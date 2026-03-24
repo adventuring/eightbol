@@ -4,17 +4,13 @@
 ;; Callers can HANDLER-CASE on specific conditions for tailored handling.
 (in-package :eightbol)
 
-;;; ---------------------------------------------------------------
 ;;; Base condition
-;;; ---------------------------------------------------------------
 
 (define-condition compiler-error (error)
   ((message :initarg :message :reader eightbol-error-message))
   (:report (lambda (c s) (format s "~a" (eightbol-error-message c)))))
 
-;;; ---------------------------------------------------------------
 ;;; Source-level errors (parser, unsupported statements)
-;;; ---------------------------------------------------------------
 
 (define-condition source-error (compiler-error)
   ((source-file     :initarg :source-file     :reader eightbol-error-file
@@ -37,9 +33,7 @@
        (format s "~@[~a:~]~@[line ~a~@[ (seq ~a)~]: ~]~a"
                file line seq (eightbol-error-message c))))))
 
-;;; ---------------------------------------------------------------
 ;;; Lexer errors
-;;; ---------------------------------------------------------------
 
 (define-condition lexer-error (compiler-error)
   ((source-file :initarg :source-file :reader eightbol-error-file :initform nil)
@@ -51,9 +45,7 @@
              (eightbol-error-file c) (eightbol-error-line c)
              (eightbol-error-message c) (eightbol-error-form c)))))
 
-;;; ---------------------------------------------------------------
 ;;; Copybook errors
-;;; ---------------------------------------------------------------
 
 (define-condition copybook-error (compiler-error)
   ((copybook-name :initarg :copybook-name :reader eightbol-copybook-name
@@ -93,9 +85,7 @@
              (eightbol-copybook-path c)
              (or (eightbol-copybook-underlying c) (eightbol-error-message c))))))
 
-;;; ---------------------------------------------------------------
 ;;; Backend / code generation errors
-;;; ---------------------------------------------------------------
 
 (define-condition backend-error (compiler-error)
   ((cpu    :initarg :cpu    :reader eightbol-backend-cpu    :initform nil)
@@ -153,9 +143,7 @@
      (format s "~@[~a: ~]COPY ~s should have been expanded at lex time"
              (eightbol-backend-cpu c) (eightbol-backend-copy-name c)))))
 
-;;; ---------------------------------------------------------------
 ;;; Compilation pipeline errors
-;;; ---------------------------------------------------------------
 
 (define-condition compile-error (compiler-error)
   ((stage   :initarg :stage   :reader eightbol-compile-stage   :initform nil)
@@ -166,9 +154,7 @@
              (eightbol-compile-stage c) (eightbol-error-message c)
              (eightbol-compile-input c)))))
 
-;;; ---------------------------------------------------------------
 ;;; CLI / usage errors
-;;; ---------------------------------------------------------------
 
 (define-condition usage-error (compiler-error)
   ((option    :initarg :option    :reader eightbol-usage-option    :initform nil)
@@ -177,3 +163,75 @@
    (lambda (c s)
      (format s "~@[~a: ~]~a"
              (eightbol-usage-option c) (eightbol-error-message c)))))
+
+(define-condition unknown-option-error (usage-error)
+  ()
+  (:report
+   (lambda (c s)
+     (format s "Unknown option: ~a" (eightbol-usage-option c)))))
+
+(define-condition dangling-option-error (usage-error)
+  ()
+  (:report
+   (lambda (c s)
+     (format s "Looks like a dangling option ends arguments: missing ~a"
+             (eightbol-usage-option c)))))
+
+(define-condition unknown-cpu-error (usage-error)
+  ((cpu       :initarg :cpu       :reader eightbol-unknown-cpu       :initform nil)
+   (known-cpus :initarg :known-cpus :reader eightbol-known-cpus :initform nil))
+  (:report
+   (lambda (c s)
+     (format s "Unknown CPU: ~a. Known: ~a"
+             (eightbol-unknown-cpu c) (eightbol-known-cpus c)))))
+
+;;; Input / file errors
+
+(define-condition input-file-not-found (compile-error)
+  ((path :initarg :path :reader eightbol-input-file-path :initform nil))
+  (:report
+   (lambda (c s)
+     (format s "Can't find input file ~a" (eightbol-input-file-path c)))))
+
+;;; Parse / AST errors
+
+(define-condition parse-failed-error (compile-error)
+  ((input-file :initarg :input-file :reader eightbol-parse-input-file
+    :initform nil)
+   (actual     :initarg :actual     :reader eightbol-parse-actual
+    :initform nil))
+  (:report
+   (lambda (c s)
+     (format s "Parse of ~a did not yield a :program node~@[ (got ~s)~]"
+             (eightbol-parse-input-file c) (eightbol-parse-actual c)))))
+
+(define-condition invalid-ast-error (compile-error)
+  ((expected :initarg :expected :reader eightbol-invalid-ast-expected
+    :initform :program)
+   (actual   :initarg :actual   :reader eightbol-invalid-ast-actual
+    :initform nil))
+  (:report
+   (lambda (c s)
+     (format s "Not a :program AST node (expected ~s~@[, got ~s~])"
+             (eightbol-invalid-ast-expected c) (eightbol-invalid-ast-actual c)))))
+
+;;; AST validation (class references, procedure termination)
+
+(define-condition undefined-class-reference (compile-error)
+  ((class-name :initarg :class-name :reader eightbol-undefined-class-name
+    :initform nil)
+   (defined-set :initarg :defined-set :reader eightbol-undefined-class-defined-set
+    :initform nil))
+  (:report
+   (lambda (c s)
+     (format s "OBJECT REFERENCE class ~s is not in the defined-class set ~s"
+             (eightbol-undefined-class-name c)
+             (eightbol-undefined-class-defined-set c)))))
+
+(define-condition routine-not-terminated (compile-error)
+  ((method-id :initarg :method-id :reader eightbol-routine-not-terminated-method-id
+    :initform nil))
+  (:report
+   (lambda (c s)
+     (format s "Method ~s is not terminated by GOBACK, EXIT, STOP RUN, unconditional GO TO, or tail INVOKE/CALL (or IF with ELSE whose branches all terminate)"
+             (eightbol-routine-not-terminated-method-id c)))))

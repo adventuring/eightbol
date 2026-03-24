@@ -54,7 +54,7 @@ Source/Classes/{ClassName}.cob
 * **COMPUTE** — COMPUTE x = expression
 * **IF/THEN/ELSE** — conditional execution
 * **PERFORM** — PERFORM procedure-name; PERFORM UNTIL/THRU
-* **INVOKE** — INVOKE object method-name
+* **INVOKE** — INVOKE object method-name (6502 family: `INVOKE Self` expands to the Phantasia `.CallMethod` macro, same as `INVOKE` on a typed object reference; see `doc/EIGHTBOL.texi` §6502 ABI)
 * **STRING** — STRING source DELIMITED BY SIZE INTO dest (block transfer only); supports reference modification `name(start:length)`
 * **SET** — SET identifier TO expression (only)
 * **CALL**, **CANCEL**, **GOBACK**, **EXIT METHOD**, **LOG FAULT**, **BREAK**

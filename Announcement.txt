@@ -1,0 +1,53 @@
+FOR IMMEDIATE RELEASE
+
+Media contact
+  Bruce-Robert Pocock
+  AtariAge forums, AtariAge Discord, or support@interworldly.com
+
+------------------------------------------------------------------------
+
+Interworldly Adventuring Announces EIGHTBOL Compiler for Classic CPUs
+
+A COBOL-shaped, object-oriented method language shipping assembly for 6502
+family, Z80, Game Boy, Intellivision, 68000, x16, ARM Thumb, and more.
+
+------------------------------------------------------------------------
+
+ONLINE—1 April 2026—Interworldly Adventuring today publicly highlights
+EIGHTBOL (Eight-Bit-Oriented Language), an open compiler that turns a strict
+subset of COBOL into maintainable assembly for vintage and constrained
+processors. EIGHTBOL is developed alongside Phantasia and the Skyline Tool
+homebrew toolchain, and is published for community use at
+https://github.com/adventuring/eightbol
+
+EIGHTBOL targets, among others, the 6502 family (including 65c02, 65c816,
+RP2A03, HuC6280), Z80, SM83, cp1610, Motorola 68000 (m68k), Intel 80286
+(i286), ARM7 in Thumb-oriented form, and Fairchild F8—one front end, multiple
+back ends, emitted as assembly sources for the developer’s existing build.
+
+The language is built for object methods in a compact OOPS style: procedures
+can INVOKE other objects, MOVE and COMPUTE state, branch with IF and EVALUATE,
+iterate with PERFORM, and lean on required COPY inclusion for class layout
+(copybooks). It complements narrative Fountain scripting where designers need
+structured logic rather than screenplay flow alone.
+
+Work on EIGHTBOL remains in progress: behavior and repository layout still
+reflect Phantasia integration in places, and early adopters should expect
+rough edges. Teams or individuals who would like to adopt EIGHTBOL for their
+own ports or originals are invited to make contact via the channels above.
+
+Is today’s date a wink, a milestone, or both? The compiler, tests, and
+back ends are in the repository either way.
+
+###
+
+About EIGHTBOL
+  EIGHTBOL is a MIT-licensed compiler (Common Lisp) that parses EIGHTBOL
+  source, validates and optimizes an AST, and emits per-CPU assembly through
+  dedicated back ends. It is a subset of COBOL—not a full standard
+  implementation—with a feature set tuned to game object methods and classic
+  hardware.
+
+About Interworldly Adventuring
+  Interworldly Adventuring, LLC develops Phantasia and related tooling for
+  classic platforms and modern preservation of interactive design.

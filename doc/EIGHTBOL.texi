@@ -969,10 +969,14 @@ Y index register; used for slot offsets (ldy #Slot, lda (Self),y)
 @table @asis
 @item Procedure call (PERFORM / CALL)
 @code{jsr} to procedure label. Caller and callee share same bank.
+Near @code{CALL} to a local label uses @code{jsr}; a tail @code{CALL} immediately before
+@code{GOBACK}/@code{EXIT@dots{}} may use @code{jmp}.  Service, library, and bank-switched
+forms use @code{.FarCall}, @code{.FarJSR}, or @code{jsr Lib.@dots{}} as appropriate.
 @item Return
 @code{rts}. No return value in registers.
 @item INVOKE Self @code{"Method"}
-@code{jsr Invoke@var{Class}@var{Method}}
+@code{.CallMethod Call@var{Class}@var{Method}, @var{Class}Class} --- same Phantasia
+@code{CallMethod} macro as @code{INVOKE} on a typed object (dispatches via @code{DoCallMethod}).
 @item INVOKE variable @code{"Method"}
 @code{.CallMethod Call@var{Type}@var{Method}, @var{Type}Class, @var{Var}}
 @item Slot access

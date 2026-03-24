@@ -1,0 +1,21 @@
+;;; EIGHTBOL compile-regression test Classes.Defs
+;;; Minimal class definitions for fixture .cob files.
+;;; Used by make-eightbol-copybooks to generate *-Slots.cpy.
+
+MinimalCharacter < BasicObject
+.HP 2
+#Think
+#Kill
+
+MinimalEmpty < BasicObject
+#Noop
+
+MinimalWithData < BasicObject
+.Counter 1
+.Flag 1
+#Increment
+
+MinimalExpanded < BasicObject
+.X 1
+.Y 1
+#Test

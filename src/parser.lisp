@@ -9,11 +9,17 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
 
 ;;; source-error is defined in conditions.lisp
 
+(defun safe-getf (plist key)
+  "Return (getf plist key) when PLIST is a plausible plist; otherwise nil. Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{:paragraph}."
+  (when (and plist (listp plist) (evenp (length plist)))
+    (handler-case (getf plist key)
+      (type-error () nil))))
+
 ;;; Token list — every terminal used anywhere in the grammar must
 ;;; appear here so the lexer produces the right token type.
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (defun token-list ()
-    '(|(| |)| |:| |,| + - * / |.| /= < <= = > >= ≠ ≤ ≥
+    '(|(| |)| |:| |,| + - * / × ÷ |.| /= < <= = > >= ≠ ≤ ≥
       add address after all alphabet alphabetic also and any are
       argument ascii atascii at author
       bank before binary bit-and bit-not bit-or bit-xor blank break by
@@ -32,7 +38,7 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
       method method-id minifont
       move multiply native negative next not null nulls numeric
       object object-computer occurs of offset on or other outdent
-      packed-decimal petscii pic picture pointer positive process
+      packed-decimal perform petscii pic picture pointer positive process
       procedure procedure-pointer program
       redefines reference remainder renames replacing returning right run
       search section security self sentence sentences service set
@@ -57,7 +63,7 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
                          _end _class end-class-name _dot c7*)
   (declare (ignore _end _class _dot _object _object_dot
                    _end_object _object_end _end_object_dot))
-  (let* ((class-id (getf id :class-id)))
+  (let* ((class-id (safe-getf id :class-id)))
     (assert (string-equal class-id end-class-name)
             () "Class-ID mismatch: ~a vs ~a" class-id end-class-name)
     (list :program
@@ -92,10 +98,38 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
   "Build a flat list of statements by appending one item to the sequence."
   (append (ensure-list seq) (list item)))
 
+(defun stmt-with-source-location (stmt)
+  "Append @code{:source-file}, @code{:source-line}, @code{:source-sequence}, and
+@code{:source-text} (trimmed COBOL line from the lexer) from
+@code{*current-token-location*} to STMT so backends can emit assembly comments."
+  (unless (and (listp stmt) (first stmt))
+    (return-from stmt-with-source-location stmt))
+  (let ((loc *current-token-location*))
+    (if (null loc)
+        stmt
+        (let ((suffix
+               (append (when (safe-getf loc :source-file)
+                         (list :source-file (safe-getf loc :source-file)))
+                       (when (safe-getf loc :source-line)
+                         (list :source-line (safe-getf loc :source-line)))
+                       (when (safe-getf loc :source-sequence)
+                         (list :source-sequence (safe-getf loc :source-sequence)))
+                       (when (safe-getf loc :source-line-text)
+                         (list :source-text (safe-getf loc :source-line-text))))))
+          ;; (:paragraph \"Name\") — second slot is the name, not a plist tail; inserting
+          ;; keys after @code{append} would make @code{(rest stmt)} a malformed plist for @code{getf}.
+          (if (and (eq (first stmt) :paragraph) (>= (length stmt) 2))
+              (list* :paragraph (second stmt) (append suffix (cddr stmt)))
+              (append stmt suffix))))))
+
 (defun parse/stmt-item-with-dot (stmt _dot)
   "stmt-item: statement followed by period — discard the period."
   (declare (ignore _dot))
-  stmt)
+  (stmt-with-source-location stmt))
+
+(defun parse/stmt-item-no-dot (stmt)
+  "stmt-item: statement without optional period (same grammar as COBOL allows)."
+  (stmt-with-source-location stmt))
 
 (defun parse/eightbol-program (struct _comments)
   "Top-level program rule: ignore trailing comments, return the program plist."
@@ -163,10 +197,19 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
   (declare (ignore _occurs _to _times _depending _on))
   (list :occurs (list :min min :max max :depending-on dep-name)))
 
-(defun parse/identifier-subscript (rp-val sub lp-val name)
+(defun parse/data-name-id (_id)
+  "Data name ID (keyword token) — return string \"ID\" for AST/copybook consistency."
+  (declare (ignore _id))
+  "ID")
+
+(defun parse/method-name-from-symbol (sym)
+  "METHOD-ID. identifier (unquoted) — return string for AST (e.g. Energize → \"Energize\")."
+  (string-capitalize (princ-to-string sym)))
+
+(defun parse/identifier-subscript (name _lp sub _rp)
   "Action for: data-name |(| subscript |)| — subscripted identifier.
- YACC passes vals in reverse stack order: (|)| subscript |(| data-name)."
-  (declare (ignore rp-val lp-val))
+ Receives $1=data-name, $2=|(|, $3=subscript, $4=|)|."
+  (declare (ignore _lp _rp))
   (list :subscript name sub))
 
 (defun parse/picture-sequence-repeat (pic-seq _lp n _rp)
@@ -242,9 +285,47 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
   (declare (ignore _is _not _null))
   (list :not (list '= expr :null)))
 
+(defun parse/cond-is-zero (expr _is _zero)
+  (declare (ignore _is _zero))
+  (list :is-zero expr))
+
+(defun parse/cond-is-not-zero (expr _is _not _zero)
+  (declare (ignore _is _not _zero))
+  (list :is-not-zero expr))
+
 (defun parse/cond-eq (expr1 _op expr2 &optional expr3)
   (declare (ignore _op))
   (list '= expr1 (or expr3 expr2)))
+
+(defun parse/cond-rel-equal-is (e1 _is _equal _to e2)
+  "Relation @code{(= E1 E2)} from @samp{E1 IS EQUAL TO E2}."
+  (declare (ignore _is _equal _to))
+  (list '= e1 e2))
+
+(defun parse/cond-rel-equal-omitted (e1 _equal _to e2)
+  "Relation @code{(= E1 E2)} from @samp{E1 EQUAL TO E2}."
+  (declare (ignore _equal _to))
+  (list '= e1 e2))
+
+(defun parse/cond-rel-less-is (e1 _is _less _than e2)
+  "Relation @code{(< E1 E2)} from @samp{E1 IS LESS THAN E2}."
+  (declare (ignore _is _less _than))
+  (list '< e1 e2))
+
+(defun parse/cond-rel-less-omitted (e1 _less _than e2)
+  "Relation @code{(< E1 E2)} from @samp{E1 LESS THAN E2}."
+  (declare (ignore _less _than))
+  (list '< e1 e2))
+
+(defun parse/cond-rel-greater-is (e1 _is _greater _than e2)
+  "Relation @code{(> E1 E2)} from @samp{E1 IS GREATER THAN E2}."
+  (declare (ignore _is _greater _than))
+  (list '> e1 e2))
+
+(defun parse/cond-rel-greater-omitted (e1 _greater _than e2)
+  "Relation @code{(> E1 E2)} from @samp{E1 GREATER THAN E2}."
+  (declare (ignore _greater _than))
+  (list '> e1 e2))
 
 (defun parse/bit-or (e1 _op e2)
   (declare (ignore _op))
@@ -257,6 +338,21 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
 (defun parse/bit-not (_bit_not expr)
   (declare (ignore _bit_not))
   (list :bit-not expr))
+
+(defun parse/expr-zero (_zero)
+  "ZERO as expression (78-level constant) — yields literal 0."
+  (declare (ignore _zero))
+  '(:literal 0))
+
+(defun parse/expr-zeroes (_zeroes)
+  "ZEROES as expression (78-level constant) — yields literal 0."
+  (declare (ignore _zeroes))
+  '(:literal 0))
+
+(defun parse/expr-null (_null)
+  "NULL as pointer / aggregate source in MOVE, COMPUTE, etc."
+  (declare (ignore _null))
+  :null)
 
 (defun parse/invoke (_invoke obj method)
   (declare (ignore _invoke))
@@ -290,6 +386,11 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
 Library routines live in LastBank which is always resident at $c000.
 Generates a near jsr (no bank switch) regardless of the library name."
   (declare (ignore _call _in _library _name))
+  (list :call :target target :bank nil :library t))
+
+(defun parse/call-in-library-omit-name (_call target _in _library)
+  "CALL target IN LIBRARY. — library name omitted (LastBank implied)."
+  (declare (ignore _call _in _library))
   (list :call :target target :bank nil :library t))
 
 (defun parse/if-then (_if condition _then stmts _end_if)
@@ -334,6 +435,14 @@ Generates a near jsr (no bank switch) regardless of the library name."
   (declare (ignore _perform _times))
   (list :perform :procedure name :times expr))
 
+(defun parse/perform-cobol-times (_perform name _times expr)
+  "Build @code{(:perform :procedure NAME :times EXPR)} for PERFORM NAME TIMES EXPR.
+
+_INPUTS_: PERFORM token, procedure NAME, TIMES keyword, count EXPR.
+_OUTPUT_: perform AST plist."
+  (declare (ignore _perform _times))
+  (list :perform :procedure name :times expr))
+
 (defun parse/perform-until (_perform name _until cond)
   (declare (ignore _perform _until))
   (list :perform :procedure name :until cond))
@@ -355,46 +464,49 @@ Generates a near jsr (no bank switch) regardless of the library name."
 ;;; Statement forms that parse but are not implemented signal
 ;;; EIGHTBOL-SOURCE-ERROR at compile time.
 ;;;
-;;; INSPECT — all 3 forms unsupported:
-;;; • INSPECT id TALLYING expr FOR CHARACTERS
-;;; • INSPECT id CONVERTING expr TO expr
-;;; • INSPECT id REPLACING CHARACTERS BY expr
+;;; INSPECT — implemented: TALLYING … FOR CHARACTERS, CONVERTING … TO …,
+;;; REPLACING CHARACTERS BY … (see parse/inspect-* below).
 ;;;
-;;; GOTO — all 4 forms unsupported:
-;;; • GO TO procedure-name
-;;; • GO procedure-name
-;;; • GO TO procedure-name DEPENDING ON expression
-;;; • GO procedure-name DEPENDING ON expression
+;;; GOTO — implemented: GO/GO TO procedure-name, GO TO id DEPENDING ON expr.
 ;;;
-;;; EVALUATE — unsupported (entire statement):
-;;; • EVALUATE subject WHEN phrases stmts [WHEN OTHER stmts] [END-EVALUATE]
-;;; All eval-subject, when-clause, and evaluate-phrases variants.
+;;; EVALUATE — implemented: EVALUATE subject WHEN ... [WHEN OTHER ...] END-EVALUATE.
 ;;;
-;;; SET — implemented: SET identifier TO expression only.
-;;; Unsupported forms:
-;;; • SET identifier UP BY expression
-;;; • SET identifier DOWN BY expression
-;;; • SET condition-name TO TRUE
-;;; • SET identifier TO ADDRESS OF identifier
-;;; • SET identifier TO NULL
-;;; • SET identifier TO NULLS
-;;; • SET identifier TO SELF
+;;; SET — implemented: TO expression, TO NULL, UP BY, DOWN BY, TO ADDRESS OF, TO SELF.
+;;; Unsupported: SET condition-name TO TRUE; SET identifier TO NULLS.
 
 (defun unsupported-statement (message)
   "Signal EIGHTBOL-SOURCE-ERROR for an unsupported statement at current token location."
   (error 'source-error
-         :source-file (getf *current-token-location* :source-file)
-         :source-line (getf *current-token-location* :source-line)
-         :source-sequence (getf *current-token-location* :source-sequence)
+         :source-file (safe-getf *current-token-location* :source-file)
+         :source-line (safe-getf *current-token-location* :source-line)
+         :source-sequence (safe-getf *current-token-location* :source-sequence)
          :message message))
 
-;;; DIVIDE — all 5 forms unsupported
-(defun parse/divide-unsupported (&rest _) (declare (ignore _))
-  (unsupported-statement "DIVIDE is not supported"))
+;;; DIVIDE — supported only when divisor is constant power-of-two (1, 2, 4, 8, ...).
+;;; INTO id, INTO expr GIVING id, BY expr GIVING id. Remainder forms unsupported.
+(defun parse/divide-into-id (_div expr _into id)
+  (declare (ignore _div _into))
+  (list :divide :into id :divisor expr))
 
-;;; MULTIPLY — both forms unsupported
-(defun parse/multiply-unsupported (&rest _) (declare (ignore _))
-  (unsupported-statement "MULTIPLY is not supported"))
+(defun parse/divide-into-giving (_div divisor _into dividend _giving id)
+  (declare (ignore _div _into _giving))
+  (list :divide :into dividend :giving id :divisor divisor))
+
+(defun parse/divide-by-giving (_div divisor _by dividend _giving id)
+  (declare (ignore _div _by _giving))
+  (list :divide :divisor divisor :by dividend :giving id))
+
+(defun parse/divide-into-remainder-unsupported (&rest _) (declare (ignore _))
+  (unsupported-statement "DIVIDE ... REMAINDER ... is not supported"))
+
+;;; MULTIPLY — supported only when multiplier is constant power-of-two.
+(defun parse/multiply-by-id (_mul expr _by id)
+  (declare (ignore _mul _by))
+  (list :multiply :by id :multiplier expr))
+
+(defun parse/multiply-by-giving (_mul mult _by op _giving id)
+  (declare (ignore _mul _by _giving))
+  (list :multiply :by op :giving id :multiplier mult))
 
 ;;; STRING — BLT form (DELIMITED BY SIZE) supported; character delimiter unsupported
 (defun parse/string-blt (_str source _del _by _size _into dest)
@@ -446,9 +558,12 @@ Generates a near jsr (no bank switch) regardless of the library name."
   (declare (ignore _dot))
   (list :paragraph (princ-to-string name)))
 
-(defun parse/goto (_go target)
-  (declare (ignore _go))
-  (list :goto :target target))
+(defun parse/goto (go token-or-to &optional target)
+  "Return (:goto :target …). @code{GO TO name} passes three values (@code{go}, @code{to}, NAME); @code{GO name} passes two (@code{go}, NAME)."
+  (declare (ignore go))
+  (if target
+      (list :goto :target target)
+      (list :goto :target token-or-to)))
 
 (defun parse/procedure-name-list-append (list _comma name)
   (declare (ignore _comma))
@@ -474,22 +589,34 @@ Generates a near jsr (no bank switch) regardless of the library name."
 (defun parse/when-clauses-append (clauses clause)
   (append (ensure-list clauses) (list clause)))
 
-(defun parse/evaluate (subject when-clauses _end)
-  (declare (ignore _end))
-  (list :evaluate :subject subject :when-clauses (ensure-list when-clauses)))
+(defun parse/evaluate (_evaluate subject when-clauses _end-evaluate)
+  "Return (:evaluate :subject SUBJECT :when-clauses …). YACC passes four values (EVALUATE token, subject, clauses, end)."
+  (declare (ignore _evaluate _end-evaluate))
+  (let ((wc when-clauses))
+    (list :evaluate :subject subject
+          :when-clauses (cond
+                          ((null wc) nil)
+                          ;; One clause: (:when …) or (:when-other …) — wrap as list of clauses.
+                          ((and (listp wc) (symbolp (first wc))
+                                (member (first wc) '(:when :when-other)))
+                           (list wc))
+                          (t (ensure-list wc))))))
 
-;;; SET — unsupported forms (SET identifier TO expression is implemented)
-(defun parse/set-up-by-unsupported (&rest _) (declare (ignore _))
-  (unsupported-statement "SET ... UP BY ... is not supported"))
+;;; SET — UP BY, DOWN BY, TO ADDRESS OF, TO SELF (TO expr and TO NULL implemented above)
+(defun parse/set-up-by (_set identifier _up _by expr)
+  (declare (ignore _set _up _by))
+  (list :set :up-by identifier :by expr))
 
-(defun parse/set-down-by-unsupported (&rest _) (declare (ignore _))
-  (unsupported-statement "SET ... DOWN BY ... is not supported"))
+(defun parse/set-down-by (_set identifier _down _by expr)
+  (declare (ignore _set _down _by))
+  (list :set :down-by identifier :by expr))
 
 (defun parse/set-condition-unsupported (&rest _) (declare (ignore _))
   (unsupported-statement "SET condition-name TO TRUE is not supported"))
 
-(defun parse/set-address-of-unsupported (&rest _) (declare (ignore _))
-  (unsupported-statement "SET ... TO ADDRESS OF ... is not supported"))
+(defun parse/set-address-of (_set target-id _to _address _of source-id)
+  (declare (ignore _set _to _address _of))
+  (list :set :target target-id :address-of source-id))
 
 (defun parse/set-null (_set id _to _null)
   (declare (ignore _set _to _null))
@@ -498,14 +625,15 @@ Generates a near jsr (no bank switch) regardless of the library name."
 (defun parse/set-nulls-unsupported (&rest _) (declare (ignore _))
   (unsupported-statement "SET ... TO NULLS is not supported"))
 
-(defun parse/set-self-unsupported (&rest _) (declare (ignore _))
-  (unsupported-statement "SET ... TO SELF is not supported"))
+(defun parse/set-self (_set identifier _to _self)
+  (declare (ignore _set _to _self))
+  (list :set :to-self identifier))
 
 ;;; YACC grammar definition
 (eval `(yacc:define-parser *eightbol-parser*
          (:start-symbol eightbol-program)
          (:terminals (,@(token-list) number string symbol bareword picture-sequence))
-         (:precedence ((:left * /) (:left + -)))
+         (:precedence ((:left * / × ÷) (:left + -)))
          (:muffle-conflicts :some)
 
          ;; Top-level: a class file
@@ -544,10 +672,9 @@ Generates a near jsr (no bank switch) regardless of the library name."
 
          ;; Literals and names
          (literal number string)
-         ;; data-name accepts SYMBOL tokens and also SELF, which is tokenized as
-         ;; a keyword but is legitimately used as a data item name (e.g. 01 Self
-         ;; OBJECT REFERENCE) and as a slot qualifier (e.g. HP OF Self).
-         (data-name symbol self)
+         ;; data-name accepts SYMBOL tokens and also SELF, ID (keyword but valid
+         ;; data names in COBOL, e.g. 01 Self OBJECT REFERENCE, 05 ID PIC 99).
+         (data-name symbol self (id #'parse/data-name-id))
          (procedure-name symbol)
          (procedure-name-list
           procedure-name
@@ -563,8 +690,8 @@ Generates a near jsr (no bank switch) regardless of the library name."
          (obj-ref-class symbol)
          (end-class-name symbol)
          (expr-class obj-ref-class)
-         ;; Method names must be quoted string literals (e.g. METHOD-ID. "Test".)
-         (method-name string)
+         ;; Method names: quoted string (METHOD-ID. "Think".) or identifier (METHOD-ID. Energize.)
+         (method-name string (symbol #'parse/method-name-from-symbol))
          ;; picture-string: PICTURE-SEQUENCE (from lexer when after PIC/PICTURE),
          ;; or symbol, number, symbol(number), or picture-sequence(number) e.g. X(64)
          (picture-string
@@ -626,7 +753,6 @@ Generates a near jsr (no bank switch) regardless of the library name."
          (object-computer-tag literal symbol)
 
          (special-names-paragraph
-          ()
           (special-names |.| special-names-clauses))
 
          (special-names-clauses
@@ -829,7 +955,7 @@ Generates a near jsr (no bank switch) regardless of the library name."
 
          (stmt-item
           (statement |.| #'parse/stmt-item-with-dot)
-          (statement (lambda (s) s))
+          (statement #'parse/stmt-item-no-dot)
           (eightbol-comment (lambda (c) (declare (ignore c)) nil)))
 
          ;; Identifiers and expressions
@@ -861,13 +987,19 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (expression + expression #'parse/expr-add)
           (expression - expression #'parse/expr-subtract)
           (expression * expression #'parse/expr-multiply)
+          (expression × expression #'parse/expr-multiply)
           (expression / expression #'parse/expr-divide)
+          (expression ÷ expression #'parse/expr-divide)
           (expression shift-left expression #'parse/shift-left)
           (expression shift-right expression #'parse/shift-right)
           (expression bit-and expression #'parse/bit-and)
           (expression bit-or expression #'parse/bit-or)
           (expression bit-xor expression #'parse/bit-xor)
-          (bit-not expression #'parse/bit-not))
+          (bit-not expression #'parse/bit-not)
+          (zero #'parse/expr-zero)
+          (zeroes #'parse/expr-zeroes)
+          (null #'parse/expr-null)
+          )
 
          (function-identifier
           (function symbol |(| argument-list |)|)
@@ -901,8 +1033,8 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (expression is not numeric)
           (expression is alphabetic)
           (expression is not alphabetic)
-          (expression is zero)
-          (expression is not zero)
+          (expression is zero #'parse/cond-is-zero)
+          (expression is not zero #'parse/cond-is-not-zero)
           (expression is null #'parse/cond-is-null)
           (expression is not null #'parse/cond-is-not-null)
           (expression is expr-class)
@@ -913,13 +1045,13 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (expression is not positive)
           (expression is negative)
           (expression is not negative)
-          (expression is zero)
-          (expression is not zero))
+          (expression is zero #'parse/cond-is-zero)
+          (expression is not zero #'parse/cond-is-not-zero))
 
 
          (relation-condition
-          (expression is greater than expression)
-          (expression greater than expression)
+          (expression is greater than expression #'parse/cond-rel-greater-is)
+          (expression greater than expression #'parse/cond-rel-greater-omitted)
           (expression is > expression)
           (expression > expression)
           (expression is not greater than expression)
@@ -930,8 +1062,8 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (expression <= expression)
           (expression is ≤ expression)
           (expression ≤ expression)
-          (expression is less than expression)
-          (expression less than expression)
+          (expression is less than expression #'parse/cond-rel-less-is)
+          (expression less than expression #'parse/cond-rel-less-omitted)
           (expression is < expression)
           (expression < expression)
           (expression is not less than expression)
@@ -942,8 +1074,8 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (expression >= expression)
           (expression is ≥ expression)
           (expression ≥ expression)
-          (expression is equal to expression)
-          (expression equal to expression)
+          (expression is equal to expression #'parse/cond-rel-equal-is)
+          (expression equal to expression #'parse/cond-rel-equal-omitted)
           (expression is = expression #'parse/cond-eq)
           (expression = expression #'parse/cond-eq)
           (expression is not equal to expression)
@@ -989,8 +1121,9 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (call call-target in service bank-identifier #'parse/call-in-service)
           ;; CALL Target IN BANK BankName. — far call to explicit bank (.FarJSR)
           (call call-target in bank bank-identifier #'parse/call-in-bank)
-          ;; CALL Target IN LIBRARY LibraryName. — near jsr (LastBank is always resident)
+          ;; CALL Target IN LIBRARY [LibraryName]. — near jsr (LastBank is always resident)
           (call call-target in library bank-identifier #'parse/call-in-library)
+          (call call-target in library #'parse/call-in-library-omit-name)
           ;; CALL Target. — local jsr
           (call call-target #'parse/call))
 
@@ -1011,11 +1144,11 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (debug break expression #'parse/debug-break))
 
          (divide-statement
-          (divide expression into identifier #'parse/divide-unsupported)
-          (divide expression into expression giving identifier #'parse/divide-unsupported)
-          (divide expression by expression giving identifier #'parse/divide-unsupported)
-          (divide expression into expression giving identifier remainder identifier #'parse/divide-unsupported)
-          (divide expression by expression giving identifier remainder identifier #'parse/divide-unsupported))
+          (divide expression into identifier #'parse/divide-into-id)
+          (divide expression into expression giving identifier #'parse/divide-into-giving)
+          (divide expression by expression giving identifier #'parse/divide-by-giving)
+          (divide expression into expression giving identifier remainder identifier #'parse/divide-into-remainder-unsupported)
+          (divide expression by expression giving identifier remainder identifier #'parse/divide-into-remainder-unsupported))
 
          (evaluate-statement
           (evaluate eval-subject when-clauses end-evaluate #'parse/evaluate))
@@ -1093,10 +1226,11 @@ Generates a near jsr (no bank switch) regardless of the library name."
           (move expression to identifier #'parse/move))
 
          (multiply-statement
-          (multiply expression by identifier #'parse/multiply-unsupported)
-          (multiply expression by expression giving identifier #'parse/multiply-unsupported))
+          (multiply expression by identifier #'parse/multiply-by-id)
+          (multiply expression by expression giving identifier #'parse/multiply-by-giving))
 
          (perform-statement
+          (perform procedure-name times expression #'parse/perform-cobol-times)
           (perform procedure-name expression times #'parse/perform-times)
           (perform procedure-name through procedure-name)
           (perform procedure-name thru procedure-name)
@@ -1120,13 +1254,13 @@ Generates a near jsr (no bank switch) regardless of the library name."
 
          (set-statement
           (set identifier to expression #'parse/set-to)
-          (set identifier up by expression #'parse/set-up-by-unsupported)
-          (set identifier down by expression #'parse/set-down-by-unsupported)
+          (set identifier up by expression #'parse/set-up-by)
+          (set identifier down by expression #'parse/set-down-by)
           (set condition-name to true #'parse/set-condition-unsupported)
-          (set identifier to address of identifier #'parse/set-address-of-unsupported)
+          (set identifier to address of identifier #'parse/set-address-of)
           (set identifier to null #'parse/set-null)
           (set identifier to nulls #'parse/set-nulls-unsupported)
-          (set identifier to self #'parse/set-self-unsupported))
+          (set identifier to self #'parse/set-self))
 
          ;; string-operand: identifier, literal, or identifier with reference modification (start:length)
          (string-operand
@@ -1153,16 +1287,17 @@ Generates a near jsr (no bank switch) regardless of the library name."
 The lexval passed to parser action functions is (second token), i.e. the raw
 parsed value (string, number, etc.) — NOT the full token plist.
 As a side effect, each consumed token's source location is stored in
-*CURRENT-TOKEN-LOCATION* for use in error reporting."
+*CURRENT-TOKEN-LOCATION* for use in error reporting and assembly comments."
   (lambda ()
     (loop
        (unless lexer-tokens (return (values nil nil)))
        (let ((token (pop lexer-tokens)))
          (when token
            (setf *current-token-location*
-                 (list :source-file (getf token :source-file)
-                       :source-line (getf token :source-line)
-                       :source-sequence (getf token :source-sequence)))
+                 (list :source-file (safe-getf token :source-file)
+                       :source-line (safe-getf token :source-line)
+                       :source-sequence (safe-getf token :source-sequence)
+                       :source-line-text (safe-getf token :source-line-text)))
            (return (values (first token) (second token))))))))
 
 (defun parse-eightbol-string (string &optional (pathname "<String>"))
@@ -1190,9 +1325,9 @@ sequence number."
                             "Unexpected token ~a~@[ (~s)~].~%~10tExpected one of: ~{~a~^, ~}"
                             term val exp)))
           (error 'source-error
-                 :source-file (getf loc :source-file)
-                 :source-line (getf loc :source-line)
-                 :source-sequence (getf loc :source-sequence)
+:source-file (safe-getf loc :source-file)
+                :source-line (safe-getf loc :source-line)
+                :source-sequence (safe-getf loc :source-sequence)
                  :terminal term
                  :token-value val
                  :expected exp

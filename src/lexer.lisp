@@ -206,12 +206,15 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
 (defun tokenize-line (line)
   "Tokenize line based on current lexing context"
   (let* (result
-         (tokens (merge-prefixed-literals (group-constituent-chars line))))
+         (tokens (merge-prefixed-literals (group-constituent-chars line)))
+         (line-text (string-trim '(#\Space #\Tab #\Page #\Return)
+                                 (if (stringp line) line (coerce line 'string)))))
     (dolist (token tokens (nreverse result))
       (let ((meta (list :source-file *source-file-pathname*
                        :source-line *source-line-number*
                        :source-sequence *source-sequence-number*
-                        :zone *line-zone-start*))
+                        :zone *line-zone-start*
+                        :source-line-text line-text))
             (prev-was-pic (and result
                                (let ((last (first result)))
                                  (member (first last) '(eightbol::pic eightbol::picture)))))
@@ -317,27 +320,37 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
   "Search *COPYBOOK-PATHS* for NAME.cpy; return pathname or NIL.
 When LIBRARY is specified (from COPY Name OF Library or COPY Name IN Library),
 search first in {path}/{library}/ subdirectory, then in {path}/.
-Rejects names containing path separators or leading dot."
+Rejects names containing path separators or leading dot.
+COBOL is case-insensitive; if exact NAME.cpy is not found, tries case-insensitive
+match against files in the directory (so COPY Basic-NPC-Slots finds Basic-Npc-Slots.cpy)."
   (unless (valid-copybook-name-p name)
     (error "Invalid COPY name ~s: must be Hyphenated-Alphanumeric" name))
   (when library
     (unless (valid-copybook-name-p (string library))
       (error "Invalid COPY library ~s: must be Hyphenamed-Alphanumeric" library)))
-  (flet ((try (dir-pn)
+  (flet ((try-exact (dir-pn)
            (let ((path (merge-pathnames
                         (make-pathname :name name :type "cpy")
                         dir-pn)))
-             (when (probe-file path) (return-from find-copybook path)))))
+             (when (probe-file path) (return-from find-copybook path))))
+         (try-case-insensitive (dir-pn)
+           (let ((want (concatenate 'string name ".cpy")))
+             (dolist (ent (directory (merge-pathnames
+                                     (make-pathname :name :wild :type "cpy")
+                                     dir-pn)))
+               (when (string-equal (file-namestring ent) want)
+                 (return-from find-copybook ent))))))
     (dolist (dir *copybook-paths*)
       (let ((dir-pn (ensure-directory-pathname dir)))
-        ;; When library specified: try {dir}/{library}/ first
         (if library
             (let ((lib-dir (merge-pathnames
                             (make-pathname :directory `(:relative ,library))
                             dir-pn)))
-              (try lib-dir))
-            ;; else try {dir}/ directly
-            (try dir-pn)))))
+              (try-exact lib-dir)
+              (try-case-insensitive lib-dir))
+            (progn
+              (try-exact dir-pn)
+              (try-case-insensitive dir-pn))))))
   nil)
 
 (defun lex-with-copy-expansion (stream)

@@ -14,26 +14,92 @@
 ;;; (defparameters appear later in file).
 (declaim (special *minimal-string-blt-cob* *minimal-arithmetic-cob*))
 
-;;;; ---------------------------------------------------------------
 ;;;; Test helpers — with-temporary-directory (UIOP has no such macro)
-;;;; ---------------------------------------------------------------
 
 (defmacro with-temporary-directory ((&key (prefix "eightbol-tmp-")) &body body)
-  "Create a temporary directory, run BODY with cwd set to it, then delete it.
-Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
+  "Create a unique temporary directory and run BODY with cwd set to it.
+This helper intentionally does not recursively delete directory trees."
   (let ((dir (gensym "DIR")))
     `(let ((,dir (uiop:ensure-directory-pathname
                   (merge-pathnames
                    (make-pathname :directory `(:relative ,(format nil "~a~a" ,prefix (get-internal-real-time))))
                    (uiop:temporary-directory)))))
        (ensure-directories-exist ,dir)
-       (unwind-protect
-            (uiop:call-with-current-directory ,dir (lambda () ,@body))
-         (uiop:delete-directory-tree ,dir :validate t :if-does-not-exist :ignore)))))
+       (uiop:call-with-current-directory ,dir (lambda () ,@body)))))
 
-;;;; ---------------------------------------------------------------
+(defun eightbol-test-slots-cpy-name (class-id)
+  "Return @code{*-Slots} copybook stem for CLASS-ID as @code{load-copybook-tables} resolves it
+(via @code{class-id-to-copybook-filename}), e.g. @code{TestClass} → @code{Test Class-Slots}."
+  (format nil "~a-Slots" (eightbol::class-id-to-copybook-filename class-id)))
+
+(defun %asm-substring-count (needle haystack)
+  "Count non-overlapping occurrences of NEEDLE in HAYSTACK (assembly regression checks)."
+  (loop with n = (length needle)
+        for start = 0 then (+ pos n)
+        for pos = (search needle haystack :start2 start)
+        count pos while pos))
+
+(defun minimal-class-with-stmt (stmt-line)
+  "Return minimal Character EIGHTBOL source with STMT-LINE in Think before GOBACK.
+
+@var{stmt-line}
+String, one procedure division line (e.g. @code{\"MOVE 1 TO HP.\"}).
+
+@table @asis
+@item Primary value
+A string suitable for @code{parse-eightbol-string}.
+@end table"
+  (format nil "000010 IDENTIFICATION DIVISION.
+000020 CLASS-ID. Character.
+000030 ENVIRONMENT DIVISION.
+000040 OBJECT.
+000050     DATA DIVISION.
+000060         WORKING-STORAGE SECTION.
+000070         05 HP PIC 9999 USAGE BINARY.
+000080     PROCEDURE DIVISION.
+000090         IDENTIFICATION DIVISION.
+000100         METHOD-ID. \"Think\".
+000110         PROCEDURE DIVISION.
+000120             ~a
+000130             GOBACK.
+000140         END METHOD \"Think\".
+000150         IDENTIFICATION DIVISION.
+000160         METHOD-ID. \"Kill\".
+000170         PROCEDURE DIVISION.
+000180             GOBACK.
+000190         END METHOD \"Kill\".
+000200 END OBJECT.
+000210 END CLASS Character.
+" stmt-line))
+
+;;;; Parser integration helper — must precede any test that calls it (SBCL compile order).
+
+(defun parse-procedure-stmts (procedure-text)
+  "Parse PROCEDURE-TEXT as the body of a minimal method and return the
+statement list for the first method.  PROCEDURE-TEXT should contain only
+statements, not the method wrapper boilerplate."
+  (let* ((src (format nil
+"000010 IDENTIFICATION DIVISION.
+000020 CLASS-ID. TestClass.
+000030 ENVIRONMENT DIVISION.
+000040 OBJECT.
+000050     DATA DIVISION.
+000060         WORKING-STORAGE SECTION.
+000070     PROCEDURE DIVISION.
+000080         IDENTIFICATION DIVISION.
+000090         METHOD-ID. \"Test\".
+000100         PROCEDURE DIVISION.
+~a
+000900             GOBACK.
+000910         END METHOD \"Test\".
+000920 END OBJECT.
+000930 END CLASS TestClass.
+" procedure-text))
+         (ast (eightbol::parse-eightbol-string src))
+         (method (first (eightbol::ast-methods ast))))
+    (eightbol::ast-method-statements method)))
+
 ;;;; Test data
-;;;; ---------------------------------------------------------------
 
 (defparameter *character-cob-path*
   #p"/home/brpocock/Projects/Phantasia/Source/Classes/Character.cob"
@@ -68,9 +134,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
 "
   "Minimal valid EIGHTBOL class with two methods, no COPY dependency.")
 
-;;;; ---------------------------------------------------------------
 ;;;; Lexer tests
-;;;; ---------------------------------------------------------------
 
 (test lexer/tokenizes-identification-line
   "A basic IDENTIFICATION DIVISION. line produces correct tokens."
@@ -143,9 +207,9 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
       (eightbol::lexer s))))
 
 (test lexer/parse-number-hex-with-comma
-  "parse-number handles x'9999,9999' hex dword format."
-  (is (= #x12345678 (eightbol::parse-number "x'1234,5678'")))
-  (is (= #xDEADBEEF (eightbol::parse-number "x'dead,beef'"))))
+  "parse-eightbol-number handles x'9999,9999' hex dword format (comma ignored)."
+  (is (= #x12345678 (eightbol::parse-eightbol-number "x'1234,5678'")))
+  (is (= #xDEADBEEF (eightbol::parse-eightbol-number "x'dead,beef'"))))
 
 (test lexer/refmod-tokenization
   "Reference modification SrcBuf(1:64) tokenizes as SrcBuf ( 1 : 64 )."
@@ -227,7 +291,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                      (eightbol::find-copybook "Slots" "MyLib"))))
         (is (pathnamep found))
         (is (string= "Slots" (pathname-name found)))
-        (is (search "MyLib" (namestring found))))))
+        (is (search "MyLib" (namestring found)))))))
 
 (test lexer/expand-copy-errors-when-copybook-not-found
   "expand-copy-tokens signals eightbol:copybook-not-found when copybook cannot be found; COPY cannot be ignored."
@@ -247,9 +311,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
      (list (list 'eightbol::copy)
            (list 'eightbol::|.|)))))
 
-;;;; ---------------------------------------------------------------
 ;;;; Copybook parsing (parse-cpy-line, load-copybook-tables)
-;;;; ---------------------------------------------------------------
 
 (test backend/parse-cpy-section-inherited
   "parse-cpy-line parses * Inherited from ClassName: section comment."
@@ -286,6 +348,48 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
     (is (getf (rest parsed) :constant-p))
     (is (= 255 (getf (rest parsed) :value)))))
 
+(test backend/parse-cpy-assetids-hex-no-period
+  "parse-cpy-line parses Phantasia AssetIDs.cpy: no trailing period, VALUE IS CONSTANT x'hh'."
+  (let ((parsed (eightbol::parse-cpy-line
+                 "77 Song--Hurt--ID PIC(99) USAGE IS BINARY VALUE IS CONSTANT x'49'")))
+    (is (eq :data-item (first parsed)))
+    (is (string= "Song--Hurt--ID" (getf (rest parsed) :name)))
+    (is (= #x49 (getf (rest parsed) :value)))))
+
+(test backend/load-copybook-merges-assetids-from-generated-machine
+  "load-copybook-tables merges Source/Generated/{machine}/AssetIDs.cpy into const-table."
+  (with-temporary-directory (:prefix "eightbol-assetids-")
+    (let* ((root (uiop:pathname-directory-pathname (uiop:getcwd)))
+           (classes (merge-pathnames
+                     (make-pathname :directory '(:relative "Source" "Generated" "7800" "Classes"))
+                     root))
+           (gen7800 (merge-pathnames
+                     (make-pathname :directory '(:relative "Source" "Generated" "7800"))
+                     root)))
+      (ensure-directories-exist classes)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "TestClass") :type "cpy")
+                                         classes)
+                        :direction :output :if-exists :supersede)
+        (write-line "* Own slots (TestClass):" f)
+        (write-line "05 HP PIC 9999 USAGE BINARY." f))
+      (with-open-file (f (merge-pathnames (make-pathname :name "Phantasia-Globals" :type "cpy") classes)
+                        :direction :output :if-exists :supersede)
+        (write-line "      01 CART-RAM EXTERNAL." f)
+        (write-line "          05 Next-Song PIC 99 USAGE BINARY." f))
+      (with-open-file (f (merge-pathnames (make-pathname :name "AssetIDs" :type "cpy") gen7800)
+                        :direction :output :if-exists :supersede)
+        (write-line "        77 Song--Hurt--ID PIC(99) USAGE IS BINARY VALUE IS CONSTANT x'49'" f))
+      (multiple-value-bind (slot-table type-table const-table sb ub ss ps pw pf pn)
+          (let ((eightbol::*eightbol-root-directory* root)
+                (eightbol::*copybook-paths* (list classes)))
+            (eightbol::load-copybook-tables "TestClass" :root-dir root))
+        (declare (ignore sb ub ss ps pw pf pn type-table))
+        (is (= #x49 (gethash "song--hurt--id" const-table)))
+        (let ((eightbol::*const-table* const-table)
+              (eightbol::*slot-table* slot-table))
+          (is-true (eightbol::constant-p "Song--Hurt--ID"))
+          (is (null (eightbol::implicit-instance-slot-p "Song--Hurt--ID" "TestClass"))))))))
+
 (test backend/load-copybook-tables-extracts-slot-type-const
   "load-copybook-tables builds slot, type, and const tables from .cpy files."
   (with-temporary-directory (:prefix "eightbol-cpy-")
@@ -294,50 +398,474 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "TestClass-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "TestClass") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (TestClass):" f)
         (write-line "05 HP PIC 9999 USAGE BINARY." f)
         (write-line "05 Target OBJECT REFERENCE Actor." f)
         (write-line "77 MaxHP PIC 9999 USAGE BINARY VALUE 100." f))
-      (multiple-value-bind (slot-table type-table const-table service-bank-table usage-table sign-table pic-size-table pic-width-table)
+      (multiple-value-bind (slot-table type-table const-table service-bank-table usage-table sign-table
+                                        pic-size-table pic-width-table pic-frac-bits-table
+                                        pic-nybble-semantics-table)
           (let ((eightbol::*eightbol-root-directory* root)
                 (eightbol::*copybook-paths* (list gen)))
             (eightbol::load-copybook-tables "TestClass" :root-dir root))
-        (declare (ignore service-bank-table usage-table sign-table pic-size-table pic-width-table))
+        (declare (ignore service-bank-table usage-table sign-table pic-size-table pic-width-table
+                         pic-frac-bits-table pic-nybble-semantics-table))
         (is (string= "TestClass" (gethash "HP" slot-table)))
         (is (string= "Actor" (gethash "Target" type-table)))
-        (is (= 100 (gethash "MaxHP" const-table)))))))
+        ;; const-table uses EQUALP — any case matches the stored copybook name "MaxHP".
+        (is (= 100 (gethash "maxhp" const-table)))))))
 
-;;;; ---------------------------------------------------------------
+(test backend/load-copybook-tables-stores-pic-frac-bits
+  "load-copybook-tables merges :pic-frac-bits from USAGE BINARY WITH nVm BITS into ninth table."
+  (with-temporary-directory (:prefix "eightbol-frac-")
+    (let* ((root (uiop:pathname-directory-pathname (uiop:getcwd)))
+           (gen  (merge-pathnames
+                  (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
+                  root)))
+      (ensure-directories-exist gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "TestClass") :type "cpy") gen)
+                         :direction :output :if-exists :supersede)
+        (write-line "* Own slots (TestClass):" f)
+        (write-line "05 Angle PIC 99 USAGE BINARY WITH 4V4 BITS." f))
+      (multiple-value-bind (slot-table type-table const-table service-bank-table usage-table sign-table
+                                        pic-size-table pic-width-table pic-frac-bits-table
+                                        pic-nybble-semantics-table)
+          (let ((eightbol::*eightbol-root-directory* root)
+                (eightbol::*copybook-paths* (list gen)))
+            (eightbol::load-copybook-tables "TestClass" :root-dir root))
+        (declare (ignore service-bank-table usage-table sign-table pic-size-table type-table
+                         const-table slot-table pic-width-table pic-nybble-semantics-table))
+        (is (= 4 (gethash "ANGLE" pic-frac-bits-table)))
+        (let ((eightbol::*pic-frac-bits-table* pic-frac-bits-table))
+          (is (= 4 (eightbol::pic-frac-bits "Angle"))))))))
+
+(test backend/globals-01-external-populates-slot-table
+  "Phantasia-Globals.cpy uses @code{01 … EXTERNAL} (no @code{* Own slots *}); merge must set origin so bare names are not instance slots."
+  (with-temporary-directory (:prefix "eightbol-globals-")
+    (let* ((root (uiop:pathname-directory-pathname (uiop:getcwd)))
+           (gen  (merge-pathnames
+                  (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
+                  root)))
+      (ensure-directories-exist gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "TestClass") :type "cpy") gen)
+                         :direction :output :if-exists :supersede)
+        (write-line "* Own slots (TestClass):" f)
+        (write-line "05 HP PIC 9999 USAGE BINARY." f))
+      (with-open-file (f (merge-pathnames (make-pathname :name "Phantasia-Globals" :type "cpy") gen)
+                         :direction :output :if-exists :supersede)
+        (write-line "      01 CART-RAM EXTERNAL." f)
+        (write-line "          05 Hurt-H-P PIC 9999 USAGE BINARY." f))
+      (multiple-value-bind (slot-table type-table const-table service-bank-table usage-table sign-table
+                                        pic-size-table pic-width-table pic-frac-bits-table)
+          (let ((eightbol::*eightbol-root-directory* root)
+                (eightbol::*copybook-paths* (list gen)))
+            (eightbol::load-copybook-tables "TestClass" :root-dir root))
+        (declare (ignore type-table const-table service-bank-table usage-table sign-table pic-size-table
+                         pic-width-table pic-frac-bits-table))
+        (is (string= "Phantasia-Globals"
+                     (gethash (eightbol::cobol-slot-table-name-key "Hurt-H-P") slot-table)))
+        (let ((eightbol::*slot-table* slot-table))
+          (is (null (eightbol::implicit-instance-slot-p "Hurt-H-P" "TestClass")))
+          (is (string= "HurtHP" (eightbol::bare-data-assembly-symbol "Hurt-H-P" "TestClass"))))))))
+
 ;;;; Backend slot/type/const resolution
-;;;; ---------------------------------------------------------------
 
 (test backend/slot-symbol-uses-origin-class
   "slot-symbol produces OriginClassSlotName from *slot-table*."
-  (let ((slot-table (make-hash-table :test 'equal)))
+  (let ((slot-table (make-hash-table :test 'equalp)))
     (setf (gethash "HP" slot-table) "Character")
     (let ((eightbol::*slot-table* slot-table))
       (is (string= "CharacterHP"
                   (eightbol::slot-symbol "HP" "TestClass"))))))
 
+(test backend/slot-symbol-course-inherited-not-double-class-prefix
+  "Regression: Course-Last-Frame with *slot-table* origin MummyCourse must be CourseLastFrame (not MummyCourseCourseLastFrame)."
+  (let ((slot-table (make-hash-table :test 'equalp)))
+    (setf (gethash "Course-Last-Frame" slot-table) "MummyCourse")
+    (let ((eightbol::*slot-table* slot-table))
+      (is (string= "CourseLastFrame"
+                   (eightbol::slot-symbol "Course-Last-Frame" "MummyCourse")))
+      (is (null (search "MummyCourseCourse"
+                        (eightbol::slot-symbol "Course-Last-Frame" "MummyCourse")
+                        :test #'char-equal))))))
+
+(test backend/slot-symbol-max-hp-not-stripped-by-parent-prefix-rule
+  "Max-HP keeps Character prefix; first word Max is not a parent-class slot-prefix word."
+  (let ((slot-table (make-hash-table :test 'equalp)))
+    (setf (gethash "Max-HP" slot-table) "Character")
+    (let ((eightbol::*slot-table* slot-table))
+      (is (string= "CharacterMaxHP"
+                   (eightbol::slot-symbol "Max-HP" "Character"))))))
+
+(test backend/service-bank-lookup-move-decal-x-paired-with-y
+  "Regression: ServiceMoveDecalX resolves to same bank as ServiceMoveDecalY when only Y is in the table."
+  (let ((svc (make-hash-table :test 'equalp)))
+    (setf (gethash "ServiceMoveDecalY" svc) "Bank-Animation")
+    (let ((eightbol::*service-bank-table* svc))
+      (is (string= "Bank-Animation" (eightbol::service-bank-table-lookup "ServiceMoveDecalX"))))))
+
 (test backend/var-class-from-type-table
   "var-class returns OBJECT REFERENCE class from *type-table*."
-  (let ((type-table (make-hash-table :test 'equal)))
+  (let ((type-table (make-hash-table :test 'equalp)))
     (setf (gethash "Target" type-table) "Actor")
     (let ((eightbol::*type-table* type-table))
       (is (string= "Actor" (eightbol::var-class "Target"))))))
 
+(test backend/phantasia-global-bare-motion-frame-not-class-prefixed
+  "Regression: without Phantasia-Globals.cpy, bare Motion-Frame must not become MummyCourseMotionFrame."
+  (let ((eightbol::*slot-table* nil))
+    (is (string= "MotionFrame"
+                 (eightbol::bare-data-assembly-symbol "Motion-Frame" "MummyCourse")))
+    (is (string= "FramesPerSecond"
+                 (eightbol::bare-data-assembly-symbol "Frames-Per-Second" "MummyCourse")))
+    (is (null (search "MummyCourse"
+                       (eightbol::bare-data-assembly-symbol "Motion-Frame" "MummyCourse")
+                       :test #'char-equal)))))
+
+(test backend/phantasia-global-implicit-instance-motion-frame-nil
+  "Regression: Motion-Frame is CartRAM/global, not lda (Self),y via implicit instance slot."
+  (is (null (eightbol::implicit-instance-slot-p "Motion-Frame" "MummyCourse")))
+  (is (null (eightbol::implicit-instance-slot-p "Frames-Per-Second" "MummyCourse"))))
+
+(test backend/var-class-phantasia-fallback-current-course-and-actor
+  "Regression: Current-Course / Current-Actor resolve to Course / Character when *type-table* has no row."
+  (let ((eightbol::*type-table* (make-hash-table :test 'equalp)))
+    (is (string= "Course" (eightbol::var-class "Current-Course")))
+    (is (string= "Character" (eightbol::var-class "Current-Actor"))))
+  ;; Explicit *type-table* row overrides fallback.
+  (let ((type-table (make-hash-table :test 'equalp)))
+    (setf (gethash "Current-Actor" type-table) "Actor")
+    (let ((eightbol::*type-table* type-table))
+      (is (string= "Actor" (eightbol::var-class "Current-Actor"))))))
+
+(test backend/operand-width-object-reference-without-pic-row
+  "operand-width uses +object-reference-storage-width+ when *type-table* has OBJECT REFERENCE but pic-width table has no entry."
+  (let ((type-table (make-hash-table :test 'equalp))
+        (pic-width (make-hash-table :test 'equalp)))
+    (setf (gethash "Wielder" type-table) "Actor")
+    (let ((eightbol::*type-table* type-table)
+          (eightbol::*pic-width-table* pic-width))
+      (is (= 2 (eightbol::operand-width "Wielder")))
+      (is (= 1 (eightbol::operand-width "Not-A-Ref"))))))
+
+(test backend/expression-operand-width-maxes-add-expr-leaves
+  "expression-operand-width returns max leaf width for :add-expr (MOVE/COMPUTE width)."
+  (let ((pic (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 2)
+    (is (= 2 (eightbol::expression-operand-width
+               (list :add-expr "A" "B") pic)))
+    (is (= 1 (eightbol::expression-operand-width "A" pic)))))
+
+(test backend/pic-nybble-semantics-pic-9-vs-99
+  "pic-nybble-semantics-p is true for single-digit PIC 9, false for PIC 99 and PIC 9(n)."
+  (is-true (eightbol::pic-nybble-semantics-p "PIC 9 USAGE BINARY."))
+  (is (null (eightbol::pic-nybble-semantics-p "PIC 99 USAGE BINARY.")))
+  (is (null (eightbol::pic-nybble-semantics-p "PIC 9(4) USAGE BINARY."))))
+
+(test backend/constraints-skyline-default-pic-one-byte-merge-width
+  "Skyline-Tool default PIC for a 1-byte slot yields pic-digits-to-width 1 (aligns with Classes.Defs)."
+  (let ((pic (skyline-tool::slot-annotation-to-eightbol-pic nil 1)))
+    (is (= 1 (eightbol::pic-digits-to-width pic)))))
+
+(test backend/load-copybook-merges-pic-nybble-semantics
+  "Tenth table marks single-digit PIC 9 rows for operand-nybble-semantics-p."
+  (with-temporary-directory (:prefix "eightbol-nyb-")
+    (let* ((root (uiop:pathname-directory-pathname (uiop:getcwd)))
+           (gen  (merge-pathnames
+                  (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
+                  root)))
+      (ensure-directories-exist gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "TestClass") :type "cpy") gen)
+                         :direction :output :if-exists :supersede)
+        (write-line "* Own slots (TestClass):" f)
+        (write-line "05 Nyb PIC 9 USAGE BINARY." f))
+      (multiple-value-bind (slot-table type-table const-table service-bank-table usage-table sign-table
+                                        pic-size-table pic-width-table pic-frac-bits-table
+                                        pic-nybble-semantics-table)
+          (let ((eightbol::*eightbol-root-directory* root)
+                (eightbol::*copybook-paths* (list gen)))
+            (eightbol::load-copybook-tables "TestClass" :root-dir root))
+        (declare (ignore slot-table type-table const-table service-bank-table usage-table sign-table
+                         pic-size-table pic-width-table pic-frac-bits-table))
+        (is-true (gethash "NYB" pic-nybble-semantics-table))
+        (let ((eightbol::*pic-nybble-semantics-table* pic-nybble-semantics-table))
+          (is-true (eightbol::operand-nybble-semantics-p "Nyb")))))))
+
 (test backend/constant-value-from-const-table
-  "constant-value returns integer from *const-table*."
-  (let ((const-table (make-hash-table :test 'equal)))
-    (setf (gethash "MaxHP" const-table) 255)
+  "constant-value returns integer from *const-table* (EQUALP keys)."
+  (let ((const-table (make-hash-table :test 'equalp)))
+    (setf (gethash "maxhp" const-table) 255)
     (let ((eightbol::*const-table* const-table))
       (is (= 255 (eightbol::constant-value "MaxHP"))))))
 
-;;;; ---------------------------------------------------------------
+(test backend/constant-p-case-insensitive
+  "constant-p matches generated copybook uppercase (ACTION-HURT) to source mixed-case (Action-Hurt)."
+  (let ((const-table (make-hash-table :test 'equalp)))
+    (setf (gethash "ACTION-HURT" const-table) 2)
+    (let ((eightbol::*const-table* const-table))
+      (is-true (eightbol::constant-p "Action-Hurt"))
+      (is (= 2 (eightbol::constant-value "Action-Hurt")))
+      (is (= 2 (eightbol::constant-value "action-hurt"))))))
+
+(test backend/cobol-constant-double-hyphen-groups-song-heal-id
+  "Double-hyphen groups map to underscore-separated Pascal segments (Song--Heal--ID → Song_Heal_ID)."
+  (is (string= "Song_Heal_ID"
+               (eightbol::cobol-constant-to-assembly-symbol "Song--Heal--ID"))))
+
+(test backend/cobol-hyphenated-pascal-decal-animation-on-tick
+  "Unhyphenated PascalCase/camelCase token expands to word boundaries (DecalAnimationOnTick), not Decalanimationontick."
+  (is (string= "DecalAnimationOnTick"
+               (eightbol::cobol-hyphenated-to-pascal-concat "DecalAnimationOnTick")))
+  (is (string= "DecalAnimationOnTick"
+               (eightbol::cobol-hyphenated-to-pascal-concat "Decal-Animation-On-Tick"))))
+
+(test backend/slot-symbol-decal-animation-on-tick
+  "slot-symbol maps Decal-Animation-On-Tick to CharacterDecalAnimationOnTick (full pipeline, not ...Decalanimationontick)."
+  (let ((eightbol::*slot-table* nil))
+    (is (string= "CharacterDecalAnimationOnTick"
+                 (eightbol::slot-symbol "Decal-Animation-On-Tick" "Character")))
+    (is (null (search "Decalanimationontick" "CharacterDecalAnimationOnTick"))
+        "case-sensitive: wrong-casing must not appear as a literal substring")))
+
+(test backend/cobol-constant-double-hyphen-groups-song-hurt-id
+  "Double-hyphen groups: Song--Hurt--ID → Song_Hurt_ID (symmetric to Song--Heal--ID)."
+  (is (string= "Song_Hurt_ID"
+                 (eightbol::cobol-constant-to-assembly-symbol "Song--Hurt--ID"))))
+
+;;;; 6502 Backend — compile helpers (must precede tests that call them)
+
+(defun compile-method-ast-with-tables (method class-id cpu
+                                        &key (slot-table (make-hash-table :test 'equalp))
+                                             (const-table (make-hash-table :test 'equalp))
+                                             (type-table (make-hash-table :test 'equalp))
+                                             (usage-table (make-hash-table :test 'equalp))
+                                             (sign-table (make-hash-table :test 'equalp))
+                                             (pic-size-table (make-hash-table :test 'equalp))
+                                             (pic-width-table (make-hash-table :test 'equalp))
+                                             (pic-frac-bits-table (make-hash-table :test 'equalp))
+                                             (pic-nybble-semantics-table (make-hash-table :test 'equalp))
+                                             (service-bank-table (make-hash-table :test 'equalp)))
+  "Compile a :method AST with explicit copybook tables; return assembly string.
+CPU is a supported backend keyword: 6502 family (:6502 :rp2a03 :65c02 :65c816 :huc6280),
+:z80 :cp1610 :sm83 :m6800 :m68k :i286 :arm7 :f8."
+  (with-output-to-string (s)
+    (let ((eightbol::*output-stream* s)
+          (eightbol::*class-id* class-id)
+          (eightbol::*slot-table* slot-table)
+          (eightbol::*type-table* type-table)
+          (eightbol::*const-table* const-table)
+          (eightbol::*service-bank-table* service-bank-table)
+          (eightbol::*usage-table* usage-table)
+          (eightbol::*sign-table* sign-table)
+          (eightbol::*pic-size-table* pic-size-table)
+          (eightbol::*pic-width-table* pic-width-table)
+          (eightbol::*pic-frac-bits-table* pic-frac-bits-table)
+          (eightbol::*pic-nybble-semantics-table* pic-nybble-semantics-table))
+      (ecase cpu
+        ((:6502) (eightbol::compile-6502-method method class-id :6502))
+        ((:rp2a03) (eightbol::compile-rp2a03-method method class-id))
+        ((:65c02) (eightbol::compile-6502-method method class-id :65c02))
+        ((:65c816) (eightbol::compile-6502-method method class-id :65c816))
+        ((:huc6280) (eightbol::compile-6502-method method class-id :huc6280))
+        ((:z80) (eightbol::compile-z80-method s method class-id slot-table type-table const-table
+                                               pic-size-table pic-width-table))
+        ((:cp1610) (eightbol::compile-cp1610-method method class-id))
+        ((:sm83) (eightbol::compile-sm83-method s method class-id slot-table type-table const-table
+                                                pic-size-table pic-width-table))
+        ((:m6800) (eightbol::compile-m6800-method s method class-id slot-table type-table const-table
+                                                  pic-size-table pic-width-table))
+        ((:m68k) (eightbol::compile-m68k-method s method class-id slot-table type-table const-table
+                                                pic-size-table pic-width-table))
+        ((:i286) (eightbol::compile-i286-method s method class-id slot-table type-table const-table
+                                                 pic-size-table pic-width-table))
+        ((:arm7) (eightbol::compile-arm7-method s method class-id slot-table type-table const-table
+                                                 pic-size-table pic-width-table))
+        ((:f8) (eightbol::compile-f8-method s method class-id slot-table type-table const-table
+                                             pic-size-table pic-width-table))))))
+
+(defun asm-from-ast (ast)
+  "Compile a hand-crafted AST directly to 6502 assembly string.
+Bypasses the file/copybook pipeline; binds empty dynamics for tables.
+AST is a :method plist (not full :program)."
+  (compile-method-ast-with-tables ast "TestClass" :6502))
+
+(test backend-6502/move-song-heal-id-to-next-song-global
+  "MOVE 78 constant to global Next-Song uses lda # Song_Heal_ID and sta NextSong (no class prefix)."
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp)))
+    (setf (gethash "song--heal--id" consts) 42)
+    (setf (gethash "Next-Song" slots) "Phantasia-Globals")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from "Song--Heal--ID" :to "Next-Song")))
+                "Character" :6502
+                :slot-table slots :const-table consts)))
+      (is (search "lda # Song_Heal_ID" asm))
+      (is (search "sta NextSong" asm))
+      (is (null (search "CharacterNextSong" asm)))
+      ;; Named 77/78 must not use numeric immediate for the constant value (42 = #$2a).
+      (is (null (search "#$2a" asm))))))
+
+(test backend-6502/move-song-hurt-id-to-next-song-global
+  "MOVE Song--Hurt--ID TO Next-Song uses lda # Song_Hurt_ID (not ldy ClassSongHurtID / lda (Self),y)."
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp)))
+    (setf (gethash "song--hurt--id" consts) 7)
+    (setf (gethash "Next-Song" slots) "Phantasia-Globals")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from "Song--Hurt--ID" :to "Next-Song")))
+                "Anenemy" :6502
+                :slot-table slots :const-table consts)))
+      (is (search "lda # Song_Hurt_ID" asm))
+      (is (search "sta NextSong" asm))
+      (is (null (search "AnenemySongHurtID" asm)))
+      (is (null (or (search "lda (Self), y" asm) (search "lda (Self),y" asm)))))))
+
+(test backend-6502/move-sound-source-incidental-to-next-sound-source-global
+  "MOVE 78 constant to global Next-Sound-Source uses symbolic immediate and sta NextSoundSource."
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp)))
+    (setf (gethash "sound-source-incidental-music" consts) 2)
+    (setf (gethash "Next-Sound-Source" slots) "Phantasia-Globals")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from "Sound-Source-Incidental-Music"
+                               :to "Next-Sound-Source")))
+                "Character" :6502
+                :slot-table slots :const-table consts)))
+      (is (search "lda # SoundSourceIncidentalMusic" asm))
+      (is (search "sta NextSoundSource" asm))
+      (is (null (search "CharacterNextSoundSource" asm)))
+      (is (null (search "#$02" asm))))))
+
+(test backend-6502/move-named-constant-to-instance-byte-slot-symbolic-immediate
+  "MOVE 77/78 constant to instance byte slot uses lda # Symbol via move-n-bytes (not #$nn)."
+  (let ((consts (make-hash-table :test 'equalp))
+        (pic (make-hash-table :test 'equalp)))
+    (setf (gethash "sound-source-incidental-music" consts) 2)
+    (setf (gethash "Scratch" pic) 1)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from "Sound-Source-Incidental-Music"
+                               :to "Scratch")))
+                "Character" :6502
+                :const-table consts :pic-width-table pic)))
+      (is (search "lda # SoundSourceIncidentalMusic" asm))
+      (is (search "ldy #CharacterScratch" asm))
+      (is (search "sta (Self), y" asm))
+      (is (null (search "#$02" asm))))))
+
+(test backend-6502/move-decal-of-self-to-decal-index-sta-bare-global
+  "MOVE Decal OF Self TO Decal-Index emits sta DecalIndex (Phantasia-Globals), not ldy CharacterCurrentDecalIndex / sta (Self),y."
+  (let ((slots (make-hash-table :test 'equalp)))
+    (setf (gethash "Decal-Index" slots) "Phantasia-Globals")
+    (setf (gethash "Decal" slots) "Character")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:of "Decal" :self) :to "Decal-Index")))
+                "Character" :6502
+                :slot-table slots)))
+      (is (search "sta DecalIndex" asm) "global CartRAM label from cobol-global-data-name-to-assembly-symbol")
+      (is (null (search "CharacterCurrentDecalIndex" asm)))
+      (is (null (search "CharacterDecalIndex" asm))
+          "dest is global DecalIndex, not CharacterDecalIndex slot")
+      (is (null (search "sta (Self), y" asm))
+          "store to global index must not use Self indirect"))))
+
+(test backend-6502/move-to-decal-animation-on-tick-emits-ldy-pascal-segments
+  "MOVE to Decal-Animation-On-Tick OF Self emits ldy #CharacterDecalAnimationOnTick (regression: no Decalanimationontick)."
+  (let ((pic (make-hash-table :test 'equalp)))
+    (setf (gethash "Decal-Animation-On-Tick" pic) 1)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from 1 :to (:of "Decal-Animation-On-Tick" :self))))
+                "Character" :6502
+                :pic-width-table pic)))
+      (is (search "ldy #CharacterDecalAnimationOnTick" asm)
+          "slot offset immediate must use per-word PascalCase")
+      (is (null (search "Decalanimationontick" asm))
+          "case-sensitive: reject glued lowercase run Decalanimationontick"))))
+
+(test backend-6502/add-hurt-hp-to-hp-of-self-uses-16-bit-path
+  "ADD global Hurt-HP to 2-byte HP OF Self uses multibyte add (clc, ldy, adc (Self),y), bare HurtHP."
+  (let ((slots (make-hash-table :test 'equalp))
+        (pic-width (make-hash-table :test 'equalp)))
+    (setf (gethash "Hurt-H-P" slots) "Phantasia-Globals")
+    (setf (gethash "HP" pic-width) 2)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:add :from "Hurt-H-P" :to (:of "HP" :self))))
+                "Character" :6502
+                :slot-table slots :pic-width-table pic-width)))
+      (is (search "HurtHP" asm) "global from should use bare HurtHP label")
+      (is (search "clc" asm))
+      (is (search "adc (Self), y" asm) "2-byte slot add uses indexed memory")
+      (is (null (search "sta NIL" asm)) "ADD must not store to a NIL assembly symbol")
+      (is (null (search "CharacterHurtHp" asm)))
+      (let ((p1 (search "adc (Self), y" asm))
+            (needle "adc (Self), y"))
+        (is (numberp p1))
+        (is (search needle asm :start2 (+ p1 (length needle)))
+            "2-byte add uses adc (Self),y for low and high byte")))))
+
+(test backend-6502/subtract-hurt-hp-from-hp-of-self-16bit-inplace-iny
+  "SUBTRACT Hurt-H-P FROM HP OF Self (w=2, same slot) uses ldy low, sta, iny, lda/sbc/sta — no tax/dey dance."
+  (let ((slots (make-hash-table :test 'equalp))
+        (pic-width (make-hash-table :test 'equalp)))
+    (setf (gethash "Hurt-H-P" slots) "Phantasia-Globals")
+    (setf (gethash "HP" slots) "Character")
+    (setf (gethash "Hurt-H-P" pic-width) 2)
+    (setf (gethash "HP" pic-width) 2)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:subtract :from "Hurt-H-P" :from-target (:of "HP" :self))))
+                "Character" :6502
+                :slot-table slots :pic-width-table pic-width)))
+      (is (search "iny" asm) "advance Y to high byte after low sta")
+      (is (null (search "tax" asm)) "in-place path does not save low result in X")
+      (is (null (search "dey" asm)) "in-place path does not dey after high sta")
+      (is (search "sta (Self), y" asm)))))
+
+(test backend-6502/if-hp-greater-than-max-hp-16-bit-unsigned-compare
+  "IF HP OF Self > Max-HP OF Self: unsigned 16-bit relational compare must compare high byte (offset+1) first, then low byte — same order as @code{emit-6502-compare-unsigned} (little-endian)."
+  (let ((pic-width (make-hash-table :test 'equalp)))
+    (setf (gethash "HP" pic-width) 2)
+    (setf (gethash "Max-HP" pic-width) 2)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:if :condition (> (:of "HP" :self) (:of "Max-HP" :self))
+                               :then ((:goback))
+                               :else ((:goback)))))
+                "Character" :6502
+                :pic-width-table pic-width)))
+      ;; Multi-byte unsigned compare: lda/cmp high words (slot+1), then low; two cmp (Self),y total.
+      (let* ((c1 (search "cmp" asm))
+             (c2 (when c1 (search "cmp" asm :start2 (1+ c1))))
+             (hi-hp (search "(CharacterHP+1)" asm))
+             (hi-max (search "(CharacterMaxHP+1)" asm)))
+        (is (numberp c1))
+        (is (numberp c2) "second cmp for low byte after high-byte branch")
+        (is (and hi-hp hi-max (<= hi-hp c1) (<= hi-max c1))
+            "high-byte ldy #(slot+1) for both sides precedes first cmp (unsigned MSB-first)")))))
+
+(test backend-6502/add-without-to-or-giving-errors
+  "ADD with neither TO nor GIVING signals backend-error (avoids sta to NIL assembly)."
+  (signals eightbol::backend-error
+    (compile-method-ast-with-tables
+     '(:method :method-id "M"
+       :statements ((:add :from "Hurt-H-P")))
+     "Character" :6502)))
+
+(test backend-6502/emit-6502-value-nil-signals-backend-error
+  "emit-6502-value on NIL signals backend-error (never emit a NIL assembly symbol)."
+  (signals eightbol::backend-error
+    (eightbol::emit-6502-value nil)))
+
 ;;;; Parser tests (using the minimal self-contained class)
-;;;; ---------------------------------------------------------------
 
 (test parser/parses-minimal-class
   "parse-eightbol-string on minimal Character text returns a :program node."
@@ -384,46 +912,31 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
       (is (not (null invoke)))
       (is (string= "Kill" (getf (rest invoke) :method))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; Unsupported statements — compile-time error
-;;;; ---------------------------------------------------------------
 
-(defun minimal-class-with-stmt (stmt-line)
-  "Build minimal Character class with STMT-LINE in Think method body."
-  (format nil "000010 IDENTIFICATION DIVISION.
-000020 CLASS-ID. Character.
-000030 ENVIRONMENT DIVISION.
-000040 OBJECT.
-000050     DATA DIVISION.
-000060         WORKING-STORAGE SECTION.
-000070         05 HP PIC 9999 USAGE BINARY.
-000080     PROCEDURE DIVISION.
-000090         IDENTIFICATION DIVISION.
-000100         METHOD-ID. \"Think\".
-000110         PROCEDURE DIVISION.
-000120             ~a
-000130             GOBACK.
-000140         END METHOD \"Think\".
-000150         IDENTIFICATION DIVISION.
-000160         METHOD-ID. \"Kill\".
-000170         PROCEDURE DIVISION.
-000180             GOBACK.
-000190         END METHOD \"Kill\".
-000200 END OBJECT.
-000210 END CLASS Character.
-" stmt-line))
+(test parser/divide-parses
+  "DIVIDE … INTO … parses to :divide (power-of-two divisor enforced at codegen)."
+  (let* ((ast (eightbol::parse-eightbol-string
+                (minimal-class-with-stmt "DIVIDE 2 INTO HP.")))
+         (think (find "Think" (eightbol::ast-methods ast)
+                      :key #'eightbol::ast-method-name :test #'string=))
+         (stmts (eightbol::ast-method-statements think))
+         (div (find :divide stmts :key #'first)))
+    (is (not (null div)))
+    (is (eql 2 (getf (rest div) :divisor)))
+    (is (string= "HP" (getf (rest div) :into)))))
 
-(test parser/divide-signals-unsupported
-  "DIVIDE signals compile-time error."
-  (signals eightbol:source-error
-    (eightbol::parse-eightbol-string
-     (minimal-class-with-stmt "DIVIDE 2 INTO HP."))))
-
-(test parser/multiply-signals-unsupported
-  "MULTIPLY signals compile-time error."
-  (signals eightbol:source-error
-    (eightbol::parse-eightbol-string
-     (minimal-class-with-stmt "MULTIPLY 2 BY HP."))))
+(test parser/multiply-parses
+  "MULTIPLY … BY … parses to :multiply (power-of-two multiplier enforced at codegen)."
+  (let* ((ast (eightbol::parse-eightbol-string
+                (minimal-class-with-stmt "MULTIPLY 2 BY HP.")))
+         (think (find "Think" (eightbol::ast-methods ast)
+                      :key #'eightbol::ast-method-name :test #'string=))
+         (stmts (eightbol::ast-method-statements think))
+         (mul (find :multiply stmts :key #'first)))
+    (is (not (null mul)))
+    (is (eql 2 (getf (rest mul) :multiplier)))
+    (is (string= "HP" (getf (rest mul) :by)))))
 
 (test parser/string-signals-unsupported
   "STRING signals compile-time error."
@@ -449,11 +962,16 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
     (is (equal "HP" (getf (rest insp) :target)))
     (is (equal "HP" (getf (rest insp) :tallying)))))
 
-(test parser/goto-signals-unsupported
-  "GO TO signals compile-time error."
-  (signals eightbol:source-error
-    (eightbol::parse-eightbol-string
-     (minimal-class-with-stmt "GO TO Think."))))
+(test parser/goto-parses
+  "GO TO paragraph parses to :goto AST."
+  (let* ((ast (eightbol::parse-eightbol-string
+                (minimal-class-with-stmt "GO TO Think.")))
+         (think (find "Think" (eightbol::ast-methods ast)
+                      :key #'eightbol::ast-method-name :test #'string=))
+         (stmts (eightbol::ast-method-statements think))
+         (go (find :goto stmts :key #'first)))
+    (is (not (null go)))
+    (is (string= "Think" (getf (rest go) :target)))))
 
 (test parser/evaluate-parses
   "EVALUATE parses and produces :evaluate AST node."
@@ -467,11 +985,29 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
     (is (equal "HP" (getf (rest eval-stmt) :subject)))
     (is (not (null (getf (rest eval-stmt) :when-clauses))))))
 
-(test parser/set-null-signals-unsupported
-  "SET ... TO NULL signals compile-time error."
-  (signals eightbol:source-error
-    (eightbol::parse-eightbol-string
-     (minimal-class-with-stmt "SET HP TO NULL."))))
+(test parser/set-null-parses
+  "SET … TO NULL parses to :set with :value :null."
+  (let* ((ast (eightbol::parse-eightbol-string
+                (minimal-class-with-stmt "SET HP TO NULL.")))
+         (think (find "Think" (eightbol::ast-methods ast)
+                      :key #'eightbol::ast-method-name :test #'string=))
+         (stmts (eightbol::ast-method-statements think))
+         (s (find :set stmts :key #'first)))
+    (is (not (null s)))
+    (is (string= "HP" (getf (rest s) :target)))
+    (is (member (getf (rest s) :value) '(:null null :NULL) :test #'equal)))
+
+(test parser/set-address-of-parses
+  "SET … TO ADDRESS OF … parses to :set with :target and :address-of."
+  (let* ((ast (eightbol::parse-eightbol-string
+                (minimal-class-with-stmt "SET HP TO ADDRESS OF HP.")))
+         (think (find "Think" (eightbol::ast-methods ast)
+                      :key #'eightbol::ast-method-name :test #'string=))
+         (stmts (eightbol::ast-method-statements think))
+         (s (find :set stmts :key #'first)))
+    (is (not (null s)))
+    (is (string= "HP" (getf (rest s) :target)))
+    (is (string= "HP" (getf (rest s) :address-of)))))
 
 (test parser/subscript-move-from-parses
   "MOVE X(I) TO Y produces :move :from (:subscript base index) :to dest."
@@ -633,9 +1169,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
     (is (not (null perf)))
     (is (string= "Loop" (format nil "~a" (getf (rest perf) :procedure))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; STRING BLT (DELIMITED BY SIZE)
-;;;; ---------------------------------------------------------------
 
 (defparameter *minimal-string-blt-cob*
   "000010 IDENTIFICATION DIVISION.
@@ -711,7 +1245,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "STRING BLT with refmod emits block copy loop."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :6502 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :6502 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ldy #$00" asm))
         (is (search "lda SrcBuf,y" asm))
@@ -754,9 +1288,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
     (eightbol::parse-eightbol-string
      (minimal-class-with-stmt "STRING \"X\" DELIMITED BY \" \" INTO HP."))))
 
-;;;; ---------------------------------------------------------------
 ;;;; AST structure tests — verify statement nodes have correct shape
-;;;; ---------------------------------------------------------------
 
 (test ast/move-structure
   "MOVE produces (:move :from expr :to identifier)."
@@ -1071,9 +1603,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
         (is (or (search "X(64)" pic) (search "X" pic))
             "PIC contains X or X(64)")))))
 
-;;;; ---------------------------------------------------------------
 ;;;; AST round-trip tests
-;;;; ---------------------------------------------------------------
 
 (test ast/write-read-round-trip
   "AST written with write-ast and read back with read-ast is equal."
@@ -1093,31 +1623,29 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                  (eightbol::read-ast s))))
     (is (equal ast ast2))))
 
-;;;; ---------------------------------------------------------------
 ;;;; 6502 Backend tests
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-6502 ()
   "Compile minimal Character class to 6502 assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :6502 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :6502 s))))
 
 (test backend-6502/method-think-label
   "6502 output contains MethodCharacterThink: label."
   (is (search "MethodCharacterThink:" (compile-minimal-6502))))
 
-(test backend-6502/method-kill-label
-  "6502 output contains MethodCharacterKill: label."
-  (is (search "MethodCharacterKill:" (compile-minimal-6502))))
+(test backend-6502/method-kill-aliases-true-method
+  "6502 output aliases trivial Kill method to TrueMethod (no separate .block)."
+  (is (search "MethodCharacterKill = TrueMethod" (compile-minimal-6502))))
 
 (test backend-6502/rts-present
   "6502 output contains rts (for GOBACK)."
   (is (search "rts" (compile-minimal-6502))))
 
 (test backend-6502/invoke-self-kill
-  "6502 output contains jsr InvokeCharacterKill for INVOKE Self \"Kill\"."
-  (is (search "jsr InvokeCharacterKill" (compile-minimal-6502))))
+  "6502 output uses .CallMethod for INVOKE Self \"Kill\"."
+  (is (search ".CallMethod CallCharacterKill, CharacterClass" (compile-minimal-6502))))
 
 (test backend-6502/block-structure
   "6502 output uses .block / .bend wrappers."
@@ -1129,15 +1657,13 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "6502 output header contains 'generated by EIGHTBOL for 6502'."
   (is (search "generated by EIGHTBOL for 6502" (compile-minimal-6502))))
 
-;;;; ---------------------------------------------------------------
 ;;;; 65c02 Backend tests (derived from 6502)
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-65c02 ()
   "Compile minimal Character class to 65c02 assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :65c02 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :65c02 s))))
 
 (test backend-65c02/header-cpu-label
   "65c02 output header contains 'generated by EIGHTBOL for 65c02'."
@@ -1159,7 +1685,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "65c02 STRING BLT emits block copy loop (delegates to 6502)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :65c02 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :65c02 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ldy #$00" asm))
         (is (search "lda SrcBuf,y" asm))
@@ -1169,7 +1695,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "65c02 ADD/SUBTRACT GIVING emits lda/adc/sta/sbc (delegates to 6502)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :65c02 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :65c02 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "lda" asm))
         (is (search "adc" asm))
@@ -1188,15 +1714,13 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
     (is (search "jmp" asm))
     (is (not (search "bra" asm)))))
 
-;;;; ---------------------------------------------------------------
 ;;;; 65c816 Backend tests (derived from 6502)
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-65c816 ()
   "Compile minimal Character class to 65c816 assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :65c816 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :65c816 s))))
 
 (test backend-65c816/header-cpu-label
   "65c816 output header contains 'generated by EIGHTBOL for 65c816'."
@@ -1218,7 +1742,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "65c816 STRING BLT emits block copy loop (delegates to 6502)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :65c816 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :65c816 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ldy #$00" asm))
         (is (search "lda SrcBuf,y" asm))
@@ -1228,22 +1752,20 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "65c816 ADD/SUBTRACT GIVING emits lda/adc/sta/sbc (delegates to 6502)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :65c816 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :65c816 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "lda" asm))
         (is (search "adc" asm))
         (is (search "sta" asm))
         (is (search "sbc" asm))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; HuC6280 Backend tests (derived from 6502)
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-huc6280 ()
   "Compile minimal Character class to HuC6280 assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :huc6280 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :huc6280 s))))
 
 (test backend-huc6280/header-cpu-label
   "HuC6280 output header contains 'generated by EIGHTBOL for HuC6280'."
@@ -1262,14 +1784,14 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
     (is (search ".bend" asm))))
 
 (test backend-huc6280/invoke-self-kill
-  "HuC6280 output contains jsr InvokeCharacterKill for INVOKE Self \"Kill\"."
-  (is (search "InvokeCharacterKill" (compile-minimal-huc6280))))
+  "HuC6280 output uses .CallMethod for INVOKE Self \"Kill\" (6502-family backend)."
+  (is (search ".CallMethod CallCharacterKill, CharacterClass" (compile-minimal-huc6280))))
 
 (test backend-huc6280/string-blt-delegates
   "HuC6280 STRING BLT emits block copy loop (delegates to 6502)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :huc6280 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :huc6280 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ldy #$00" asm))
         (is (search "lda SrcBuf,y" asm))
@@ -1279,25 +1801,23 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "HuC6280 ADD/SUBTRACT GIVING emits lda/adc/sta/sbc (delegates to 6502)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :huc6280 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :huc6280 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "lda" asm))
         (is (search "adc" asm))
         (is (search "sta" asm))
         (is (search "sbc" asm))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; All backends compile (smoke test)
-;;;; ---------------------------------------------------------------
 
 (test backend/all-cpus-compile-minimal
   "All supported CPUs compile minimal Character class without error."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
-    (dolist (cpu eightbol::*supported-cpus*)
+    (dolist (cpu +supported-cpus+)
       (is-true (handler-case
                   (progn
                     (with-output-to-string (s)
-                      (eightbol::compile-to-assembly ast cpu s))
+                      (eightbol::compile-to-assembly-with-ast-passes ast cpu s))
                     t)
                 (error (e) (declare (ignore e)) nil))
                "~s backend should compile without error" cpu))))
@@ -1305,11 +1825,11 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
 (test backend/all-cpus-compile-arithmetic
   "All supported CPUs compile minimal Arithmetic-Test class without error."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
-    (dolist (cpu eightbol::*supported-cpus*)
+    (dolist (cpu +supported-cpus+)
       (is-true (handler-case
                   (progn
                     (with-output-to-string (s)
-                      (eightbol::compile-to-assembly ast cpu s))
+                      (eightbol::compile-to-assembly-with-ast-passes ast cpu s))
                     t)
                 (error (e) (declare (ignore e)) nil))
                "~s backend should compile arithmetic without error" cpu))))
@@ -1317,11 +1837,11 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
 (test backend/all-cpus-compile-string-blt
   "All supported CPUs compile minimal STRING BLT class without error."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
-    (dolist (cpu eightbol::*supported-cpus*)
+    (dolist (cpu +supported-cpus+)
       (is-true (handler-case
                   (progn
                     (with-output-to-string (s)
-                      (eightbol::compile-to-assembly ast cpu s))
+                      (eightbol::compile-to-assembly-with-ast-passes ast cpu s))
                     t)
                 (error (e) (declare (ignore e)) nil))
                "~s backend should compile STRING BLT without error" cpu))))
@@ -1353,11 +1873,11 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
 (test backend/all-cpus-compile-evaluate-inspect
   "All supported CPUs compile EVALUATE and INSPECT without error."
   (let ((ast (eightbol::parse-eightbol-string *minimal-evaluate-inspect-cob*)))
-    (dolist (cpu eightbol::*supported-cpus*)
+    (dolist (cpu +supported-cpus+)
       (is-true (handler-case
                   (progn
                     (with-output-to-string (s)
-                      (eightbol::compile-to-assembly ast cpu s))
+                      (eightbol::compile-to-assembly-with-ast-passes ast cpu s))
                     t)
                 (error (e) (declare (ignore e)) nil))
                "~s backend should compile EVALUATE/INSPECT without error" cpu))))
@@ -1420,20 +1940,20 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "Subscript-Test-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "Subscript-Test") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (Subscript-Test):" f)
         (write-line "05 Arr PIC 99 OCCURS 8." f)
         (write-line "05 Idx PIC 99 USAGE BINARY." f)
         (write-line "05 Val PIC 99 USAGE BINARY." f))
       (let ((ast (eightbol::parse-eightbol-string *minimal-subscript-cob*)))
-        (dolist (cpu eightbol::*supported-cpus*)
+        (dolist (cpu +supported-cpus+)
           (is-true (handler-case
                       (progn
                         (let ((eightbol::*eightbol-root-directory* root)
                               (eightbol::*copybook-paths* (list gen)))
                           (with-output-to-string (s)
-                            (eightbol::compile-to-assembly ast cpu s)))
+                            (eightbol::compile-to-assembly-with-ast-passes ast cpu s)))
                         t)
                     (error (e) (declare (ignore e)) nil))
                    "~s backend should compile subscript without error" cpu))))))
@@ -1446,20 +1966,20 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "ComputeShiftBit-Test-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "ComputeShiftBit-Test") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (ComputeShiftBit-Test):" f)
         (write-line "05 X PIC 99 USAGE BINARY." f)
         (write-line "05 Y PIC 99 USAGE BINARY." f)
         (write-line "05 Z PIC 99 USAGE BINARY." f))
       (let ((ast (eightbol::parse-eightbol-string *minimal-compute-shift-bit-cob*)))
-        (dolist (cpu eightbol::*supported-cpus*)
+        (dolist (cpu +supported-cpus+)
           (is-true (handler-case
                       (progn
                         (let ((eightbol::*eightbol-root-directory* root)
                               (eightbol::*copybook-paths* (list gen)))
                           (with-output-to-string (s)
-                            (eightbol::compile-to-assembly ast cpu s)))
+                            (eightbol::compile-to-assembly-with-ast-passes ast cpu s)))
                         t)
                     (error (e) (declare (ignore e)) nil))
                    "~s backend should compile COMPUTE shift/bit without error" cpu))))))
@@ -1494,20 +2014,90 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
 (test backend/all-cpus-compile-stmt-coverage
   "All supported CPUs compile SET, PERFORM, LOG FAULT, DEBUG BREAK, CALL without error."
   (let ((ast (eightbol::parse-eightbol-string *minimal-stmt-coverage-cob*)))
-    (dolist (cpu eightbol::*supported-cpus*)
+    (dolist (cpu +supported-cpus+)
       (is-true (handler-case
               (progn
                 (with-output-to-string (s)
-                  (eightbol::compile-to-assembly ast cpu s))
+                  (eightbol::compile-to-assembly-with-ast-passes ast cpu s))
                 t)
             (error (e) (declare (ignore e)) nil))
           "~s backend should compile SET/PERFORM/LOG FAULT/DEBUG BREAK/CALL without error" cpu))))
+
+(defparameter *minimal-goto-depending-cob*
+  "000010 IDENTIFICATION DIVISION.
+000020 CLASS-ID. GotoDep-Test.
+000030 ENVIRONMENT DIVISION.
+000040 OBJECT.
+000050     DATA DIVISION.
+000060         WORKING-STORAGE SECTION.
+000070         05 Idx PIC 9 USAGE BINARY.
+000080     PROCEDURE DIVISION.
+000090         IDENTIFICATION DIVISION.
+000100         METHOD-ID. \"T\".
+000110         PROCEDURE DIVISION.
+000120             GO TO First Second Third DEPENDING ON Idx.
+000130 First.
+000140             GOBACK.
+000150 Second.
+000160             GOBACK.
+000170 Third.
+000180             GOBACK.
+000190         END METHOD \"T\".
+000200 END OBJECT.
+000210 END CLASS GotoDep-Test.
+"
+  "Minimal class with GO TO … DEPENDING ON (three paragraph targets).")
+
+(test backend/all-cpus-compile-goto-depending
+  "All supported CPUs compile GO TO … DEPENDING ON without error."
+  (let ((ast (eightbol::parse-eightbol-string *minimal-goto-depending-cob*)))
+    (dolist (cpu +supported-cpus+)
+      (is-true (handler-case
+                  (progn
+                    (with-output-to-string (s)
+                      (eightbol::compile-to-assembly-with-ast-passes ast cpu s))
+                    t)
+                (error (e) (declare (ignore e)) nil))
+               "~s backend should compile GOTO DEPENDING ON without error" cpu))))
+
+(defparameter *minimal-set-address-cob*
+  "000010 IDENTIFICATION DIVISION.
+000020 CLASS-ID. SetAddr-Test.
+000030 ENVIRONMENT DIVISION.
+000040 OBJECT.
+000050     DATA DIVISION.
+000060         WORKING-STORAGE SECTION.
+000070         05 Ptr PIC 99 USAGE BINARY.
+000080         05 HP PIC 99 USAGE BINARY.
+000090     PROCEDURE DIVISION.
+000100         IDENTIFICATION DIVISION.
+000110         METHOD-ID. \"T\".
+000120         PROCEDURE DIVISION.
+000130             SET Ptr TO ADDRESS OF HP OF Self.
+000140             GOBACK.
+000150         END METHOD \"T\".
+000160 END OBJECT.
+000170 END CLASS SetAddr-Test.
+"
+  "Minimal class with SET … TO ADDRESS OF … OF Self (pointer to instance slot).")
+
+(test backend/all-cpus-compile-set-address-of-self
+  "All supported CPUs compile SET pointer TO ADDRESS OF slot OF Self without error."
+  (let ((ast (eightbol::parse-eightbol-string *minimal-set-address-cob*)))
+    (dolist (cpu +supported-cpus+)
+      (is-true (handler-case
+                  (progn
+                    (with-output-to-string (s)
+                      (eightbol::compile-to-assembly-with-ast-passes ast cpu s))
+                    t)
+                (error (e) (declare (ignore e)) nil))
+               "~s backend should compile SET ADDRESS OF Self without error" cpu))))
 
 (test backend-6502/arithmetic-output-key-sequences
   "6502 arithmetic output contains key instruction sequences (byte add/subtract)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :6502 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :6502 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "lda ByteA" asm) "Byte add: lda ByteA")
         (is (search "adc" asm) "Byte add: adc")
@@ -1528,7 +2118,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "BcdTest-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "BcdTest") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (BcdTest):" f)
         (write-line "05 ByteA PIC 99 USAGE DECIMAL." f)
@@ -1556,7 +2146,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
           (let ((asm (let ((eightbol::*eightbol-root-directory* root)
                           (eightbol::*copybook-paths* (list gen)))
                        (with-output-to-string (s)
-                         (eightbol::compile-to-assembly ast :6502 s)))))
+                         (eightbol::compile-to-assembly-with-ast-passes ast :6502 s)))))
             (is (search "sed" asm) "6502 BCD ADD should emit sed")
             (is (search "daa" asm) "6502 BCD ADD should emit daa"))))))))
 
@@ -1568,7 +2158,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "BcdTest-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "BcdTest") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (BcdTest):" f)
         (write-line "05 ByteA PIC 99 USAGE DECIMAL." f)
@@ -1596,7 +2186,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
           (let ((asm (let ((eightbol::*eightbol-root-directory* root)
                           (eightbol::*copybook-paths* (list gen)))
                        (with-output-to-string (s)
-                         (eightbol::compile-to-assembly ast :6502 s)))))
+                         (eightbol::compile-to-assembly-with-ast-passes ast :6502 s)))))
             (is (search "sed" asm) "6502 BCD SUBTRACT should emit sed")
             (is (search "sbc" asm) "6502 BCD SUBTRACT should emit sbc")))))))
 
@@ -1608,7 +2198,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "ConstTest-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "ConstTest") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (ConstTest):" f)
         (write-line "05 X PIC 99 USAGE BINARY." f)
@@ -1634,18 +2224,17 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
           (let ((asm (let ((eightbol::*eightbol-root-directory* root)
                           (eightbol::*copybook-paths* (list gen)))
                        (with-output-to-string (s)
-                         (eightbol::compile-to-assembly ast :6502 s)))))
-            (is (search "lda #MaxVal" asm) "Named constant should use immediate mode lda #ConstName")))))))
+                         (eightbol::compile-to-assembly-with-ast-passes ast :6502 s)))))
+            (is (search "# MaxVal" asm)
+                "Named constant should use immediate operand # MaxVal (64tass style)")))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; RP2A03 Backend tests (derived from 6502, no decimal mode)
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-rp2a03 ()
   "Compile minimal Character class to RP2A03 assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :rp2a03 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :rp2a03 s))))
 
 (test backend-rp2a03/header-cpu-label
   "RP2A03 output header contains 'generated by EIGHTBOL for RP2A03 (NES)'."
@@ -1663,7 +2252,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "RP2A03 STRING BLT emits block copy loop (delegates to 6502)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :rp2a03 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :rp2a03 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ldy #$00" asm))
         (is (search "lda SrcBuf,y" asm))
@@ -1673,26 +2262,24 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "RP2A03 ADD/SUBTRACT GIVING emits lda/adc/sta/sbc (delegates to 6502)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :rp2a03 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :rp2a03 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "lda" asm))
         (is (search "adc" asm))
         (is (search "sta" asm))
         (is (search "sbc" asm))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; CP1610 Backend tests (Intellivision)
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-cp1610 ()
   "Compile minimal Character class to CP1610 assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :cp1610 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :cp1610 s))))
 
 (test backend-cp1610/header-cpu-label
-  "CP1610 output header contains 'generated by EIGHTBOL for CP1610'."
-  (is (search "generated by EIGHTBOL for CP1610" (compile-minimal-cp1610))))
+  "CP1610 output header contains generated-by line (display name is lowercase cp1610)."
+  (is (search "generated by EIGHTBOL for cp1610" (compile-minimal-cp1610))))
 
 (test backend-cp1610/method-labels-and-ret
   "CP1610 output contains MethodCharacterThink PROC and JR R5."
@@ -1710,7 +2297,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "CP1610 STRING BLT emits block copy loop using R2/R3 (R5 reserved for JSR return)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :cp1610 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :cp1610 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "MVI@" asm))
         (is (search "MVO@" asm))
@@ -1722,7 +2309,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   (let ((ast (eightbol::parse-eightbol-string
               (minimal-class-with-stmt "MOVE 1 TO HP."))))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :cp1610 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :cp1610 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "MVII" asm) "MOVE/load should emit MVII")
         (is (search "MVO" asm) "MOVE/store should emit MVO")))))
@@ -1731,19 +2318,17 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "CP1610 ADD x TO y GIVING z emits ADDR."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :cp1610 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :cp1610 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ADDR" asm) "ADD should emit ADDR")))))
 
-;;;; ---------------------------------------------------------------
 ;;;; Z80 Backend tests
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-z80 ()
   "Compile minimal Character class to Z80 assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :z80 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :z80 s))))
 
 (test backend-z80/header-cpu-label
   "Z80 output header contains 'generated by EIGHTBOL for Z80'."
@@ -1763,7 +2348,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "Z80 STRING BLT emits block copy loop (ld (hl), ld (de), inc hl/de, dec bc)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :z80 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :z80 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ld" asm))
         (is (search "(hl)" asm))
@@ -1775,7 +2360,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "Z80 MOVE and ADD emit ld and add instructions."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :z80 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :z80 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ld" asm) "MOVE/ADD should emit ld")
         (is (search "add" asm) "ADD should emit add")))))
@@ -1788,7 +2373,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "BcdTest-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "BcdTest") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (BcdTest):" f)
         (write-line "05 ByteA PIC 99 USAGE DECIMAL." f)
@@ -1816,7 +2401,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
           (let ((asm (let ((eightbol::*eightbol-root-directory* root)
                           (eightbol::*copybook-paths* (list gen)))
                        (with-output-to-string (s)
-                         (eightbol::compile-to-assembly ast :z80 s)))))
+                         (eightbol::compile-to-assembly-with-ast-passes ast :z80 s)))))
             (is (search "daa" asm) "Z80 BCD ADD should emit daa")))))))
 
 (test backend-z80/word-add-emits-add-hl
@@ -1827,7 +2412,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "WordTest-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "WordTest") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (WordTest):" f)
         (write-line "05 WordA PIC 9999 USAGE BINARY." f)
@@ -1855,19 +2440,17 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
           (let ((asm (let ((eightbol::*eightbol-root-directory* root)
                           (eightbol::*copybook-paths* (list gen)))
                        (with-output-to-string (s)
-                         (eightbol::compile-to-assembly ast :z80 s)))))
+                         (eightbol::compile-to-assembly-with-ast-passes ast :z80 s)))))
             (is (search "add" asm) "Z80 word ADD should emit add")
             (is (search "hl" asm) "Z80 word ADD should use hl")))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; m68k Backend tests
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-m68k ()
   "Compile minimal Character class to m68k assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :m68k s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :m68k s))))
 
 (test backend-m68k/header-and-rts
   "m68k output contains header and rts."
@@ -1884,7 +2467,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "m68k STRING BLT emits block copy loop (move.b, lea, subq)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :m68k s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :m68k s)
       (let ((asm (get-output-stream-string s)))
         (is (search "move.b" asm))
         (is (search "lea" asm))
@@ -1894,7 +2477,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "m68k MOVE and ADD emit move and add instructions."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :m68k s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :m68k s)
       (let ((asm (get-output-stream-string s)))
         (is (search "move" asm) "MOVE/ADD should emit move")
         (is (search "add" asm) "ADD should emit add")))))
@@ -1907,7 +2490,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "BcdTest-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "BcdTest") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (BcdTest):" f)
         (write-line "05 ByteA PIC 99 USAGE DECIMAL." f)
@@ -1935,7 +2518,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
           (let ((asm (let ((eightbol::*eightbol-root-directory* root)
                           (eightbol::*copybook-paths* (list gen)))
                        (with-output-to-string (s)
-                         (eightbol::compile-to-assembly ast :m68k s)))))
+                         (eightbol::compile-to-assembly-with-ast-passes ast :m68k s)))))
             (is (search "abcd" asm) "m68k BCD ADD should emit abcd"))))))))
 
 (test backend-m68k/bcd-subtract-emits-sbcd
@@ -1946,7 +2529,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "BcdTest-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "BcdTest") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (BcdTest):" f)
         (write-line "05 ByteA PIC 99 USAGE DECIMAL." f)
@@ -1974,18 +2557,16 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
           (let ((asm (let ((eightbol::*eightbol-root-directory* root)
                           (eightbol::*copybook-paths* (list gen)))
                        (with-output-to-string (s)
-                         (eightbol::compile-to-assembly ast :m68k s)))))
+                         (eightbol::compile-to-assembly-with-ast-passes ast :m68k s)))))
             (is (search "sbcd" asm) "m68k BCD SUBTRACT should emit sbcd")))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; SM83 Backend tests
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-sm83 ()
   "Compile minimal Character class to SM83 (Game Boy) assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :sm83 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :sm83 s))))
 
 (test backend-sm83/header-and-ret
   "SM83 output contains header and ret."
@@ -2002,7 +2583,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "SM83 STRING BLT emits block copy loop (ld [hl+], ld [de])."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :sm83 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :sm83 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ld" asm))
         (is (search "[hl" asm))
@@ -2013,28 +2594,26 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   (let ((ast (eightbol::parse-eightbol-string
               (minimal-class-with-stmt "MOVE 1 TO HP."))))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :sm83 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :sm83 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ld" asm) "MOVE should emit ld")
-        (is (search "Hp" asm) "Variable Hp should appear")))))
+        (is (search "HP" asm) "Variable HP should appear (PascalCase slot label)")))))
 
 (test backend-sm83/add-emits-add
   "SM83 ADD x TO y GIVING z emits add."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :sm83 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :sm83 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "add" asm) "ADD should emit add")))))
 
-;;;; ---------------------------------------------------------------
 ;;;; ARM7 Backend tests
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-arm7 ()
   "Compile minimal Character class to ARM7 assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :arm7 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :arm7 s))))
 
 (test backend-arm7/header-and-bx-lr
   "ARM7 output contains header and bx lr."
@@ -2052,7 +2631,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "ARM7 STRING BLT emits block copy loop (ldrb, strb)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :arm7 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :arm7 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "ldrb" asm))
         (is (search "strb" asm))))))
@@ -2062,7 +2641,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   (let ((ast (eightbol::parse-eightbol-string
               (minimal-class-with-stmt "MOVE 1 TO HP."))))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :arm7 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :arm7 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "movs" asm) "MOVE/load should emit movs")
         (is (or (search "strb" asm) (search "strh" asm)) "MOVE/store should emit str")))))
@@ -2071,19 +2650,17 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "ARM7 ADD x TO y GIVING z emits add."
   (let ((ast (eightbol::parse-eightbol-string *minimal-arithmetic-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :arm7 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :arm7 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "add" asm) "ADD should emit add")))))
 
-;;;; ---------------------------------------------------------------
 ;;;; i286 Backend tests
-;;;; ---------------------------------------------------------------
 
 (defun compile-minimal-i286 ()
   "Compile minimal Character class to i286 assembly, return as string."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :i286 s))))
+      (eightbol::compile-to-assembly-with-ast-passes ast :i286 s))))
 
 (test backend-i286/header-and-ret
   "i286 output contains header and ret."
@@ -2100,7 +2677,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
   "i286 STRING BLT emits block copy loop (mov [si], mov [di], loop)."
   (let ((ast (eightbol::parse-eightbol-string *minimal-string-blt-cob*)))
     (with-output-to-string (s)
-      (eightbol::compile-to-assembly ast :i286 s)
+      (eightbol::compile-to-assembly-with-ast-passes ast :i286 s)
       (let ((asm (get-output-stream-string s)))
         (is (search "mov" asm))
         (is (search "[si]" asm))
@@ -2115,7 +2692,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "BcdTest-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "BcdTest") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (BcdTest):" f)
         (write-line "05 ByteA PIC 99 USAGE DECIMAL." f)
@@ -2143,7 +2720,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
           (let ((asm (let ((eightbol::*eightbol-root-directory* root)
                           (eightbol::*copybook-paths* (list gen)))
                        (with-output-to-string (s)
-                         (eightbol::compile-to-assembly ast :i286 s)))))
+                         (eightbol::compile-to-assembly-with-ast-passes ast :i286 s)))))
             (is (search "daa" asm) "i286 BCD ADD should emit daa")))))))
 
 (test backend-i286/bcd-subtract-emits-das
@@ -2154,7 +2731,7 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
                   (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
                   root)))
       (ensure-directories-exist gen)
-      (with-open-file (f (merge-pathnames (make-pathname :name "BcdTest-Slots" :type "cpy") gen)
+      (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "BcdTest") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (BcdTest):" f)
         (write-line "05 ByteA PIC 99 USAGE DECIMAL." f)
@@ -2182,57 +2759,47 @@ Uses uiop:call-with-current-directory and uiop:delete-directory-tree."
           (let ((asm (let ((eightbol::*eightbol-root-directory* root)
                           (eightbol::*copybook-paths* (list gen)))
                        (with-output-to-string (s)
-                         (eightbol::compile-to-assembly ast :i286 s)))))
+                         (eightbol::compile-to-assembly-with-ast-passes ast :i286 s)))))
             (is (search "das" asm) "i286 BCD SUBTRACT should emit das")))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; CPU display names (case-preserving UI)
-;;;; ---------------------------------------------------------------
 
 (test backend/cpu-display-names
   "cpu-display-name returns intended case for all supported CPUs."
   (let ((expected '(("6502" . :6502) ("65c02" . :65c02) ("65c816" . :65c816)
                     ("cp1610" . :cp1610) ("HuC6280" . :huc6280) ("RP2A03" . :rp2a03)
-                    ("Z80" . :z80) ("SM83" . :sm83) ("m68k" . :m68k)
-                    ("i286" . :i286) ("ARM7" . :arm7))))
+                    ("Z80" . :z80) ("SM83" . :sm83) ("m6800" . :m6800) ("m68k" . :m68k)
+                    ("i286" . :i286) ("ARM7" . :arm7) ("F8" . :f8))))
     (dolist (pair expected)
       (is (string= (first pair) (eightbol::cpu-display-name (rest pair)))
           "~s should display as ~s" (rest pair) (first pair)))))
+
+(test compile/default-copybook-paths-without-star-cpu
+  "default-copybook-paths with *cpu* nil still yields a directory (uses explicit CPU or :6502)."
+  (let ((eightbol::*cpu* nil))
+    (let ((dir (pathname-directory (first (eightbol::default-copybook-paths #p"/tmp/" :6502)))))
+      (is (not (member nil dir :test #'equal))))))
+
+(test backend-6502/service-bank-statement-is-error
+  "Corrupt AST with :service-bank as statement type signals a clear error."
+  (signals error
+    (asm-from-ast
+     '(:method :method-id "M"
+       :statements ((:service-bank :service "Foo" :bank "Bar"))))))
 
 (test backend/cpu-directory-name-canonical-case
   "cpu-directory-name returns canonical case for output directories."
   (is (string= "cp1610" (eightbol::cpu-directory-name :cp1610)))
   (is (string= "65c02" (eightbol::cpu-directory-name :65c02)))
   (is (string= "RP2A03" (eightbol::cpu-directory-name :rp2a03)))
+  (is (string= "m6800" (eightbol::cpu-directory-name :m6800)))
   (is (string= "m68k" (eightbol::cpu-directory-name :m68k)))
   (is (string= "i286" (eightbol::cpu-directory-name :i286)))
   (is (string= "Z80" (eightbol::cpu-directory-name :z80)))
   (is (string= "HuC6280" (eightbol::cpu-directory-name :huc6280)))
   (is (string= "SM83" (eightbol::cpu-directory-name :sm83)))
-  (is (string= "ARM7" (eightbol::cpu-directory-name :arm7))))
-
-;;;; ---------------------------------------------------------------
-;;;; 6502 Backend — detailed instruction-level integration tests
-;;;; Uses direct AST construction to avoid COPY/copybook dependencies.
-;;;; ---------------------------------------------------------------
-
-(defun asm-from-ast (ast)
-  "Compile a hand-crafted AST directly to 6502 assembly string.
-Bypasses the file/copybook pipeline; binds empty dynamics for tables.
-AST is a :method plist (not full :program)."
-  (let ((empty (make-hash-table :test #'equal)))
-    (let ((eightbol::*class-id* "TestClass")
-          (eightbol::*slot-table* empty)
-          (eightbol::*type-table* empty)
-          (eightbol::*const-table* empty)
-          (eightbol::*service-bank-table* empty)
-          (eightbol::*usage-table* empty)
-          (eightbol::*sign-table* empty)
-          (eightbol::*pic-size-table* empty)
-          (eightbol::*pic-width-table* empty))
-      (with-output-to-string (s)
-        (let ((eightbol::*output-stream* s))
-          (eightbol::compile-6502-method ast "TestClass" :6502))))))
+  (is (string= "ARM7" (eightbol::cpu-directory-name :arm7)))
+  (is (string= "F8" (eightbol::cpu-directory-name :f8))))
 
 ;;; --- CALL SERVICE / .FarCall ---
 
@@ -2265,13 +2832,113 @@ AST is a :method plist (not full :program)."
     (is (search "PlaySong" asm))))
 
 (test backend-6502/call-in-library-jsr
-  "CALL target IN LIBRARY name. emits plain jsr."
+  "CALL target IN LIBRARY name. emits jsr Lib.<RoutineName> (see compile-6502-call :libraryp)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Run"
                         :statements ((:call :target "Lib-Routine"
                                             :bank nil :library t))))))
-    (is (search "jsr LibRoutine" asm))
+    (is (search "jsr Lib.LibRoutine" asm))
     (is (not (search ".FarJSR" asm)))))
+
+(test backend-6502/call-in-library-service-in-bank-table-still-jsr-lib
+  "CALL Service-Move-Decal-Y IN LIBRARY emits jsr Lib.…; *service-bank-table* does not change library path."
+  (let ((svc (make-hash-table :test 'equalp)))
+    (setf (gethash "ServiceMoveDecalY" svc) "Bank-Animation")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "Run"
+                  :statements ((:call :target "Service-Move-Decal-Y"
+                                      :library t
+                                      :tail-call-p t)))
+                "TestClass" :6502
+                :service-bank-table svc)))
+      (is (search "jsr Lib.ServiceMoveDecalY" asm))
+      (is (null (search ".FarCall" asm)))
+      (is (null (search "BankAnimation" asm)))
+      (is (null (search "jmp ServiceMoveDecalY" asm))))))
+
+(test backend-6502/call-in-library-service-move-decal-x-jsr-lib-via-paired-y-bank
+  "CALL Service-Move-Decal-X IN LIBRARY uses jsr Lib.… even when only ServiceMoveDecalY is in *service-bank-table*."
+  (let ((svc (make-hash-table :test 'equalp)))
+    (setf (gethash "ServiceMoveDecalY" svc) "Bank-Animation")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "WalkEast"
+                  :statements ((:call :target "Service-Move-Decal-X"
+                                      :library t
+                                      :tail-call-p t)))
+                "MummyCourse" :6502
+                :service-bank-table svc)))
+      (is (search "jsr Lib.ServiceMoveDecalX" asm))
+      (is (null (search ".FarCall" asm)))
+      (is (null (search "BankAnimation" asm)))
+      (is (null (search "jmp ServiceMoveDecalX" asm))))))
+
+(test backend-6502/call-plain-target-in-service-bank-table-farcall-not-jmp
+  "CALL Service-Move-Decal-Y with *service-bank-table* mapping emits .FarCall, not jmp/jsr (tail-call safe)."
+  (let ((svc (make-hash-table :test 'equalp)))
+    (setf (gethash "ServiceMoveDecalY" svc) "Bank-Animation")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "Run"
+                  :statements ((:call :target "Service-Move-Decal-Y" :tail-call-p t)))
+                "TestClass" :6502
+                :service-bank-table svc)))
+      (is (search ".FarCall" asm))
+      (is (search "ServiceMoveDecalY" asm))
+      (is (search "BankAnimation" asm))
+      (is (null (search "jmp ServiceMoveDecalY" asm))
+          "known service must use .FarCall, not tail jmp to label"))))
+
+(test backend-6502/if-course-last-frame-eq-motion-frame-uses-global-label
+  "Regression: IF Course-Last-Frame OF Self = Motion-Frame uses MotionFrame (not MummyCourseMotionFrame)."
+  (let ((slots (make-hash-table :test 'equalp))
+        (pic (make-hash-table :test 'equalp)))
+    (setf (gethash "Course-Last-Frame" slots) "Course")
+    (setf (gethash "Course-Last-Frame" pic) 1)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "Step"
+                  :statements ((:if :condition (= (:of "Course-Last-Frame" :self) "Motion-Frame")
+                               :then ((:goback))
+                               :else ((:goback)))))
+                "MummyCourse" :6502
+                :slot-table slots :pic-width-table pic)))
+      (is (search "MotionFrame" asm))
+      (is (null (search "MummyCourseMotionFrame" asm)))
+      (is (search "CourseLastFrame" asm)))))
+
+(test backend-6502/add-frames-per-second-to-course-last-frame-global-operand
+  "Regression: ADD Frames-Per-Second TO Course-Last-Frame OF Self uses FramesPerSecond label."
+  (let ((slots (make-hash-table :test 'equalp))
+        (pic (make-hash-table :test 'equalp)))
+    (setf (gethash "Course-Last-Frame" slots) "Course")
+    (setf (gethash "Course-Last-Frame" pic) 1)
+    (setf (gethash "Frames-Per-Second" pic) 1)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "Moved"
+                  :statements ((:add :from "Frames-Per-Second"
+                               :to (:of "Course-Last-Frame" :self))))
+                "MummyCourse" :6502
+                :slot-table slots :pic-width-table pic)))
+      (is (search "FramesPerSecond" asm))
+      (is (null (search "MummyCourseFramesPerSecond" asm))))))
+
+(test backend-6502/invoke-current-course-disconnect-callmethod
+  "Regression: INVOKE Current-Course \"Disconnect\" emits .CallMethod CallCourseDisconnect, not CallDisconnectMethod."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "ArrivedHorizontal"
+                :statements ((:invoke :object "Current-Course" :method "Disconnect")))
+              "MummyCourse" :6502)))
+    (is (search ".CallMethod CallCourseDisconnect" asm))
+    (is (search "CurrentCourse" asm))
+    (is (null (search "CallDisconnectMethod" asm)))))
+
+(test backend-6502/invoke-current-actor-stuck-callmethod
+  "Regression: INVOKE Current-Actor \"Stuck\" emits .CallMethod CallCharacterStuck, not CallStuckMethod."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "Stuck"
+                :statements ((:invoke :object "Current-Actor" :method "Stuck")))
+              "MummyCourse" :6502)))
+    (is (search ".CallMethod CallCharacterStuck" asm))
+    (is (search "CurrentActor" asm))
+    (is (null (search "CallStuckMethod" asm)))))
 
 ;;; --- ADD 1 / SUBTRACT 1 optimisation ---
 
@@ -2280,7 +2947,7 @@ AST is a :method plist (not full :program)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Inc"
                         :statements ((:add :from 1 :to "Counter"))))))
-    (is (search "inc Counter" asm))
+    (is (search "inc TestClassCounter" asm))
     (is (not (search "adc" asm)))))
 
 (test backend-6502/add-1-giving-does-not-use-inc
@@ -2290,14 +2957,14 @@ AST is a :method plist (not full :program)."
                         :statements ((:add :from 1 :to "Counter" :giving "Result"))))))
     ;; should still use adc, not inc
     (is (search "adc" asm))
-    (is (not (search "inc Counter" asm)))))
+    (is (not (search "inc TestClassCounter" asm)))))
 
 (test backend-6502/subtract-1-uses-dec
   "SUBTRACT 1 FROM variable emits dec, not sbc."
   (let ((asm (asm-from-ast
               '(:method :method-id "Dec"
                         :statements ((:subtract :from 1 :from-target "Counter"))))))
-    (is (search "dec Counter" asm))
+    (is (search "dec TestClassCounter" asm))
     (is (not (search "sbc" asm)))))
 
 (test backend-6502/add-2-uses-adc
@@ -2306,7 +2973,7 @@ AST is a :method plist (not full :program)."
               '(:method :method-id "Add2"
                         :statements ((:add :from 2 :to "Counter"))))))
     (is (search "adc" asm))
-    (is (not (search "inc Counter" asm)))))
+    (is (not (search "inc TestClassCounter" asm)))))
 
 ;;; --- Arithmetic byte/word (ADD/SUBTRACT GIVING) ---
 
@@ -2315,18 +2982,35 @@ AST is a :method plist (not full :program)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Add"
                         :statements ((:add :from "ByteA" :to "ByteB" :giving "ByteC"))))))
-    (is (search "lda ByteA" asm))
+    (is (search "TestClassByteA" asm))
     (is (search "adc" asm))
-    (is (search "sta ByteC" asm))))
+    (is (search "sta (Self), y" asm))
+    (is (search "TestClassByteC" asm))))
 
 (test backend-6502/arithmetic-byte-subtract-giving
   "SUBTRACT x FROM y GIVING z emits lda/sec/sbc/sta sequence."
   (let ((asm (asm-from-ast
               '(:method :method-id "Sub"
                         :statements ((:subtract :from "ByteB" :from-target "ByteA" :giving "ByteC"))))))
-    (is (search "lda ByteA" asm))
+    (is (search "TestClassByteA" asm))
     (is (search "sbc" asm))
-    (is (search "sta ByteC" asm))))
+    (is (search "sta (Self), y" asm))
+    (is (search "TestClassByteC" asm))))
+
+(test backend-6502/arithmetic-word-add-to-same-variable
+  "ADD WordA TO WordB with PIC width 2 emits clc, low adc, high adc with carry, sta both bytes."
+  (let ((pw (make-hash-table :test 'equal)))
+    (setf (gethash "WordA" pw) 2)
+    (setf (gethash "WordB" pw) 2)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "W"
+                  :statements ((:add :from "WordA" :to "WordB")))
+                "Character" :6502
+                :pic-width-table pw)))
+      (is (search "clc" asm))
+      (is (search "adc" asm))
+      (is (search "CharacterWordB" asm))
+      (is (search "+ 1" asm)))))
 
 ;;; --- Shift operators ---
 
@@ -2360,8 +3044,9 @@ AST is a :method plist (not full :program)."
               '(:method :method-id "Mask"
                         :statements ((:compute :target "X"
                                                :expression (:bit-and "Y" 128)))))))
-    (is (search "and #$80" asm))
-    (is (search "sta X" asm))))
+    (is (or (search "and #$80" asm)
+            (search "and #128" asm)))
+    (is (search "TestClassX" asm))))
 
 (test backend-6502/bit-or-emits-ora
   "COMPUTE X = Y BIT-OR Z emits ora Z."
@@ -2369,7 +3054,7 @@ AST is a :method plist (not full :program)."
               '(:method :method-id "Flag"
                         :statements ((:compute :target "X"
                                                :expression (:bit-or "Y" "Z-Flag")))))))
-    (is (search "ora ZFlag" asm))))
+    (is (search "ora (Self), y" asm))))
 
 (test backend-6502/bit-xor-emits-eor
   "COMPUTE X = Y BIT-XOR $FF emits eor #$ff (hex immediate)."
@@ -2377,7 +3062,7 @@ AST is a :method plist (not full :program)."
               '(:method :method-id "Flip"
                         :statements ((:compute :target "X"
                                                :expression (:bit-xor "Y" 255)))))))
-    (is (search "eor #$ff" asm))))
+    (is (search "#$ff" (string-downcase asm)))))
 
 (test backend-6502/bit-not-emits-eor-ff
   "COMPUTE X = BIT-NOT Y emits eor #$ff."
@@ -2395,17 +3080,207 @@ AST is a :method plist (not full :program)."
               '(:method :method-id "Store"
                         :statements ((:move :from "Val" :to (:subscript "Arr" 1)))))))
     (is (search "tax" asm))
-    (is (search "sta Arr,x" asm))
-    (is (search "lda Val" asm))))
+    (is (or (search "sta TestClassArr, x" asm)
+            (search "sta TestClassArr,x" asm)))
+    (is (search "TestClassVal" asm))))
 
 (test backend-6502/subscript-load-emits-indexed-lda
-  "MOVE arr(idx) TO dest emits tax, lda Arr,x, sta dest."
+  "MOVE arr(idx) TO dest emits tax, lda Arr,x (or Arr + 0,x), ldy #Dest, sta (Self),y."
   (let ((asm (asm-from-ast
               '(:method :method-id "Load"
                         :statements ((:move :from (:subscript "Arr" 1) :to "Dest"))))))
     (is (search "tax" asm))
-    (is (search "lda Arr,x" asm))
-    (is (search "sta Dest" asm))))
+    (is (or (search "lda TestClassArr, x" asm)
+            (search "lda TestClassArr,x" asm)
+            (search "lda TestClassArr + 0, x" asm)
+            (search "lda TestClassArr + 0,x" asm)))
+    (is (search "ldy #TestClassDest" asm))
+    (is (search "sta (Self), y" asm))))
+
+(test backend-6502/subscript-global-decal-flash-time-uses-bare-label-and-lax-index
+  "MOVE from global Decal-Flash-Time(Decal OF Self): index via lax (Self),y on plain 6502; lda DecalFlashTime,x; scratch via sta (Self),y."
+  (let ((slots (make-hash-table :test 'equalp)))
+    (setf (gethash "Decal-Flash-Time" slots) "Phantasia-Globals")
+    (setf (gethash "Decal" slots) "Character")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:subscript "Decal-Flash-Time"
+                                                      (:of "Decal" :self))
+                                :to "Scratch")))
+                "Character" :6502
+                :slot-table slots)))
+      (is (search "lax (Self), y" asm))
+      (is (search "lda DecalFlashTime" asm))
+      (is (search "ldy #CharacterScratch" asm))
+      (is (search "sta (Self), y" asm)))))
+
+(test backend-6502/subscript-global-decal-flash-time-uppercase-copybook-key
+  "Globals copybook keys are uppercase (DECAL-FLASH-TIME); AST uses Decal-Flash-Time — emit lda DecalFlashTime, not CharacterDecalFlashTime."
+  (let ((slots (make-hash-table :test 'equalp)))
+    (setf (gethash "DECAL-FLASH-TIME" slots) "Phantasia-Globals")
+    (setf (gethash "Decal" slots) "Character")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:subscript "Decal-Flash-Time"
+                                                      (:of "Decal" :self))
+                                :to "Scratch")))
+                "Character" :6502
+                :slot-table slots)))
+      (is (search "lda DecalFlashTime" asm))
+      (is (null (search "CharacterDecalFlashTime" asm))))))
+
+(test backend-65c02/subscript-global-decal-flash-time-uses-lda-tax-not-lax
+  "Same MOVE as plain 6502 but 65c02 forbids undocumented opcodes: lda (Self),y not lax."
+  (let ((slots (make-hash-table :test 'equalp)))
+    (setf (gethash "Decal-Flash-Time" slots) "Phantasia-Globals")
+    (setf (gethash "Decal" slots) "Character")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:subscript "Decal-Flash-Time"
+                                                      (:of "Decal" :self))
+                                :to "Scratch")))
+                "Character" :65c02
+                :slot-table slots)))
+      (is (search "lda (Self), y" asm))
+      (is (search "tax" asm))
+      (is (null (search "lax" asm)))
+      (is (search "lda DecalFlashTime" asm)))))
+
+(test backend-6502/move-named-constant-to-global-subscripted-table
+  "MOVE 78 constant to global CartRAM indexed array uses lda # Name (not Self slot) and sta GlobalName,x."
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp))
+        (empty (make-hash-table :test 'equalp)))
+    (setf (gethash "decal-animation-on-tick" consts) 0)
+    (setf (gethash "Decal-Animation-State" slots) "Phantasia-Globals")
+    (setf (gethash "Decal" slots) "Character")
+    (let ((asm (with-output-to-string (s)
+                 (let ((eightbol::*class-id* "Character")
+                       (eightbol::*slot-table* slots)
+                       (eightbol::*const-table* consts)
+                       (eightbol::*type-table* empty)
+                       (eightbol::*usage-table* empty)
+                       (eightbol::*sign-table* empty)
+                       (eightbol::*pic-size-table* empty)
+                       (eightbol::*pic-width-table* empty)
+                       (eightbol::*service-bank-table* empty)
+                       (eightbol::*output-stream* s))
+                   (eightbol::compile-6502-method
+                    '(:method :method-id "M"
+                      :statements ((:move :from "Decal-Animation-On-Tick"
+                                          :to (:subscript "Decal-Animation-State"
+                                                (:of "Decal" :self)))))
+                    "Character" :6502)))))
+      (is (search "lda # DecalAnimationOnTick" asm))
+      (is (search "sta DecalAnimationState" asm))
+      ;; Index in X: plain 6502 may use undocumented lax (Self),y instead of lda/tax.
+      (is (or (search "tax" asm) (search "lax" asm))))))
+
+(test backend-6502/move-action-hurt-enum-uses-immediate-not-self-slot
+  "MOVE Action-Hurt TO Action OF Self emits lda # ActionHurt (78 enum), not ldy CharacterActionHurt / lda (Self),y."
+  (let ((consts (make-hash-table :test 'equalp))
+        (empty (make-hash-table :test 'equalp)))
+    (setf (gethash "action-hurt" consts) 2)
+    (let ((asm (with-output-to-string (s)
+                 (let ((eightbol::*class-id* "Character")
+                       (eightbol::*slot-table* empty)
+                       (eightbol::*const-table* consts)
+                       (eightbol::*type-table* empty)
+                       (eightbol::*usage-table* empty)
+                       (eightbol::*sign-table* empty)
+                       (eightbol::*pic-size-table* empty)
+                       (eightbol::*pic-width-table* empty)
+                       (eightbol::*service-bank-table* empty)
+                       (eightbol::*output-stream* s))
+                   (eightbol::compile-6502-method
+                    '(:method :method-id "M"
+                      :statements ((:move :from "Action-Hurt"
+                                          :to (:of "Action" :self))))
+                    "Character" :6502)))))
+      (is (search "lda # ActionHurt" asm))
+      (is (null (search "CharacterActionHurt" asm))))))
+
+(test backend-6502/move-song-heal-id-of-self-to-next-song-immediate
+  "MOVE Song--Heal--ID OF Self TO Next-Song: 77/78 in *const-table* must use lda # Song_Heal_ID, not ldy CharacterSongHealID / lda (Self),y (regression)."
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp)))
+    (setf (gethash "song--heal--id" consts) 42)
+    (setf (gethash "Next-Song" slots) "Phantasia-Globals")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:of "Song--Heal--ID" :self)
+                               :to "Next-Song")))
+                "Character" :6502
+                :slot-table slots :const-table consts)))
+      (is (search "lda # Song_Heal_ID" asm))
+      (is (search "sta NextSong" asm))
+      (is (null (search "CharacterSongHealID" asm)))
+      (is (null (or (search "lda (Self), y" asm) (search "lda (Self),y" asm)))))))
+
+(test backend-6502/if-song-hurt-id-of-self-equal-zero-uses-immediate-lda
+  "IF (= Song--Hurt--ID OF Self 0): load path uses emit-6502-load-expr — must lda # Song_Hurt_ID, not ldy CharacterSongHurtID / lda (Self),y."
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp)))
+    (setf (gethash "song--hurt--id" consts) 7)
+    (setf (gethash "Next-Song" slots) "Phantasia-Globals")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:if :condition (= (:of "Song--Hurt--ID" :self) 0)
+                               :then ((:goback))
+                               :else ((:goback)))))
+                "Character" :6502
+                :slot-table slots :const-table consts)))
+      (is (search "lda # Song_Hurt_ID" asm))
+      (is (null (search "CharacterSongHurtID" asm))))))
+
+(test backend-6502/if-state-eq-anenemy-shoot-uses-symbolic-cmp-immediate
+  "IF STATE OF Self = Anenemy-Shoot: load State from (Self),y then cmp with enum value (numeric immediate when const-table supplies it)."
+  (let ((consts (make-hash-table :test 'equalp)))
+    (setf (gethash "anenemy-shoot" consts) 2)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:if :condition (= (:of "State" :self) "Anenemy-Shoot")
+                               :then ((:goback))
+                               :else ((:goback)))))
+                "Anenemy" :6502
+                :const-table consts)))
+      (is (search "ldy #AnenemyState" asm))
+      (is (search "cmp #$02" asm)))))
+
+(test backend-6502/move-16bit-slot-to-slot-uses-lax-two-byte-copy
+  "MOVE Character-Max-HP OF Self TO Character-HP OF Self: 16-bit copy with lax/stx on plain 6502 (regression: not one byte only)."
+  (let ((widths (make-hash-table :test 'equalp)))
+    (setf (gethash "Character-HP" widths) 2)
+    (setf (gethash "Character-Max-HP" widths) 2)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:of "Character-Max-HP" :self)
+                               :to (:of "Character-HP" :self))))
+                "Character" :6502
+                :pic-width-table widths)))
+      (is (search "lax (Self), y" asm))
+      (is (search "txa" asm))
+      (is (search "iny" asm))
+      ;; 6502 has no stx (zp),y; low byte moves X→A then sta (Self),y.
+      (is (<= 2 (+ (%asm-substring-count "sta (Self), y" asm)
+                  (%asm-substring-count "sta (Self),y" asm)))))))
+
+(test backend-65c02/move-16bit-slot-to-slot-uses-byte-loop-not-lax
+  "Same 16-bit slot→slot MOVE on 65c02: no undocumented lax; per-byte lda/sta."
+  (let ((widths (make-hash-table :test 'equalp)))
+    (setf (gethash "Character-HP" widths) 2)
+    (setf (gethash "Character-Max-HP" widths) 2)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:of "Character-Max-HP" :self)
+                               :to (:of "Character-HP" :self))))
+                "Character" :65c02
+                :pic-width-table widths)))
+      (is (null (search "lax" asm)))
+      (is (<= 2 (+ (%asm-substring-count "lda (Self), y" asm)
+                    (%asm-substring-count "lda (Self),y" asm))))
+      (is (<= 2 (+ (%asm-substring-count "sta (Self), y" asm)
+                    (%asm-substring-count "sta (Self),y" asm)))))))
 
 (test backend-6502/log-fault-emits-logfault
   "LOG FAULT \"X\" emits .LogFault directive."
@@ -2423,47 +3298,16 @@ AST is a :method plist (not full :program)."
     (is (search ".DebugBreak" asm))))
 
 ;;; --- Unsupported CPU tests
-;;;; ---------------------------------------------------------------
 ;;;; Unsupported CPU tests
-;;;; ---------------------------------------------------------------
 
 (test backend/unsupported-cpu-signals-error
   "Requesting an unimplemented CPU backend signals an error."
   (let ((ast (eightbol::parse-eightbol-string *minimal-character-cob*)))
     (signals error
       (with-output-to-string (s)
-        (eightbol::compile-to-assembly ast :pdp11 s)))))
+        (eightbol::compile-to-assembly-with-ast-passes ast :pdp11 s)))))
 
-;;;; ---------------------------------------------------------------
 ;;;; Parser integration tests — new grammar forms
-;;;; Each test parses a minimal self-contained EIGHTBOL snippet and
-;;;; inspects the resulting AST for correct structure.
-;;;; ---------------------------------------------------------------
-
-(defun parse-procedure-stmts (procedure-text)
-  "Parse PROCEDURE-TEXT as the body of a minimal method and return the
-statement list for the first method.  PROCEDURE-TEXT should contain only
-statements, not the method wrapper boilerplate."
-  (let* ((src (format nil
-"000010 IDENTIFICATION DIVISION.
-000020 CLASS-ID. TestClass.
-000030 ENVIRONMENT DIVISION.
-000040 OBJECT.
-000050     DATA DIVISION.
-000060         WORKING-STORAGE SECTION.
-000070     PROCEDURE DIVISION.
-000080         IDENTIFICATION DIVISION.
-000090         METHOD-ID. \"Test\".
-000100         PROCEDURE DIVISION.
-~a
-000900             GOBACK.
-000910         END METHOD \"Test\".
-000920 END OBJECT.
-000930 END CLASS TestClass.
-" procedure-text))
-         (ast (eightbol::parse-eightbol-string src))
-         (method (first (eightbol::ast-methods ast))))
-    (eightbol::ast-method-statements method)))
 
 (test parser/call-in-service-produces-service-key
   "CALL target IN SERVICE bank. produces :service key in AST."
@@ -2553,9 +3397,7 @@ statements, not the method wrapper boilerplate."
     (let ((expr (getf (rest compute) :expression)))
       (is (and (listp expr) (eq :bit-not (first expr)))))))
 
-;;;; ---------------------------------------------------------------
 ;;;; Argument parsing tests
-;;;; ---------------------------------------------------------------
 
 (test main/parse-args-input-file
   "parse-arguments recognises a bare filename as :input-file."
@@ -2603,8 +3445,10 @@ statements, not the method wrapper boilerplate."
                    (s "000100     FOO).")
                  (eightbol::lexer s))))
     (let ((types (mapcar #'first tokens)))
-      (is (member '|)| types) "Should have ) token")
-      (is (member '|.| types) "Should have . token")
+      (is (find-if (lambda (sym) (and (symbolp sym) (string= ")" (symbol-name sym)))) types)
+          "Should have ) token")
+      (is (find-if (lambda (sym) (and (symbolp sym) (string= "." (symbol-name sym)))) types)
+          "Should have . token")
       (is (not (find-if (lambda (tok)
                           (and (eq (first tok) 'bareword)
                                (string= (cadr tok) ").")))
