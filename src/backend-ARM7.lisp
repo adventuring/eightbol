@@ -41,18 +41,26 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
 
 (defun compile-arm7-method (out method class-id slot-table type-table const-table pic-size-table pic-width-table)
   "Emit one @code{:method} body: @code{.thumb_func} label, statements, fallback @code{bx lr}."
-  (let* ((method-id  (getf (rest method) :method-id))
-         (statements (ensure-list (getf (rest method) :statements)))
-         (last-stmt (car (last statements))))
-    (format out  "~&~8t.thumb_func")
-    (format out  "~&Method~a~a:"
-            (arm7-symbol class-id) (arm7-symbol (format nil "~a" method-id)))
-    (dolist (stmt statements)
-      (compile-arm7-statement out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
-    (unless (and last-stmt (listp last-stmt)
-                 (member (first last-stmt)
-                         '(:goback :exit-method :exit-program :exit :stop-run)))
-      (format out  "~&~8tbx      lr"))))
+  (let ((*slot-table* slot-table)
+        (*type-table* type-table)
+        (*const-table* const-table)
+        (*pic-size-table* pic-size-table)
+        (*pic-width-table* pic-width-table)
+        (*class-id* class-id))
+    (declare (special *slot-table* *type-table* *const-table* *pic-size-table*
+                      *pic-width-table* *class-id*))
+    (let* ((method-id  (getf (rest method) :method-id))
+           (statements (ensure-list (getf (rest method) :statements)))
+           (last-stmt (car (last statements))))
+      (format out  "~&~8t.thumb_func")
+      (format out  "~&Method~a~a:"
+              (arm7-symbol class-id) (arm7-symbol (format nil "~a" method-id)))
+      (dolist (stmt statements)
+        (compile-arm7-statement out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
+      (unless (and last-stmt (listp last-stmt)
+                   (member (first last-stmt)
+                           '(:goback :exit-method :exit-program :exit :stop-run)))
+        (format out  "~&~8tbx      lr")))))
 
 (defun compile-arm7-goto (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
   "Emit ARM7 GOTO: unconditional @code{b}, or @code{cmp}/@code{beq} chain when @code{:depending-on} is set."
@@ -212,7 +220,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
          (format out  "~&~8tbl      Invoke~a~a" (arm7-symbol class-id) method-sym))
         (t
          (let* ((obj-name (arm7-symbol (format nil "~a" object)))
-                (obj-class (or (var-class obj-name type-table) "Unknown")))
+                (obj-class (or (var-class obj-name) "Unknown")))
            (format out  "~&~8tbl      Call~a~a" obj-class method-sym))))
       (when returning
         (format out  "~&~8tldr     r2, =~a" (arm7-symbol (format nil "~a" returning)))
@@ -595,12 +603,14 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
     (t (arm7-symbol (format nil "~a" operand)))))
 
 (defun compile-arm7-string-blt (out stmt class-id slot-table const-table)
+  (declare (ignore class-id slot-table const-table))
   (let ((source (getf (rest stmt) :source))
         (dest (getf (rest stmt) :dest))
         (length (getf (rest stmt) :length)))
-    (let ((len (or (and (listp source) (getf source :length))
-                   (and (listp dest) (getf dest :length))
-                   length 64))
+    (let ((len (or (%string-blt-refmod-length source)
+                   (%string-blt-refmod-length dest)
+                   length
+                   64))
           (src-addr (arm7-string-operand-address source))
           (dst-addr (arm7-string-operand-address dest)))
       (format out  "~&~8tldr     r2, =~a" src-addr)

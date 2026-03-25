@@ -47,15 +47,23 @@
 ;;; ---------------------------------------------------------------
 
 (defun compile-i286-method (out method class-id slot-table type-table const-table pic-size-table pic-width-table)
-  (let ((method-id  (getf (rest method) :method-id))
-        (statements (getf (rest method) :statements)))
-    (format out "~&Method~a~a proc"
-            (i286-symbol class-id) (i286-symbol (format nil "~a" method-id)))
-    (dolist (stmt (ensure-list statements))
-      (compile-i286-statement out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
-    (format out "~&~8tret")
-    (format out "~&Method~a~a endp"
-            (i286-symbol class-id) (i286-symbol (format nil "~a" method-id)))))
+  (let ((*slot-table* slot-table)
+        (*type-table* type-table)
+        (*const-table* const-table)
+        (*pic-size-table* pic-size-table)
+        (*pic-width-table* pic-width-table)
+        (*class-id* class-id))
+    (declare (special *slot-table* *type-table* *const-table* *pic-size-table*
+                      *pic-width-table* *class-id*))
+    (let ((method-id  (getf (rest method) :method-id))
+          (statements (getf (rest method) :statements)))
+      (format out "~&Method~a~a proc"
+              (i286-symbol class-id) (i286-symbol (format nil "~a" method-id)))
+      (dolist (stmt (ensure-list statements))
+        (compile-i286-statement out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
+      (format out "~&~8tret")
+      (format out "~&Method~a~a endp"
+              (i286-symbol class-id) (i286-symbol (format nil "~a" method-id))))))
 
 (defun compile-i286-goto (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
   "Emit i286 GOTO: unconditional @code{jmp}, or @code{cmp}/@code{je} chain when @code{:depending-on} is set."
@@ -125,14 +133,18 @@
 ;;; ---------------------------------------------------------------
 
 (defun i286-expr-is-constant-p (expr const-table)
+  "True if EXPR is a compile-time constant. CONST-TABLE is ignored; use @code{*CONST-TABLE*}."
+  (declare (ignore const-table))
   (or (numberp expr)
-      (and (stringp expr) (constant-p expr const-table))))
+      (and (stringp expr) (constant-p expr))))
 
 (defun i286-value (expr const-table)
+  "Return assembly text for immediate or symbol. CONST-TABLE is ignored."
+  (declare (ignore const-table))
   (cond
     ((numberp expr) (format nil "~d" expr))
-    ((and (stringp expr) (constant-p expr const-table))
-     (format nil "~d" (constant-value expr const-table)))
+    ((and (stringp expr) (constant-p expr))
+     (format nil "~d" (constant-value expr)))
     ((stringp expr) (i286-symbol expr))
     ((eq expr :self) "Self")
     ((and (listp expr) (eq (first expr) :of))
@@ -145,8 +157,8 @@
     (cond
       ((numberp expr)
        (format out "~&~8tmov     ~a, ~d" reg expr))
-      ((and (stringp expr) (constant-p expr const-table))
-       (format out "~&~8tmov     ~a, ~d" reg (constant-value expr const-table)))
+      ((and (stringp expr) (constant-p expr))
+       (format out "~&~8tmov     ~a, ~d" reg (constant-value expr)))
       ((stringp expr)
        (format out "~&~8tmov     ~a, ~a" reg (i286-symbol expr)))
       ((and (listp expr) (eq (first expr) :of))
@@ -209,10 +221,10 @@
 ;;; ---------------------------------------------------------------
 
 (defun compile-i286-move (out stmt class-id slot-table const-table pic-width-table)
-  (let ((from (getf (rest stmt) :from))
-        (to   (getf (rest stmt) :to))
-        (to-w (operand-width to pic-width-table))
-        (reg  (i286-reg to-w)))
+  (let* ((from (getf (rest stmt) :from))
+         (to   (getf (rest stmt) :to))
+         (to-w (operand-width to pic-width-table))
+         (reg  (i286-reg to-w)))
     (compile-i286-load out from class-id slot-table const-table pic-width-table)
     (cond
       ((stringp to)
@@ -249,11 +261,11 @@
          (format out "~&~8tcall    Invoke~a~a" (i286-symbol class-id) method-sym))
         (t
          (let* ((obj-name (i286-symbol (format nil "~a" object)))
-                (obj-class (or (var-class obj-name type-table) "Unknown")))
+                (obj-class (or (var-class obj-name) "Unknown")))
            (format out "~&~8tcall    Call~a~a" obj-class method-sym))))
       (when returning
-        (let ((ret-w (operand-width returning pic-width-table))
-              (reg (i286-reg ret-w)))
+        (let* ((ret-w (operand-width returning pic-width-table))
+               (reg (i286-reg ret-w)))
           (format out "~&~8tmov     ~a, ~a" (i286-symbol (format nil "~a" returning)) reg))))))
 
 (defun compile-i286-call (out stmt)
@@ -467,7 +479,7 @@
            (format out "~&~8tjmp     ~a" lbl)
            (format out "~&~a:" lbl-done)))
         (repl-by
-         (let ((len (or (pic-size (format nil "~a" target) pic-size-table) 64)))
+         (let ((len (or (pic-size (format nil "~a" target)) 64)))
            (format out "~&~8t; INSPECT ~a REPLACING CHARACTERS BY ~a" target repl-by)
            (compile-i286-load out repl-by class-id slot-table const-table pic-width-table 1)
            (format out "~&~8tmov     si, offset ~a" tgt-sym)
@@ -483,14 +495,14 @@
 ;;; ---------------------------------------------------------------
 
 (defun compile-i286-add (out stmt class-id slot-table const-table pic-width-table)
-  (let ((from (getf (rest stmt) :from))
-        (to (getf (rest stmt) :to))
-        (giving (getf (rest stmt) :giving))
-        (result (or giving (and (stringp to) to) (and (listp to) (eq (first to) :subscript) to)))
-        (w (operand-width (or result to) pic-width-table))
-        (bcd-p (when result (usage-bcd-p (expr-to-width-name result))))
-        (acc (i286-reg w))
-        (tmp (i286-temp-reg w)))
+  (let* ((from (getf (rest stmt) :from))
+         (to (getf (rest stmt) :to))
+         (giving (getf (rest stmt) :giving))
+         (result (or giving (and (stringp to) to) (and (listp to) (eq (first to) :subscript) to)))
+         (w (operand-width (or result to) pic-width-table))
+         (bcd-p (when result (usage-bcd-p (expr-to-width-name result))))
+         (acc (i286-reg w))
+         (tmp (i286-temp-reg w)))
     (compile-i286-load out to class-id slot-table const-table pic-width-table)
     (format out "~&~8tmov     ~a, ~a" tmp acc)
     (compile-i286-load out from class-id slot-table const-table pic-width-table)
@@ -513,14 +525,14 @@
         (t (format out "~&~8t; Unsupported add result ~s" result))))))
 
 (defun compile-i286-subtract (out stmt class-id slot-table const-table pic-width-table)
-  (let ((from (getf (rest stmt) :from))
-        (from-target (getf (rest stmt) :from-target))
-        (giving (getf (rest stmt) :giving))
-        (dest (or giving from-target))
-        (w (operand-width dest pic-width-table))
-        (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest))))
-        (acc (i286-reg w))
-        (tmp (i286-temp-reg w)))
+  (let* ((from (getf (rest stmt) :from))
+         (from-target (getf (rest stmt) :from-target))
+         (giving (getf (rest stmt) :giving))
+         (dest (or giving from-target))
+         (w (operand-width dest pic-width-table))
+         (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest))))
+         (acc (i286-reg w))
+         (tmp (i286-temp-reg w)))
     (compile-i286-load out from-target class-id slot-table const-table pic-width-table)
     (format out "~&~8tmov     ~a, ~a" tmp acc)
     (compile-i286-load out from class-id slot-table const-table pic-width-table)
@@ -543,10 +555,10 @@
       (t (format out "~&~8t; Unsupported subtract dest ~s" dest)))))
 
 (defun compile-i286-compute (out stmt class-id slot-table const-table pic-width-table)
-  (let ((target (getf (rest stmt) :target))
-        (expr (getf (rest stmt) :expression))
-        (w (operand-width target pic-width-table))
-        (reg (i286-reg w)))
+  (let* ((target (getf (rest stmt) :target))
+         (expr (getf (rest stmt) :expression))
+         (w (operand-width target pic-width-table))
+         (reg (i286-reg w)))
     (compile-i286-load out expr class-id slot-table const-table pic-width-table)
     (cond
       ((stringp target)
@@ -564,10 +576,10 @@
       (t (format out "~&~8t; Unsupported compute target ~s" target)))))
 
 (defun compile-i286-set (out stmt class-id slot-table const-table pic-width-table)
-  (let ((target (getf (rest stmt) :target))
-        (value (getf (rest stmt) :value))
-        (w (operand-width target pic-width-table))
-        (reg (i286-reg w)))
+  (let* ((target (getf (rest stmt) :target))
+         (value (getf (rest stmt) :value))
+         (w (operand-width target pic-width-table))
+         (reg (i286-reg w)))
     (cond
       ((stringp target)
        (format out "~&~8tmov     ~a, ~a" (i286-symbol target) reg))
@@ -576,7 +588,7 @@
          (when (member obj '(:self "Self" self) :test #'equal)
            (format out "~&~8tmov     bx, offset Self")
            (format out "~&~8tmov     bx, [bx]")
-           (format out "~&~8tmov     [bx+~a], ~a" (slot-symbol slot slot-table class-id) reg))))
+           (format out "~&~8tmov     [bx+~a], ~a" (slot-symbol slot class-id) reg))))
       ((and (listp target) (eq (first target) :subscript))
        (let ((arr-name (second target)) (idx-expr (third target)))
          (format out "~&~8tmov     ~a, ~a" (i286-temp-reg w) reg)
@@ -638,9 +650,10 @@
   (let ((source (getf (rest stmt) :source))
         (dest (getf (rest stmt) :dest))
         (length (getf (rest stmt) :length)))
-    (let ((len (or (and (listp source) (getf source :length))
-                   (and (listp dest) (getf dest :length))
-                   length 64))
+    (let ((len (or (%string-blt-refmod-length source)
+                   (%string-blt-refmod-length dest)
+                   length
+                   64))
           (src-addr (i286-string-operand-address source))
           (dst-addr (i286-string-operand-address dest)))
       (format out "~&~8tmov     si, ~a" src-addr)

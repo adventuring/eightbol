@@ -266,7 +266,7 @@
          (format out "~&~8tcall    Invoke~a~a" (sm83-symbol class-id) method-sym))
         (t
          (let* ((obj-name (sm83-symbol (format nil "~a" object)))
-                (obj-class (or (var-class obj-name type-table) "Unknown")))
+                (obj-class (or (var-class obj-name) "Unknown")))
            (format out "~&~8tcall    Call~a~a" obj-class method-sym))))
       (when returning
         (let ((ret-w (operand-width returning pic-width-table)))

@@ -1318,6 +1318,15 @@ TARGETS is list of paragraph names (1-based indices). LO, HI are 1-based inclusi
   "Return PascalCase assembly symbol from a literal, identifier, or string (COBOL stabby-case)."
   (cobol-id-to-assembly-symbol (if (listp x) (second x) x)))
 
+(defun %service-call-dispatch-symbol (item-sym)
+  "Map CALL SERVICE routine stem to assembly dispatch label (@code{ServiceFoo} for LUT / .FarCall).
+When ITEM-SYM already has a @code{Service} prefix (case-insensitive), return it unchanged."
+  (let ((s (if (stringp item-sym) item-sym (format nil "~a" item-sym))))
+    (if (and (>= (length s) 7)
+             (string-equal (subseq s 0 7) "Service"))
+        s
+        (concatenate 'string "Service" s))))
+
 (defun compile-6502-call (out stmt)
   (let* ((target (safe-getf (rest stmt) :target))
          (service (safe-getf (rest stmt) :service))
@@ -1326,15 +1335,17 @@ TARGETS is list of paragraph names (1-based indices). LO, HI are 1-based inclusi
          (tail-call-p (safe-getf (rest stmt) :tail-call-p))
          (item (or service target))
          (item-sym (sym-string item))
-         (resolved-bank (or bank (service-bank-table-lookup item-sym)))
+         (dispatch-sym (if service (%service-call-dispatch-symbol item-sym) item-sym))
+         (resolved-bank (or bank (service-bank-table-lookup dispatch-sym)))
          (jmp-p tail-call-p))
     (cond
       ;; CALL target IN SERVICE bank. / CALL SERVICE target. — service dispatch
       (service
        (if resolved-bank
            (let ((bank-sym (sym-string resolved-bank)))
-             (format out "~&~10T.FarCall ~a, ~a" item-sym bank-sym))
-           (error "EIGHTBOL: CALL ~a IN SERVICE requires bank (not in service-bank table)" item-sym)))
+             (format out "~&~10T.FarCall ~a, ~a" dispatch-sym bank-sym))
+           (error "EIGHTBOL: CALL ~a IN SERVICE requires bank (not in service-bank table)"
+                  dispatch-sym)))
       ;; CALL target IN LIBRARY. — always call LastBank library thunk label.
       ;; Emits jsr Lib.<RoutineName> (e.g. CALL Move-Decal-Y IN LIBRARY
       ;; => jsr Lib.MoveDecalY), regardless of service LUT entries.

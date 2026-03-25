@@ -213,7 +213,7 @@
          (format out "~&~10tjsr     Invoke~a~a" (m68k-symbol class-id) method-sym))
         (t
          (let* ((obj-name (m68k-symbol (format nil "~a" object)))
-                (obj-class (or (var-class obj-name type-table) "Unknown")))
+                (obj-class (or (var-class obj-name) "Unknown")))
            (format out "~&~10tjsr     Call~a~a" obj-class method-sym))))
       (when returning
         (format out "~&~10tmove.b  %d0, ~a" (m68k-symbol (format nil "~a" returning)))))))
