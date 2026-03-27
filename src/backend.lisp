@@ -779,8 +779,9 @@ One assembly symbol string."
         ((phantasia-global-bare-data-name-p n)
          (cobol-global-data-name-to-assembly-symbol n))
         (t
-         ;; No copybook row (e.g. inline WORKING-STORAGE in tests): class slot label.
-         (slot-symbol n current-class-id))))))
+         ;; Unknown bare names default to non-slot data labels (WORKING-STORAGE/global scratch),
+         ;; not implicit instance slots.
+         (cobol-global-data-name-to-assembly-symbol n))))))
 
 (defun cobol-double-hyphen-grouped-name-p (name)
   "True when NAME uses COBOL 77/78 grouped spelling with @code{--} (e.g. @code{Song--Hurt--ID}).
@@ -814,7 +815,9 @@ Boolean."
         (cond
           ((and origin (slot-origin-global-data-p origin)) nil)
           ((and origin (not (slot-origin-global-data-p origin))) t)
-          (t t))))))
+          ;; No copybook origin: only treat as implicit instance slot when a PIC width row
+          ;; exists (i.e., class copybook declared it). Otherwise prefer bare/global labels.
+          (t (not (null (pic-width-table-lookup n *pic-width-table*)))))))))
 
 (defun const-table-name-key (name)
   "Trimmed identifier for @code{*const-table*} @code{gethash}/@code{setf}.
@@ -958,7 +961,9 @@ uses @code{+object-reference-storage-width+}."
   (let ((name (expr-to-width-name expr)))
     (if name
         (let ((n (if (stringp name) name (format nil "~a" name))))
-          (or (pic-width-table-lookup n pic-width-table)
+          (or (when (string-equal n "Self")
+                +object-reference-storage-width+)
+              (pic-width-table-lookup n pic-width-table)
               (when (var-class n) +object-reference-storage-width+)
               1))
         1)))

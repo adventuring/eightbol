@@ -79,3 +79,29 @@
                   :slot-table slots :const-table consts)))
         (is (search "Method" asm) "CPU ~s should emit method label" cpu)
         (is (plusp (length asm)) "CPU ~s should emit non-empty assembly" cpu)))))
+
+(test matrix/z80-bare-dest-name-not-class-prefixed
+  "MOVE to bare Dest-X emits DestX, not MummyCourseDestX."
+  (let ((slots (make-hash-table :test 'equalp)))
+    (setf (gethash "Course-Waypoint-X" slots) "Course")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:of "Course-Waypoint-X" :self)
+                                      :to "Dest-X")))
+                "MummyCourse" :z80
+                :slot-table slots)))
+      (is (search "DestX" asm))
+      (is (null (search "MummyCourseDestX" asm))))))
+
+(test matrix/cp1610-bare-dest-name-not-class-prefixed
+  "MOVE to bare Dest-X emits DestX, not MummyCourseDestX."
+  (let ((slots (make-hash-table :test 'equalp)))
+    (setf (gethash "Course-Waypoint-X" slots) "Course")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:of "Course-Waypoint-X" :self)
+                                      :to "Dest-X")))
+                "MummyCourse" :cp1610
+                :slot-table slots)))
+      (is (search "DestX" asm))
+      (is (null (search "MummyCourseDestX" asm))))))

@@ -776,6 +776,40 @@ AST is a :method plist (not full :program)."
       (is (null (search "sta (Self), y" asm))
           "store to global index must not use Self indirect"))))
 
+(test backend-6502/move-self-to-current-course-copies-both-bytes
+  "Regression: MOVE Self TO Current-Course emits direct 16-bit copy from Self pointer."
+  (let ((slots (make-hash-table :test 'equalp))
+        (types (make-hash-table :test 'equalp)))
+    (setf (gethash "Current-Course" slots) "Phantasia-Globals")
+    (setf (gethash "Current-Course" types) "Course")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from "Self" :to "Current-Course")))
+                "MummyCourse" :6502
+                :slot-table slots :type-table types)))
+      (is (search "lda Self" asm))
+      (is (search "sta CurrentCourse" asm))
+      (is (search "lda Self + 1" asm))
+      (is (search "sta CurrentCourse + 1" asm))
+      (is (null (search "ldy #MummyCourseSelf" asm)))
+      (is (null (search "lda (Self),y" asm)))))
+
+(test backend-6502/move-course-waypoint-x-of-self-to-dest-x-sta-bare-destx
+  "Regression: bare Dest-X must resolve to direct data label, not implicit class slot."
+  (let ((slots (make-hash-table :test 'equalp)))
+    (setf (gethash "Course-Waypoint-X" slots) "Course")
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from (:of "Course-Waypoint-X" :self)
+                                      :to "Dest-X")))
+                "MummyCourse" :6502
+                :slot-table slots)))
+      (is (search "ldy #CourseWaypointX" asm))
+      (is (search "lda (Self), y" asm))
+      (is (search "sta DestX" asm))
+      (is (null (search "ldy #MummyCourseDestX" asm)))
+      (is (null (search "sta (Self), y" asm))))))
+
 (test backend-6502/move-to-decal-animation-on-tick-emits-ldy-pascal-segments
   "MOVE to Decal-Animation-On-Tick OF Self emits ldy #CharacterDecalAnimationOnTick (regression: no Decalanimationontick)."
   (let ((pic (make-hash-table :test 'equalp)))

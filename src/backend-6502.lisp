@@ -809,6 +809,8 @@ Named 77/78 constants with byte width 1 use @code{emit-6502-immediate-operand} (
             (ptr (6502-object-pointer-label (third sof) class-id)))
        (format out "~&~10Tldy #~a" (if (zerop n) off (format nil "(~a+~d)" off n)))
        (format out "~&~10Tlda (~a), y" ptr)))
+    ((and (stringp expr) (string-equal expr "Self"))
+     (format out "~&~10Tlda Self~a" (if (zerop n) "" (format nil " + ~d" n))))
     ((and (stringp expr) (implicit-instance-slot-p expr class-id))
      (let ((off (slot-symbol expr class-id)))
        (format out "~&~10Tldy ~a" (emit-6502-immediate (if (zerop n) off (format nil "(~a+~d)" off n))))
