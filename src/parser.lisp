@@ -10,7 +10,9 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
 ;;; source-error is defined in conditions.lisp
 
 (defun safe-getf (plist key)
-  "Return (getf plist key) when PLIST is a plausible plist; otherwise nil. Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{:paragraph}."
+  "Return (getf plist key) when PLIST is a plausible plist; otherwise nil. 
+
+Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{:paragraph}."
   (when (and plist (listp plist) (evenp (length plist)))
     (handler-case (getf plist key)
       (type-error () nil))))
@@ -44,7 +46,6 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
       search section security self sentence sentences service set
       shift-left shift-right sign signed size subtract
       source-computer special-names stop string super symbol
-      sync synchronized
       tallying test than then through thru times title to trailing true
       unicode unsigned until up usage
       value values varying
@@ -793,17 +794,17 @@ _OUTPUT_: perform AST plist."
           (level-number data-name
                         redefines-clause external-clause global-clause
                         justified-clause picture-clause occurs-clause
-                        sign-clause synchronized-clause usage-clause
+                        sign-clause usage-clause
                         value-clause date-format-clause |.|)
           (level-number data-name
                         redefines-clause external-clause global-clause
                         justified-clause occurs-clause picture-clause
-                        sign-clause synchronized-clause usage-clause
+                        sign-clause usage-clause
                         value-clause date-format-clause |.|)
           (level-number data-name
                         redefines-clause external-clause global-clause
                         justified-clause picture-clause usage-clause occurs-clause
-                        sign-clause synchronized-clause
+                        sign-clause
                         value-clause date-format-clause |.|)
           (level-number filler picture-clause sign-clause |.|)
           copy-statement
@@ -865,8 +866,6 @@ _OUTPUT_: perform AST plist."
           (sign leading) (sign trailing)
           (unsigned) (signed)
           ())
-
-         (synchronized-clause (synchronized) (sync) ())
 
          (usage-clause
           (usage is binary (lambda (&rest _) (declare (ignore _)) (list :usage :binary)))
@@ -1310,25 +1309,19 @@ As a side effect, each consumed token's source location is stored in
 Parse  errors  are  caught  and  re-signalled  as  EIGHTBOL-SOURCE-ERROR
 conditions   that   include   the   source  file,   line   number,   and
 sequence number."
-  (let ((tokens (lex-with-copy-expansion stream))
-        (*current-token-location* nil))
+  (let ((tokens (lex-with-copy-expansion stream)))
     (handler-case
         (yacc:parse-with-lexer
          (stream-code tokens)
          *eightbol-parser*)
       (yacc:yacc-parse-error (e)
-        (let* ((loc *current-token-location*)
-               (term (yacc:yacc-parse-error-terminal e))
-               (val (yacc:yacc-parse-error-value e))
-               (exp (yacc:yacc-parse-error-expected-terminals e))
-               (msg (format nil
-                            "Unexpected token ~a~@[ (~s)~].~%~10tExpected one of: ~{~a~^, ~}"
-                            term val exp)))
-          (error 'source-error
-:source-file (safe-getf loc :source-file)
-                :source-line (safe-getf loc :source-line)
-                :source-sequence (safe-getf loc :source-sequence)
-                 :terminal term
-                 :token-value val
-                 :expected exp
-                 :message msg))))))
+        (error 'source-error
+               :source-file (safe-getf *current-token-location* :source-file)
+               :source-line (safe-getf *current-token-location* :source-line)
+               :source-sequence (safe-getf *current-token-location* :source-sequence)
+               :terminal (yacc:yacc-parse-error-terminal e)
+               :token-value (yacc:yacc-parse-error-value e)
+               :expected (yacc:yacc-parse-error-expected-terminals e)
+               :message (format nil
+                                "Unexpected token ~s~@[ (~s)~].~%~10tExpected one of: ~{~s~^, ~}"
+                                term val exp))))))

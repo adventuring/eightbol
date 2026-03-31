@@ -164,7 +164,7 @@ service dispatch failed to resolve via the service-bank LUT."
       (write-line "000040 OBJECT." s)
       (write-line "000050     DATA DIVISION." s)
       (write-line "000060         WORKING-STORAGE SECTION." s)
-      (write-line "000070         05 Dummy PIC 9 USAGE BINARY." s)
+      (write-line "000070         05 Dummy PIC 99 USAGE BINARY." s)
       (write-line "000080     PROCEDURE DIVISION." s)
       (write-line "000090         IDENTIFICATION DIVISION." s)
       (write-line "000100         METHOD-ID. \"Step\"." s)

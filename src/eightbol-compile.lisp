@@ -155,26 +155,14 @@ Returns the AST plist."
       (dolist (input-file input-files)
         (unless primary-input-file
           (setf primary-input-file input-file))
-        (setf ast (handler-case
-                      (with-open-file (stream input-file :direction :input)
-                        (let ((*source-file-pathname* (enough-namestring input-file)))
-                          (parse-eightbol stream)))
-                    (source-error (e)
-                      ;; Re-signal with file context filled in if the lexer didn't
-                      ;; already capture the source pathname.
-                      (when (and (null (eightbol-error-file e))
-                                 input-file)
-                        (error 'source-error
-                               :source-file     (pathname-name input-file)
-                               :source-line     (eightbol-error-line e)
-                               :source-sequence (eightbol-error-sequence e)
-                               :terminal        (eightbol-error-terminal e)
-                               :token-value     (eightbol-error-value e)
-                               :expected        (eightbol-error-expected e)
-                               :message         (eightbol-error-message e)))
-                      (error e)))))
+        (setf ast (with-open-file (stream input-file :direction :input)
+                    (let* ((*source-file-pathname* (enough-namestring input-file))
+                           (*current-token-location* (list :source-file *source-file-pathname*
+                                                           :source-line nil
+                                                           :source-sequence nil)))
+                      (parse-eightbol stream)))))
       (unless (and (listp ast) (eq (first ast) :program))
-        (error "EIGHTBOL: parse of ~a did not yield a :program node"
+        (error "EIGHTBOL: parse of ~a did not yield a Program node"
                (first input-files)))
       (setf ast (optimize-ast ast))
       (let ((class-id (ast-class-id ast)))
@@ -190,7 +178,7 @@ Returns the AST plist."
                                :if-exists :supersede
                                :if-does-not-exist :create)
             (write-ast ast out))
-          (format t  "~2&EIGHTBOL: wrote AST to ~a" (enough-namestring ast-path)))
+          (format t "~2&EIGHTBOL: wrote AST to ~a" (enough-namestring ast-path)))
         ;; ── Phase 3: backends ────────────────────────────────────
         ;; Step CPU from (REST CPU-LIST): (FIRST CPU-LIST) would repeat the first
         ;; CPU and skip the last (e.g. F8 never emitted in ALL-BACKENDS-ONE-FIXTURE).
@@ -200,46 +188,46 @@ Returns the AST plist."
             ((null cpu-list))
           (handler-case
               (let ((asm-path (if (and first-p output-file)
-                                 (pathname output-file)
-                                 (merge-pathnames
-                                  (make-pathname
-                                   :directory (list :relative "Source" "Generated" "Classes"
-                                                    (cpu-directory-name cpu))
-                                   :name (concatenate 'string class-id "Class") :type "s")
-                                  root-directory))))
+                                  (pathname output-file)
+                                  (merge-pathnames
+                                   (make-pathname
+                                    :directory (list :relative "Source" "Generated" "Classes"
+                                                     (cpu-directory-name cpu))
+                                    :name (concatenate 'string class-id "Class") :type "s")
+                                   root-directory))))
                 (ensure-directories-exist asm-path)
                 (with-open-file (out asm-path
                                      :direction :output
                                      :if-exists :supersede
                                      :if-does-not-exist :create)
                   (compile-to-assembly ast cpu out))
-                (format t  "~2&EIGHTBOL: wrote ~a assembly to ~a"
+                (format t "~2&EIGHTBOL: wrote ~a assembly to ~a"
                         (cpu-display-name cpu) (enough-namestring asm-path)))
             (error (e)
-              (format *error-output*  "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
+              (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
                       class-id (cpu-display-name cpu) e)
               (error e))))
         ;; ── Phase 4: dependency file for Make ─────────────────────
         (write-copybook-deps (or primary-input-file (first input-files))
-                            class-id cpus root-directory output-file
-                            *copybook-dependencies*)
+                             class-id cpus root-directory output-file
+                             *copybook-dependencies*)
         ast))))
 
 (defun compile-to-assembly-with-ast-passes (ast cpu output-stream
-                                            &key (validate-termination t)
-                                                 defined-class-ids)
-  "Run optimize-ast (routine AST optimizations), optional VALIDATE-EIGHTBOL-PROGRAM, then compile.
+ &key (validate-termination t)
+ defined-class-ids)
+ "Run optimize-ast (routine AST optimizations), optional VALIDATE-EIGHTBOL-PROGRAM, then compile.
 Use when AST comes from parse only (e.g. unit tests). `compile-eightbol-class`
 already calls optimize-ast before `compile-to-assembly`."
-  (let ((opt (optimize-ast ast)))
-    (validate-eightbol-program opt
-                               :defined-class-ids defined-class-ids
-                               :validate-termination validate-termination)
-    (compile-to-assembly opt cpu output-stream)))
+ (let ((opt (optimize-ast ast)))
+ (validate-eightbol-program opt
+ :defined-class-ids defined-class-ids
+ :validate-termination validate-termination)
+ (compile-to-assembly opt cpu output-stream)))
 
 (defun parse-eightbol-string-for-codegen (string &optional (pathname "<String>"))
-  "Parse STRING and apply optimize-ast so the result matches codegen input."
-  (optimize-ast (parse-eightbol-string string pathname)))
+ "Parse STRING and apply optimize-ast so the result matches codegen input."
+ (optimize-ast (parse-eightbol-string string pathname)))
 
 (defun compile-eightbol-class-from-ast
     (ast
@@ -259,13 +247,13 @@ routine AST passes run as in `compile-eightbol-class`."
         ((null cpu-list))
       (handler-case
           (let ((asm-path (if (and first-p output-file)
-                             (pathname output-file)
-                             (merge-pathnames
-                              (make-pathname
-                               :directory (list :relative "Source" "Generated" "Classes"
-                                                (cpu-directory-name cpu))
-                               :name (concatenate 'string class-id "Class") :type "s")
-                              root-directory))))
+                              (pathname output-file)
+                              (merge-pathnames
+                               (make-pathname
+                                :directory (list :relative "Source" "Generated" "Classes"
+                                                 (cpu-directory-name cpu))
+                                :name (concatenate 'string class-id "Class") :type "s")
+                               root-directory))))
             (ensure-directories-exist asm-path)
             (with-open-file (out asm-path
                                  :direction :output
@@ -273,7 +261,7 @@ routine AST passes run as in `compile-eightbol-class`."
                                  :if-does-not-exist :create)
               (compile-to-assembly ast cpu out)))
         (error (e)
-          (format *error-output*  "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
+          (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
                   class-id (cpu-display-name cpu) e)
           (error e))))))
 

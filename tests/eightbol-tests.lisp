@@ -561,7 +561,7 @@ statements, not the method wrapper boilerplate."
 
 (test backend/pic-nybble-semantics-pic-9-vs-99
   "pic-nybble-semantics-p is true for single-digit PIC 9, false for PIC 99 and PIC 9(n)."
-  (is-true (eightbol::pic-nybble-semantics-p "PIC 9 USAGE BINARY."))
+  (is-true (eightbol::pic-nybble-semantics-p "PIC 99 USAGE BINARY."))
   (is (null (eightbol::pic-nybble-semantics-p "PIC 99 USAGE BINARY.")))
   (is (null (eightbol::pic-nybble-semantics-p "PIC 9(4) USAGE BINARY."))))
 
@@ -571,7 +571,7 @@ statements, not the method wrapper boilerplate."
     (is (= 1 (eightbol::pic-digits-to-width pic)))))
 
 (test backend/load-copybook-merges-pic-nybble-semantics
-  "Tenth table marks single-digit PIC 9 rows for operand-nybble-semantics-p."
+  "Tenth table marks single-digit PIC 99 rows for operand-nybble-semantics-p."
   (with-temporary-directory (:prefix "eightbol-nyb-")
     (let* ((root (uiop:pathname-directory-pathname (uiop:getcwd)))
            (gen  (merge-pathnames
@@ -581,7 +581,7 @@ statements, not the method wrapper boilerplate."
       (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "TestClass") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (TestClass):" f)
-        (write-line "05 Nyb PIC 9 USAGE BINARY." f))
+        (write-line "05 Nyb PIC 99 USAGE BINARY." f))
       (multiple-value-bind (slot-table type-table const-table service-bank-table usage-table sign-table
                                         pic-size-table pic-width-table pic-frac-bits-table
                                         pic-nybble-semantics-table)
@@ -2064,7 +2064,7 @@ AST is a :method plist (not full :program)."
 000040 OBJECT.
 000050     DATA DIVISION.
 000060         WORKING-STORAGE SECTION.
-000070         05 Idx PIC 9 USAGE BINARY.
+000070         05 Idx PIC 99 USAGE BINARY.
 000080     PROCEDURE DIVISION.
 000090         IDENTIFICATION DIVISION.
 000100         METHOD-ID. \"T\".

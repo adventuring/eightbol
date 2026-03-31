@@ -311,7 +311,7 @@ Compiling class string (e.g. @code{\"Character\"}).
   (let ((norm (or (and (listp expr) (eq (first expr) :of) expr)
                   (normalize-slot-of expr))))
     (when norm
-      (member (third norm) '(:self "Self" self) :test #'equal))))
+      (member (third norm) '(:self "Self" self) :test #'string-equal))))
 
 (defun slot-of-expr (expr)
   "Return (:of slot obj) form for EXPR, or NIL."
@@ -353,7 +353,7 @@ Ignored (reserved for typed object refs).
 String usable as @code{lda (Label), y} base."
   (declare (ignore class-id))
   (cond
-    ((member obj-expr '(:self "Self" self) :test #'equal)
+    ((member obj-expr '(:self "Self" self) :test #'string-equal)
      "Self")
     ((stringp obj-expr)
      (cobol-global-data-name-to-assembly-symbol obj-expr))
@@ -831,7 +831,7 @@ When SKIP-LDY is true, emit only @code{sta (Self), y} / @code{sta (Ptr), y} — 
 the slot offset from an immediately preceding @code{emit-6502-load-byte-n} to the same lvalue byte
 (multi-byte ADD/SUBTRACT/COMPUTE loops)."
   (when (>= n w)
-    (error "emit-6502-store-byte-n: n ~d >= w ~d" n w))
+    (error "emit-6502-store-byte-n: index byte # ~d ≥ variable width ~d byte~:p" n w))
   (cond
     ((slot-of-self-p dest)
      (let ((offset (slot-symbol (second (slot-of-expr dest)) class-id)))
@@ -860,7 +860,7 @@ the slot offset from an immediately preceding @code{emit-6502-load-byte-n} to th
              (if (zerop n) "" (format nil " + ~d" n)))))
   ;; After sta, A still holds the byte written. For a single-byte destination, note it so the
   ;; next load of the same lvalue can skip lda (avoids ldy/lda (Self),y after adc/sta to same slot).
-  (if (and (= w 1) (zerop n))
+  (if (= n (1- w))
       (cond
         ((slot-of-self-p dest)
          (%6502-note-accumulator-holds-value-of dest))
@@ -996,7 +996,7 @@ Array fetches use X or Y; when true, avoid using X for temp storage."
              (emit-6502-load-expr-into-x out idx-expr class-id)))
     (cond
       ;; MOVE NULL TO ptr — 6502: set pointer to NULL by zeroing high byte
-      ((member from '(:null null "NULL") :test #'equal)
+      ((member from '(:null null "NULL") :test #'string-equal)
        (format out "~&~10Tlda ~a" (emit-6502-immediate 0))
        (emit-6502-store-byte-n out to-dest class-id (1- to-w) to-w))
       ;; Destination is subscripted: base(index) — load index into X, then store
@@ -1299,7 +1299,7 @@ TARGETS is list of paragraph names (1-based indices). LO, HI are 1-based inclusi
                                                        (format nil "~a" method))))
           (jmp-p (and tail-call-p (null returning))))
       (cond
-        ((member object '(:self "Self" self) :test #'equal)
+        ((member object '(:self "Self" self) :test #'string-equal)
          ;; Same OOPS path as INVOKE on a named object: Phantasia CallMethod macro (DoCallMethod).
          (format out "~&~10T.CallMethod Call~a~a, ~aClass"
                  class-id method-sym class-id))
@@ -1414,7 +1414,7 @@ return (op lhs rhs). Otherwise return CONDITION unchanged."
            (when (and (tok b "NOT")
                       (or (tok c "=") (tok c "EQUAL")))
              (return-from normalize-relation-condition
-               (list :not (list '= a d)))))))
+               (list :not (list := a d)))))))
       ;; 5-element: (expr is less than expr) or (expr less than expr), etc.
       ((= (length condition) 5)
        (destructuring-bind (a b c d e) condition
@@ -1430,9 +1430,13 @@ return (op lhs rhs). Otherwise return CONDITION unchanged."
        (let ((a (first condition))
              (b (second condition))
              (c (third condition)))
+         (when (member a '(/= ≠) :test #'string-equal)
+	 (return-from normalize-relation-condition (list 'not (list '= b c))))
+         (when (member b '(/= ≠) :test #'string-equal)
+	 (return-from normalize-relation-condition (list 'not (list '= a c))))
          (when (member b '(= equal < less > greater >= ≤ ≥ <= ">=" "<=" ">" "<" "="
-                            :> :< :>= :<=)
-                       :test #'equal)
+                           :> :< :>= :<=)
+                       :test #'string-equal)
            (return-from normalize-relation-condition (list b a c)))))))
   condition)
 
@@ -1507,33 +1511,35 @@ Label when value is all zeros (IS-NOT-ZERO is false).
           (format out "~&~a:" lbl-some)))))
 
 (defun relation-op-canonical (op)
-  "If OP is a comparison operator in any form, return canonical string \">\", \"<\", \">=\", or \"<=\".
+  "If OP is a comparison operator in any form, return canonical string \">\", \"<\", \">=\", \"/=\", or \"<=\".
 Otherwise return NIL."
-  (cond ((member op '(> greater) :test #'equal) ">")
-        ((member op '(< less) :test #'equal) "<")
-        ((member op '(>= ≥) :test #'equal) ">=")
-        ((member op '(<= ≤) :test #'equal) "<=")
+  (cond ((member op '(> greater) :test #'string-equal) ">")
+        ((member op '(< less) :test #'string-equal) "<")
+        ((member op '(>= ≥) :test #'string-equal) ">=")
+        ((member op '(<= ≤) :test #'string-equal) "<=")
+        ((member op '(/= ≠) :test #'string-equal) "/=")
         (t (let ((s (princ-to-string op)))
              (cond ((or (string= s ">") (string= s ":>")) ">")
                    ((or (string= s "<") (string= s ":<")) "<")
                    ((or (string= s ">=") (string= s ":>=")) ">=")
                    ((or (string= s "<=") (string= s ":<=")) "<=")
+	         ((or (string= s "/=") (string= s ":/=")) "/=")
                    (t nil))))))
 
 (defun emit-6502-condition (out condition class-id branch-label)
   "Emit 6502 code to evaluate CONDITION and branch to BRANCH-LABEL if false."
   (when (listp condition)
     (let* ((condition (or (normalize-relation-condition condition) condition))
-          (op (first condition)))
+           (op (first condition)))
       (cond
         ;; 3-element comparison: op as string or symbol (princ-to-string covers both)
         ((and (= (length condition) 3)
               (let ((s (princ-to-string (first condition))))
-                (member s '(">" "<" ">=" "<=") :test #'string=)))
+                (member s '(">" "<" ">=" "<=" "/=") :test #'string=)))
          (let ((rel (princ-to-string (first condition)))
                (lhs (second condition))
                (rhs (third condition)))
-           (if (and (string= rel ">") (expr-is-literal-zero-p rhs))
+           (if (and (string= rel ">=") (expr-is-literal-zero-p rhs))
                (emit-6502-false-when-not-unsigned-greater-than-zero out lhs class-id branch-label)
                (progn
                  (emit-6502-compare out lhs rhs class-id)
@@ -1544,6 +1550,8 @@ Otherwise return NIL."
                         (format out "~&~10Tbge ~a" branch-label))
                        ((string= rel ">=")
                         (format out "~&~10Tblt ~a" branch-label))
+		   ((string= rel "/=")
+		    (format out "~&~10tbne ~a" branch-label))
                        ((string= rel "<=")
                         (let ((lbl-stay (new-6502-label "LeStay")))
                           (format out "~&~10Tbeq ~a" lbl-stay)
@@ -1555,7 +1563,7 @@ Otherwise return NIL."
                     (lhs (second condition))
                     (rhs (third condition)))
                 (when rel
-                  (if (and (string= rel ">") (expr-is-literal-zero-p rhs))
+                  (if (and (string= rel ">=") (expr-is-literal-zero-p rhs))
                       (emit-6502-false-when-not-unsigned-greater-than-zero out lhs class-id branch-label)
                       (progn
                         (emit-6502-compare out lhs rhs class-id)
@@ -1564,6 +1572,8 @@ Otherwise return NIL."
                                (format out "~&~10Tbeq ~a" branch-label))
                               ((string= rel "<")
                                (format out "~&~10Tbge ~a" branch-label))
+			((string= rel "/=")
+			 (format out "~&~10tbne ~a" branch-label))
                               ((string= rel ">=")
                                (format out "~&~10Tblt ~a" branch-label))
                               ((string= rel "<=")
@@ -1576,11 +1586,15 @@ Otherwise return NIL."
         ;; Relation with op as first element (after normalization) — legacy branch
         ((and (= (length condition) 3)
               (let ((s (princ-to-string op)))
-                (or (string= s ">") (string= s "<") (string= s ">=") (string= s "<="))))
+                (or (string= s ">") (string= s "<") (string= s ">=") (string= s "<=")
+		(string= s "/="))))
          (let ((rel-op (princ-to-string op))
                (lhs (second condition))
                (rhs (third condition)))
            (cond
+	   ((string= rel-op "/=")
+	    (emit-6502-compare out lhs rhs class=id)
+	    (format out "~&~10Tbne ~a" branch-label))
              ((string= rel-op ">")
               (if (expr-is-literal-zero-p rhs)
                   (emit-6502-false-when-not-unsigned-greater-than-zero out lhs class-id branch-label)
@@ -1610,9 +1624,9 @@ Otherwise return NIL."
            (emit-6502-branch-if-expr-not-all-zero out slot-expr class-id branch-label)))
         ;; NULL pointer test — 6502: NULL = any pointer with high byte zero
         ((and (member op '(= equal))
-              (or (member (second condition) '(:null null "NULL") :test #'equal)
-                  (member (third condition) '(:null null "NULL") :test #'equal)))
-         (let ((ptr-expr (if (member (second condition) '(:null null "NULL") :test #'equal)
+              (or (member (second condition) '(:null null "NULL") :test #'string-equal)
+                  (member (third condition) '(:null null "NULL") :test #'string-equal)))
+         (let ((ptr-expr (if (member (second condition) '(:null null "NULL") :test #'string-equal)
                              (third condition)
                              (second condition))))
            (emit-6502-load-hi-byte out ptr-expr class-id)
@@ -1621,10 +1635,10 @@ Otherwise return NIL."
         ((and (eq op :not)
               (listp (second condition))
               (member (first (second condition)) '(= equal))
-              (or (member (second (second condition)) '(:null null "NULL") :test #'equal)
-                  (member (third (second condition)) '(:null null "NULL") :test #'equal)))
+              (or (member (second (second condition)) '(:null null "NULL") :test #'string-equal)
+                  (member (third (second condition)) '(:null null "NULL") :test #'string-equal)))
          (let* ((inner (second condition))
-                (ptr-expr (if (member (second inner) '(:null null "NULL") :test #'equal)
+                (ptr-expr (if (member (second inner) '(:null null "NULL") :test #'string-equal)
                               (third inner)
                               (second inner))))
            (emit-6502-load-hi-byte out ptr-expr class-id)
@@ -1661,11 +1675,11 @@ Otherwise return NIL."
                             (emit-6502-cmp-byte-n-of-expr out right class-id i w))
                         ;; Any mismatch means NOT (= ...) is true, so skip false-branch.
                         (format out "~&~10Tbne ~a" lbl-done))
-                      ;; All bytes equal => condition false.
+                      ;; All bytes equal ⇒  condition false.
                       (format out "~&~10T~a ~a" (6502-branch-always-mnemonic) branch-label)
                       (format out "~&~a:" lbl-done)))
                    (t
-                    (emit-6502-generic-condition out condition class-id branch-label)))))))
+                    (error "Condition not implemented: ~s" condition)))))))
         ;; IS ZERO
         ((eq op :is-zero)
          (emit-6502-branch-if-expr-not-all-zero out (second condition) class-id branch-label))
@@ -1677,6 +1691,10 @@ Otherwise return NIL."
          ;; Reuse emit-6502-load-expr for the full bit-and expression
          (emit-6502-load-expr out condition class-id)
          (format out "~&~10Tbeq ~a" branch-label))
+        ((or (member op '(/= ≠))
+	   (string= (princ-to-string op) "/="))
+         (error "REACHED")
+         )
         ;; Unsigned greater-than (op may be symbol or string from parser)
         ((or (member op '(> greater))
              (string= (princ-to-string op) ">"))
@@ -1741,7 +1759,7 @@ Otherwise return NIL."
            (emit-6502-condition out (third condition) class-id branch-label)
            (format out "~&~a:" lbl-skip)))
         ;; Generic fallback
-        (t (emit-6502-generic-condition out condition class-id branch-label))))))
+        (t (error "Unhandled comparison operation ~s" condition))))))
 
 (defun emit-6502-compare-unsigned (out lhs rhs class-id w)
   "Emit unsigned compare of LHS vs RHS for W-byte values (little-endian in memory).
@@ -1751,8 +1769,6 @@ stored byte (index @code{W-1}) to least (index @code{0}). If any byte differs, @
 remaining compares; the last @code{cmp} (low byte) only runs when all higher bytes were equal.
 Last @code{cmp} leaves flags for @code{emit-6502-condition} (@code{blt}/@code{bge}/@code{beq} on 6502)."
   (let ((lbl-done (new-6502-label "CmpU")))
-    (when (< w 2)
-      (error "emit-6502-compare-unsigned: w ~d < 2" w))
     (loop for i from (1- w) downto 1 do
       (emit-6502-load-byte-n out lhs class-id i w)
       (emit-6502-cmp-byte-n-of-expr out rhs class-id i w)
@@ -1774,16 +1790,18 @@ Expressions; widths from @code{*pic-width-table*}.
 Current class (slot labels).
 @end table"
   (let ((w (max (operand-width lhs) (operand-width rhs))))
-    (if (<= w 1)
-        (progn
-          (emit-6502-load-expr out lhs class-id)
-          (emit-6502-cmp-memory-rhs out rhs class-id))
-        (emit-6502-compare-unsigned out lhs rhs class-id w))))
-
-(defun emit-6502-generic-condition (out condition class-id branch-label)
-  "Signal error for conditions not yet implemented."
-  (declare (ignore out class-id branch-label))
-  (error "EIGHTBOL: condition ~s not implemented" condition))
+    (ecase w
+      (1
+        (emit-6502-load-expr out lhs class-id)
+        (emit-6502-cmp-memory-rhs out rhs class-id)
+        (emit-6502-compare-unsigned out lhs rhs class-id w))
+      (2
+        (emit-6502-load-expr out lhs class-id)
+        (emit-6502-cmp-memory-rhs out rhs class-id)
+        (emit-6502-compare-unsigned out lhs rhs class-id w)
+	(emit-6502-load-expr out (list '+ 1 lhs) class-id)
+        (emit-6502-cmp-memory-rhs out (list '+ 1 rhs) class-id)
+        (emit-6502-compare-unsigned out lhs rhs class-id w)))))
 
 ;;; ADD / SUBTRACT / COMPUTE
 
@@ -2156,9 +2174,9 @@ For w=1, expr may be compound (add, subtract, etc.). For w>1, expr must be varia
        (emit-6502-store-byte-n out to-self class-id 0 2)
        (format out "~&~10Tlda #>Self")
        (emit-6502-store-byte-n out to-self class-id 1 2))
-      ((member value '(:null null "NULL") :test #'equal)
+      ((string-equal value "null")
        ;; 6502: NULL = high byte zero. Set pointer to NULL by zeroing high byte only.
-       (format out "~&~10Tlda ~a" (emit-6502-immediate 0))
+       (format out "~&~10Tlda #0")
        (emit-6502-store-byte-n out target class-id (1- w) w))
       (t
        (let ((val-w (expression-operand-width value)))
@@ -2167,7 +2185,7 @@ For w=1, expr may be compound (add, subtract, etc.). For w>1, expr must be varia
            (emit-6502-store-byte-n out target class-id i w))
          (when (< val-w w)
            (format out "~&~10Tlda ~a" (emit-6502-immediate 0))
-             (dotimes (i (- w val-w))
+           (dotimes (i (- w val-w))
              (emit-6502-store-byte-n out target class-id (+ val-w i) w))))))))
 
 ;;; DIVIDE statement — divisor must be constant power-of-two; emit LSR.

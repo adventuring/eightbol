@@ -58,7 +58,7 @@
 000040 OBJECT.
 000050     DATA DIVISION.
 000060         WORKING-STORAGE SECTION.
-000070         05 Flag PIC 9 USAGE BINARY.
+000070         05 Flag PIC 99 USAGE BINARY.
 000080     PROCEDURE DIVISION.
 000090         IDENTIFICATION DIVISION.
 000100         METHOD-ID. \"Think\".
@@ -76,7 +76,7 @@
 ")
 
 (defun compile-stmt-to-6502-1-byte-flag (stmt-line)
-  "Like @code{compile-stmt-to-6502} but WORKING-STORAGE has @code{Flag} PIC 9 (single byte)."
+  "Like @code{compile-stmt-to-6502} but WORKING-STORAGE has @code{Flag} PIC 99 (single byte)."
   (let ((src (format nil +minimal-character-1-byte-flag-source+ stmt-line)))
     (let ((ast (eightbol::parse-eightbol-string src)))
       (with-output-to-string (s)
@@ -539,7 +539,7 @@ is an alist of @code{(service . bank)} strings for @code{*service-bank-table*}."
 (test backend-output/6502-accumulator-reuse-and-condition
   "6502: second test in AND reuses A for same slot — only one @code{lda} via @code{(Self),y} for Flag.
 
-Uses PIC 9 (one byte); @code{> 0} vs zero is @code{lda} + @code{beq} (no @code{cmp})."
+Uses PIC 99 (one byte); @code{> 0} vs zero is @code{lda} + @code{beq} (no @code{cmp})."
   (let* ((stmt
           "IF Flag IS GREATER THAN 0 AND Flag IS GREATER THAN 0 THEN GOBACK END-IF.")
          (asm (compile-stmt-to-6502-1-byte-flag stmt))

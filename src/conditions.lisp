@@ -233,5 +233,6 @@
     :initform nil))
   (:report
    (lambda (c s)
-     (format s "Method ~s is not terminated by GOBACK, EXIT, STOP RUN, unconditional GO TO, or tail INVOKE/CALL (or IF with ELSE whose branches all terminate)"
+     (format s "Method ~s is not terminated by GOBACK, EXIT, STOP RUN, unconditional ~
+GO TO, or tail INVOKE/CALL (or IF with ELSE whose branches all terminate)"
              (eightbol-routine-not-terminated-method-id c)))))
