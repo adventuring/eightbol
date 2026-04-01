@@ -136,19 +136,19 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
   "Merge prefix letter + quoted string into single token. E.g. (\"b\" \"'1010'\") -> (\"b'1010'\")."
   (let (result)
     (loop while tokens do
-      (let ((tok (first tokens))
+      (let ((token (first tokens))
             (nxt (cadr tokens)))
         (cond
           ((and nxt
-                (= 1 (length tok))
-                (prefixed-literal-prefix-p (char tok 0))
+                (= 1 (length token))
+                (prefixed-literal-prefix-p (char token 0))
                 (>= (length nxt) 2)
                 (member (char nxt 0) '(#\' #\") :test #'char=)
                 (char= (char nxt 0) (char nxt (1- (length nxt)))))
-           (push (concatenate 'string tok nxt) result)
+           (push (concatenate 'string token nxt) result)
            (setf tokens (cddr tokens)))
           (t
-           (push tok result)
+           (push token result)
            (setf tokens (rest tokens))))))
     (nreverse result)))
 
@@ -158,15 +158,15 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
     (when colon-pos
       (let* ((left-str  (string-trim " " (subseq token-str 0 colon-pos)))
              (right-str (string-trim " " (subseq token-str (1+ colon-pos))))
-             (left-tok  (if (every #'digit-char-p left-str)
+             (left-token  (if (every #'digit-char-p left-str)
                             (list 'number (parse-eightbol-number left-str))
                             (list 'symbol left-str)))
-             (right-tok (if (every #'digit-char-p right-str)
+             (right-token (if (every #'digit-char-p right-str)
                              (list 'number (parse-eightbol-number right-str))
                              (list 'symbol right-str))))
-        (list (append left-tok meta)
+        (list (append left-token meta)
               (append (list '|:| ":") meta)
-              (append right-tok meta))))))
+              (append right-token meta))))))
 
 (defun expand-subscripted-symbol (token-str meta)
   "If TOKEN-STR is name(subscript) or name(start:length) with letters in name,
@@ -182,17 +182,17 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
               ;; Reference modification: name(start:length)
               (let* ((left-str  (string-trim " " (subseq sub 0 colon-pos)))
                      (right-str (string-trim " " (subseq sub (1+ colon-pos))))
-                     (left-tok  (if (every #'digit-char-p left-str)
+                     (left-token  (if (every #'digit-char-p left-str)
                                     (list 'number (parse-eightbol-number left-str))
                                     (list 'symbol left-str)))
-                     (right-tok (if (every #'digit-char-p right-str)
+                     (right-token (if (every #'digit-char-p right-str)
                                     (list 'number (parse-eightbol-number right-str))
                                     (list 'symbol right-str))))
                 (list (append (list 'symbol name) meta)
                       (append (list '|(| "(") meta)
-                      (append left-tok meta)
+                      (append left-token meta)
                       (append (list '|:| ":") meta)
-                      (append right-tok meta)
+                      (append right-token meta)
                       (append (list '|)| ")") meta))))
               ;; Subscript: name(subscript) — emit number when subscript is all digits (e.g. X(64))
               (list (append (list 'symbol name) meta)
@@ -221,7 +221,7 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
             (prev-was-open-paren (and result
                                       (let ((last (first result)))
                                         (eq (first last) '|(|)))))
-        (dolist (tok (or (when (and (every #'constituent-char-p token)
+        (dolist (token (or (when (and (every #'constituent-char-p token)
                                     (stringp token))
                            (cond
                              ((and prev-was-pic (picture-sequence-p token))
@@ -264,8 +264,8 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
                                           (list 'symbol (coerce token 'string)))
                                          (t (list 'bareword token)))
                                        meta))))
-          (format *trace-output* "~& // ~s" tok)
-          (push tok result))))))
+          #+() (format *trace-output* "~& // ~s" token)
+          (push token result))))))
 
 (defvar *copybook-paths* nil
   "Directories in which to search for copybooks")
@@ -363,47 +363,44 @@ match against files in the directory (so COPY Basic-NPC-Slots finds Basic-Npc-Sl
 (defun expand-copy-tokens (tokens)
   "Walk TOKENS; when a (COPY ...) sequence is found, replace it with the
    lexed contents of the referenced copybook file."
-  (let (result)
-    (loop while tokens
-          for tok = (pop tokens)
-          do
-             (cond
-               ;; COPY Name .  — expand the copybook inline
-               ;; COPY Name OF Library .  or  COPY Name IN Library .
-               ((and (listp tok) (eq (first tok) 'copy))
-                (let* ((next (pop tokens))
-                       (name (if (and (listp next)
-                                      (member (first next) '(symbol bareword)))
-                                 (second next)
-                                 (progn (push next tokens) nil)))
-                       ;; consume optional OF/IN library and the full stop
-                       (after (pop tokens))
-                       library)
-                  (when (and (listp after)
-                             (member (first after) '(of in)))
-                    (let ((lib-tok (pop tokens)))
-                      (setf library (and (listp lib-tok)
-                                         (member (first lib-tok) '(symbol bareword))
-                                         (second lib-tok)))
-                      (setf after (pop tokens))))
-                  (unless (and (listp after) (eq (first after) '|.|))
-                    (push after tokens))
-                  (if name
-                      (let ((path (find-copybook name library)))
-                        (if path
-                            (progn
-                              (when (boundp '*copybook-dependencies*)
-                                (pushnew (truename path) *copybook-dependencies*
-                                         :test #'equalp))
-                              (let ((cb-tokens (lex-file path)))
-                                (setf tokens (append (expand-copy-tokens cb-tokens) tokens))))
-                            (error 'copybook-not-found
-                                   :message "cannot find copybook; COPY is required"
-                                   :copybook-name name
-                                   :library library)))
-                      (error "EIGHTBOL: COPY without a name"))))
-               (t (push tok result))))
-    (nreverse result)))
+  (loop with result
+	while tokens
+        for token = (pop tokens)
+        do
+        (cond
+          ((and (listp token) (eq (first token) 'copy))
+           (let* ((next (pop tokens))
+                  (name (if (and (listp next)
+                                 (member (first next) '(symbol bareword)))
+                            (second next)
+                            (progn (push next tokens) nil)))
+                  (after (pop tokens))
+                  library)
+             (when (and (listp after)
+                        (member (first after) '(of in)))
+               (let ((lib-token (pop tokens)))
+                 (setf library (and (listp lib-token)
+                                    (member (first lib-token) '(symbol bareword))
+                                    (second lib-token)))
+                 (setf after (pop tokens))))
+             (unless (and (listp after) (eq (first after) '|.|))
+               (push after tokens))
+             (if name
+                 (let ((path (find-copybook name library)))
+                   (if path
+                       (progn
+                         (when (boundp '*copybook-dependencies*)
+                           (pushnew (truename path) *copybook-dependencies*
+                                    :test #'equalp))
+                         (let ((cb-tokens (lex-file path)))
+                           (setf tokens (append (expand-copy-tokens cb-tokens) tokens))))
+                       (error 'copybook-not-found
+                              :message "cannot find copybook; COPY is required"
+                              :copybook-name name
+                              :library library)))
+                 (error "EIGHTBOL: COPY without a name"))))
+          (t (appendf result (cons token nil))))
+	finally (return result)))
 
 (defun lexer (stream)
   (loop for *source-line-number* from 1
@@ -448,10 +445,10 @@ not greater than previous ~s — must be strictly increasing"
                (t
                 (mapcar (lambda (token) (appendf body (cons token nil)))
                         (tokenize-line (getf parsed-line :contents))))))
-        finally (return (remove-if (lambda (tok)
+        finally (return (remove-if (lambda (token)
                                       ;; INDENT/OUTDENT zone markers were never
                                       ;; integrated into the grammar; strip them
                                       ;; before handing tokens to the YACC parser.
-                                      (member (first tok) '(eightbol::indent eightbol::outdent)))
+                                      (member (first token) '(eightbol::indent eightbol::outdent)))
                                    body))))
 

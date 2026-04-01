@@ -127,30 +127,34 @@ rebuilding the compiler triggers recompilation of all .s outputs."
                 (mapcar #'namestring targets)
                 (mapcar #'namestring deps))))))
 
-(defun compile-eightbol-class
-    (input-files
-     &key (cpus '(:6502))
-          copybook-paths
-          (root-directory (truename "."))
-          output-file
-          defined-class-ids
-          (validate-termination t))
+(defun compile-eightbol-class (input-files
+			       &key (cpus '(:6502))
+				 copybook-paths
+				 (root-directory (truename #p"."))
+				 output-file
+				 defined-class-ids
+				 (validate-termination t))
   "Compile INPUT-FILE (.cob):
+
    1. Parse to AST and write to  {root}/Object/Classes/{ClassName}.eightbol
+
    2. For each cpu in CPUS compile to
       {root}/Source/Generated/Classes/{cpu}/{ClassName}Class.s
       (or OUTPUT-FILE for the single CPU when specified)
+
    3. Write {root}/Source/Generated/Classes/{ClassName}.d for Makefile includes
+
 When DEFINED-CLASS-IDS is non-NIL, every OBJECT REFERENCE class in WORKING-STORAGE
 must be named therein (STRING-EQUAL). When VALIDATE-TERMINATION (default T), each
 non-blank method must end with GOBACK, EXIT*, STOP RUN, unconditional GO TO, tail
 INVOKE/CALL, or IF ... ELSE ... with every branch completing.
+
 Returns the AST plist."
   (let ((*eightbol-root-directory* root-directory)
         (*copybook-paths* (or copybook-paths
                               (default-copybook-paths root-directory (first cpus))))
         (*copybook-dependencies* ()))
-    ;; ── Phase 1: parse ──────────────────────────────────────────
+    ;;  Phase 1: parse 
     (let (ast primary-input-file)
       (dolist (input-file input-files)
         (unless primary-input-file
@@ -166,7 +170,7 @@ Returns the AST plist."
                (first input-files)))
       (setf ast (optimize-ast ast))
       (let ((class-id (ast-class-id ast)))
-        ;; ── Phase 2: write AST ───────────────────────────────────
+        ;;  Phase 2: write AST 
         (let ((ast-path (merge-pathnames
                          (make-pathname
                           :directory '(:relative "Object" "Classes")
@@ -179,7 +183,7 @@ Returns the AST plist."
                                :if-does-not-exist :create)
             (write-ast ast out))
           (format t "~2&EIGHTBOL: wrote AST to ~a" (enough-namestring ast-path)))
-        ;; ── Phase 3: backends ────────────────────────────────────
+        ;;  Phase 3: backends 
         ;; Step CPU from (REST CPU-LIST): (FIRST CPU-LIST) would repeat the first
         ;; CPU and skip the last (e.g. F8 never emitted in ALL-BACKENDS-ONE-FIXTURE).
         (do ((cpu-list cpus (rest cpu-list))
@@ -203,14 +207,14 @@ Returns the AST plist."
                   (compile-to-assembly ast cpu out))
                 (format t "~2&EIGHTBOL: wrote ~a assembly to ~a"
                         (cpu-display-name cpu) (enough-namestring asm-path)))
-            (error (e)
+            #+()(error (e)
               (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
                       class-id (cpu-display-name cpu) e)
               (error e))))
-        ;; ── Phase 4: dependency file for Make ─────────────────────
-        (write-copybook-deps (or primary-input-file (first input-files))
-                             class-id cpus root-directory output-file
-                             *copybook-dependencies*)
+        ;; ;;  Phase 4: dependency file for Make 
+        ;; (write-copybook-deps (or primary-input-file (first input-files))
+        ;;                      class-id cpus root-directory output-file
+        ;;                      *copybook-dependencies*)
         ast))))
 
 (defun compile-to-assembly-with-ast-passes (ast cpu output-stream

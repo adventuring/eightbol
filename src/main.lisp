@@ -25,12 +25,11 @@
                             nil)
                            ((equal #\- (char arg 0))
 			    (error 'unknown-option-error :option arg))
-                           (t
-                            (if last-wants-arg-p
-                                (prog1
-                                    (list last-wants-arg-p arg)
-                                  (setf last-wants-arg-p nil))
-                                (list :input-file arg)))))))))
+                           (t (if last-wants-arg-p
+                                  (prog1
+                                      (list last-wants-arg-p arg)
+                                    (setf last-wants-arg-p nil))
+                                  (list :input-file arg)))))))))
     (when (keywordp (lastcar argv))
       (error "Looks like a dangling option ends arguments: missing ~a"
 	     (lastcar argv)))
@@ -42,7 +41,7 @@
 				(local-time:universal-to-timestamp universal-time)
 				:format '(:year #\- (:month 2) #\- (:day 2))))
 
-(defun main (&rest args)
+(defun main (args)
   "Main entry point for the compiler.
 Buildapp passes argv as single argument; use uiop:command-line-arguments when available."
   (let ((options (parse-arguments (rest args)))
@@ -53,12 +52,13 @@ Buildapp passes argv as single argument; use uiop:command-line-arguments when av
       ((getf options :help)
        (let ((cpus (append (mapcar #'cdr +cpu-display-names+)
                            (list "all"))))
-         (format t "Usage: eightbol [OPTIONS] input-file.cob~%Options:~%
-                -I <path>    Add <path> to include path for copybooks
-                -m <cpu>     Target CPU: ~{~a~^, ~}~%
-                -o <file>    Output to <file>
-                --version    Print the version of the compiler~%
-                --help       Print this help message~%"
+         (format t "Usage: eightbol [OPTIONS] input-file.cob
+  Options:
+	-I <path>    Add <path> to include path for copybooks
+	-m <cpu>     Target CPU: ~{~a~^, ~}
+	-o <file>    Output to <file>
+	--version    Print the version of the compiler
+	--help       Print this help message"
                  cpus)))
       ((getf options :input-file)
        (let* ((input-file (getf options :input-file))
@@ -80,9 +80,11 @@ Buildapp passes argv as single argument; use uiop:command-line-arguments when av
                                  :copybook-paths (when copybook-paths copybook-paths)
                                  :output-file (when output-file (pathname output-file))
                                  :root-directory (truename "."))))
-      (t
-       (error 'usage-error :message
-	      (format nil
-		      "No input file specified.~
-Use --help for usage information.~
+      (t (error 'usage-error
+		:option "input file"
+		:argument nil
+		:message
+		(format nil
+			"No input file specified. ~
+Use --help for usage information.
 Processed: ~s" options))))))
