@@ -1723,7 +1723,7 @@ Otherwise return NIL."
 	     (let* ((left (second condition))
 		    (right (third condition))
 		    (w (min (operand-width left) (operand-width right)))
-		    (label-done (new-6502-label "NotEqDone")))
+		    (label-done (new-6502-label "EqDone")))
 	       (dotimes (i w)
 		 (emit-6502-load-byte-n out left class-id i w)
 		 (if (expr-is-constant-p right)
@@ -1740,10 +1740,10 @@ Otherwise return NIL."
 		   (dotimes (i rem)
 		     (emit-6502-load-byte-n out bigger class-id (+ i w) (+ rem w))
 		     ;; any higher non-zero byte is not equal, ergo = is false
-		     (format out "~&~10Tbne ~a" label-done))))))
+		     (format out "~&~10Tbne ~a" label-done))))
 	     ;; All bytes equal ⇒ condition true.
 	     (format out "~&~10T~a ~a" (6502-branch-always-mnemonic) branch-label)
-	     (format out "~&~a:" label-done))
+	     (format out "~&~a:" label-done))))
         ;; AND — short-circuit: if first is false, branch; else evaluate second
         ((eq op :and)
          (emit-6502-condition out (second condition) class-id branch-label)
