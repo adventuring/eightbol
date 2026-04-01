@@ -65,8 +65,9 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (declare (ignore _end _class _dot _object _object_dot
                    _end_object _object_end _end_object_dot))
   (let* ((class-id (safe-getf id :class-id)))
-    (assert (string-equal class-id end-class-name)
-            () "Class-ID mismatch: ~a vs ~a" class-id end-class-name)
+    (unless (string-equal class-id end-class-name)
+      (warn "Class-ID mismatch: starts with ~a, ends with ~a~@[, expected ~a~]"
+	    class-id end-class-name (header-case (pathname-name *source-file-pathname*))))
     (list :program
           :comments (list :before-id c1*
                           :before-end c2*
@@ -82,7 +83,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
           :environment env
           :working-storage (ensure-list class-data)
           :data (ensure-list data)
-          :methods (or (extract-method-list proc) '()))))
+          :methods (or (extract-method-list proc) nil))))
 
 (defun extract-method-list (proc)
   "Extract flat list of method AST nodes from procedure-division result."
