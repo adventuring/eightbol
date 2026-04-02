@@ -216,8 +216,7 @@ Function of three arguments used when the method is not a @code{TrueMethod} alia
   (cond
     ((method-true-method-alias-p method)
      (format output-stream "~&Method~a~a = TrueMethod"
-             class-id (cobol-id-to-assembly-symbol
-                       (format nil "~a" (safe-getf (rest method) :method-id)))))
+             (pascal-case class-id) (pascal-case (safe-getf (rest method) :method-id))))
     (t (funcall compile-method-fn method class-id cpu))))
 
 (defun compile-6502-family (ast output-stream cpu)
@@ -274,11 +273,12 @@ Compiling class string (e.g. @code{\"Character\"}).
 @end table"
   (let* ((*6502-family-cpu* cpu)
          (*method-id* (safe-getf (rest method) :method-id))
-         (method-dispatch-suffix (cobol-id-to-assembly-symbol
-                                  (format nil "~a" *method-id*)))
+         (method-dispatch-suffix (pascal-case *method-id*))
          (stmts (method-statements-list method))
          (last-stmt (car (last stmts))))
-    (format *output-stream* "~&Method~a~a: .block" class-id method-dispatch-suffix)
+    (format *output-stream* "~&Method~a~a: .block"
+	    (pascal-case class-id)
+	    method-dispatch-suffix)
     (let ((*6502-accumulator-expr* nil))
       (dolist (stmt stmts)
         (cond
@@ -1302,14 +1302,16 @@ TARGETS is list of paragraph names (1-based indices). LO, HI are 1-based inclusi
         ((member object '(:self "Self" self) :test #'string-equal)
          ;; Same OOPS path as INVOKE on a named object: Phantasia CallMethod macro (DoCallMethod).
          (format out "~&~10T.CallMethod Call~a~a, ~aClass"
-                 class-id method-sym class-id))
+                 (pascal-case class-id) (pascal-case method-sym) (pascal-case class-id)))
         (t
-         (let* ((obj-name (cobol-id-to-assembly-symbol object))
-                (obj-class (or (var-class obj-name) "Unknown")))
-           (if (string= obj-class "Unknown")
-               (format out "~&~10T~a Call~aMethod" (if jmp-p "jmp" "jsr") method-sym)
+         (let* ((unknown '#:Unknown)
+		(obj-name (cobol-id-to-assembly-symbol object))
+                (obj-class (or (var-class obj-name) unknown)))
+           (if (eq obj-class Unknown)
+               (error "Unknown class of method ~a" method-sym)
                (format out "~&~10T.CallMethod Call~a~a, ~aClass, ~a"
-                       obj-class method-sym obj-class obj-name))))))
+                       (pascal-case obj-class) (pascal-case method-sym)
+		       (pascal-case obj-class) obj-name))))))
     (%invalidate-6502-accumulator-a)
     (when returning
       (format out "~&~10Tsta ~a" (cobol-id-to-assembly-symbol returning)))))
