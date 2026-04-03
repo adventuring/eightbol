@@ -127,14 +127,13 @@ rebuilding the compiler triggers recompilation of all .s outputs."
                 (mapcar #'namestring targets)
                 (mapcar #'namestring deps))))))
 
-(defun compile-eightbol-class
-    (input-files
-     &key (cpus '(:6502))
-          copybook-paths
-          (root-directory (truename "."))
-          output-file
-          defined-class-ids
-          (validate-termination t))
+(defun compile-eightbol-class (input-files
+			       &key (cpus '(:6502))
+				 copybook-paths
+				 (root-directory (truename "."))
+				 output-file
+				 defined-class-ids
+				 (validate-termination t))
   "Compile INPUT-FILE (.cob):
    1. Parse to AST and write to  {root}/Object/Classes/{ClassName}.eightbol
    2. For each cpu in CPUS compile to

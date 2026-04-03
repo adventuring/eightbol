@@ -4,13 +4,15 @@
 ;;; Source-location tracking for error reporting
 
 (defvar *current-token-location* nil
-  "Plist (:source-file :source-line :source-sequence) of the token most
+  "plist (:source-file :source-line :source-sequence) of the token most
 recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
 
 ;;; source-error is defined in conditions.lisp
 
 (defun safe-getf (plist key)
-  "Return (getf plist key) when PLIST is a plausible plist; otherwise nil. Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{:paragraph}."
+  "Return (getf plist key) when PLIST is a plausible plist; otherwise nil. 
+
+Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{:paragraph}."
   (when (and plist (listp plist) (evenp (length plist)))
     (handler-case (getf plist key)
       (type-error () nil))))
@@ -44,7 +46,6 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
       search section security self sentence sentences service set
       shift-left shift-right sign signed size subtract
       source-computer special-names stop string super symbol
-      sync synchronized
       tallying test than then through thru times title to trailing true
       unicode unsigned until up usage
       value values varying
@@ -64,8 +65,9 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
   (declare (ignore _end _class _dot _object _object_dot
                    _end_object _object_end _end_object_dot))
   (let* ((class-id (safe-getf id :class-id)))
-    (assert (string-equal class-id end-class-name)
-            () "Class-ID mismatch: ~a vs ~a" class-id end-class-name)
+    (unless (string-equal class-id end-class-name)
+      (warn "Class-ID mismatch: starts with ~a, ends with ~a~@[, expected ~a~]"
+	    class-id end-class-name (header-case (pathname-name *source-file-pathname*))))
     (list :program
           :comments (list :before-id c1*
                           :before-end c2*
@@ -81,7 +83,7 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
           :environment env
           :working-storage (ensure-list class-data)
           :data (ensure-list data)
-          :methods (or (extract-method-list proc) '()))))
+          :methods (or (extract-method-list proc) nil))))
 
 (defun extract-method-list (proc)
   "Extract flat list of method AST nodes from procedure-division result."
@@ -94,19 +96,19 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
   "Append one method definition to the method definitions list."
   (append defs (list method)))
 
-(defun parse/stmt-sequence-append (seq item)
+(defun parse/statement-sequence-append (seq item)
   "Build a flat list of statements by appending one item to the sequence."
   (append (ensure-list seq) (list item)))
 
-(defun stmt-with-source-location (stmt)
+(defun statement-with-source-location (statement)
   "Append @code{:source-file}, @code{:source-line}, @code{:source-sequence}, and
 @code{:source-text} (trimmed COBOL line from the lexer) from
-@code{*current-token-location*} to STMT so backends can emit assembly comments."
-  (unless (and (listp stmt) (first stmt))
-    (return-from stmt-with-source-location stmt))
+@code{*current-token-location*} to STATEMENT so backends can emit assembly comments."
+  (unless (and (listp statement) (first statement))
+    (return-from statement-with-source-location statement))
   (let ((loc *current-token-location*))
     (if (null loc)
-        stmt
+        statement
         (let ((suffix
                (append (when (safe-getf loc :source-file)
                          (list :source-file (safe-getf loc :source-file)))
@@ -117,19 +119,19 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
                        (when (safe-getf loc :source-line-text)
                          (list :source-text (safe-getf loc :source-line-text))))))
           ;; (:paragraph \"Name\") — second slot is the name, not a plist tail; inserting
-          ;; keys after @code{append} would make @code{(rest stmt)} a malformed plist for @code{getf}.
-          (if (and (eq (first stmt) :paragraph) (>= (length stmt) 2))
-              (list* :paragraph (second stmt) (append suffix (cddr stmt)))
-              (append stmt suffix))))))
+          ;; keys after @code{append} would make @code{(rest statement)} a malformed plist for @code{getf}.
+          (if (and (eq (first statement) :paragraph) (>= (length statement) 2))
+              (list* :paragraph (second statement) (append suffix (cddr statement)))
+              (append statement suffix))))))
 
-(defun parse/stmt-item-with-dot (stmt _dot)
-  "stmt-item: statement followed by period — discard the period."
+(defun parse/statement-item-with-dot (statement _dot)
+  "statement-item: statement followed by period — discard the period."
   (declare (ignore _dot))
-  (stmt-with-source-location stmt))
+  (statement-with-source-location statement))
 
-(defun parse/stmt-item-no-dot (stmt)
-  "stmt-item: statement without optional period (same grammar as COBOL allows)."
-  (stmt-with-source-location stmt))
+(defun parse/statement-item-no-dot (statement)
+  "statement-item: statement without optional period (same grammar as COBOL allows)."
+  (statement-with-source-location statement))
 
 (defun parse/eightbol-program (struct _comments)
   "Top-level program rule: ignore trailing comments, return the program plist."
@@ -154,7 +156,7 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
 (defun parse/method-block (id-div proc _end _method name _dot)
   "Action for: method-identification-division procedure-statements END METHOD method-name |.|"
   (declare (ignore id-div _end _method _dot))
-  (let ((statements (if (and (listp proc) (eq (first proc) :proc-stmts))
+  (let ((statements (if (and (listp proc) (eq (first proc) :proc-statements))
                         (rest proc)
                         (ensure-list proc))))
     (list :method
@@ -164,7 +166,7 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
 (defun parse/method-block-em (id-div proc _end-method name _dot)
   "Action for: method-identification-division procedure-statements END-METHOD method-name |.|"
   (declare (ignore id-div _end-method _dot))
-  (let ((statements (if (and (listp proc) (eq (first proc) :proc-stmts))
+  (let ((statements (if (and (listp proc) (eq (first proc) :proc-statements))
                         (rest proc)
                         (ensure-list proc))))
     (list :method
@@ -181,9 +183,9 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
   (declare (ignore _proc _div _dot))
   (cons :methods (ensure-list methods)))
 
-(defun parse/procedure-statements (_proc _div _dot stmts)
+(defun parse/procedure-statements (_proc _div _dot statements)
   (declare (ignore _proc _div _dot))
-  (cons :proc-stmts (ensure-list stmts)))
+  (cons :proc-statements (ensure-list statements)))
 
 (defun parse/blank-when-zero ()
   (list :blank-when-zero t))
@@ -393,15 +395,15 @@ Generates a near jsr (no bank switch) regardless of the library name."
   (declare (ignore _call _in _library))
   (list :call :target target :bank nil :library t))
 
-(defun parse/if-then (_if condition _then stmts _end_if)
+(defun parse/if-then (_if condition _then statements _end_if)
   (declare (ignore _if _then _end_if))
-  (list :if :condition condition :then (or stmts '()) :else '()))
+  (list :if :condition condition :then (or statements '()) :else '()))
 
-(defun parse/if-then-else (_if condition _then then-stmts _else else-stmts _end_if)
+(defun parse/if-then-else (_if condition _then then-statements _else else-statements _end_if)
   (declare (ignore _if _then _else _end_if))
   (list :if :condition condition
-            :then (or then-stmts '())
-            :else (or else-stmts '())))
+            :then (or then-statements '())
+            :else (or else-statements '())))
 
 (defun parse/goback () (list :goback))
 (defun parse/exit-method (_exit _method) (declare (ignore _exit _method)) (list :exit-method))
@@ -438,8 +440,9 @@ Generates a near jsr (no bank switch) regardless of the library name."
 (defun parse/perform-cobol-times (_perform name _times expr)
   "Build @code{(:perform :procedure NAME :times EXPR)} for PERFORM NAME TIMES EXPR.
 
-_INPUTS_: PERFORM token, procedure NAME, TIMES keyword, count EXPR.
-_OUTPUT_: perform AST plist."
+INPUTS: PERFORM token, procedure NAME, TIMES keyword, count EXPR.
+
+OUTPUT: perform AST plist."
   (declare (ignore _perform _times))
   (list :perform :procedure name :times expr))
 
@@ -578,13 +581,13 @@ _OUTPUT_: perform AST plist."
   (list :goto :targets (ensure-list targets) :depending-on expr))
 
 ;;; EVALUATE — implemented
-(defun parse/when-clause (_when phrases stmts)
+(defun parse/when-clause (_when phrases statements)
   (declare (ignore _when))
-  (list :when phrases (if (listp stmts) stmts (list stmts))))
+  (list :when phrases (if (listp statements) statements (list statements))))
 
-(defun parse/when-other-clause (_when _other stmts)
+(defun parse/when-other-clause (_when _other statements)
   (declare (ignore _when _other))
-  (list :when-other (if (listp stmts) stmts (list stmts))))
+  (list :when-other (if (listp statements) statements (list statements))))
 
 (defun parse/when-clauses-append (clauses clause)
   (append (ensure-list clauses) (list clause)))
@@ -793,17 +796,17 @@ _OUTPUT_: perform AST plist."
           (level-number data-name
                         redefines-clause external-clause global-clause
                         justified-clause picture-clause occurs-clause
-                        sign-clause synchronized-clause usage-clause
+                        sign-clause usage-clause
                         value-clause date-format-clause |.|)
           (level-number data-name
                         redefines-clause external-clause global-clause
                         justified-clause occurs-clause picture-clause
-                        sign-clause synchronized-clause usage-clause
+                        sign-clause usage-clause
                         value-clause date-format-clause |.|)
           (level-number data-name
                         redefines-clause external-clause global-clause
                         justified-clause picture-clause usage-clause occurs-clause
-                        sign-clause synchronized-clause
+                        sign-clause
                         value-clause date-format-clause |.|)
           (level-number filler picture-clause sign-clause |.|)
           copy-statement
@@ -865,8 +868,6 @@ _OUTPUT_: perform AST plist."
           (sign leading) (sign trailing)
           (unsigned) (signed)
           ())
-
-         (synchronized-clause (synchronized) (sync) ())
 
          (usage-clause
           (usage is binary (lambda (&rest _) (declare (ignore _)) (list :usage :binary)))
@@ -944,18 +945,18 @@ _OUTPUT_: perform AST plist."
 
          ;; PROCEDURE DIVISION inside a method
          (procedure-statements
-          (procedure division |.| stmt-sequence
+          (procedure division |.| statement-sequence
                      #'parse/procedure-statements))
 
-         ;; stmt-sequence builds a flat list of statement AST nodes.
-         (stmt-sequence
-          (stmt-sequence stmt-item #'parse/stmt-sequence-append)
-          (stmt-item (lambda (item) (list item)))
+         ;; statement-sequence builds a flat list of statement AST nodes.
+         (statement-sequence
+          (statement-sequence statement-item #'parse/statement-sequence-append)
+          (statement-item (lambda (item) (list item)))
           ())
 
-         (stmt-item
-          (statement |.| #'parse/stmt-item-with-dot)
-          (statement #'parse/stmt-item-no-dot)
+         (statement-item
+          (statement |.| #'parse/statement-item-with-dot)
+          (statement #'parse/statement-item-no-dot)
           (eightbol-comment (lambda (c) (declare (ignore c)) nil)))
 
          ;; Identifiers and expressions
@@ -1178,10 +1179,10 @@ _OUTPUT_: perform AST plist."
           (evaluate-phrases also evaluate-phrases))
 
          ;; imperative-statements allows each statement to have an optional trailing period.
-         ;; Uses the same list-building pattern as stmt-sequence to produce a flat list.
+         ;; Uses the same list-building pattern as statement-sequence to produce a flat list.
          (imperative-statements
-          (imperative-statements stmt-item #'parse/stmt-sequence-append)
-          (stmt-item (lambda (item) (list item))))
+          (imperative-statements statement-item #'parse/statement-sequence-append)
+          (statement-item (lambda (item) (list item))))
 
          (exit-statement (exit (constantly (list :exit))))
          (exit-method-statement (exit method #'parse/exit-method))
@@ -1288,21 +1289,28 @@ The lexval passed to parser action functions is (second token), i.e. the raw
 parsed value (string, number, etc.) — NOT the full token plist.
 As a side effect, each consumed token's source location is stored in
 *CURRENT-TOKEN-LOCATION* for use in error reporting and assembly comments."
-  (lambda ()
-    (loop
-       (unless lexer-tokens (return (values nil nil)))
-       (let ((token (pop lexer-tokens)))
-         (when token
-           (setf *current-token-location*
-                 (list :source-file (safe-getf token :source-file)
-                       :source-line (safe-getf token :source-line)
-                       :source-sequence (safe-getf token :source-sequence)
-                       :source-line-text (safe-getf token :source-line-text)))
-           (return (values (first token) (second token))))))))
+  (let ((*current-token-location*
+          (or *current-token-location*
+              (list :source-file "?"))))
+   (lambda ()
+     (loop
+        (unless lexer-tokens (return (values nil nil)))
+        (let ((token (pop lexer-tokens)))
+          (when token
+            (when-let (source (getf token :source-file))
+                      (setf (getf *current-token-location* :source-file) source))
+            (when-let (line (getf token :source-line))
+                      (setf (getf *current-token-location* :source-line) line))
+            (when-let (seq (getf token :source-sequence))
+                      (setf (getf *current-token-location* :source-sequence) seq))
+            (when-let (text (getf token :source-line-text))
+                      (setf (getf *current-token-location* :source-line-text) text)))
+          (return (values (first token) (second token))))))))
 
 (defun parse-eightbol-string (string &optional (pathname "<String>"))
   (with-input-from-string (stream string)
     (let ((*source-file-pathname* pathname))
+      (setf (getf *current-token-location* :source-file) (enough-namestring pathname))
       (parse-eightbol stream))))
 
 (defun parse-eightbol (stream)
@@ -1310,25 +1318,27 @@ As a side effect, each consumed token's source location is stored in
 Parse  errors  are  caught  and  re-signalled  as  EIGHTBOL-SOURCE-ERROR
 conditions   that   include   the   source  file,   line   number,   and
 sequence number."
-  (let ((tokens (lex-with-copy-expansion stream))
-        (*current-token-location* nil))
+  (let ((tokens (lex-with-copy-expansion stream)))
     (handler-case
         (yacc:parse-with-lexer
          (stream-code tokens)
          *eightbol-parser*)
-      (yacc:yacc-parse-error (e)
-        (let* ((loc *current-token-location*)
-               (term (yacc:yacc-parse-error-terminal e))
-               (val (yacc:yacc-parse-error-value e))
-               (exp (yacc:yacc-parse-error-expected-terminals e))
-               (msg (format nil
-                            "Unexpected token ~a~@[ (~s)~].~%~10tExpected one of: ~{~a~^, ~}"
-                            term val exp)))
-          (error 'source-error
-:source-file (safe-getf loc :source-file)
-                :source-line (safe-getf loc :source-line)
-                :source-sequence (safe-getf loc :source-sequence)
-                 :terminal term
-                 :token-value val
-                 :expected exp
-                 :message msg))))))
+      (yacc:yacc-parse-error (c)
+        (format *error-output*
+                "~2%~s~%Unexpected token ~s~@[ (~s)~].~%~10tExpected one of: ~{~s~^, ~}"
+                *current-token-location*
+                (yacc:yacc-parse-error-terminal c)
+                (yacc:yacc-parse-error-value c)
+                (yacc:yacc-parse-error-expected-terminals c))
+        (error 'source-error
+               :source-file (getf *current-token-location* :source-file)
+               :source-line (getf *current-token-location* :source-line)
+               :source-sequence (getf *current-token-location* :source-sequence)
+               :terminal (yacc:yacc-parse-error-terminal c)
+               :token-value (yacc:yacc-parse-error-value c)
+               :expected (yacc:yacc-parse-error-expected-terminals c)
+               :message (format nil
+                                "Unexpected token ~s~@[ (~s)~].~%~10tExpected one of: ~{~s~^, ~}"
+                                (yacc:yacc-parse-error-terminal c)
+                                (yacc:yacc-parse-error-value c)
+                                (yacc:yacc-parse-error-expected-terminals c)))))))

@@ -79,7 +79,8 @@ Not true for @code{:subscript} loads (uses X) or absolute globals (no Y)."
       (and (stringp expr) (implicit-instance-slot-p expr class-id))))
 
 (defun %6502-subtract-2byte-inplace-eligible-p (from from-target result giving class-id w bcd-p)
-  "True when SUBTRACT can use one @code{ldy} to the low slot byte, @code{sta}/@code{iny}/@code{lda}/@code{sbc}/@code{sta} for high byte (no @code{tax}/@code{dey} dance)."
+  "True when SUBTRACT can use one @code{ldy} to the low slot byte,
+@code{sta}/@code{iny}/@code{lda}/@code{sbc}/@code{sta} for high byte (no @code{tax}/@code{dey} dance)."
   (and (= w 2)
        (not bcd-p)
        (null giving)
@@ -303,15 +304,13 @@ Compiling class string (e.g. @code{\"Character\"}).
     (let ((slot (first expr))
           (of (second expr))
           (obj (third expr)))
-      (when (or (equal of "OF") (eq of 'eightbol::of))
+      (when (string-equal of "OF")
         (list :of slot obj)))))
 
 (defun slot-of-self-p (expr)
   "True if EXPR is slot OF Self in either (:of slot :self) or (slot OF Self) format."
-  (let ((norm (or (and (listp expr) (eq (first expr) :of) expr)
-                  (normalize-slot-of expr))))
-    (when norm
-      (member (third norm) '(:self "Self" self) :test #'equal))))
+  (when-let (norm (normalize-slot-of expr))
+      (string-equal "Self" (third norm))))
 
 (defun slot-of-expr (expr)
   "Return (:of slot obj) form for EXPR, or NIL."
