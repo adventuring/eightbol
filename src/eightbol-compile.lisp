@@ -276,7 +276,7 @@ routine AST passes run as in `compile-eightbol-class`."
     (load-methods))
   (let ((consider-class (pascal-case class-id)))
     (loop
-     (when (find (pascal-case method-id) (getf consider-class *class-methods*)
+     (when (find (pascal-case method-id) (gethash consider-class *class-methods*)
 		   :test #'string-equal)
        (return-from method-class (header-case class-id)))
      (setf consider-class (gethash consider-class *parent-classes*))
