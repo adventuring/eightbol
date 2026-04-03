@@ -311,7 +311,7 @@ Compiling class string (e.g. @code{\"Character\"}).
   (let ((norm (or (and (listp expr) (eq (first expr) :of) expr)
                   (normalize-slot-of expr))))
     (when norm
-      (member (third norm) '(:self "Self" self) :test #'string-equal))))
+      (member (third norm) '(:self "Self" self) :test #'equal))))
 
 (defun slot-of-expr (expr)
   "Return (:of slot obj) form for EXPR, or NIL."
