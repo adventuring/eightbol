@@ -7,7 +7,7 @@
 
 (defun m6800-symbol (name)
   "Convert EIGHTBOL identifier to m6800 assembly symbol (PascalCase)."
-  (cobol-id-to-assembly-symbol (format nil "~a" name)))
+  (pascal-case (format nil "~a" name)))
 
 (defmethod compile-to-assembly (ast (cpu (eql :m6800)) output-stream)
   (unless (and (listp ast) (eq (first ast) :program))

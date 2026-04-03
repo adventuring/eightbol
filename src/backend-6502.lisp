@@ -12,14 +12,14 @@
 ;; switching via macros  RP2A03: 6502 subset; no SED  (no decimal mode);
 ;; software BCD
 ;;
-;; Key  conventions:  Method  labels: MethodCharacterThink:  .block  ...
-;; .bend GOBACK/EXIT: rts INVOKE Self "M": .CallMethod Call{Class}M, {Class}Class
-;; INVOKE Var "M": .CallMethod Call{Type}M, {Type}Class, Var  Slot  access:  ldy
-;; #{OriginClass}{Slot} /  lda (Self), y  Array access:  ldx index  / lda
-;; base, x  (X  for  subscript;  Y   for  slot)  Constants  (78/77):  lda
-;; #ConstName    (immediate   addressing)    Variables:   lda    VarName
-;; (direct/absolute addressing) Fault:  .LogFault "code" (4-char string;
-;; assembler does minifont)
+;; Key conventions: Method labels: MethodCharacterThink: .block ...
+
+;; {Class}Class INVOKE Var "M": .CallMethod Call{Type}M, {Type}Class,
+;; Var Slot access: ldy #{OriginClass}{Slot} / lda (Self), y Array
+;; access: ldx index / lda base, x (X for subscript; Y for slot)
+;; Constants (78/77): lda #ConstName (immediate addressing) Variables:
+;; lda VarName (direct/absolute addressing) Fault: .LogFault "code"
+;; (4-char string; assembler does minifont)
 ;;
 ;; Register  usage: A=accumulator,  X=subscript  index  or temp,  Y=slot
 ;; offset.   Array   fetches   use    X   (or   Y   for   slot-of-self).
@@ -1033,7 +1033,7 @@ For :refmod, returns Base+offset for 1-based start."
     ((and (listp operand) (eq (first operand) :refmod))
      (let* ((base (safe-getf (rest operand) :base))
             (start (safe-getf (rest operand) :start))
-            (base-str (cobol-id-to-assembly-symbol base)))
+            (base-str (pascal-case base)))
        (if (and (integerp start) (= start 1))
            base-str
            (format nil "~a+~d" base-str (1- start)))))
@@ -1086,7 +1086,7 @@ constant expression, or nil."
 (defun para-label (name class-id method-id)
   "Return assembly label for paragraph NAME within method.
    COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
-  (cobol-id-to-assembly-symbol
+  (pascal-case
    (substitute #\- #\_ (format nil "~a_~a_~a" class-id method-id name))))
 
 (defun compile-6502-paragraph (out stmt class-id method-id)
@@ -1230,11 +1230,11 @@ TARGETS is list of paragraph names (1-based indices). LO, HI are 1-based inclusi
         (conv-to (safe-getf (rest stmt) :to))
         (repl-by (safe-getf (rest stmt) :by)))
     (%invalidate-6502-accumulator-a)
-    (let ((target-sym (cobol-id-to-assembly-symbol target)))
+    (let ((target-sym (pascal-case target)))
       (cond
         (tally
          ;; INSPECT id TALLYING tally FOR CHARACTERS — add 1 to tally per character
-         (let ((tally-sym (cobol-id-to-assembly-symbol tally)))
+         (let ((tally-sym (pascal-case tally)))
            (format out "~&~10T;; INSPECT ~a TALLYING ~a FOR CHARACTERS" target tally)
            (format out "~&~10Tldy ~a" (emit-6502-immediate 0))
            (let ((label (new-6502-label "TallyLoop"))
@@ -1295,17 +1295,19 @@ TARGETS is list of paragraph names (1-based indices). LO, HI are 1-based inclusi
         (method (safe-getf (rest stmt) :method))
         (returning (safe-getf (rest stmt) :returning))
         (tail-call-p (safe-getf (rest stmt) :tail-call-p)))
-    (let ((method-sym (cobol-id-to-assembly-symbol (if (stringp method) method
+    (let ((method-sym (pascal-case (if (stringp method) method
                                                        (format nil "~a" method))))
           (jmp-p (and tail-call-p (null returning))))
       (cond
         ((member object '(:self "Self" self) :test #'string-equal)
          ;; Same OOPS path as INVOKE on a named object: Phantasia CallMethod macro (DoCallMethod).
          (format out "~&~10T.CallMethod Call~a~a, ~aClass"
-                 (pascal-case class-id) (pascal-case method-sym) (pascal-case class-id)))
+                 (pascal-case (method-class class-id method-sym))
+		 (pascal-case method-sym)
+		 (pascal-case class-id)))
         (t
          (let* ((unknown '#:Unknown)
-		(obj-name (cobol-id-to-assembly-symbol object))
+		(obj-name (pascal-case object))
                 (obj-class (or (var-class obj-name) unknown)))
            (if (eq obj-class Unknown)
                (error "Unknown class of method ~a" method-sym)
@@ -1314,13 +1316,13 @@ TARGETS is list of paragraph names (1-based indices). LO, HI are 1-based inclusi
 		       (pascal-case obj-class) obj-name))))))
     (%invalidate-6502-accumulator-a)
     (when returning
-      (format out "~&~10Tsta ~a" (cobol-id-to-assembly-symbol returning)))))
+      (format out "~&~10Tsta ~a" (pascal-case returning)))))
 
 ;;; CALL statement
 
 (defun sym-string (x)
   "Return PascalCase assembly symbol from a literal, identifier, or string (COBOL stabby-case)."
-  (cobol-id-to-assembly-symbol (if (listp x) (second x) x)))
+  (pascal-case (if (listp x) (second x) x)))
 
 (defun %service-call-dispatch-symbol (item-sym)
   "Map CALL SERVICE routine stem to assembly dispatch label (@code{ServiceFoo} for LUT / .FarCall).
@@ -1378,8 +1380,8 @@ When ITEM-SYM already has a @code{Service} prefix (case-insensitive), return it 
 
 (defun compile-6502-if (out stmt cpu)
   (let ((condition (safe-getf (rest stmt) :condition))
-        (then-stmts (safe-getf (rest stmt) :then))
-        (else-stmts (safe-getf (rest stmt) :else))
+        (then-stmts (remove nil (safe-getf (rest stmt) :then)))
+        (else-stmts (remove nil (safe-getf (rest stmt) :else)))
         (label-else (new-6502-label "IfElse"))
         (label-end (new-6502-label "IfEnd")))
     (emit-6502-condition out condition *class-id* label-else)

@@ -13,7 +13,6 @@
            :input-file-not-found :parse-failed-error :invalid-ast-error
            :undefined-class-reference :routine-not-terminated
            :validate-eightbol-program :collect-object-reference-classes-from-ast
-           :cobol-id-to-assembly-symbol
            :cobol-hyphenated-to-pascal-concat
            :cobol-constant-to-assembly-symbol
            :cobol-global-data-name-to-assembly-symbol

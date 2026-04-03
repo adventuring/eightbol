@@ -710,7 +710,7 @@ From @code{slot-name-to-assembly-segment}.
   (let ((lead (slot-name-first-hyphen-word slot-name)))
     (when (and lead (member lead *parent-class-slot-prefix-words* :test #'string-equal)
               (plusp (length segment)))
-      (let ((lead-p (to-pascal-case lead)))
+      (let ((lead-p (pascal-case lead)))
         (when (and (plusp (length lead-p))
                    (>= (length segment) (length lead-p))
                    (string-equal lead-p segment :end2 (length lead-p)))
@@ -726,7 +726,7 @@ returns the segment alone (@code{CourseLastFrame}) so labels match OOPS copybook
 the slot name is parent-prefixed (@code{Course-Last-Frame}), returns @code{CourseLastFrame},
 not @code{MummyCourseCourseLastFrame}. Otherwise @code{{OriginClass}{SlotSegment}} (e.g. @code{CharacterHP})."
   (let* ((origin (slot-origin-class slot-name current-class))
-         (origin-pascal (to-pascal-case (format nil "~a" origin)))
+         (origin-pascal (pascal-case (format nil "~a" origin)))
          (segment (slot-name-to-assembly-segment slot-name)))
     (cond
       ((and (plusp (length origin-pascal))

@@ -44,7 +44,7 @@
 (defvar *cpu* nil
   "Current target CPU keyword; bound during compile-to-assembly.")
 
-(defun cpu-display-name (cpu)
+(defun cpu-display-name (&optional (cpu *cpu*))
   "Return the case-preserving UI label for CPU."
   (rest (assoc cpu +cpu-display-names+)))
 
@@ -131,9 +131,7 @@ rebuilding the compiler triggers recompilation of all .s outputs."
 			       &key (cpus '(:6502))
 				 copybook-paths
 				 (root-directory (truename #p"."))
-				 output-file
-				 defined-class-ids
-				 (validate-termination t))
+				 output-file)
   "Compile INPUT-FILE (.cob):
 
    1. Parse to AST and write to  {root}/Object/Classes/{ClassName}.eightbol
@@ -143,11 +141,6 @@ rebuilding the compiler triggers recompilation of all .s outputs."
       (or OUTPUT-FILE for the single CPU when specified)
 
    3. Write {root}/Source/Generated/Classes/{ClassName}.d for Makefile includes
-
-When DEFINED-CLASS-IDS is non-NIL, every OBJECT REFERENCE class in WORKING-STORAGE
-must be named therein (STRING-EQUAL). When VALIDATE-TERMINATION (default T), each
-non-blank method must end with GOBACK, EXIT*, STOP RUN, unconditional GO TO, tail
-INVOKE/CALL, or IF ... ELSE ... with every branch completing.
 
 Returns the AST plist."
   (let ((*eightbol-root-directory* root-directory)
@@ -217,16 +210,12 @@ Returns the AST plist."
         ;;                      *copybook-dependencies*)
         ast))))
 
-(defun compile-to-assembly-with-ast-passes (ast cpu output-stream
- &key (validate-termination t)
- defined-class-ids)
+(defun compile-to-assembly-with-ast-passes (ast cpu output-stream)
  "Run optimize-ast (routine AST optimizations), optional VALIDATE-EIGHTBOL-PROGRAM, then compile.
 Use when AST comes from parse only (e.g. unit tests). `compile-eightbol-class`
 already calls optimize-ast before `compile-to-assembly`."
  (let ((opt (optimize-ast ast)))
- (validate-eightbol-program opt
- :defined-class-ids defined-class-ids
- :validate-termination validate-termination)
+ (validate-eightbol-program opt)
  (compile-to-assembly opt cpu output-stream)))
 
 (defun parse-eightbol-string-for-codegen (string &optional (pathname "<String>"))
@@ -273,3 +262,41 @@ routine AST passes run as in `compile-eightbol-class`."
   "Read a previously-serialised AST from AST-FILE (.eightbol)."
   (with-open-file (stream ast-file :direction :input)
     (read-ast stream)))
+
+(defvar *class-methods* (make-hash-table :test 'equalp))
+
+(defvar *parent-classes* (make-hash-table :test 'equalp))
+
+(defun method-class (class-id method-id)
+  (when (equal "BasicObject" (pascal-case class-id))
+    (if (equal "Destroy" (pascal-case method-id))
+	(return-from method-class "Basic-Object")
+	(error "~s is not a method of Basic-Object" method-id)))
+  (unless (gethash class-id *parent-classes*)
+    (load-methods))
+  (let ((consider-class (pascal-case class-id)))
+    (loop
+     (when (find (pascal-case method-id) (getf consider-class *class-methods*)
+		   :test #'string-equal)
+       (return-from method-class (header-case class-id)))
+     (setf consider-class (gethash consider-class *parent-classes*))
+     (when (equal consider-class "BasicObject")
+       (error "~s is not a method of class ~a" method-id (header-case class-id))))))
+
+(defun load-methods ()
+  (when (hash-table-count *parent-classes*)
+    (return-from load-methods))
+  (with-input-from-file (classes.defs #p"Source/Classes/Classes.Defs")
+    (loop with last-class = "BasicObject"
+	  for line = (read-line classes.defs nil nil)
+	  while line
+	  do (cond ((search "<" line)
+		    (destructuring-bind (child parent)
+			(mapcar (lambda (word)
+				  (string-trim #(#\Space #\Tab) word))
+				(split-sequence #\< line))
+		      (setf (gethash child *parent-classes*) parent
+			    last-class child)))
+		   ((and (< 2 (length line)) (char= #\# (char line 0)))
+		    (appendf (gethash (subseq line 1) *class-methods* '())
+			     (cons last-class nil)))))))

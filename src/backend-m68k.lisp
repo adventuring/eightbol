@@ -14,7 +14,7 @@
 
 (defun m68k-symbol (name)
   "Convert EIGHTBOL identifier to m68k assembly symbol (PascalCase)."
-  (to-pascal-case (format nil "~a" name)))
+  (pascal-case (format nil "~a" name)))
 
 (defmethod compile-to-assembly (ast (cpu (eql :m68k)) output-stream)
   (unless (and (listp ast) (eq (first ast) :program))

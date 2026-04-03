@@ -54,7 +54,7 @@
 (defun compile-rp2a03-method (method class-id)
   (let* ((*6502-family-cpu* :rp2a03)
          (*method-id* (getf (rest method) :method-id))
-         (method-dispatch-suffix (cobol-id-to-assembly-symbol
+         (method-dispatch-suffix (pascal-case
                                   (format nil "~a" *method-id*)))
          (stmts (method-statements-list method))
          (last-stmt (car (last stmts))))

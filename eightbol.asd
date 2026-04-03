@@ -33,8 +33,6 @@
                   :depends-on ("package" "ast" "ast-optimize" "conditions"))
                  (:file "parser"      :depends-on ("package" "conditions" "lexer" "ast"))
                  (:file "backend"     :depends-on ("package" "conditions" "ast"))
-                 (:file "compat-overrides"
-                  :depends-on ("package" "parser" "backend" "eightbol-compile"))
                  (:file "backend-6502"
                   :depends-on ("package" "ast" "backend"))
                  (:file "backend-RP2A03"

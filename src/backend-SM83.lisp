@@ -10,7 +10,7 @@
 
 (defun sm83-symbol (name)
   "Convert EIGHTBOL identifier to SM83 assembly symbol (PascalCase). COBOL stabby-case supported."
-  (cobol-id-to-assembly-symbol (format nil "~a" name)))
+  (pascal-case (format nil "~a" name)))
 
 (defmethod compile-to-assembly (ast (cpu (eql :sm83)) output-stream)
   (unless (and (listp ast) (eq (first ast) :program))

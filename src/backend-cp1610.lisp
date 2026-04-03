@@ -14,7 +14,7 @@
 
 (defun cp1610-symbol (name)
   "Convert EIGHTBOL identifier to cp1610 assembly symbol (PascalCase). COBOL stabby-case supported."
-  (cobol-id-to-assembly-symbol (format nil "~a" name)))
+  (pascal-case (format nil "~a" name)))
 
 ;;; Top-level entry point
 

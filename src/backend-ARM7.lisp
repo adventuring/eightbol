@@ -11,7 +11,7 @@
 
 (defun arm7-symbol (name)
   "Convert EIGHTBOL identifier to ARM assembly symbol (PascalCase). COBOL stabby-case supported."
-  (cobol-id-to-assembly-symbol (format nil "~a" name)))
+  (pascal-case (format nil "~a" name)))
 
 (defmethod compile-to-assembly (ast (cpu (eql :arm7)) output-stream)
   "Compile AST to ARM7TDMI assembly for OUTPUT-STREAM (GBA-oriented Thumb GAS).

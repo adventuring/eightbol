@@ -8,7 +8,7 @@
 
 (defun f8-symbol (name)
   "Convert EIGHTBOL identifier to F8 assembly symbol (PascalCase). COBOL stabby-case supported."
-  (cobol-id-to-assembly-symbol (format nil "~a" name)))
+  (pascal-case (format nil "~a" name)))
 
 (defun %f8-self-pointer-to-dc0 (out)
   "*Self at label Self → DC0 (16-bit pointer from memory, little-endian)."
