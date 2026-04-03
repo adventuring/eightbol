@@ -389,9 +389,8 @@ match against files in the directory (so COPY Basic-NPC-Slots finds Basic-Npc-Sl
                  (let ((path (find-copybook name library)))
                    (if path
                        (progn
-                         (when (boundp '*copybook-dependencies*)
-                           (pushnew (truename path) *copybook-dependencies*
-                                    :test #'equalp))
+                         (pushnew (truename path) *copybook-dependencies*
+                                  :test #'equalp)
                          (let ((cb-tokens (lex-file path)))
                            (setf tokens (append (expand-copy-tokens cb-tokens) tokens))))
                        (error 'copybook-not-found
@@ -399,8 +398,8 @@ match against files in the directory (so COPY Basic-NPC-Slots finds Basic-Npc-Sl
                               :copybook-name name
                               :library library)))
                  (error "EIGHTBOL: COPY without a name"))))
-          (t (appendf result (cons token nil))))
-	finally (return result)))
+          (t (push token result)))
+	finally (return (nreverse result))))
 
 (defun lexer (stream)
   (loop for *source-line-number* from 1

@@ -264,27 +264,33 @@ routine AST passes run as in `compile-eightbol-class`."
     (read-ast stream)))
 
 (defvar *class-methods* (make-hash-table :test 'equalp))
-
 (defvar *parent-classes* (make-hash-table :test 'equalp))
 
 (defun method-class (class-id method-id)
-  (when (equal "BasicObject" (pascal-case class-id))
-    (if (equal "Destroy" (pascal-case method-id))
-	(return-from method-class "Basic-Object")
-	(error "~s is not a method of Basic-Object" method-id)))
-  (unless (gethash class-id *parent-classes*)
-    (load-methods))
-  (let ((consider-class (pascal-case class-id)))
-    (loop
-     (when (find (pascal-case method-id) (gethash consider-class *class-methods*)
+  (let ((canon-class (pascal-case class-id))
+	(canon-method (pascal-case method-id)))
+    #+()(format *trace-output* "~&Method ~s Class ~s" canon-method canon-class)
+    #+()(force-output *trace-output*)
+    (when (equal "BasicObject" canon-class)
+      (if (equal "Destroy" canon-method)
+	  (return-from method-class "Basic-Object")
+	  (error "~s is not a method of Basic-Object" method-id)))
+    (unless (gethash canon-class *parent-classes*)
+      (load-methods))
+    (let ((consider-class canon-class))
+      (loop
+       #+()(format *trace-output* "~&~4TLooking for ~s in ~s" canon-method consider-class)
+       #+()(force-output *trace-output*)
+       (when (find canon-method (gethash consider-class *class-methods*)
 		   :test #'string-equal)
-       (return-from method-class (header-case class-id)))
-     (setf consider-class (gethash consider-class *parent-classes*))
-     (when (equal consider-class "BasicObject")
-       (error "~s is not a method of class ~a" method-id (header-case class-id))))))
+	 (return-from method-class (header-case consider-class)))
+       (setf consider-class (gethash consider-class *parent-classes*))
+       (when (or (null consider-class) (equal consider-class "BasicObject"))
+	 (error "~s is not a method of class ~s, nor its parent classes up to ~s"
+		(header-case method-id) (header-case canon-class) consider-class))))))
 
 (defun load-methods ()
-  (when (hash-table-count *parent-classes*)
+  (when (plusp (hash-table-count *parent-classes*))
     (return-from load-methods))
   (with-input-from-file (classes.defs #p"Source/Classes/Classes.Defs")
     (loop with last-class = "BasicObject"
@@ -298,5 +304,5 @@ routine AST passes run as in `compile-eightbol-class`."
 		      (setf (gethash child *parent-classes*) parent
 			    last-class child)))
 		   ((and (< 2 (length line)) (char= #\# (char line 0)))
-		    (appendf (gethash (subseq line 1) *class-methods* '())
-			     (cons last-class nil)))))))
+		    (appendf (gethash last-class *class-methods* '())
+			     (cons (subseq line 1) nil)))))))
