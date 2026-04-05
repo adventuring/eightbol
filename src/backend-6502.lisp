@@ -427,13 +427,13 @@ W-byte EXPR. A  holds the accumulated other operand  (same addressing as
        (let* ((sof (slot-of-expr expr))
               (off (slot-symbol (second sof) class-id))
               (ptr (6502-object-pointer-label (third sof) class-id)))
-         (format out "~&~10Tldy # ~a~[~:; + ~d~]" off n)
+         (format out "~&~10Tldy # ~a~[~:;~:* + ~d~]" off n)
          (format out "~&~10T~a (~a), y" mnemonic ptr)))
       ((stringp expr)
-       (format out "~&~10T~a ~a~[~:; + ~d~]"
+       (format out "~&~10T~a ~a~[~:;~:* + ~d~]"
                mnemonic (bare-data-assembly-symbol expr class-id) n))
       (t
-       (format out "~&~10T~a ~a~[~:; + ~d~]"
+       (format out "~&~10T~a ~a~[~:;~:* + ~d~]"
                mnemonic (emit-6502-value expr) n)))))
 
 (defun emit-6502-cmp-byte-n-of-expr (out expr class-id n w)
