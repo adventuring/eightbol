@@ -65,7 +65,7 @@ Argument after @code{-m} (e.g. @code{\"6502\"}, @code{\"all\"}).
   (let ((s (string display-string)))
     (cond ((string-equal s "all") :all)
           (t (let ((pair (find s +cpu-display-names+
-                                :test #'string-equal :key #'cdr)))
+                               :test #'string-equal :key #'cdr)))
                (if pair
                    (car pair)
                    (error 'unknown-cpu-error
@@ -90,8 +90,8 @@ as @code{(first cpus)} so the copybook directory matches the first backend targe
 A one-element list of pathname designators."
   (let ((c (or cpu *cpu* :6502)))
     (list (make-pathname :defaults root-directory
-                    :directory (list :relative "Source" "Generated"
-                                     "Classes" (cpu-directory-name c))))))
+			 :directory (list :relative "Source" "Generated"
+					  "Classes" (cpu-directory-name c))))))
 
 (defun write-copybook-deps (input-file class-id cpus root-directory output-file
                             copybook-deps)
@@ -102,27 +102,27 @@ rebuilding the compiler triggers recompilation of all .s outputs."
          (eightbol-bin (merge-pathnames #p"bin/eightbol" root-directory))
          (deps (list* input-truename eightbol-bin (nreverse copybook-deps)))
          (targets
-           (loop for cpu in cpus
-                 for first-p = t then nil
+          (loop for cpu in cpus
+                for first-p = t then nil
                 collect (if (and first-p
                                  output-file
                                  (not (string= (namestring (pathname output-file)) "")))
-                             (merge-pathnames (pathname output-file) root-directory)
-                             (merge-pathnames
-                              (make-pathname
-                               :directory (list :relative "Source" "Generated" "Classes"
-                                                (cpu-directory-name cpu))
-                               :name (concatenate 'string class-id "Class") :type "s")
-                              root-directory)))))
+                            (merge-pathnames (pathname output-file) root-directory)
+                            (merge-pathnames
+                             (make-pathname
+                              :directory (list :relative "Source" "Generated" "Classes"
+                                               (cpu-directory-name cpu))
+                              :name (concatenate 'string class-id "Class") :type "s")
+                             root-directory)))))
     (let ((d-path (merge-pathnames
                    (make-pathname :directory '(:relative "Source" "Generated" "Classes")
-                                 :name class-id :type "d")
+                                  :name class-id :type "d")
                    root-directory)))
       (ensure-directories-exist d-path)
       (with-open-file (out d-path
-                          :direction :output
-                          :if-exists :supersede
-                          :if-does-not-exist :create)
+                           :direction :output
+                           :if-exists :supersede
+                           :if-does-not-exist :create)
         (format out "~{~a~^ ~}: ~{~a~^ ~}~%"
                 (mapcar #'namestring targets)
                 (mapcar #'namestring deps))))))
@@ -201,9 +201,9 @@ Returns the AST plist."
                 (format t "~2&EIGHTBOL: wrote ~a assembly to ~a"
                         (cpu-display-name cpu) (enough-namestring asm-path)))
             #+()(error (e)
-              (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
-                      class-id (cpu-display-name cpu) e)
-              (error e))))
+		  (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
+			  class-id (cpu-display-name cpu) e)
+		  (error e))))
         ;; ;;  Phase 4: dependency file for Make 
         ;; (write-copybook-deps (or primary-input-file (first input-files))
         ;;                      class-id cpus root-directory output-file
@@ -211,22 +211,22 @@ Returns the AST plist."
         ast))))
 
 (defun compile-to-assembly-with-ast-passes (ast cpu output-stream)
- "Run optimize-ast (routine AST optimizations), optional VALIDATE-EIGHTBOL-PROGRAM, then compile.
+  "Run optimize-ast (routine AST optimizations), optional VALIDATE-EIGHTBOL-PROGRAM, then compile.
 Use when AST comes from parse only (e.g. unit tests). `compile-eightbol-class`
 already calls optimize-ast before `compile-to-assembly`."
- (let ((opt (optimize-ast ast)))
- (validate-eightbol-program opt)
- (compile-to-assembly opt cpu output-stream)))
+  (let ((opt (optimize-ast ast)))
+    (validate-eightbol-program opt)
+    (compile-to-assembly opt cpu output-stream)))
 
 (defun parse-eightbol-string-for-codegen (string &optional (pathname "<String>"))
- "Parse STRING and apply optimize-ast so the result matches codegen input."
- (optimize-ast (parse-eightbol-string string pathname)))
+  "Parse STRING and apply optimize-ast so the result matches codegen input."
+  (optimize-ast (parse-eightbol-string string pathname)))
 
 (defun compile-eightbol-class-from-ast
     (ast
      &key (cpus +supported-cpus+)
-          (root-directory (truename "."))
-          output-file)
+       (root-directory (truename "."))
+       output-file)
   "Re-compile from a previously-parsed (or loaded) AST plist.
 Writes only assembly output (no AST write). Applies optimize-ast so the same
 routine AST passes run as in `compile-eightbol-class`."
@@ -264,6 +264,7 @@ routine AST passes run as in `compile-eightbol-class`."
     (read-ast stream)))
 
 (defvar *class-methods* (make-hash-table :test 'equalp))
+(defvar *class-slots* (make-hash-table :test 'equalp))
 (defvar *parent-classes* (make-hash-table :test 'equalp))
 
 (defun method-class (class-id method-id)
@@ -276,7 +277,7 @@ routine AST passes run as in `compile-eightbol-class`."
 	(when (equal "BasicObject" canon-class)
 	  (error "~s is not a method of Basic-Object" method-id)))
     (unless (gethash canon-class *parent-classes*)
-      (load-methods))
+      (load-classes))
     (let ((consider-class canon-class))
       (loop
        #+()(format *trace-output* "~&~4TLooking for ~s in ~s" canon-method consider-class)
@@ -289,9 +290,32 @@ routine AST passes run as in `compile-eightbol-class`."
 	 (error "~s is not a method of class ~s, nor its parent classes up to ~s"
 		(header-case method-id) (header-case canon-class) consider-class))))))
 
-(defun load-methods ()
+(defun slot-class (class-id slot-id)
+  (let ((canon-class (pascal-case class-id))
+	(canon-slot (pascal-case slot-id)))
+    #+()(format *trace-output* "~&Slot ~s Class ~s" canon-slot canon-class)
+    #+()(force-output *trace-output*)
+    (if (equal "Destroy" canon-slot)
+	(return-from slot-class "Basic-Object")
+	(when (equal "BasicObject" canon-class)
+	  (error "~s is not a slot of Basic-Object" slot-id)))
+    (unless (gethash canon-class *parent-classes*)
+      (load-classes))
+    (let ((consider-class canon-class))
+      (loop
+       #+()(format *trace-output* "~&~4TLooking for ~s in ~s" canon-slot consider-class)
+       #+()(force-output *trace-output*)
+       (when (find canon-slot (gethash consider-class *class-slots*)
+		   :test #'string-equal)
+	 (return-from slot-class (header-case consider-class)))
+       (setf consider-class (gethash consider-class *parent-classes*))
+       (when (or (null consider-class) (equal consider-class "BasicObject"))
+	 (error "~s is not a slot of class ~s, nor its parent classes up to ~s"
+		(header-case slot-id) (header-case canon-class) consider-class))))))
+
+(defun load-classes ()
   (when (plusp (hash-table-count *parent-classes*))
-    (return-from load-methods))
+    (return-from load-classes))
   (with-input-from-file (classes.defs #p"Source/Classes/Classes.Defs")
     (loop with last-class = "BasicObject"
 	  for line = (read-line classes.defs nil nil)
@@ -305,4 +329,7 @@ routine AST passes run as in `compile-eightbol-class`."
 			    last-class child)))
 		   ((and (< 2 (length line)) (char= #\# (char line 0)))
 		    (appendf (gethash last-class *class-methods* '())
-			     (cons (subseq line 1) nil)))))))
+			     (cons (subseq line 1) nil)))
+		   ((and (< 2 (length line)) (char= #\. (char line 0)))
+		    (appendf (gethash last-class *class-slots* '())
+			     (cons (subseq line 1 (position #\Space line)) nil)))))))

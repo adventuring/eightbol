@@ -422,7 +422,7 @@ A holds the accumulated other operand (same addressing as @code{emit-6502-load-b
        (format out "~&~10T~a ~a + ~d, x" mnemonic (bare-data-assembly-symbol (second expr) class-id) n))
       ((slot-of-self-p expr)
        (let ((offset (slot-symbol (second (slot-of-expr expr)) class-id)))
-         (format out "~&~10Tldy #~a" (if (zerop n) offset (format nil "(~a+~d)" offset n)))
+         (format out "~&~10Tldy # ~a~[~:; + ~d~]" offset n)
          (format out "~&~10T~a (Self), y" mnemonic)))
       ((and (slot-of-expr expr) (not (slot-of-self-p expr)))
        (let* ((sof (slot-of-expr expr))
