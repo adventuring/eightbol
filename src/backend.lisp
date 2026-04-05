@@ -737,7 +737,7 @@ Compiling class (e.g. Character) for @code{slot-symbol} fallback.
 One assembly symbol string."
   (let ((n (string name)))
     (cond
-      ((and origin (slot-origin-global-data-p origin))
+      ((and current-class-id (slot-origin-global-data-p current-class-id))
        (cobol-global-data-name-to-assembly-symbol n))
       ((phantasia-global-bare-data-name-p n)
        (cobol-global-data-name-to-assembly-symbol n))
