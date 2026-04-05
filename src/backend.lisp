@@ -60,30 +60,25 @@ Used by backends to locate generated copybook files.")
 (defvar *output-stream* nil "Assembly output stream; bound during compile-to-assembly.")
 (defvar *class-id* nil)
 (defvar *method-id* nil "Current method being compiled; used for paragraph labels.")
-(defvar *slot-table* nil
+(defvar *slot-table* (make-hash-table :test 'equal)
   "Slot name → origin class string or global section label (e.g. Phantasia-Globals).
 Bound to a hash table with @code{:test equalp} so copybook uppercase names match
 parser mixed-case identifiers (see @code{load-copybook-tables}).")
-(defvar *type-table* nil)
-(defvar *const-table* nil
+(defvar *type-table* (make-hash-table :test 'equal))
+(defvar *const-table* (make-hash-table :test 'equal)
   "77/78 constant name → integer. Bound to a hash table with @code{:test equalp}
 (case-insensitive string keys; see @code{const-table-name-key}).")
-(defvar *service-bank-table* nil)
-(defvar *usage-table* nil)
-(defvar *sign-table* nil)
-(defvar *pic-size-table* nil)
-(defvar *pic-nybble-table* nil)
-(defvar *pic-width-table* nil)
-(defvar *pic-frac-bits-table* nil
+(defvar *service-bank-table* (make-hash-table :test 'equal))
+(defvar *usage-table* (make-hash-table :test 'equal))
+(defvar *sign-table* (make-hash-table :test 'equal))
+(defvar *pic-size-table* (make-hash-table :test 'equal))
+(defvar *pic-nybble-table* (make-hash-table :test 'equal))
+(defvar *pic-width-table* (make-hash-table :test 'equal))
+(defvar *pic-frac-bits-table* (make-hash-table :test 'equal)
   "Variable-name → fractional bits (0..n). From USAGE BINARY WITH nVm BITS (m = fractional).")
-(defvar *pic-nybble-semantics-table* nil
+(defvar *pic-nybble-semantics-table* (make-hash-table :test 'equal)
   "Variable-name → T when copybook PIC is single-digit @code{9}/@code{S9} (logical @code{#x0}--@code{#xF});
 @code{NIL} in table means @code{PIC 99} or wider numeric picture. Storage is still byte-aligned.")
-
-(defparameter +object-reference-storage-width+ 2
-  "Byte width for OBJECT REFERENCE data items (OOPS pointer). Phantasia uses 16-bit references.
-Used when @code{*type-table*} names a class but @code{*pic-width-table*} has no entry (copybook
-lines often omit numeric PIC for @code{USAGE OBJECT REFERENCE @dots{}}).")
 
 ;;; In-memory service→bank LUT for CALL SERVICE resolution (no copybook file).
 ;;; Populated by build-service-bank-lut-from-banks when scanning Source/Code/{machine}/Banks.
@@ -167,80 +162,83 @@ Looks for .../Generated/NNNN/Classes or .../7800/Classes in paths."
 
 (defun %merge-cpy-stream-into-tables (stream)
   "Read copybook text from STREAM and merge entries into the ten hash tables.
-*SLOT-TABLE*, *TYPE-TABLE*, *CONST-TABLE*, *SERVICE-BANK-TABLE*, *USAGE-TABLE*, *SIGN-TABLE*,
-*PIC-SIZE-TABLE*, *PIC-WIDTH-TABLE*, *PIC-FRAC-BITS-TABLE*, and *PIC-NYBBLE-TABLE* are mutated.
+
+*SLOT-TABLE*,    *TYPE-TABLE*,   *CONST-TABLE*,    *SERVICE-BANK-TABLE*,
+**USAGE-TABLE*,   *SIGN-TABLE*,    PIC-SIZE-TABLE*,   *PIC-WIDTH-TABLE*,
+**PIC-FRAC-BITS-TABLE*,    and     *PIC-NYBBLE-TABLE*    are    mutated.
+
 Uses @code{parse-cpy-line} on each line."
   (declare (stream stream))
   (let ((current-origin nil))
     (loop for line = (read-line stream nil nil) while line do
-          (let ((parsed (parse-cpy-line line)))
-            (when parsed
-              ;; Use COND (not ECASE) so :SERVICE-BANK cannot be mis-read as a stray form after a
-              ;; paren mismatch (which would evaluate as (FUNCALL :SERVICE-BANK …) and signal
-              ;; UNDEFINED-FUNCTION).
-              (cond
-                ((eql (first parsed) :section-comment)
-                 (setf current-origin
-                       (or (getf (rest parsed) :origin-class)
-                           (getf (rest parsed) :own-class))))
-                ((eql (first parsed) :data-item)
-                 (let ((level (getf (rest parsed) :level))
-                       (name (getf (rest parsed) :name))
-                       (pic-rest (getf (rest parsed) :pic))
-                       (type-class (getf (rest parsed) :type-class))
-                       (constp (getf (rest parsed) :constant-p))
-                       (value (getf (rest parsed) :value))
-                       (usage-bcd (getf (rest parsed) :usage-bcd))
-                       (usage-signed (getf (rest parsed) :usage-signed))
-                       (pic-size (getf (rest parsed) :pic-size))
-                       (pic-width (getf (rest parsed) :pic-width)))
-                   ;; Phantasia-Globals.cpy uses COBOL 01 … EXTERNAL section headers (no * Inherited * line).
-                   ;; Without this, current-origin stays NIL and globals never enter *SLOT-TABLE* — bare names
-                   ;; wrongly default to instance slots (e.g. Hurt-H-P → CharacterHurtHp + lda (Self),y).
-                   (when (and (= level 1)
-                              (stringp pic-rest)
-                              (search "EXTERNAL" pic-rest :test #'char-equal))
-                     (setf current-origin "Phantasia-Globals"))
-                   ;; Gap subsections (05 CART-RAM-GAP-n) follow 01 CART-RAM EXTERNAL; keep global origin.
-                   (when (and (= level 5)
-                              (stringp name)
-                              (cl-ppcre:scan "^CART-RAM-GAP" name))
-                     (setf current-origin "Phantasia-Globals"))
-                   (let ((skip-slot-hash
-                          (or (and (= level 1)
-                                   (stringp pic-rest)
-                                   (search "EXTERNAL" pic-rest :test #'char-equal))
-                              (and (= level 5)
-                                   (stringp name)
-                                   (cl-ppcre:scan "^CART-RAM-GAP" name))
-                              ;; 77/78 are compile-time constants — not object layout slots.
-                              constp)))
-                     (when (and current-origin (not skip-slot-hash))
-                       (setf (gethash (cobol-slot-table-name-key name) *slot-table*)
-                             current-origin)))
-                   (when type-class
-                     (setf (gethash (cobol-slot-table-name-key name) *type-table*) type-class))
-                   (when (and constp value)
-                     (setf (gethash (const-table-name-key name) *const-table*) value))
-                   (when usage-bcd
-                     (setf (gethash (cobol-slot-table-name-key name) *usage-table*) :bcd))
-                   (when usage-signed
-                     (setf (gethash (cobol-slot-table-name-key name) *sign-table*) t))
-                   (when pic-size
-                     (setf (gethash (cobol-slot-table-name-key name) *pic-size-table*) pic-size))
-                   (when pic-width
-                     (setf (gethash (cobol-slot-table-name-key name) *pic-width-table*) pic-width))
-                   (when-let (frac (getf (rest parsed) :pic-frac-bits))
-                     (setf (gethash (cobol-slot-table-name-key name) *pic-frac-bits-table*) frac))
-                   (when (and (stringp pic-rest) (pic-nybble-semantics-p pic-rest))
-                     (setf (gethash (cobol-slot-table-name-key name) *pic-nybble-table*) t))))
-                ((eql (first parsed) :service-bank)
-                 (let ((service (getf (rest parsed) :service))
-                       (bank (getf (rest parsed) :bank)))
-                   (when (and service bank)
-                     (setf (gethash service *service-bank-table*) bank))))
-                (t
-                 (error "EIGHTBOL: parse-cpy-line returned unknown type ~s" (first parsed)))))))))
+      (let ((parsed (parse-cpy-line line)))
+        (when parsed
+          ;; Use COND (not ECASE) so :SERVICE-BANK cannot be mis-read as a stray form after a
+          ;; paren mismatch (which would evaluate as (FUNCALL :SERVICE-BANK …) and signal
+          ;; UNDEFINED-FUNCTION).
+          (cond
+            ((eql (first parsed) :section-comment)
+             (setf current-origin
+                   (or (getf (rest parsed) :origin-class)
+                       (getf (rest parsed) :own-class))))
+            ((eql (first parsed) :data-item)
+             (let ((level (getf (rest parsed) :level))
+                   (name (getf (rest parsed) :name))
+                   (pic-rest (getf (rest parsed) :pic))
+                   (type-class (getf (rest parsed) :type-class))
+                   (constp (getf (rest parsed) :constant-p))
+                   (value (getf (rest parsed) :value))
+                   (usage-bcd (getf (rest parsed) :usage-bcd))
+                   (usage-signed (getf (rest parsed) :usage-signed))
+                   (pic-size (getf (rest parsed) :pic-size))
+                   (pic-width (getf (rest parsed) :pic-width)))
+               ;; Phantasia-Globals.cpy uses COBOL 01 … EXTERNAL section headers (no * Inherited * line).
+               ;; Without this, current-origin stays NIL and globals never enter *SLOT-TABLE* — bare names
+               ;; wrongly default to instance slots (e.g. Hurt-H-P → CharacterHurtHp + lda (Self),y).
+               (when (and (= level 1)
+                          (stringp pic-rest)
+                          (search "EXTERNAL" pic-rest :test #'char-equal))
+                 (setf current-origin "Phantasia-Globals"))
+               ;; Gap subsections (05 CART-RAM-GAP-n) follow 01 CART-RAM EXTERNAL; keep global origin.
+               (when (and (= level 5)
+                          (stringp name)
+                          (cl-ppcre:scan "^CART-RAM-GAP" name))
+                 (setf current-origin "Phantasia-Globals"))
+               (let ((skip-slot-hash
+                       (or (and (= level 1)
+                                (stringp pic-rest)
+                                (search "EXTERNAL" pic-rest :test #'char-equal))
+                           (and (= level 5)
+                                (stringp name)
+                                (cl-ppcre:scan "^CART-RAM-GAP" name))
+                           ;; 77/78 are compile-time constants — not object layout slots.
+                           constp)))
+                 (when (and current-origin (not skip-slot-hash))
+                   (setf (gethash (cobol-slot-table-name-key name) *slot-table*)
+                         current-origin)))
+               (when type-class
+                 (setf (gethash (cobol-slot-table-name-key name) *type-table*) type-class))
+               (when (and constp value)
+                 (setf (gethash (const-table-name-key name) *const-table*) value))
+               (when usage-bcd
+                 (setf (gethash (cobol-slot-table-name-key name) *usage-table*) :bcd))
+               (when usage-signed
+                 (setf (gethash (cobol-slot-table-name-key name) *sign-table*) t))
+               (when pic-size
+                 (setf (gethash (cobol-slot-table-name-key name) *pic-size-table*) pic-size))
+               (when pic-width
+                 (setf (gethash (cobol-slot-table-name-key name) *pic-width-table*) pic-width))
+               (when-let (frac (getf (rest parsed) :pic-frac-bits))
+                 (setf (gethash (cobol-slot-table-name-key name) *pic-frac-bits-table*) frac))
+               (when (and (stringp pic-rest) (pic-nybble-semantics-p pic-rest))
+                 (setf (gethash (cobol-slot-table-name-key name) *pic-nybble-table*) t))))
+            ((eql (first parsed) :service-bank)
+             (let ((service (getf (rest parsed) :service))
+                   (bank (getf (rest parsed) :bank)))
+               (when (and service bank)
+                 (setf (gethash service *service-bank-table*) bank))))
+            (t
+             (error "EIGHTBOL: parse-cpy-line returned unknown type ~s" (first parsed)))))))))
 
 (defun load-copybook-tables (class-id &key root-dir)
   "Load copybooks for CLASS-ID and return 10 tables: slot, type, const, service-bank,
@@ -251,14 +249,15 @@ After @file{*-Globals.cpy}, merges @file{Source/Generated/{machine}/AssetIDs.cpy
 77/78 asset IDs (e.g. @code{Song--Hurt--ID}) populate @code{*CONST-TABLE*}."
   (let* ((root (or root-dir *eightbol-root-directory* (truename ".")))
          (paths (or *copybook-paths* (list (merge-pathnames
-                                            (make-pathname :directory '(:relative "Source" "Generated" "Classes"))
+                                            (make-pathname :directory `(:relative "Source" "Generated"
+                                                                                  ,(machine-directory-name) "Classes"))
                                             root)))))
     ;; Populate service-bank-table from in-memory LUT (scanned from bank files)
     (let ((machine (infer-machine-from-copybook-paths)))
       (when machine
         (build-service-bank-lut-from-banks root machine))
-      (maphash (lambda (k v) (setf (gethash k service-bank-table) v)) *service-bank-lut*))
-    ;; Load copybooks: Class-Slots and *-Globals
+      (setf *service-bank-table* (copy-hash-table *service-bank-lut*)))
+    ;; Load copybooks: Class-Slots and *-Globals 
     (flet ((load-one-copybook (base-name)
              (let ((path (block find-path
                            (dolist (dir paths)
@@ -886,19 +885,23 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
      (format nil "~a" (second expr)))
     (t (expr-slot-of-slot-name expr))))
 
+(defun object-reference-storage-width ()
+  (case *cpu*
+    (otherwise 2)))
+
 (defun operand-width (expr &optional (pic-width-table *pic-width-table*))
   "Return byte width (1–8) for EXPR. Default 1 for literals/unknown.
 When PIC-WIDTH-TABLE is supplied, width is resolved from that table; otherwise
 from *PIC-WIDTH-TABLE* (used by backends that pass per-compile tables).
 If the name is an OBJECT REFERENCE (@code{*type-table*}) but has no PIC width row,
-uses @code{+object-reference-storage-width+}."
+uses @code{(object-reference-storage-width)}."
   (let ((name (expr-to-width-name expr)))
     (if name
         (let ((n (if (stringp name) name (format nil "~a" name))))
           (or (when (string-equal n "Self")
-                +object-reference-storage-width+)
+                (object-reference-storage-width))
               (pic-width-table-lookup n pic-width-table)
-              (when (var-class n) +object-reference-storage-width+)
+              (when (var-class n) (object-reference-storage-width))
               1))
         1)))
 
