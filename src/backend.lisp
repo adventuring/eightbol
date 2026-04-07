@@ -85,26 +85,24 @@ parser mixed-case identifiers (see @code{load-copybook-tables}).")
 (defvar *service-bank-lut* (make-hash-table :test 'equal)
   "In-memory LUT: service name (string) → bank symbol (string). Used for CALL SERVICE target.")
 
-(defun build-service-bank-lut-from-banks (root-dir machine-dir)
+(defun build-service-bank-lut-from-banks ()
   "Scan Source/Code/{MACHINE-DIR}/Banks/**/*.s and Common/Enums.s.
 Populate *service-bank-lut* with service→bank mappings. MACHINE-DIR is e.g. \"7800\"."
   (clrhash *service-bank-lut*)
-  (let* ((common (merge-pathnames
-                  (make-pathname :directory `(:relative "Source" "Code" ,machine-dir "Common"))
-                  root-dir))
+  (let* ((common (make-pathname :directory `(:relative "Source" "Code"
+                                                       ,(machine-directory-name) "Common")))
          (enums-path (merge-pathnames "Enums.s" common))
-         (banks-dir (merge-pathnames
-                     (make-pathname :directory `(:relative "Source" "Code" ,machine-dir "Banks"))
-                     root-dir))
+         (banks-dir (make-pathname :directory `(:relative "Source" "Code"
+                                                          ,(machine-directory-name) "Banks")))
          (bank-num->symbol ()))
     ;; Parse Enums.s for BankXxx = $YY
     (when (probe-file enums-path)
       (with-open-file (stream enums-path :direction :input)
         (loop for line = (read-line stream nil nil) while line do
-              (cl-ppcre:register-groups-bind (sym hex)
-					     ("^\\s*\\b(Bank[-A-Za-z0-9_]+)\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
-					     (when (and sym hex)
-					       (push (cons (parse-integer hex :radix 16) sym) bank-num->symbol))))))
+          (cl-ppcre:register-groups-bind (sym hex)
+	    ("^\\s*\\b(Bank[-A-Za-z0-9_]+)\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
+	  (when (and sym hex)
+	    (push (cons (parse-integer hex :radix 16) sym) bank-num->symbol))))))
     ;; Scan bank .s files for BANK = $NN and .Dispatch ServiceXxx, Label
     (when (and (probe-file banks-dir) bank-num->symbol)
       (setf bank-num->symbol (nreverse bank-num->symbol))
@@ -114,35 +112,36 @@ Populate *service-bank-lut* with service→bank mappings. MACHINE-DIR is e.g. \"
                             (make-pathname :directory `(:relative ,(format nil "Bank~2,'0x" n)))
                             banks-dir)
               when (probe-file subdir)
-              do (dolist (path (directory (merge-pathnames
-                                           (make-pathname :name :wild :type "s")
-                                           subdir)))
-                   (let ((bank-num nil)
-                         (bank-sym nil))
-                     ;; Swallow read/open errors per bank file (permissions, encoding, etc.).
-                     (ignore-errors
-                       (with-open-file (stream path :direction :input)
-                         (loop for line = (read-line stream nil nil) while line do
-                           (cl-ppcre:register-groups-bind
-                            (hex)
-		        ("^\\s*BANK\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
-		        (when hex
-			(setf bank-num (parse-integer hex :radix 16))
-			(setf bank-sym (cdr (assoc bank-num bank-num->symbol-alist)))))
-                           (cl-ppcre:register-groups-bind
-                            (service)
-		        ("^\\s*\\.Dispatch\\s+(Service[-A-Za-z0-9_]+)\\s*," line)
-		        (when (and service bank-sym)
-			(setf (gethash service *service-bank-lut*) bank-sym))))))))))))
+                do (dolist (path (directory (merge-pathnames
+                                             (make-pathname :name :wild :type "s")
+                                             subdir)))
+                     (let ((bank-num nil)
+                           (bank-sym nil))
+                       ;; Swallow read/open errors per bank file (permissions, encoding, etc.).
+                       (ignore-errors
+                        (with-open-file (stream path :direction :input)
+                          (loop for line = (read-line stream nil nil) while line do
+                            (cl-ppcre:register-groups-bind
+                                (hex)
+		            ("^\\s*BANK\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
+		          (when hex
+			  (setf bank-num (parse-integer hex :radix 16))
+			  (setf bank-sym (cdr (assoc bank-num bank-num->symbol-alist)))))
+                            (cl-ppcre:register-groups-bind
+                                (service)
+		            ("^\\s*\\.Dispatch\\s+(Service[-A-Za-z0-9_]+)\\s*," line)
+		          (when (and service bank-sym)
+			  (setf (gethash service *service-bank-lut*) bank-sym))))))))))))
   ;; Temp trees (unit tests) often lack Source/Code/.../Banks — allow empty LUT there.
   ;; When Banks exists under ROOT-DIR but the LUT is still empty, Enums.s or .Dispatch scan failed.
   (when (and (zerop (hash-table-count *service-bank-lut*))
-             (probe-file (merge-pathnames
-                          (make-pathname :directory `(:relative "Source" "Code" ,machine-dir "Banks"))
-                          root-dir)))
-    (error "EIGHTBOL: empty service:bank LUT for machine ~a (~a); check Source/Code/~a/Banks dispatch labels and Common/Enums bank symbols"
-           machine-dir root-dir machine-dir))
+             (probe-file (make-pathname :directory `(:relative "Source" "Code"
+                                                               ,(machine-directory-name) "Banks"))))
+    (error "EIGHTBOL: empty service:bank LUT for machine"))
   *service-bank-lut*)
+
+(defun machine-directory-name ()
+  (infer-machine-from-copybook-paths))
 
 (defun infer-machine-from-copybook-paths ()
   "Infer machine directory (e.g. 7800) from *copybook-paths*.
@@ -164,8 +163,8 @@ Looks for .../Generated/NNNN/Classes or .../7800/Classes in paths."
   "Read copybook text from STREAM and merge entries into the ten hash tables.
 
 *SLOT-TABLE*,    *TYPE-TABLE*,   *CONST-TABLE*,    *SERVICE-BANK-TABLE*,
-**USAGE-TABLE*,   *SIGN-TABLE*,    PIC-SIZE-TABLE*,   *PIC-WIDTH-TABLE*,
-**PIC-FRAC-BITS-TABLE*,    and     *PIC-NYBBLE-TABLE*    are    mutated.
+*USAGE-TABLE*,    *SIGN-TABLE*,   PIC-SIZE-TABLE*,    *PIC-WIDTH-TABLE*,
+*PIC-FRAC-BITS-TABLE*, and *PIC-NYBBLE-TABLE* are mutated.
 
 Uses @code{parse-cpy-line} on each line."
   (declare (stream stream))
@@ -240,59 +239,6 @@ Uses @code{parse-cpy-line} on each line."
             (t
              (error "EIGHTBOL: parse-cpy-line returned unknown type ~s" (first parsed)))))))))
 
-(defun load-copybook-tables (class-id &key root-dir)
-  "Load copybooks for CLASS-ID and return 10 tables: slot, type, const, service-bank,
-usage, sign, pic-size, pic-width, pic-frac-bits, pic-nybble-semantics. Uses *copybook-paths* and
-@code{*eightbol-root-directory*}. Merges @code{*service-bank-lut*} (built from bank files)
-into service-bank-table so CALL SERVICE resolves without a Service-Banks copybook.
-After @file{*-Globals.cpy}, merges @file{Source/Generated/{machine}/AssetIDs.cpy} when present so
-77/78 asset IDs (e.g. @code{Song--Hurt--ID}) populate @code{*CONST-TABLE*}."
-  (let* ((root (or root-dir *eightbol-root-directory* (truename ".")))
-         (paths (or *copybook-paths* (list (merge-pathnames
-                                            (make-pathname :directory `(:relative "Source" "Generated"
-                                                                                  ,(machine-directory-name) "Classes"))
-                                            root)))))
-    ;; Populate service-bank-table from in-memory LUT (scanned from bank files)
-    (let ((machine (infer-machine-from-copybook-paths)))
-      (when machine
-        (build-service-bank-lut-from-banks root machine))
-      (setf *service-bank-table* (copy-hash-table *service-bank-lut*)))
-    ;; Load copybooks: Class-Slots and *-Globals 
-    (flet ((load-one-copybook (base-name)
-             (let ((path (block find-path
-                           (dolist (dir paths)
-                             (let ((p (merge-pathnames
-                                       (make-pathname :name base-name :type "cpy")
-                                       (if (pathnamep dir) dir (pathname dir)))))
-                               (when (probe-file p)
-                                 (return-from find-path p))))
-                           (return-from load-one-copybook nil))))
-               (when path
-                 (with-open-file (stream path :direction :input)
-                   (%merge-cpy-stream-into-tables stream))))))
-      (load-one-copybook (format nil "~a-Slots" (class-id-to-copybook-filename class-id)))
-      ;; Load first *-Globals.cpy found in paths
-      (block load-globals
-        (dolist (dir paths)
-          (let ((dir-p (if (pathnamep dir) dir (pathname dir))))
-            (when (probe-file dir-p)
-              (dolist (f (directory (merge-pathnames
-                                     (make-pathname :name :wild :type "cpy")
-                                     dir-p)))
-                (when (cl-ppcre:scan "-Globals$" (pathname-name f))
-                  (load-one-copybook (pathname-name f))
-                  (return-from load-globals)))))))
-      (let ((machine (infer-machine-from-copybook-paths)))
-        (when machine
-          (let ((asset-ids (merge-pathnames
-                            (make-pathname :name "AssetIDs" :type "cpy")
-                            (merge-pathnames
-                             (make-pathname :directory `(:relative "Source" "Generated" ,machine))
-                             root))))
-            (when (probe-file asset-ids)
-              (with-open-file (stream asset-ids :direction :input)
-                (%merge-cpy-stream-into-tables stream)))))))))
-
 (defun pic-nybble-semantics-p (pic-rest)
   "True when PIC-REST describes a single decimal digit picture (@code{PIC 9} or @code{PIC S9}),
 so logical values are @code{#x0}--@code{#xF}. @code{PIC 99}, @code{PIC 9(n)}, @code{PIC X}, and
@@ -309,9 +255,9 @@ Boolean."
              (not (cl-ppcre:scan "(?i)(?:PIC|PICTURE)\\s+S?X" pic-rest))
              (not (cl-ppcre:scan "(?i)(?:PIC|PICTURE)\\s+S?9\\s*\\(" pic-rest)))
     (cl-ppcre:register-groups-bind (sign run)
-				   ("(?i)(?:PIC|PICTURE)\\s+(S?)(9+)" pic-rest)
-				   (declare (ignore sign))
-				   (and run (= (length run) 1)))))
+        ("(?i)(?:PIC|PICTURE)\\s+(S?)(9+)" pic-rest)
+      (declare (ignore sign))
+      (and run (= (length run) 1)))))
 
 (defun pic-digits-to-width (pic-rest)
   "From PIC clause rest, return byte width (1–8) for packed storage in RAM.
@@ -322,179 +268,22 @@ Single-digit @code{PIC 9} and two-digit @code{PIC 99} both allocate one byte in
 generated copybooks; runtime nybble packing (where used) is documented in Phantasia
 class design notes."
   (or (cl-ppcre:register-groups-bind (digits n)
-				     ("(?i)(?:PIC|PICTURE)\\s+(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
-				     (let ((d (or (when digits (length digits)) (when n (parse-integer n)))))
-				       (when d (max 1 (ceiling d 2)))))
+	("(?i)(?:PIC|PICTURE)\\s+(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
+        (let ((d (or (when digits (length digits)) (when n (parse-integer n)))))
+	(when d (max 1 (ceiling d 2)))))
       ;; S9, S99, S9(n) — signed; for BCD, S9 = 1 byte (1 digit + sign nybble)
       (cl-ppcre:register-groups-bind (sdigits sn)
-				     ("(?i)(?:PIC|PICTURE)\\s+S(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
-				     (let ((d (or (when sdigits (length sdigits)) (when sn (parse-integer sn)))))
-				       (when d (max 1 (ceiling d 2)))))))
-
-(defun parse-cpy-line (line)
-  "Parse one line of a EIGHTBOL copybook (.cpy) file.
-Returns one of:
-  (:section-comment :origin-class CLASS-NAME-STRING)   — * Inherited from X:
-  (:section-comment :own-class CLASS-NAME-STRING)       — * Own slots (X):
-  (:data-item :level N :name NAME :pic PIC :type-class C) — 05/10/77/78 item
-  NIL                                                    — uninteresting line"
-  (let ((s (string-trim " " line)))
-    (when (zerop (length s)) (return-from parse-cpy-line nil))
-    ;; Comment line: NNNNNN* or * at start.  Cols 1-6 = seq, col 7 = *.
-    (let ((text (cond ((and (>= (length s) 7) (char= #\* (char s 6)))
-                       (string-trim " " (subseq s 7)))
-                      ((char= #\* (char s 0))
-                       (string-trim " " (subseq s 1)))
-                      (t nil))))
-      (when text
-        (cl-ppcre:register-groups-bind (class)
-				       ("Inherited from (\\S+):" text)
-				       (return-from parse-cpy-line
-					 (list :section-comment :origin-class class)))
-        (cl-ppcre:register-groups-bind (class)
-				       ("Own slots \\((\\S+)\\)" text)
-				       (return-from parse-cpy-line
-					 (list :section-comment :own-class class)))
-        (cl-ppcre:register-groups-bind (service bank)
-				       ("^Service bank (\\S+)\\s+(\\S+)$" text)
-				       (when (and service bank)
-					 (return-from parse-cpy-line
-					   (list :service-bank :service service :bank bank))))))
-    ;; Data item line:  NN Name PIC … [VALUE …]. Trailing period optional.
-    (let ((data (if (and (plusp (length s)) (char= #\. (char s (1- (length s)))))
-                    (subseq s 0 (1- (length s)))
-                    s)))
-      (cl-ppcre:register-groups-bind (level-str name rest)
-				     ("^(\\d+)\\s+(\\S+)\\s+(.*)$" data)
-				     (let* ((level    (parse-integer level-str))
-					    (type-class (cl-ppcre:register-groups-bind (c)
-										       ("OBJECT REFERENCE (\\S+)" rest)
-										       c))
-					    (is-const (or (= level 77) (= level 78)))
-					    (value    (when is-const
-							(or (cl-ppcre:register-groups-bind (v)
-											   ("(?i)VALUE\\s+(\\d+)" rest)
-											   (ignore-errors (parse-integer v)))
-							    (cl-ppcre:register-groups-bind (hx)
-											   ("(?i)VALUE\\s+IS\\s+CONSTANT\\s+x'([0-9A-Fa-f]+)'" rest)
-											   (ignore-errors (parse-integer hx :radix 16))))))
-					    (usage-bcd (cl-ppcre:scan "(?i)USAGE\\s+(?:BCD|DECIMAL|PACKED\\s*[- ]?DECIMAL)" rest))
-					    (usage-signed (or (cl-ppcre:scan "(?i)(?:PIC|PICTURE)\\s+S\\d" rest)
-							      (cl-ppcre:scan "(?i)SIGN\\s+(?:IS\\s+)?(?:LEADING|TRAILING)" rest)
-							      (cl-ppcre:scan "(?i)\\bSIGNED\\b" rest)))
-					    (pic-size   (cl-ppcre:register-groups-bind (n)
-										       ("(?i)(?:PIC|PICTURE)\\s+X\\s*\\(\\s*(\\d+)\\s*\\)" rest)
-										       (when n (parse-integer n))))
-					    ;; Numeric PIC → digit-derived width; PIC X(n) → n bytes (pic-size).
-					    (pic-width  (or (pic-digits-to-width rest) pic-size))
-					    (pic-frac-bits (cl-ppcre:register-groups-bind (int-bits frac-bits)
-											  ("(?i)USAGE\\s+BINARY\\s+WITH\\s+(\\d+)V(\\d+)\\s+BITS" rest)
-											  (when (and int-bits frac-bits)
-											    (parse-integer frac-bits)))))
-				       (return-from parse-cpy-line
-					 (list :data-item
-					       :level     level
-					       :name      name
-					       :pic       rest
-					       :pic-size  pic-size
-					       :pic-width pic-width
-					       :type-class type-class
-					       :constant-p is-const
-					       :value     value
-					       :usage-bcd  (and usage-bcd t)
-					       :usage-signed (and usage-signed t)
-					       :pic-frac-bits pic-frac-bits)))))
-    nil))
-
-(defun usage-bcd-p (name)
-  "True if NAME is a BCD variable (USAGE BCD or PACKED-DECIMAL) in *USAGE-TABLE*."
-  (and *usage-table*
-       (let ((n (if (stringp name) name (format nil "~a" name))))
-         (eq :bcd (or (gethash (cobol-slot-table-name-key n) *usage-table*)
-                      (gethash n *usage-table*))))))
-
-(defun operand-signed-p (expr)
-  "True if EXPR is a variable/slot with signed PIC (PIC S99, SIGN LEADING/TRAILING, SIGNED).
-Uses *SIGN-TABLE*."
-  (and *sign-table*
-       (let ((name (expr-to-width-name expr)))
-         (and name
-              (let ((n (if (stringp name) name (format nil "~a" name))))
-                (or (gethash (cobol-slot-table-name-key n) *sign-table*)
-                    (gethash n *sign-table*)))))))
-
-;;; Accessor helpers (used by backends)
-
-(defun cobol-hyphen-segment-to-pascal-fragment (segment)
-  "One hyphen-delimited piece of a COBOL name → fragment for PascalCase concatenation.
-2–3 letter all-uppercase segments (e.g. HP, ID) stay uppercase so assembly matches
-@code{HurtHP} / @code{NextSong}; longer words use @code{string-capitalize}."
-  (let ((s (string-trim " " segment)))
-    (cond
-      ((zerop (length s)) "")
-      ((and (<= 2 (length s) 3)
-            (every #'alpha-char-p s)
-            (every #'upper-case-p s))
-       s)
-      (t (string-capitalize s)))))
-
-(defun cobol-hyphenated-to-pascal-concat (name)
-  "Split COBOL stabby-case NAME on single hyphens; map each segment; concatenate.
-
-Segments use @code{cobol-hyphen-segment-to-pascal-fragment} (not raw @code{string-capitalize})
-so @code{Hurt-HP} → @code{HurtHP} not @code{HurtHp}. Examples: Next-Song → NextSong,
-Hurt-H-P → HurtHP.
-
-When NAME has no hyphens but is a long alphabetic token (e.g. generated @code{DecalAnimationOnTick}),
-@code{param-case} expands camelCase/PascalCase to hyphen-separated words so each word is
-capitalized — avoiding @code{Decalanimationontick} from a single @code{string-capitalize}.
-
-@table @asis
-@item NAME
-COBOL identifier (string or atom printed as string); surrounding space trimmed.
-@end table
-
-@subsection Outputs
-Returns a single PascalCase-like concatenation with no separators (no class prefix)."
-  (let ((s (string-trim " " (if (stringp name) name (format nil "~a" name)))))
-    (when (zerop (length s))
-      (return-from cobol-hyphenated-to-pascal-concat ""))
-    (let* ((parts0 (split-sequence:split-sequence #\- s :remove-empty-subseqs t))
-           (parts (if (and (= (length parts0) 1)
-                           (> (length (first parts0)) 4)
-                           (every #'alpha-char-p (first parts0))
-                           (not (find #\- s)))
-                      (let ((p (param-case (first parts0))))
-                        (if (find #\- p)
-                            (split-sequence:split-sequence #\- p :remove-empty-subseqs t)
-                            parts0))
-                      parts0)))
-      (apply #'concatenate 'string
-             (mapcar #'cobol-hyphen-segment-to-pascal-fragment parts)))))
-
-(defun pascal-to-eightbol-name-core (pascal-name)
-  "Insert hyphens before uppercase letters that follow lowercase (Skyline-Tool rule).
-Used only to build @code{cobol-slot-table-name-key}."
-  (with-output-to-string (out)
-    (loop for i from 0 below (length pascal-name)
-          for ch = (char pascal-name i)
-          do (when (and (> i 0)
-                        (upper-case-p ch)
-                        (lower-case-p (char pascal-name (1- i))))
-               (write-char #\- out))
-          (write-char ch out))))
-
-(defun cobol-slot-table-name-key (name)
-  "Canonical key for @code{*slot-table*} / PIC-width / usage lookups.
-Unifies @code{Hurt-H-P} and @code{Hurt-HP} (both map to assembly @code{HurtHP}) and
-matches generated Globals copybook keys (uppercase stabby-case)."
-  (let ((s (string-trim #(#\Space #\Tab) (string name))))
-    (when (zerop (length s))
-      (return-from cobol-slot-table-name-key nil))
-    (string-upcase (header-case s))))
+	("(?i)(?:PIC|PICTURE)\\s+S(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
+        (let ((d (or (when sdigits (length sdigits)) (when sn (parse-integer sn)))))
+	(when d (max 1 (ceiling d 2)))))))
 
 (defun oops-class-of (symbol)
-  (gethash symbol *type-table*))
+  (if (string-equal "Self" symbol)
+      *class-id*
+      (let ((var (gethash symbol *working-storage*)))
+        (if (eql :object-ref (getf var :usage))
+            (getf var :class)
+            (error "Unable to find reference class for ~a: ~s" symbol var)))))
 
 (defun slot-table-origin-lookup (name symbol)
   "Resolve copybook origin for NAME using canonical key, raw NAME, then class-qualified strip.
@@ -502,29 +291,6 @@ matches generated Globals copybook keys (uppercase stabby-case)."
 When the parser emits @code{Class-Global-Name} and the copybook row is @code{Global-Name}
 under Phantasia-Globals, stripping the @code{*CLASS-ID*} prefix finds the same row."
   (slot-class name (oops-class-of symbol)))
-
-(defun %service-move-decal-paired-bank (n)
-  "If N is @code{ServiceMoveDecalX} or @code{ServiceMoveDecalY}, return the other’s bank entry.
-
-LastBank @code{MoveDecal.s} exposes both; bank LUT may only list one @code{.Dispatch} line.
-Paired lookup keeps @code{CALL … IN LIBRARY} on both emitting @code{.FarCall} with the same bank.
-
-@table @asis
-@item N
-Assembly service name string.
-@end table
-
-@subsection Outputs
-Bank symbol string or @code{NIL}."
-  (when (and *service-bank-table* n)
-    (let ((other
-           (cond
-             ((string-equal n "ServiceMoveDecalX") "ServiceMoveDecalY")
-             ((string-equal n "ServiceMoveDecalY") "ServiceMoveDecalX")
-             (t nil))))
-      (when other
-        (or (gethash other *service-bank-table*)
-            (gethash (cobol-slot-table-name-key other) *service-bank-table*))))))
 
 (defun service-bank-table-lookup (name)
   "Resolve bank symbol for service NAME from @code{*service-bank-table*}.
@@ -538,11 +304,9 @@ Assembly-style service label (e.g. @code{ServiceMoveDecalY}) or COBOL form.
 
 @subsection Outputs
 Bank symbol string (e.g. @code{BankAnimation}), or NIL."
-  (when (and *service-bank-table* name)
-    (let ((n (if (stringp name) name (format nil "~a" name))))
-      (or (gethash n *service-bank-table*)
-          (gethash (cobol-slot-table-name-key n) *service-bank-table*)
-          (%service-move-decal-paired-bank n)))))
+  (when (zerop (hash-table-count *service-bank-lut*))
+    (build-service-bank-lut-from-banks))
+  (gethash name *service-bank-lut*))
 
 (defun pic-width-table-lookup (name pic-width-table)
   "Byte width for NAME from PIC-WIDTH-TABLE, with canonical key then raw.
@@ -628,9 +392,11 @@ NIL origin means “unknown” — not global; see @code{bare-data-assembly-symb
         (search "SECTION" s :test #'char-equal)
         (string-equal s "EXTERNAL"))))
 
-(defun slot-origin-class (slot-name current-class)
+(defun slot-origin-class (slot-name object &optional (class-id (if (string-equal "Self" object)
+                                                                   *class-id*
+                                                                   object)))
   "Return the origin class for SLOT-NAME."
-  (slot-class current-class slot-name))
+  (slot-class object slot-name class-id))
 
 (defun slot-name-to-assembly-segment (name)
   "Convert COBOL data item NAME to the slot suffix of an OOPS assembly symbol.
@@ -641,14 +407,6 @@ CharacterHP; hyphenated names use @code{cobol-hyphenated-to-pascal-concat} (H-P 
       ((zerop (length s)) "")
       ((cl-ppcre:scan "^[A-Z]{2,4}$" s) s)
       (t (cobol-hyphenated-to-pascal-concat s)))))
-
-(defvar *parent-class-slot-prefix-words*
-  '("Course" "Entity" "Character" "Actor" "BasicObject" "Item" "Boat" "BasicEnemy"
-    "BasicScenery" "NonPlayerCharacter" "Player" "Ally")
-  "First hyphen-separated word of slot names whose assembly segment already carries that
-parent’s PascalCase prefix (e.g. @code{Course-Last-Frame} → @code{CourseLastFrame}).
-Used when the copybook @code{*slot-table*} origin is the compiling subclass (e.g. MummyCourse)
-so we do not emit @code{MummyCourseCourseLastFrame}.")
 
 (defun slot-name-first-hyphen-word (slot-name)
   "Return the substring before the first single hyphen in SLOT-NAME, or @code{NIL}.
@@ -662,27 +420,7 @@ COBOL data name (e.g. @code{Course-Last-Frame}).
       (when pos
         (subseq s 0 pos)))))
 
-(defun slot-symbol-parent-prefixed-segment-p (slot-name segment)
-  "True when SLOT-NAME is @code{Parent-…} and SEGMENT already starts with Parent’s PascalCase.
-
-Subclass copybooks may set slot origin to the compiling class while inherited slots keep
-names like @code{Course-Waypoint-X}; layout labels stay @code{CourseWaypointX}.
-
-@table @asis
-@item SLOT-NAME
-@item SEGMENT
-From @code{slot-name-to-assembly-segment}.
-@end table"
-  (let ((lead (slot-name-first-hyphen-word slot-name)))
-    (when (and lead (member lead *parent-class-slot-prefix-words* :test #'string-equal)
-               (plusp (length segment)))
-      (let ((lead-p (pascal-case lead)))
-        (when (and (plusp (length lead-p))
-                   (>= (length segment) (length lead-p))
-                   (string-equal lead-p segment :end2 (length lead-p)))
-          t)))))
-
-(defun slot-symbol (slot-name current-class)
+(defun slot-symbol (slot-name object-name &optional (current-class *class-id*))
   "Return assembly copybook offset symbol for SLOT-NAME. Uses *SLOT-TABLE* for origin class.
 
 When the hyphenated slot segment already begins with the origin class’s PascalCase name
@@ -691,60 +429,10 @@ returns the segment alone (@code{CourseLastFrame}) so labels match OOPS copybook
 @code{CourseCourseLastFrame}. When the copybook origin is a subclass (e.g. MummyCourse) but
 the slot name is parent-prefixed (@code{Course-Last-Frame}), returns @code{CourseLastFrame},
 not @code{MummyCourseCourseLastFrame}. Otherwise @code{{OriginClass}{SlotSegment}} (e.g. @code{CharacterHP})."
-  (let* ((origin (slot-origin-class slot-name current-class))
-         (origin-pascal (pascal-case (format nil "~a" origin)))
-         (segment (slot-name-to-assembly-segment slot-name)))
-    (cond
-      ((and (plusp (length origin-pascal))
-            (plusp (length segment))
-            (>= (length segment) (length origin-pascal))
-            (string-equal origin-pascal segment :end2 (length origin-pascal)))
-       segment)
-      ((slot-symbol-parent-prefixed-segment-p slot-name segment)
-       segment)
-      (t
-       (format nil "~a~a" origin-pascal segment)))))
-
-(defun phantasia-global-bare-data-name-p (name)
-  "True when NAME is a Phantasia CartRAM / ZeroPage item without a @code{*SLOT-TABLE*} row.
-
-When @file{Phantasia-Globals.cpy} is not loaded, bare names like @code{Motion-Frame} would
-otherwise fall through to @code{slot-symbol} and pick up the compiling class prefix. Keys
-match @code{cobol-slot-table-name-key}.
-
-@table @asis
-@item NAME
-COBOL identifier (string).
-@end table"
-  (let ((k (cobol-slot-table-name-key name)))
-    (member k
-            '("MOTION-FRAME" "FRAMES-PER-SECOND" "CURRENT-COURSE" "CURRENT-ACTOR")
-            :test #'string=)))
-
-(defun bare-data-assembly-symbol (name current-class-id)
-  "Assembly label for a bare data reference (not @code{:of}). NAME must not be a constant (caller handles constants).
-
-OOPS slots from class copybooks use @code{slot-symbol}; globals use @code{cobol-global-data-name-to-assembly-symbol}.
-
-@table @asis
-@item NAME
-COBOL data name.
-@item CURRENT-CLASS-ID
-Compiling class (e.g. Character) for @code{slot-symbol} fallback.
-@end table
-
-@subsection Outputs
-One assembly symbol string."
-  (let ((n (string name)))
-    (cond
-      ((and current-class-id (slot-origin-global-data-p current-class-id))
-       (cobol-global-data-name-to-assembly-symbol n))
-      ((phantasia-global-bare-data-name-p n)
-       (cobol-global-data-name-to-assembly-symbol n))
-      (t
-       ;; Unknown bare names default to non-slot data labels (WORKING-STORAGE/global scratch),
-       ;; not implicit instance slots.
-       (cobol-global-data-name-to-assembly-symbol n)))))
+  (let* ((origin (slot-origin-class slot-name object-name current-class)))
+    (when (and (listp slot-name) (eql :subscript (first slot-name)))
+      (setf slot-name (second slot-name)))
+    (concatenate 'string (pascal-case origin) (pascal-case slot-name))))
 
 (defun cobol-double-hyphen-grouped-name-p (name)
   "True when NAME uses COBOL 77/78 grouped spelling with @code{--} (e.g. @code{Song--Hurt--ID}).
@@ -761,59 +449,20 @@ These are manifest constants in Phantasia, never per-instance OOPS slots; they m
 only surrounding space is normalized."
   (string-trim " " (if (stringp name) name (format nil "~a" name))))
 
-(defun phantasia-global-object-reference-class (var-name)
-  "Return OBJECT REFERENCE class for well-known Phantasia globals when @code{*TYPE-TABLE*} has no row.
-
-Covers @code{Current-Course} and @code{Current-Actor} so @code{INVOKE} emits @code{.CallMethod}
-instead of @code{Call…Method} placeholders when @file{Phantasia-Globals.cpy} is absent.
-
-@table @asis
-@item VAR-NAME
-COBOL data name (e.g. @code{Current-Actor}).
-@end table
-
-@subsection Outputs
-Class id string (e.g. @code{\"Character\"}) or @code{NIL}."
-  (let ((n (if (stringp var-name) var-name (format nil "~a" var-name))))
-    (let ((k (cobol-slot-table-name-key n)))
-      (cdr (assoc k
-                  '(("CURRENT-COURSE" . "Course")
-                    ("CURRENT-ACTOR" . "Character"))
-                  :test #'string=)))))
-
 (defun var-class (var-name)
   "Return the OBJECT REFERENCE class for VAR-NAME, or NIL. Uses *TYPE-TABLE* then Phantasia fallbacks."
-  (let ((n (if (stringp var-name) var-name (format nil "~a" var-name))))
-    (or (and *type-table*
-             (or (gethash (cobol-slot-table-name-key n) *type-table*)
-                 (gethash n *type-table*)))
-        (phantasia-global-object-reference-class n))))
+  (oops-class-of var-name))
 
 (defun %const-table-resolve (name)
   "Return @code{(values integer-value cobol-name-for-assembly)} or @code{(values nil nil)}.
 
 Looks up @code{*CONST-TABLE*} by trimmed name, canonical slot key, and by stripping a leading
 @code{Class-} prefix when @code{*CLASS-ID*} is bound (matches unqualified copybook 77/78 names)."
-  (unless (and *const-table* name)
+  (unless name
     (return-from %const-table-resolve (values nil nil)))
-  (let ((trimmed (const-table-name-key name)))
-    (multiple-value-bind (val present) (gethash trimmed *const-table*)
-      (when present
-        (return-from %const-table-resolve (values val trimmed))))
-    (let ((canon (cobol-slot-table-name-key name)))
-      (multiple-value-bind (val present) (gethash canon *const-table*)
-        (when present
-          (return-from %const-table-resolve (values val trimmed)))))
-    (when *class-id*
-      (let ((short (cobol-strip-class-copybook-prefix name)))
-        (when short
-          (multiple-value-bind (val present) (gethash (const-table-name-key short) *const-table*)
-            (when present
-              (return-from %const-table-resolve (values val short))))
-          (multiple-value-bind (val present) (gethash (cobol-slot-table-name-key short) *const-table*)
-            (when present
-              (return-from %const-table-resolve (values val short)))))))
-    (values nil nil)))
+  (multiple-value-bind (value presentp) (gethash (header-case name) *const-table*)
+    (when presentp
+      (values value (pascal-case name)))))
 
 (defun constant-value (name)
   "Return the integer value of constant NAME, or NIL. Uses *CONST-TABLE*."
@@ -889,21 +538,54 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
   (case *cpu*
     (otherwise 2)))
 
+(defun operand-signed-p (expr)
+  (cond
+    ((numberp expr)
+     (cond
+       ((minusp expr) t)
+       (t nil)))
+    ((eql :null expr) nil)
+    ((eql :zero expr) nil)
+    (t (let ((token (cond ((and (listp expr) (eql :of (first expr)))
+                           (list :of (second expr)
+                                 (slot-class (third expr) (second expr))))
+                          ((and (listp expr) (eql :subscript (first expr)))
+                           (second expr))
+                          (t expr))))
+         (when-let (var (gethash token *working-storage*))
+           (getf var :signed nil))))))
+
 (defun operand-width (expr &optional (pic-width-table *pic-width-table*))
   "Return byte width (1–8) for EXPR. Default 1 for literals/unknown.
 When PIC-WIDTH-TABLE is supplied, width is resolved from that table; otherwise
 from *PIC-WIDTH-TABLE* (used by backends that pass per-compile tables).
 If the name is an OBJECT REFERENCE (@code{*type-table*}) but has no PIC width row,
 uses @code{(object-reference-storage-width)}."
-  (let ((name (expr-to-width-name expr)))
-    (if name
-        (let ((n (if (stringp name) name (format nil "~a" name))))
-          (or (when (string-equal n "Self")
-                (object-reference-storage-width))
-              (pic-width-table-lookup n pic-width-table)
-              (when (var-class n) (object-reference-storage-width))
-              1))
-        1)))
+  (cond
+    ((numberp expr) (cond
+                      ((zerop expr) 1)
+                      ((minusp expr) (ceiling (log (1+ (abs expr)) 2) 8))
+                      (t (ceiling (log expr 2) 8))))
+    ((eql :null expr) 1)
+    ((eql :zero expr) 1)
+    (t (let ((token (cond ((and (listp expr) (eql :of (first expr)))
+                           (list :of (second expr)
+                                 (slot-class (third expr) (second expr))))
+                          ((and (listp expr) (eql :subscript (first expr)))
+                           (second expr))
+                          (t expr))))
+         (if-let (var (gethash token *working-storage*))
+           (ecase (getf var :usage)
+             (:binary
+              (assert (every (lambda (ch) (char= ch #\9)) (getf var :pic)))
+              (ceiling (length (getf var :pic)) 2))
+             (:decimal
+              (assert (every (lambda (ch) (char= ch #\9)) (getf var :pic)))
+              (ceiling (length (getf var :pic)) 2))
+             (:pointer 2)
+             (:procedure-pointer 2)
+             (:object-ref 2))
+           (error "No such variable: ~s" token))))))
 
 (defun expression-operand-width (expr &optional (pic-width-table *pic-width-table*))
   "Return max byte width (1–8) for EXPR and its leaves.
@@ -965,20 +647,10 @@ NAME is a string or symbol; keys match copybook canonical names."
            cpu-name op-name width max-supported)))
 
 (defun %sanitize-cobol-source-for-assembly-comment (text)
-  "Return TEXT safe to embed after @code{;} in 64tass-style assembly (no nested @code{;}).
+  "Return TEXT safe to embed after @code{;} in 64tass-style assembly.
 
-Collapses line breaks to spaces and maps @code{#\\;} to @code{#\\:} so the rest of the
-line is not swallowed as a nested assembler comment."
-  (when (and text (plusp (length text)))
-    (with-output-to-string (out)
-      (loop for ch across text
-            do (write-char (case ch
-                             (#\; #\:)
-                             (#\Newline #\Space)
-                             (#\Return #\Space)
-                             (#\Page #\Space)
-                             (t ch))
-                           out)))))
+Collapses line breaks to spaces"
+  (cl-ppcre:regex-replace-all "[[:space:]]" text " "))
 
 (defun emit-assembly-source-line-comment (stream plist)
   "Emit a semicolon comment mapping generated assembly to COBOL source when PLIST
@@ -999,21 +671,20 @@ appended after file / seq / line metadata (sanitized)."
     (let ((file (safe-getf plist :source-file))
           (line (safe-getf plist :source-line))
           (seq (safe-getf plist :source-sequence))
-          (src (safe-getf plist :source-text))
           (src-safe (and (safe-getf plist :source-text)
                          (%sanitize-cobol-source-for-assembly-comment
                           (safe-getf plist :source-text)))))
       (when (or line file seq src-safe)
         (let ((meta-parts
-               (remove nil
-                       (list (when file
-                               (handler-case
-                                   (if (pathnamep file)
-                                       (namestring file)
-                                       (princ-to-string file))
-                                 (error () (princ-to-string file))))
-                             (when seq (format nil "seq ~a" seq))
-                             (when line (format nil "line ~a" line)))))
+                (remove nil
+                        (list (when file
+                                (handler-case
+                                    (if (pathnamep file)
+                                        (namestring file)
+                                        (princ-to-string file))
+                                  (error () (princ-to-string file))))
+                              (when seq (format nil "seq ~a" seq))
+                              (when line (format nil "line ~a" line)))))
               (trimmed (when src-safe (string-trim " " src-safe))))
           (when (or meta-parts trimmed)
             (format stream "~&; ~{~a~^ ~}~@[ ~a~]~%"
@@ -1066,11 +737,11 @@ Signals an error (no successful return)."
       (when (and (listp item) (eq (first item) 'comment))
         (let ((text (if (stringp (second item)) (second item) "")))
           (cl-ppcre:register-groups-bind (c)
-					 ("Inherited from (\\S+):" text)
-					 (setf current-origin c))
+	    ("Inherited from (\\S+):" text)
+	  (setf current-origin c))
           (cl-ppcre:register-groups-bind (c)
-					 ("Own slots \\((\\S+)\\)" text)
-					 (setf current-origin c))))
+	    ("Own slots \\((\\S+)\\)" text)
+	  (setf current-origin c))))
       (when (and (listp item) (numberp (first item))
                  (stringp (second item)))
         (setf (gethash (cobol-slot-table-name-key (second item)) table) current-origin)))

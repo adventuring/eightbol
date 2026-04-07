@@ -1,11 +1,15 @@
 ;; src/parser.lisp
 (in-package :eightbol)
 
+(shadowing-import 'serapeum:occurs)
+
 ;;; Source-location tracking for error reporting
 
 (defvar *current-token-location* nil
   "plist (:source-file :source-line :source-sequence) of the token most
 recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
+
+(defvar *working-storage* (make-hash-table :test 'equalp))
 
 ;;; source-error is defined in conditions.lisp
 
@@ -22,11 +26,11 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (defun token-list ()
     '(|(| |)| |:| |,| + - * / × ÷ |.| /= < <= = > >= ≠ ≤ ≥
-      add address after all alphabet alphabetic also and any are
+      add address after all alphabet alphabetic also and any are as
       argument ascii atascii at author
       bank before binary bit-and bit-not bit-or bit-xor blank break by
       call cancel characters class class-id comment compute
-      configuration constant continue converting copy count
+      configuration constant continue converting count
       data date date-compiled date-written debug decimal
       delimited delimiter depending display divide division down
       else end end-evaluate end-if end-method end-perform end-search
@@ -55,10 +59,8 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 ;;; Parser action functions
 
 (defun parse/class-file (c1* id c2*
-                         env c2a*
-                         class-data c3*
+                         env c3*
                          _object _object_dot c4*
-                         data c5*
                          proc c6*
                          _end_object _object_end _end_object_dot c6a*
                          _end _class end-class-name _dot c7*)
@@ -67,23 +69,66 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (let* ((class-id (safe-getf id :class-id)))
     (unless (string-equal class-id end-class-name)
       (warn "Class-ID mismatch: starts with ~a, ends with ~a~@[, expected ~a~]"
-	    class-id end-class-name (header-case (pathname-name *source-file-pathname*))))
+	  class-id end-class-name (header-case (pathname-name *source-file-pathname*))))
     (list :program
           :comments (list :before-id c1*
                           :before-end c2*
-                          :before-class-data c2a*
                           :before-object c3*
-                          :before-object-data c4*
-                          :before-procedure c5*
+                          :before-procedure c4*
                           :before-end-object c6*
                           :before-end-class c6a*
                           :trailer c7*)
           :class-id class-id
           :identification id
           :environment env
-          :working-storage (ensure-list class-data)
-          :data (ensure-list data)
           :methods (or (extract-method-list proc) nil))))
+
+(defun parse/global-dd (c1* class-data-division c2*)
+  (dolist (dd class-data-division)
+    (ecase (first dd)
+      (:comment (appendf c1* dd))
+      (:dd (let* ((key (getf (rest dd) :label))
+                  (attributes (getf (rest dd) :attr))
+                  (value (reduce (curry #'concatenate 'list)
+                                 (if (string-equal "." (lastcar attributes))
+                                     (butlast attributes)
+                                     attributes))))
+             (setf (gethash key *working-storage*) value)))))
+  (list :program
+        :comments (list :before-class-data c1*
+                        :trailer c2*)
+        :global t
+        :methods nil))
+
+(defun parse/class-dd (c1* _class-id _ciddot class-id _dot
+                       c1a* _object _object_dot
+                       c2* class-data-division
+                       c3* _end _class end-class-name _dot2
+                       c4*)
+  (declare (ignore _end _class _dot _object _object_dot _class-id _dot2 _ciddot))
+  (unless (string-equal class-id end-class-name)
+    (warn "Class-ID mismatch: starts with ~a, ends with ~a~@[, expected ~a~]"
+	class-id end-class-name (header-case (pathname-name *source-file-pathname*))))
+  (dolist (dd class-data-division)
+    (ecase (first dd)
+      (:comment (appendf c2* dd))
+      (:dd (let* ((key (list :of (getf (rest dd) :label) class-id))
+                  (attributes (getf (rest dd) :attr))
+                  (value (reduce (curry #'concatenate 'list)
+                                 (if (string-equal "." (lastcar attributes))
+                                     (butlast attributes)
+                                     attributes))))
+             (setf (gethash key *working-storage*) value)))))
+  (list :program
+        :comments (list :before-id c1*
+                        :before-end c3*
+                        :before-class-data c2*
+                        :before-object c1a*
+                        :before-object-data c3*
+                        :trailer c4*)
+        :class-id class-id
+        :identification (list :class-id class-id)
+        :methods nil))
 
 (defun extract-method-list (proc)
   "Extract flat list of method AST nodes from procedure-division result."
@@ -397,13 +442,14 @@ Generates a near jsr (no bank switch) regardless of the library name."
 
 (defun parse/if-then (_if condition _then statements _end_if)
   (declare (ignore _if _then _end_if))
-  (list :if :condition condition :then (or statements '()) :else '()))
+  (list :if :condition condition :then statements :else '()))
 
-(defun parse/if-then-else (_if condition _then then-statements _else else-statements _end_if)
+(defun parse/if-then-else (_if condition _then then-statements
+                           _else else-statements _end_if)
   (declare (ignore _if _then _else _end_if))
   (list :if :condition condition
-            :then (or then-statements '())
-            :else (or else-statements '())))
+            :then then-statements
+            :else else-statements))
 
 (defun parse/goback () (list :goback))
 (defun parse/exit-method (_exit _method) (declare (ignore _exit _method)) (list :exit-method))
@@ -419,15 +465,15 @@ Generates a near jsr (no bank switch) regardless of the library name."
 
 (defun parse/copy (_copy name _dot)
   (declare (ignore _copy _dot))
-  (list :copy :name name))
+  (error "Failed to COPY ~s" name))
 
 (defun parse/copy-of (_copy name _of library _dot)
   (declare (ignore _copy _of _dot))
-  (list :copy :name name :library library))
+  (error "Failed to COPY ~s of ~s" name library))
 
 (defun parse/copy-in (_copy name _in library _dot)
   (declare (ignore _copy _in _dot))
-  (list :copy :name name :library library))
+  (error "Failed to COPY ~s in ~s" name library))
 
 (defun parse/perform-proc (_perform name)
   (declare (ignore _perform))
@@ -450,7 +496,8 @@ OUTPUT: perform AST plist."
   (declare (ignore _perform _until))
   (list :perform :procedure name :until cond))
 
-(defun parse/perform-varying (_perform name _varying id _from start _by step _until cond)
+(defun parse/perform-varying (_perform name _varying id _from
+                              start _by step _until cond)
   (declare (ignore _perform _varying _from _by _until))
   (list :perform :procedure name :varying id :from start :by step :until cond))
 
@@ -593,17 +640,19 @@ OUTPUT: perform AST plist."
   (append (ensure-list clauses) (list clause)))
 
 (defun parse/evaluate (_evaluate subject when-clauses _end-evaluate)
-  "Return (:evaluate :subject SUBJECT :when-clauses …). YACC passes four values (EVALUATE token, subject, clauses, end)."
+  "Return (:evaluate  :subject SUBJECT  :when-clauses …).
+ 
+YACC passes four values (EVALUATE token, subject, clauses, end)."
   (declare (ignore _evaluate _end-evaluate))
   (let ((wc when-clauses))
     (list :evaluate :subject subject
-          :when-clauses (cond
-                          ((null wc) nil)
-                          ;; One clause: (:when …) or (:when-other …) — wrap as list of clauses.
-                          ((and (listp wc) (symbolp (first wc))
-                                (member (first wc) '(:when :when-other)))
-                           (list wc))
-                          (t (ensure-list wc))))))
+                    :when-clauses (cond
+                                    ((null wc) nil)
+                                    ;; One clause: (:when …) or (:when-other …) — wrap as list of clauses.
+                                    ((and (listp wc) (symbolp (first wc))
+                                          (member (first wc) '(:when :when-other)))
+                                     (list wc))
+                                    (t (ensure-list wc))))))
 
 ;;; SET — UP BY, DOWN BY, TO ADDRESS OF, TO SELF (TO expr and TO NULL implemented above)
 (defun parse/set-up-by (_set identifier _up _by expr)
@@ -632,51 +681,81 @@ OUTPUT: perform AST plist."
   (declare (ignore _set _to _self))
   (list :set :to-self identifier))
 
+(defvar *external* nil)
+
+(defun parse/dd (level label &rest attributes)
+  #+ () (format *trace-output* "~&DD [~a] ~a: ~s" *class-id* label attributes)
+  (list :dd :level level :label label :attr attributes))
+
 ;;; YACC grammar definition
 (eval `(yacc:define-parser *eightbol-parser*
          (:start-symbol eightbol-program)
          (:terminals (,@(token-list) number string symbol bareword picture-sequence))
          (:precedence ((:left * / × ÷) (:left + -)))
          (:muffle-conflicts :some)
-
+         
          ;; Top-level: a class file
-         (eightbol-program
-          eightbol-class-definition-structure)
+         (eightbol-program top-level-forms)
 
+         (top-level-forms
+          (top-level-form
+           (lambda (form) (list form)))
+          (top-level-forms top-level-form
+                           (lambda (forms form)
+                             (append forms (list form)))))
+         
+         (top-level-form
+          eightbol-class-definition-structure
+          eightbol-class-data-definition
+          eightbol-global-data-definition
+          eightbol-routine)
+
+         (eightbol-routine
+          (comments* identification-division
+                     comments* environment-division
+                     comment* data-division
+                     comments* procedure-division
+                     comments*
+                     (lambda () (error "Top-level routine support not implemented"))))
+         
+         (eightbol-class-data-definition
+          (comments* class-id |.| symbol |.|
+                     comments* object |.|
+                     comments* data-division
+                     comments* end class symbol |.|
+                     comments*
+                     #'parse/class-dd))
+         
+         (eightbol-global-data-definition
+          (comments* data-division
+                     comments*
+                     #'parse/global-dd))
+         
          (eightbol-class-definition-structure
           (comments* class-identification-division
                      comments* environment-division
-                     comments* class-data-division
                      comments* object |.|
-                     comments* data-division
                      comments* object-procedure-division
                      comments* end object |.|
                      comments* end class end-class-name |.|
                      comments*
                      #'parse/class-file))
-
-         ;; Class-level DATA  DIVISION (WORKING-STORAGE) —  globals, not
-         ;; object instance data
-         (class-data-division
-          ()
-          (data division |.| working-storage section |.| data-item-description-entries))
          
-         ;; Optional  terminals   (noise  words  /   repetitions)  NOTE:
-         ;; eightbol-comment   is  a   non-terminal  wrapping   the  COMMENT
-         ;; terminal. It  is named  eightbol-comment (not comment)  to avoid
-         ;; a T/NT symbol collision with the COMMENT keyword terminal in
-         ;; the   :terminals  list,   which  would   corrupt  the   LALR
-         ;; GOTO table.
-         (comments* () eightbol-comment (comments* eightbol-comment))
-         (eightbol-comment (eightbol-comment bareword) (eightbol-comment symbol) comment)
+         (comments* ()
+                    eightbol-comment
+                    (comments* eightbol-comment (lambda (cs c) (append cs c) )))
+         (eightbol-comment
+          (eightbol-comment bareword (lambda (c b) (append c b)))
+          (eightbol-comment symbol (lambda (c s) (append c s)))
+          (comment (lambda (c) (list :comment c))))
          
-         ;; ID / IDENTIFICATION interchangeable
+         ;; id / identification interchangeable
          (id* (id (constantly 'identification)) (identification #'identity))
 
-         ;; Literals and names
+         ;; literals and names
          (literal number string)
-         ;; data-name accepts SYMBOL tokens and also SELF, ID (keyword but valid
-         ;; data names in COBOL, e.g. 01 Self OBJECT REFERENCE, 05 ID PIC 99).
+         ;; data-name accepts symbol tokens and also self, id (keyword but valid
+         ;; data names in cobol, e.g. 01 self object reference, 05 id pic 99).
          (data-name symbol self (id #'parse/data-name-id))
          (procedure-name symbol)
          (procedure-name-list
@@ -688,23 +767,23 @@ OUTPUT: perform AST plist."
          (bank-identifier symbol number)
          (condition-name symbol)
          (alphabet-name minifont ascii petscii atascii unicode)
-         ;; obj-ref-class: class name in OBJECT REFERENCE. end-class-name: at END CLASS.
-         ;; Named to avoid T/NT collision with terminal CLASS-NAME (corrupts LALR table).
+         ;; obj-ref-class: class name in object reference. end-class-name: at end class.
+         ;; named to avoid t/nt collision with terminal class-name (corrupts lalr table).
          (obj-ref-class symbol)
          (end-class-name symbol)
          (expr-class obj-ref-class)
-         ;; Method names: quoted string (METHOD-ID. "Think".) or identifier (METHOD-ID. Energize.)
+         ;; method names: quoted string (method-id. "think".) or identifier (method-id. energize.)
          (method-name string (symbol #'parse/method-name-from-symbol))
-         ;; picture-string: PICTURE-SEQUENCE (from lexer when after PIC/PICTURE),
-         ;; or symbol, number, symbol(number), or picture-sequence(number) e.g. X(64)
+         ;; picture-string: picture-sequence (from lexer when after pic/picture),
+         ;; or symbol, number, symbol(number), or picture-sequence(number) e.g. x(64)
          (picture-string
           picture-sequence
           symbol
           number
           (symbol |(| number |)|)
           (picture-sequence |(| number |)| #'parse/picture-sequence-repeat))
-
-         ;; IDENTIFICATION DIVISION
+         
+         ;; identification division
          (class-identification-division
           (id* division |.|
                class-id |.| symbol |.|
@@ -712,7 +791,8 @@ OUTPUT: perform AST plist."
                #'parse/class-id))
 
          (identification-division-clauses
-          (identification-division-clauses identification-division-clause)
+          (identification-division-clauses identification-division-clause
+                                           (lambda (cs c) (append cs c)))
           identification-division-clause
           ())
 
@@ -724,15 +804,15 @@ OUTPUT: perform AST plist."
           (date-compiled |.| comment-entry |.| #'parse/id-field)
           (security |.| comment-entry |.| #'parse/id-field)
           eightbol-comment)
-
+         
          (comment-entry
           literal symbol bareword
           (comment-entry literal)
           (comment-entry symbol)
           (comment-entry bareword)
           (comment-entry |,|))
-
-         ;; ENVIRONMENT DIVISION
+         
+         ;; environment division
          (environment-division
           ()
           (environment division |.|)
@@ -766,14 +846,17 @@ OUTPUT: perform AST plist."
 
          (repository-paragraph ())
 
-         ;; DATA DIVISION
+         ;; data division
          (data-division
           ()
-          (data division |.| data-division-sections))
-
+          (data division |.| working-storage section |.|
+                data-division-sections (lambda (_d1 _d2 _d3 _w1 _w2 _w3 ss)
+                                         (declare (ignore _d1 _d2 _d3 _w1 _w2 _w3))
+                                         (cadar ss))))
+         
          (data-division-sections
-          (data-division-sections data-division-section)
-          data-division-section
+          (data-division-sections data-division-section (lambda (cs c) (append cs c)))
+          (data-division-section)
           ())
 
          (data-division-section
@@ -785,8 +868,11 @@ OUTPUT: perform AST plist."
           (data-item-description-entry data-item-description-entries))
 
          (data-item-description-entries
-          (data-item-description-entries data-item-description-entry)
-          data-item-description-entry
+          (data-item-description-entries data-item-description-entry
+                                         (lambda (list item)
+                                           (append list (cons item nil))))
+          (data-item-description-entry
+           (lambda (item) (cons item nil)))
           ())
 
          ;; pic/usage/occurs: canonical order is PIC [USAGE] [OCCURS [min TO max] TIMES [DEPENDING ON x]]
@@ -797,21 +883,20 @@ OUTPUT: perform AST plist."
                         redefines-clause external-clause global-clause
                         justified-clause picture-clause occurs-clause
                         sign-clause usage-clause
-                        value-clause date-format-clause |.|)
+                        value-clause date-format-clause |.| #'parse/dd)
           (level-number data-name
                         redefines-clause external-clause global-clause
                         justified-clause occurs-clause picture-clause
                         sign-clause usage-clause
-                        value-clause date-format-clause |.|)
+                        value-clause date-format-clause |.| #'parse/dd)
           (level-number data-name
                         redefines-clause external-clause global-clause
                         justified-clause picture-clause usage-clause occurs-clause
                         sign-clause
-                        value-clause date-format-clause |.|)
-          (level-number filler picture-clause sign-clause |.|)
-          copy-statement
+                        value-clause date-format-clause |.| #'parse/dd)
+          (level-number filler picture-clause sign-clause |.| #'parse/dd)
           eightbol-comment)
-
+         
          ;; level-number covers the full EIGHTBOL range: 01-49, 66, 77, 78, 88.
          ;; Special-purpose levels (66=RENAMES, 77=independent, 78=constant, 88=condition)
          ;; are distinguished by the action function of each data-item rule, not by
@@ -823,9 +908,12 @@ OUTPUT: perform AST plist."
                                                   (member level-number '(66 77 78 88)))))
                                  level-number)))
 
-         (external-clause (external) ())
+         (external-clause (external (lambda (_ext)
+                                      (declare (ignore _ext))
+                                      (setf *external* t)
+                                      (list :external t))) ())
          (global-clause ())
-
+         
          (blank-when-zero-clause
           (blank when zero #'parse/blank-when-zero)
           (blank when zeroes)
@@ -859,14 +947,21 @@ OUTPUT: perform AST plist."
                (lambda (_p _i pic) (declare (ignore _p _i)) (list :pic pic)))
           (pic picture-string
                (lambda (_p pic) (declare (ignore _p)) (list :pic pic)))
+          (object reference obj-ref-class
+                  (lambda (_obj _ref class)
+                    (declare (ignore _obj _ref))
+                    (list :usage :object-ref :class class)))
           ())
 
          (redefines-clause (redefines data-name) ())
 
          (sign-clause
-          (sign is leading) (sign is trailing)
-          (sign leading) (sign trailing)
-          (unsigned) (signed)
+          (sign is leading (lambda (&rest _) (declare (ignore _)) '(:signed t)))
+          (sign is trailing (lambda () (error "Sign must be leading")))
+          (sign leading (lambda (&rest _) (declare (ignore _)) '(:signed t)))
+          (sign trailing (lambda () (error "Sign must be leading")))
+          (unsigned (lambda (&rest _) (declare (ignore _)) '(:signed nil)))
+          (signed (lambda (&rest _) (declare (ignore _)) '(:signed t)))
           ())
 
          (usage-clause
@@ -906,14 +1001,13 @@ OUTPUT: perform AST plist."
           ())
 
          (value-clause
-          (value is literal)
-          (value literal)
-          (value is literal through literal)
-          (value literal through literal)
-          (values are literal through literal)
-          (values literal through literal)
-          (value is null)
-          (value is nulls)
+          (value is literal (lambda (_value _is lit) (declare (ignore _value _is)) (list :value lit)))
+          (value literal (lambda (_value lit) (declare (ignore _value)) (list :value lit)))
+          ;; (value is literal through literal)
+          ;; (value literal through literal)
+          ;; (values are literal through literal)
+          ;; (values literal through literal)
+          (value is null (lambda (_value _is _null) (declare (ignore _value _is _null)) (list :value :null)))
           ())
 
          ;; OBJECT PROCEDURE DIVISION containing method definitions
@@ -923,8 +1017,8 @@ OUTPUT: perform AST plist."
 
          (method-definitions
           (method-definitions method-definition #'parse/method-defs-append)
-          (method-definition (lambda (m) (list m)))
-          ())
+          (method-definition comments* (lambda (m c) (list m c)))
+          (comments*))
 
          ;; Each method: IDENTIFICATION DIVISION. METHOD-ID. "Name". PROCEDURE DIVISION. … END METHOD "Name".
          ;; Two forms: "END METHOD name." (two tokens) and "END-METHOD name." (one hyphenated token).
@@ -937,11 +1031,12 @@ OUTPUT: perform AST plist."
            procedure-statements
            |END-METHOD| method-name |.|
            #'parse/method-block-em))
-
+         
          (method-identification-division
-          (id* division |.|
-               method-id |.| method-name |.|
-               identification-division-clauses))
+          (comments* id* division |.|
+                     comments*
+                     method-id |.| method-name |.|
+                     identification-division-clauses))
 
          ;; PROCEDURE DIVISION inside a method
          (procedure-statements
@@ -957,22 +1052,39 @@ OUTPUT: perform AST plist."
          (statement-item
           (statement |.| #'parse/statement-item-with-dot)
           (statement #'parse/statement-item-no-dot)
-          (eightbol-comment (lambda (c) (declare (ignore c)) nil)))
+          (eightbol-comment (lambda (c) (list :comment c))))
 
          ;; Identifiers and expressions
          (identifier
           data-name
-          (data-name of data-name)
+          (low |(| identifier |)| (lambda (_low _p1 id _p2)
+                                    (declare (ignore _low _p1 _p2))
+                                    (list :low id)))
+          (high |(| identifier |)| (lambda (_low _p1 id _p2)
+                                     (declare (ignore _low _p1 _p2))
+                                     (list :high id)))
+          (data-name of data-name as data-name
+                     (lambda (slot _of object _as class)
+                       (declare (ignore _of _as))
+                       (list :of slot object class)))
+          (data-name of data-name
+                     (lambda (slot _of object)
+                       (declare (ignore _of))
+                       (list :of slot object)))
+          (data-name |(| subscript |)| of data-name
+                     (lambda (slot _1 subscript _2 _of object)
+                       (declare (ignore _1 _2 _of))
+                       (list :of (list :subscript slot subscript) object)))
+          (data-name |(| subscript |)| of data-name as data-name
+                     (lambda (slot _1 subscript _2 _of object _as class)
+                       (declare (ignore _1 _2 _of _as))
+                       (list :of (list :subscript slot subscript) object class)))
           (data-name |(| subscript |)| #'parse/identifier-subscript))
 
-         (subscript
-          integer all data-name
-          (data-name of data-name)
-          (data-name + integer)
-          (data-name - integer))
-
+         (subscript identifier integer)
+         
          (integer number)
-
+         
          (pointer-value-expression
           self identifier
           (address of identifier)
@@ -1093,7 +1205,7 @@ OUTPUT: perform AST plist."
          ;; Statements
          (statement
           add-statement call-statement cancel-statement
-          compute-statement copy-statement
+          compute-statement 
           debug-break-statement
           divide-statement
           evaluate-statement
@@ -1135,11 +1247,6 @@ OUTPUT: perform AST plist."
           (compute identifier = expression #'parse/compute-eq)
           (compute identifier equal expression #'parse/compute-eq)
           (compute expression giving identifier))
-
-         (copy-statement
-          (copy symbol |.| #'parse/copy)
-          (copy symbol of library-name |.| #'parse/copy-of)
-          (copy symbol in library-name |.| #'parse/copy-in))
 
          (debug-break-statement
           (debug break expression #'parse/debug-break))
@@ -1292,20 +1399,36 @@ As a side effect, each consumed token's source location is stored in
   (let ((*current-token-location*
           (or *current-token-location*
               (list :source-file "?"))))
-   (lambda ()
-     (loop
-        (unless lexer-tokens (return (values nil nil)))
-        (let ((token (pop lexer-tokens)))
-          (when token
-            (when-let (source (getf token :source-file))
-                      (setf (getf *current-token-location* :source-file) source))
-            (when-let (line (getf token :source-line))
-                      (setf (getf *current-token-location* :source-line) line))
-            (when-let (seq (getf token :source-sequence))
-                      (setf (getf *current-token-location* :source-sequence) seq))
-            (when-let (text (getf token :source-line-text))
-                      (setf (getf *current-token-location* :source-line-text) text)))
-          (return (values (first token) (second token))))))))
+    (lambda ()
+      (loop
+         (unless lexer-tokens (return (values nil nil)))
+         (let ((token (pop lexer-tokens)))
+           (when token
+             (when-let (source (getf token :source-file))
+               (setf (getf *current-token-location* :source-file) source))
+             (when-let (line (getf token :source-line))
+               (setf (getf *current-token-location* :source-line) line))
+             (when-let (seq (getf token :source-sequence))
+               (setf (getf *current-token-location* :source-sequence) seq))
+             (when-let (text (getf token :source-line-text))
+               (setf (getf *current-token-location* :source-line-text) text)))
+           (return (values (first token) (second token))))))))
+
+(defun find-copybook-on-path (copybook)
+  (dolist (dir *copybook-paths*)
+    (let ((path (make-pathname :defaults dir
+                               :name copybook
+                               :type "cpy")))
+      (when (probe-file path)
+        (return-from find-copybook-on-path path))))
+  (error "Can't find copybook ~a on path~%Tried ~{~a~^, ~}"
+         copybook
+         (mapcar #'enough-namestring *copybook-paths*)))
+
+(defun read-copybook (copybook &key library)
+  (unless (null library)
+    (error "LIBRARY of COPY not supported: COPY ~a IN ~a" copybook library))
+  (lex-file (find-copybook-on-path copybook)))
 
 (defun parse-eightbol-string (string &optional (pathname "<String>"))
   (with-input-from-string (stream string)
@@ -1314,11 +1437,12 @@ As a side effect, each consumed token's source location is stored in
       (parse-eightbol stream))))
 
 (defun parse-eightbol (stream)
-  "Lex STREAM (with COPY expansion) and parse with YACC, returning AST plist.
+  "Lex STREAM and parse with YACC, returning AST plist.
+
 Parse  errors  are  caught  and  re-signalled  as  EIGHTBOL-SOURCE-ERROR
 conditions   that   include   the   source  file,   line   number,   and
 sequence number."
-  (let ((tokens (lex-with-copy-expansion stream)))
+  (let ((tokens (lexer stream)))
     (handler-case
         (yacc:parse-with-lexer
          (stream-code tokens)

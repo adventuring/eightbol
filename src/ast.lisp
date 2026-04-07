@@ -64,10 +64,11 @@
   (and (listp node) (first node)))
 
 (defun ast-class-id (program-node)
-  (safe-getf (rest program-node) :class-id))
+  (safe-getf (rest (lastcar (remove-if #'null program-node))) :class-id))
 
 (defun ast-methods (program-node)
-  (safe-getf (rest program-node) :methods))
+  (loop for node in program-node
+        append (safe-getf (rest node) :methods)))
 
 (defun ast-data (program-node)
   (safe-getf (rest program-node) :data))
@@ -82,10 +83,10 @@
 
 (defun write-ast (ast output-stream)
   "Write AST to OUTPUT-STREAM as a readable S-expression."
-  (let ((*print-pretty*   t)
+  (let ((*print-pretty* t)
         (*print-readably* t)
-        (*print-length*   nil)
-        (*print-level*    nil))
+        (*print-length* nil)
+        (*print-level* nil))
     (write ast :stream output-stream)
     (terpri output-stream)))
 

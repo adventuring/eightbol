@@ -286,7 +286,7 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
 (defvar *line-zone-start* nil)
 
 (defun lex-file (input-file)
-  "Lex INPUT-FILE, returning a flat token list (no COPY expansion)."
+  "Lex INPUT-FILE, returning a flat token list."
   (let ((*source-file-pathname* (pathname-name input-file)))
     (with-open-file (stream input-file :direction :input)
       (lexer stream))))
@@ -309,97 +309,15 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
   "True if NAME is safe for use as a copybook identifier (no path traversal)."
   (and (stringp name)
        (plusp (length name))
-       (every (lambda (ch)
-                (or (char= ch #\-)
-                    (alphanumericp ch)))
-              name)
-       (alpha-char-p (char name 0))
-       (not (char= (last-elt name) #\-))
-       (not (search "--" name))))
+       (not (some (lambda (ch) (or (char= #\Null ch) (char= #\/ ch))) name))))
 
-(defun find-copybook (name &optional library)
-  "Search *COPYBOOK-PATHS* for NAME.cpy; return pathname or NIL.
-When LIBRARY is specified (from COPY Name OF Library or COPY Name IN Library),
-search first in {path}/{library}/ subdirectory, then in {path}/.
-Rejects names containing path separators or leading dot.
-COBOL is case-insensitive; if exact NAME.cpy is not found, tries case-insensitive
-match against files in the directory (so COPY Basic-NPC-Slots finds Basic-Npc-Slots.cpy)."
-  (unless (valid-copybook-name-p name)
-    (error "Invalid COPY name ~s: must be Hyphenated-Alphanumeric" name))
-  (when library
-    (unless (valid-copybook-name-p (string library))
-      (error "Invalid COPY library ~s: must be Hyphenamed-Alphanumeric" library)))
-  (flet ((try-exact (dir-pn)
-           (let ((path (merge-pathnames
-                        (make-pathname :name name :type "cpy")
-                        dir-pn)))
-             (when (probe-file path) (return-from find-copybook path))))
-         (try-case-insensitive (dir-pn)
-           (let ((want (concatenate 'string name ".cpy")))
-             (dolist (ent (directory (merge-pathnames
-                                     (make-pathname :name :wild :type "cpy")
-                                     dir-pn)))
-               (when (string-equal (file-namestring ent) want)
-                 (return-from find-copybook ent))))))
-    (dolist (dir *copybook-paths*)
-      (let ((dir-pn (ensure-directory-pathname dir)))
-        (if library
-            (let ((lib-dir (merge-pathnames
-                            (make-pathname :directory `(:relative ,library))
-                            dir-pn)))
-              (try-exact lib-dir)
-              (try-case-insensitive lib-dir))
-            (progn
-              (try-exact dir-pn)
-              (try-case-insensitive dir-pn))))))
-  nil)
+(defun copy-line-p (line)
+  (when (parse-copy-line line) t))
 
-(defun lex-with-copy-expansion (stream)
-  "Lex STREAM, expanding any COPY tokens by inlining the referenced copybook.
-   Returns a flat token list ready for the YACC parser."
-  (let ((tokens (lexer stream)))
-    (expand-copy-tokens tokens)))
-
-(defun expand-copy-tokens (tokens)
-  "Walk TOKENS; when a (COPY ...) sequence is found, replace it with the
-   lexed contents of the referenced copybook file."
-  (loop with result
-	while tokens
-        for token = (pop tokens)
-        do
-        (cond
-          ((and (listp token) (eq (first token) 'copy))
-           (let* ((next (pop tokens))
-                  (name (if (and (listp next)
-                                 (member (first next) '(symbol bareword)))
-                            (second next)
-                            (progn (push next tokens) nil)))
-                  (after (pop tokens))
-                  library)
-             (when (and (listp after)
-                        (member (first after) '(of in)))
-               (let ((lib-token (pop tokens)))
-                 (setf library (and (listp lib-token)
-                                    (member (first lib-token) '(symbol bareword))
-                                    (second lib-token)))
-                 (setf after (pop tokens))))
-             (unless (and (listp after) (eq (first after) '|.|))
-               (push after tokens))
-             (if name
-                 (let ((path (find-copybook name library)))
-                   (if path
-                       (progn
-                         (pushnew (truename path) *copybook-dependencies*
-                                  :test #'equalp)
-                         (let ((cb-tokens (lex-file path)))
-                           (setf tokens (append (expand-copy-tokens cb-tokens) tokens))))
-                       (error 'copybook-not-found
-                              :message "cannot find copybook; COPY is required"
-                              :copybook-name name
-                              :library library)))
-                 (error "EIGHTBOL: COPY without a name"))))
-          (t (push token result)))
-	finally (return (nreverse result))))
+(defun parse-copy-line (line)
+  (cl-ppcre:register-groups-bind (copybook) ("\\bCOPY +(.*)\\." (getf line :contents))
+    (when (and (stringp copybook) (plusp (length copybook)))
+      copybook)))
 
 (defun lexer (stream)
   (loop for *source-line-number* from 1
@@ -441,13 +359,19 @@ not greater than previous ~s — must be strictly increasing"
                         (tokenize-line (getf parsed-line :contents))))
                ((comment-line-p parsed-line)
                 (appendf body (cons (list* 'comment (getf parsed-line :contents) parsed-line) nil)))
+               ((copy-line-p parsed-line)
+                (let ((book (parse-copy-line parsed-line)))
+                  (appendf body (append (cons (list 'comment (format nil "*// START COPYBOOK ~a" book)) nil)
+                                        (append (read-copybook book)
+                                                (cons (list 'comment (format nil "**/ END COPYBOOK ~a" book)) nil)))))
+                (setf parsed-line nil))
                (t
                 (mapcar (lambda (token) (appendf body (cons token nil)))
                         (tokenize-line (getf parsed-line :contents))))))
         finally (return (remove-if (lambda (token)
-                                      ;; INDENT/OUTDENT zone markers were never
-                                      ;; integrated into the grammar; strip them
-                                      ;; before handing tokens to the YACC parser.
-                                      (member (first token) '(eightbol::indent eightbol::outdent)))
+                                     ;; INDENT/OUTDENT zone markers were never
+                                     ;; integrated into the grammar; strip them
+                                     ;; before handing tokens to the YACC parser.
+                                     (member (first token) '(indent outdent)))
                                    body))))
 

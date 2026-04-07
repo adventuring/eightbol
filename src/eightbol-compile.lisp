@@ -146,69 +146,71 @@ Returns the AST plist."
   (let ((*eightbol-root-directory* root-directory)
         (*copybook-paths* (or copybook-paths
                               (default-copybook-paths root-directory (first cpus))))
-        (*copybook-dependencies* ()))
-    ;;  Phase 1: parse 
-    (let (ast primary-input-file)
-      (dolist (input-file input-files)
-        (unless primary-input-file
-          (setf primary-input-file input-file))
-        (setf ast (with-open-file (stream input-file :direction :input)
-                    (let* ((*source-file-pathname* (enough-namestring input-file))
-                           (*current-token-location* (list :source-file *source-file-pathname*
-                                                           :source-line nil
-                                                           :source-sequence nil)))
-                      (parse-eightbol stream)))))
-      (unless (and (listp ast) (eq (first ast) :program))
-        (error "EIGHTBOL: parse of ~a did not yield a Program node"
-               (first input-files)))
-      (setf ast (optimize-ast ast))
-      (let ((class-id (ast-class-id ast)))
-        ;;  Phase 2: write AST 
-        (let ((ast-path (merge-pathnames
-                         (make-pathname
-                          :directory '(:relative "Object" "Classes")
-                          :name class-id :type "eightbol")
-                         root-directory)))
-          (ensure-directories-exist ast-path)
-          (with-open-file (out ast-path
-                               :direction :output
-                               :if-exists :supersede
-                               :if-does-not-exist :create)
-            (write-ast ast out))
-          (format t "~2&EIGHTBOL: wrote AST to ~a" (enough-namestring ast-path)))
-        ;;  Phase 3: backends 
-        ;; Step CPU from (REST CPU-LIST): (FIRST CPU-LIST) would repeat the first
-        ;; CPU and skip the last (e.g. F8 never emitted in ALL-BACKENDS-ONE-FIXTURE).
-        (do ((cpu-list cpus (rest cpu-list))
-             (cpu (first cpus) (first (rest cpu-list)))
-             (first-p t nil))
-            ((null cpu-list))
-          (handler-case
-              (let ((asm-path (if (and first-p output-file)
-                                  (pathname output-file)
-                                  (merge-pathnames
-                                   (make-pathname
-                                    :directory (list :relative "Source" "Generated" "Classes"
-                                                     (cpu-directory-name cpu))
-                                    :name (concatenate 'string class-id "Class") :type "s")
-                                   root-directory))))
-                (ensure-directories-exist asm-path)
-                (with-open-file (out asm-path
-                                     :direction :output
-                                     :if-exists :supersede
-                                     :if-does-not-exist :create)
-                  (compile-to-assembly ast cpu out))
-                (format t "~2&EIGHTBOL: wrote ~a assembly to ~a"
-                        (cpu-display-name cpu) (enough-namestring asm-path)))
-            #+()(error (e)
-	        (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
-		      class-id (cpu-display-name cpu) e)
-	        (error e))))
-        ;; ;;  Phase 4: dependency file for Make 
-        ;; (write-copybook-deps (or primary-input-file (first input-files))
-        ;;                      class-id cpus root-directory output-file
-        ;;                      *copybook-dependencies*)
-        ast))))
+        (*copybook-dependencies* ())
+        (optimum))
+    (dolist (input-file input-files)
+      (let ((ast (with-open-file (stream input-file :direction :input)
+                   (let* ((*source-file-pathname* (enough-namestring input-file))
+                          (*current-token-location* (list :source-file *source-file-pathname*
+                                                          :source-line nil
+                                                          :source-sequence nil)))
+                     (parse-eightbol stream)))))
+        (unless (and (listp ast)
+                     (every #'listp ast)
+                     (every (lambda (section)
+                              (eq (first section) :program))
+                            ast))
+          (error "EIGHTBOL: parse of ~{~a~^, ~} did not yield a Program node~%~s"
+                 input-files ast))
+        (appendf optimum (remove-if #'null (mapcar #'optimize-ast ast)))))
+    (let ((class-id (ast-class-id optimum)))
+      ;;  Phase 2: write AST 
+      (let ((ast-path (merge-pathnames
+                       (make-pathname
+                        :directory '(:relative "Object" "Classes")
+                        :name class-id :type "eightbol")
+                       root-directory)))
+        (ensure-directories-exist ast-path)
+        (with-open-file (out ast-path
+                             :direction :output
+                             :if-exists :supersede
+                             :if-does-not-exist :create)
+          (write-ast optimum out))
+        (format t "~2&EIGHTBOL: wrote AST to ~a" (enough-namestring ast-path)))
+      ;;  Phase 3: backends 
+      ;; Step CPU from (REST CPU-LIST): (FIRST CPU-LIST) would repeat the first
+      ;; CPU and skip the last (e.g. F8 never emitted in ALL-BACKENDS-ONE-FIXTURE).
+      (do ((cpu-list cpus (rest cpu-list))
+           (cpu (first cpus) (first (rest cpu-list)))
+           (first-p t nil))
+          ((null cpu-list))
+        (handler-case
+            (let ((asm-path (if (and first-p output-file)
+                                (pathname output-file)
+                                (merge-pathnames
+                                 (make-pathname
+                                  :directory (list :relative "Source" "Generated" "Classes"
+                                                   (cpu-directory-name cpu))
+                                  :name (concatenate 'string class-id "Class") :type "s")
+                                 root-directory))))
+              (ensure-directories-exist asm-path)
+              (with-open-file (out asm-path
+                                   :direction :output
+                                   :if-exists :supersede
+                                   :if-does-not-exist :create)
+                (dolist (module optimum)
+                  (compile-to-assembly module cpu out)))
+              (format t "~2&EIGHTBOL: wrote ~a assembly to ~a"
+                      (cpu-display-name cpu) (enough-namestring asm-path)))
+          #+()(error (e)
+	      (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
+		    class-id (cpu-display-name cpu) e)
+	      (error e))))
+      ;; ;;  Phase 4: dependency file for Make 
+      ;; (write-copybook-deps (or primary-input-file (first input-files))
+      ;;                      class-id cpus root-directory output-file
+      ;;                      *copybook-dependencies*)
+      optimum)))
 
 (defun compile-to-assembly-with-ast-passes (ast cpu output-stream)
   "Run optimize-ast (routine AST optimizations), optional VALIDATE-EIGHTBOL-PROGRAM, then compile.
@@ -278,40 +280,54 @@ routine AST passes run as in `compile-eightbol-class`."
 	(error "~s is not a method of Basic-Object" method-id)))
     (unless (gethash canon-class *parent-classes*)
       (load-classes))
-    (let ((consider-class canon-class))
+    (let ((consider-class canon-class)
+          (seen nil))
       (loop
         #+()(format *trace-output* "~&~4TLooking for ~s in ~s" canon-method consider-class)
         #+()(force-output *trace-output*)
+            (push (gethash consider-class *class-methods*) seen)
             (when (find canon-method (gethash consider-class *class-methods*)
 		    :test #'string-equal)
 	    (return-from method-class (header-case consider-class)))
             (setf consider-class (gethash consider-class *parent-classes*))
             (when (or (null consider-class) (equal consider-class "BasicObject"))
-	    (error "~s is not a method of class ~s, nor its parent classes up to ~s"
-		 (header-case method-id) (header-case canon-class) consider-class))))))
+	    (error "~s is not a method of class ~s, nor its parent classes up to ~s~2%Seen: ~{~s~^, ~}"
+		 (header-case method-id) (header-case canon-class) (header-case consider-class)
+                     (mapcar #'header-case (flatten seen))))))))
 
-(defun slot-class (class-id slot-id)
-  (let ((canon-class (pascal-case class-id))
+(defun slot-class (object slot-id &optional class-id)
+  (when (and (listp slot-id) (eql :subscript (first slot-id)))
+    (setf slot-id (second slot-id)))
+  (when (string-equal "Destroy" slot-id)
+    (return-from slot-class "Basic-Object"))
+  (let ((canon-class (pascal-case (or class-id
+                                      (if (string-equal "Self" object)
+                                          *class-id*
+                                          (oops-class-of object)))))
         (canon-slot (pascal-case slot-id)))
     #+()(format *trace-output* "~&Slot ~s Class ~s" canon-slot canon-class)
     #+()(force-output *trace-output*)
-    (if (equal "Destroy" canon-slot)
-        (return-from slot-class "Basic-Object")
-        (when (equal "BasicObject" canon-class)
-	(error "~s is not a slot of Basic-Object" slot-id)))
+    (unless (plusp (length canon-class))
+      (error "Unable to determine the class of ~s when trying to access slot ~s"
+             (header-case object) (header-case canon-slot)))
     (unless (gethash canon-class *parent-classes*)
       (load-classes))
-    (let ((consider-class canon-class))
+    (let ((consider-class canon-class)
+          (seen nil))
       (loop
         #+()(format *trace-output* "~&~4TLooking for ~s in ~s" canon-slot consider-class)
         #+()(force-output *trace-output*)
+            (push (gethash consider-class *class-slots*) seen)
             (when (find canon-slot (gethash consider-class *class-slots*)
 		    :test #'string-equal)
 	    (return-from slot-class (header-case consider-class)))
             (setf consider-class (gethash consider-class *parent-classes*))
             (when (or (null consider-class) (equal consider-class "BasicObject"))
-	    (error "~s is not a slot of class ~s, nor its parent classes up to ~s"
-		 (header-case slot-id) (header-case canon-class) consider-class))))))
+              (if (string-equal canon-class (oops-class-of object))
+	        (error "~s is not a slot of class ~s, nor its parent classes up to ~s~2%Slots: ~{~a~^, ~}"
+		     (header-case slot-id) (header-case canon-class) (header-case consider-class)
+                         (mapcar #'header-case (flatten seen)))
+                  (slot-class object slot-id (oops-class-of object))))))))
 
 (defun load-classes ()
   (when (plusp (hash-table-count *parent-classes*))
