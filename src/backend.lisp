@@ -31,7 +31,7 @@ The default method signals an error for unsupported CPUs.")
 (defun class-id-to-copybook-filename (class-id)
   "Convert CLASS-ID (PascalCase) to copybook filename base in Title-And-Hyphens form.
    Character → Character, NonPlayerCharacter → Non-Player-Character"
-  (title-case (param-case class-id)))
+  (header-case class-id))
 
 (defun cobol-strip-class-copybook-prefix (name)
   "If NAME begins with the Title-And-Hyphens spelling of @code{*CLASS-ID*} and a hyphen, return the suffix; else NIL.
@@ -159,86 +159,6 @@ Looks for .../Generated/NNNN/Classes or .../7800/Classes in paths."
                   (return-from infer-machine-from-copybook-paths cand)))))))))
   nil)
 
-(defun %merge-cpy-stream-into-tables (stream)
-  "Read copybook text from STREAM and merge entries into the ten hash tables.
-
-*SLOT-TABLE*,    *TYPE-TABLE*,   *CONST-TABLE*,    *SERVICE-BANK-TABLE*,
-*USAGE-TABLE*,    *SIGN-TABLE*,   PIC-SIZE-TABLE*,    *PIC-WIDTH-TABLE*,
-*PIC-FRAC-BITS-TABLE*, and *PIC-NYBBLE-TABLE* are mutated.
-
-Uses @code{parse-cpy-line} on each line."
-  (declare (stream stream))
-  (let ((current-origin nil))
-    (loop for line = (read-line stream nil nil) while line do
-      (let ((parsed (parse-cpy-line line)))
-        (when parsed
-          ;; Use COND (not ECASE) so :SERVICE-BANK cannot be mis-read as a stray form after a
-          ;; paren mismatch (which would evaluate as (FUNCALL :SERVICE-BANK …) and signal
-          ;; UNDEFINED-FUNCTION).
-          (cond
-            ((eql (first parsed) :section-comment)
-             (setf current-origin
-                   (or (getf (rest parsed) :origin-class)
-                       (getf (rest parsed) :own-class))))
-            ((eql (first parsed) :data-item)
-             (let ((level (getf (rest parsed) :level))
-                   (name (getf (rest parsed) :name))
-                   (pic-rest (getf (rest parsed) :pic))
-                   (type-class (getf (rest parsed) :type-class))
-                   (constp (getf (rest parsed) :constant-p))
-                   (value (getf (rest parsed) :value))
-                   (usage-bcd (getf (rest parsed) :usage-bcd))
-                   (usage-signed (getf (rest parsed) :usage-signed))
-                   (pic-size (getf (rest parsed) :pic-size))
-                   (pic-width (getf (rest parsed) :pic-width)))
-               ;; Phantasia-Globals.cpy uses COBOL 01 … EXTERNAL section headers (no * Inherited * line).
-               ;; Without this, current-origin stays NIL and globals never enter *SLOT-TABLE* — bare names
-               ;; wrongly default to instance slots (e.g. Hurt-H-P → CharacterHurtHp + lda (Self),y).
-               (when (and (= level 1)
-                          (stringp pic-rest)
-                          (search "EXTERNAL" pic-rest :test #'char-equal))
-                 (setf current-origin "Phantasia-Globals"))
-               ;; Gap subsections (05 CART-RAM-GAP-n) follow 01 CART-RAM EXTERNAL; keep global origin.
-               (when (and (= level 5)
-                          (stringp name)
-                          (cl-ppcre:scan "^CART-RAM-GAP" name))
-                 (setf current-origin "Phantasia-Globals"))
-               (let ((skip-slot-hash
-                       (or (and (= level 1)
-                                (stringp pic-rest)
-                                (search "EXTERNAL" pic-rest :test #'char-equal))
-                           (and (= level 5)
-                                (stringp name)
-                                (cl-ppcre:scan "^CART-RAM-GAP" name))
-                           ;; 77/78 are compile-time constants — not object layout slots.
-                           constp)))
-                 (when (and current-origin (not skip-slot-hash))
-                   (setf (gethash (cobol-slot-table-name-key name) *slot-table*)
-                         current-origin)))
-               (when type-class
-                 (setf (gethash (cobol-slot-table-name-key name) *type-table*) type-class))
-               (when (and constp value)
-                 (setf (gethash (const-table-name-key name) *const-table*) value))
-               (when usage-bcd
-                 (setf (gethash (cobol-slot-table-name-key name) *usage-table*) :bcd))
-               (when usage-signed
-                 (setf (gethash (cobol-slot-table-name-key name) *sign-table*) t))
-               (when pic-size
-                 (setf (gethash (cobol-slot-table-name-key name) *pic-size-table*) pic-size))
-               (when pic-width
-                 (setf (gethash (cobol-slot-table-name-key name) *pic-width-table*) pic-width))
-               (when-let (frac (getf (rest parsed) :pic-frac-bits))
-                 (setf (gethash (cobol-slot-table-name-key name) *pic-frac-bits-table*) frac))
-               (when (and (stringp pic-rest) (pic-nybble-semantics-p pic-rest))
-                 (setf (gethash (cobol-slot-table-name-key name) *pic-nybble-table*) t))))
-            ((eql (first parsed) :service-bank)
-             (let ((service (getf (rest parsed) :service))
-                   (bank (getf (rest parsed) :bank)))
-               (when (and service bank)
-                 (setf (gethash service *service-bank-table*) bank))))
-            (t
-             (error "EIGHTBOL: parse-cpy-line returned unknown type ~s" (first parsed)))))))))
-
 (defun pic-nybble-semantics-p (pic-rest)
   "True when PIC-REST describes a single decimal digit picture (@code{PIC 9} or @code{PIC S9}),
 so logical values are @code{#x0}--@code{#xF}. @code{PIC 99}, @code{PIC 9(n)}, @code{PIC X}, and
@@ -281,16 +201,17 @@ class design notes."
   (if (string-equal "Self" symbol)
       *class-id*
       (let ((var (gethash symbol *working-storage*)))
-        (if (eql :object-ref (getf var :usage))
-            (getf var :class)
-            (error "Unable to find reference class for ~a: ~s" symbol var)))))
+        (case (getf var :usage)
+          ((:object :object-ref)
+           (getf var :class))
+          (otherwise (error "Unable to find reference class for ~a: ~s" symbol var))))))
 
 (defun slot-table-origin-lookup (name symbol)
   "Resolve copybook origin for NAME using canonical key, raw NAME, then class-qualified strip.
 
 When the parser emits @code{Class-Global-Name} and the copybook row is @code{Global-Name}
 under Phantasia-Globals, stripping the @code{*CLASS-ID*} prefix finds the same row."
-  (slot-class name (oops-class-of symbol)))
+  (slot-class symbol name))
 
 (defun service-bank-table-lookup (name)
   "Resolve bank symbol for service NAME from @code{*service-bank-table*}.
@@ -307,35 +228,6 @@ Bank symbol string (e.g. @code{BankAnimation}), or NIL."
   (when (zerop (hash-table-count *service-bank-lut*))
     (build-service-bank-lut-from-banks))
   (gethash name *service-bank-lut*))
-
-(defun pic-width-table-lookup (name pic-width-table)
-  "Byte width for NAME from PIC-WIDTH-TABLE, with canonical key then raw.
-
-When @code{*CLASS-ID*} is bound, also tries @code{cobol-strip-class-copybook-prefix}
-(unqualified suffix of a class-qualified name) and @code{ClassId-Name} qualified
-form so instance slots written as @code{05 HP} or @code{05 Character-HP} in the
-copybook both resolve (fixes 16-bit @code{IF HP OF Self > Max-HP OF Self}).
-
-Finally tries @code{(string-upcase (cobol-hyphenated-to-pascal-concat NAME))} so
-@code{Max-HP} (stabby key @code{MAX-HP}) matches copybook rows keyed as @code{MAXHP}
-from @code{05 MAX-HP} (same concatenated form as @code{MAX-HP} in source)."
-  (when (and name pic-width-table)
-    (let ((n (if (stringp name) name (format nil "~a" name))))
-      (or (gethash (cobol-slot-table-name-key n) pic-width-table)
-          (gethash n pic-width-table)
-          (when *class-id*
-            (let ((short (cobol-strip-class-copybook-prefix n)))
-              (when short
-                (or (gethash (cobol-slot-table-name-key short) pic-width-table)
-                    (gethash short pic-width-table)))))
-          (when *class-id*
-            (let ((qualified (format nil "~a-~a"
-                                     (class-id-to-copybook-filename *class-id*)
-                                     n)))
-              (or (gethash (cobol-slot-table-name-key qualified) pic-width-table)
-                  (gethash qualified pic-width-table))))
-          (gethash (string-upcase (cobol-hyphenated-to-pascal-concat n))
-                   pic-width-table)))))
 
 (defun cobol-constant-to-assembly-symbol (name)
   "Map COBOL 77/78 constant name to assembly (no class prefix).
@@ -357,9 +249,9 @@ Assembly symbol string suitable after @code{# } in immediates or as an equate la
     (let ((groups (remove-if (lambda (g) (zerop (length (string-trim " " g))))
                              (cl-ppcre:split "--" s))))
       (if (null groups)
-          (cobol-hyphenated-to-pascal-concat s)
+          (pascal-case s)
           (format nil "~{~a~^_~}"
-                  (mapcar #'cobol-hyphenated-to-pascal-concat groups))))))
+                  (mapcar #'pascal-case groups))))))
 
 (defun cobol-global-data-name-to-assembly-symbol (name)
   "Map bare COBOL data name (globals, WORKING-STORAGE) to assembly without class prefix.
@@ -374,7 +266,7 @@ Data name from source.
 
 @subsection Outputs
 Single concatenated symbol (no @code{--} → underscore rule)."
-  (cobol-hyphenated-to-pascal-concat name))
+  (pascal-case name))
 
 (defun slot-origin-global-data-p (origin)
   "True if copybook ORIGIN names global/section data (e.g. Phantasia-Globals), not an OOPS class slot block.
@@ -399,28 +291,10 @@ NIL origin means “unknown” — not global; see @code{bare-data-assembly-symb
   (slot-class object slot-name class-id))
 
 (defun slot-name-to-assembly-segment (name)
-  "Convert COBOL data item NAME to the slot suffix of an OOPS assembly symbol.
-Short all-caps names (2–4 letters, e.g. HP) stay uppercase so labels match
-CharacterHP; hyphenated names use @code{cobol-hyphenated-to-pascal-concat} (H-P → HP)."
-  (let ((s (string-trim " " (if (stringp name) name (princ-to-string name)))))
-    (cond
-      ((zerop (length s)) "")
-      ((cl-ppcre:scan "^[A-Z]{2,4}$" s) s)
-      (t (cobol-hyphenated-to-pascal-concat s)))))
+  (pascal-case name))
 
-(defun slot-name-first-hyphen-word (slot-name)
-  "Return the substring before the first single hyphen in SLOT-NAME, or @code{NIL}.
-
-@table @asis
-@item SLOT-NAME
-COBOL data name (e.g. @code{Course-Last-Frame}).
-@end table"
-  (let ((s (string-trim " " (if (stringp slot-name) slot-name (format nil "~a" slot-name)))))
-    (let ((pos (position #\- s)))
-      (when pos
-        (subseq s 0 pos)))))
-
-(defun slot-symbol (slot-name object-name &optional (current-class *class-id*))
+(defun slot-symbol (slot-name object-name &optional
+                                            (cast-class (slot-class object-name slot-name)))
   "Return assembly copybook offset symbol for SLOT-NAME. Uses *SLOT-TABLE* for origin class.
 
 When the hyphenated slot segment already begins with the origin class’s PascalCase name
@@ -429,7 +303,7 @@ returns the segment alone (@code{CourseLastFrame}) so labels match OOPS copybook
 @code{CourseCourseLastFrame}. When the copybook origin is a subclass (e.g. MummyCourse) but
 the slot name is parent-prefixed (@code{Course-Last-Frame}), returns @code{CourseLastFrame},
 not @code{MummyCourseCourseLastFrame}. Otherwise @code{{OriginClass}{SlotSegment}} (e.g. @code{CharacterHP})."
-  (let* ((origin (slot-origin-class slot-name object-name current-class)))
+  (let* ((origin cast-class))
     (when (and (listp slot-name) (eql :subscript (first slot-name)))
       (setf slot-name (second slot-name)))
     (concatenate 'string (pascal-case origin) (pascal-case slot-name))))
@@ -489,19 +363,6 @@ String suitable for @code{cobol-constant-to-assembly-symbol}."
     (declare (ignore val))
     (or sym name)))
 
-(defun pic-size (name)
-  "Return PIC X(n) size for NAME, or NIL if unknown. Uses *PIC-SIZE-TABLE*."
-  (and *pic-size-table*
-       (let ((n (if (stringp name) name (format nil "~a" name))))
-         (or (gethash (cobol-slot-table-name-key n) *pic-size-table*)
-             (gethash n *pic-size-table*)))))
-
-(defun pic-width (name)
-  "Return PIC byte width for NAME (1–8 bytes). NIL if unknown. Uses *PIC-WIDTH-TABLE*."
-  (and *pic-width-table*
-       (pic-width-table-lookup (if (stringp name) name (format nil "~a" name))
-                               *pic-width-table*)))
-
 (defun expr-slot-of-slot-name (expr)
   "Return slot data name for @code{*pic-width-table*} when EXPR is slot OF object.
 
@@ -515,16 +376,8 @@ Expression AST leaf or nested form.
 
 @subsection Outputs
 Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
-  (cond
-    ((and (listp expr) (eq (first expr) :of))
-     (format nil "~a" (second expr)))
-    ((and (listp expr) (= (length expr) 3))
-     (let ((slot (first expr))
-           (of (second expr)))
-       (when (or (equal of "OF")
-                 (and (symbolp of) (string-equal (symbol-name of) "OF")))
-         (format nil "~a" slot))))
-    (t nil)))
+  (when (listp expr) (eql :of (first expr))
+        (second expr)))
 
 (defun expr-to-width-name (expr)
   "Return variable name for pic-width lookup. NIL for literals/constants."
@@ -546,21 +399,44 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
        (t nil)))
     ((eql :null expr) nil)
     ((eql :zero expr) nil)
-    (t (let ((token (cond ((and (listp expr) (eql :of (first expr)))
-                           (list :of (second expr)
-                                 (slot-class (third expr) (second expr))))
-                          ((and (listp expr) (eql :subscript (first expr)))
-                           (second expr))
-                          (t expr))))
+    (t (let ((token (slot-token expr)))
          (when-let (var (gethash token *working-storage*))
            (getf var :signed nil))))))
 
+(defun operand-bcd-p (expr)
+  (cond
+    ((numberp expr) nil)
+    ((eql :zero expr) nil)
+    (t (let ((token (slot-token expr)))
+         (when-let (var (gethash token *working-storage*))
+           (eql :decimal (getf var :usage nil)))))))
+
+(defun usage-bcd-p (expr) (operand-bcd-p expr))
+
+(defun pic-length-bytes (pic)
+  (ceiling (if (find #\( pic)
+               (cl-ppcre:register-groups-bind (count) ("[9X]\\(([0-9]+)\\)" pic)
+                 (parse-integer count))
+               (count-if (lambda (ch) (find ch "9X")) pic))
+           2))
+
+(defun slot-token (expr)
+  (cond ((and (listp expr) (eql :of (first expr)))
+         (list :of (second expr)
+               (if (< 3 (length expr))
+                   (fourth expr)
+                   (slot-class (third expr) (second expr)))))
+        ((and (listp expr) (eql :on (first expr)))
+         (list :of (second expr)
+               (if (> 3 (length expr))
+                   (fourth expr)
+                   (slot-class (third expr) (second expr)))))
+        ((and (listp expr) (eql :subscript (first expr)))
+         (slot-token (second expr)))
+        (t expr)))
+
 (defun operand-width (expr &optional (pic-width-table *pic-width-table*))
-  "Return byte width (1–8) for EXPR. Default 1 for literals/unknown.
-When PIC-WIDTH-TABLE is supplied, width is resolved from that table; otherwise
-from *PIC-WIDTH-TABLE* (used by backends that pass per-compile tables).
-If the name is an OBJECT REFERENCE (@code{*type-table*}) but has no PIC width row,
-uses @code{(object-reference-storage-width)}."
+  "Return byte width (1–8) for EXPR."
   (cond
     ((numberp expr) (cond
                       ((zerop expr) 1)
@@ -568,20 +444,14 @@ uses @code{(object-reference-storage-width)}."
                       (t (ceiling (log expr 2) 8))))
     ((eql :null expr) 1)
     ((eql :zero expr) 1)
-    (t (let ((token (cond ((and (listp expr) (eql :of (first expr)))
-                           (list :of (second expr)
-                                 (slot-class (third expr) (second expr))))
-                          ((and (listp expr) (eql :subscript (first expr)))
-                           (second expr))
-                          (t expr))))
+    ((and (listp expr) (member (first expr) '(:low :high))) 1)
+    (t (let ((token (slot-token expr)))
          (if-let (var (gethash token *working-storage*))
            (ecase (getf var :usage)
              (:binary
-              (assert (every (lambda (ch) (char= ch #\9)) (getf var :pic)))
-              (ceiling (length (getf var :pic)) 2))
+              (pic-length-bytes (getf var :pic)))
              (:decimal
-              (assert (every (lambda (ch) (char= ch #\9)) (getf var :pic)))
-              (ceiling (length (getf var :pic)) 2))
+              (pic-length-bytes (getf var :pic)))
              (:pointer 2)
              (:procedure-pointer 2)
              (:object-ref 2))
@@ -605,15 +475,22 @@ Optional width table (defaults to @code{*pic-width-table*}).
 Integer byte count at least 1."
   (labels ((rec (e)
              (cond
-               ((and (listp e)
-                     (member (first e)
-                             '(:add-expr :subtract-expr :multiply-expr :divide-expr
-                               :shift-left :shift-right :bit-and :bit-or :bit-xor)
-                             :test #'eq))
-                (max (rec (second e)) (rec (third e))))
-               ((and (listp e) (eq (first e) :bit-not))
+               ((not (listp e)) (operand-width e))
+               ((eql :literal (first e))
                 (rec (second e)))
-               (t (operand-width e pic-width-table)))))
+               ((member (first e)
+                        '(:add-expr :subtract-expr
+                          :multiply-expr :divide-expr
+                          :shift-left :shift-right :bit-and :bit-or :bit-xor)
+                        :test #'eq)
+                (max (rec (second e)) (rec (third e))))
+               ((and (string= "(" (first e))
+                     (string= ")" (lastcar e)))
+                (loop for el in (subseq e 1 (- (length e) 2))
+                      maximize (rec el)))
+               ((eq (first e) :bit-not)
+                (rec (second e)))
+               (t (operand-width e)))))
     (max 1 (rec expr))))
 
 (defun pic-frac-bits (name)
@@ -630,15 +507,6 @@ NAME is a string or symbol; keys match copybook canonical names."
     (if (eq (first operand) :refmod)
         (getf (rest operand) :length)
         (getf operand :length))))
-
-(defun operand-nybble-semantics-p (expr)
-  "True when EXPR names a copybook row in @code{*pic-nybble-semantics-table*} (single @code{PIC 9} digit)."
-  (and *pic-nybble-semantics-table*
-       (let ((name (expr-to-width-name expr)))
-         (and name
-              (let ((n (if (stringp name) name (format nil "~a" name))))
-                (or (gethash (cobol-slot-table-name-key n) *pic-nybble-semantics-table*)
-                    (gethash n *pic-nybble-semantics-table*)))))))
 
 (defun backend-unsupported-operand-width (cpu-name op-name width max-supported)
   "Signal an error when WIDTH exceeds MAX-SUPPORTED for CPU-NAME on OP-NAME (multi-byte codegen)."

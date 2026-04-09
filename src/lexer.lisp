@@ -361,9 +361,10 @@ not greater than previous ~s — must be strictly increasing"
                 (appendf body (cons (list* 'comment (getf parsed-line :contents) parsed-line) nil)))
                ((copy-line-p parsed-line)
                 (let ((book (parse-copy-line parsed-line)))
-                  (appendf body (append (cons (list 'comment (format nil "*// START COPYBOOK ~a" book)) nil)
-                                        (append (read-copybook book)
-                                                (cons (list 'comment (format nil "**/ END COPYBOOK ~a" book)) nil)))))
+                  (appendf body
+                           (append (cons (list 'comment (format nil "*// START COPYBOOK ~a" book)) nil)
+                                   (append (read-copybook book)
+                                           (cons (list 'comment (format nil "**/ END COPYBOOK ~a" book)) nil)))))
                 (setf parsed-line nil))
                (t
                 (mapcar (lambda (token) (appendf body (cons token nil)))

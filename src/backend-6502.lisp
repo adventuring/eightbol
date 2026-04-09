@@ -97,7 +97,7 @@ Sequence: @code{ldy} low offset, @code{sec}, @code{lda (Self),y}, @code{sbc} low
            :message "EIGHTBOL/6502: BCD 2-byte in-place SUBTRACT not implemented"
            :cpu :6502
            :detail (list :subtract-inplace from result)))
-  (let ((offset (slot-symbol (second (slot-of-expr result)) (third (slot-of-expr result)) class-id)))
+  (let ((offset (apply #'slot-symbol (rest (slot-of-expr result)))))
     (format out "~&~10Tldy # ~a" offset)
     (format out "~&~10Tsec")
     (format out "~&~10Tlda (~a), y" (pascal-case (third (slot-of-expr result))))
@@ -229,7 +229,8 @@ Binds  *6502-family-cpu*  for  opcode selection.  Trivial  methods  emit
 @code{MethodClassM    =    TrueMethod};    @code{INVOKE    Self}    uses
 @code{.CallMethod} in the method body."
   (let ((*6502-family-cpu* cpu)
-        (cpu-label (cpu-display-name cpu)))
+        (cpu-label (cpu-display-name cpu))
+        (*output-stream* output-stream))
     (unless (and (listp ast) (eq (first ast) :program))
       (error "EIGHTBOL/~a: expected :program AST node, got ~s" cpu-label (first ast)))
     (let ((*class-id* (safe-getf (rest ast) :class-id))
@@ -241,8 +242,18 @@ Binds  *6502-family-cpu*  for  opcode selection.  Trivial  methods  emit
       (if (and *class-id* methods)
           (dolist (method (ensure-list methods))
             (when (and (listp method) (eq (first method) :method))
-              (emit-one-6502-family-method output-stream *class-id* method cpu #'compile-6502-method)
-              (finish-output output-stream)))))))
+              (format output-stream "~2%;;; Method ~a # ~a" *class-id* (getf (rest method) :method-id))
+              (handler-case
+                  (emit-one-6502-family-method output-stream *class-id* method cpu #'compile-6502-method)
+                #+ () (error (e)
+                        (format output-stream "~%~10T.LogFault \"CMPE\"~%~10Trts")
+                        (format output-stream "~{~2%;;; ~a~}" (split-sequence #\newline (princ-to-string e)))
+                        (warn "Error in ~a # ~a:~%~a" *class-id*
+                              (getf (rest method) :method-id) (princ-to-string e))))
+              (format output-stream "~2%;;; End of method ~a # ~a" *class-id* (getf (rest method) :method-id))
+              (finish-output output-stream))))
+      (format output-stream ";;; end of ~a" (or *class-id* "Globals"))
+      (finish-output output-stream))))
 
 (defmethod compile-to-assembly (ast (cpu (eql :6502)) output-stream)
   (compile-6502-family ast output-stream :6502))
@@ -298,32 +309,21 @@ Compiling class string (e.g. @code{\"Character\"}).
 
 (defun slot-of-expr (expr)
   "Return (:of slot obj) form for EXPR, or NIL."
-  (when (and (listp expr)
-             (eq (first expr) :of))
+  (when (and (listp expr) (eq :of (first expr)))
+    expr))
+
+(defun slot-on-expr (expr)
+  "Return (:on slot obj) form for EXPR, or NIL."
+  (when (and (listp expr) (eq :on (first expr)))
     expr))
 
 (defun %move-from-resolve-constant-of-self (from)
-  "When   FROM   is   (:of   Name   Self)  but   Name   is   a   77/78   in
-@code{*CONST-TABLE*}, return the canonical constant name.
-
-Uses    @code{constant-cobol-name-for-assembly}    so    class-qualified
-names        (e.g.        @code{Character-Song--Heal--ID})        become
-@code{Song--Heal--ID} for
-@code{cobol-constant-to-assembly-symbol}    (@code{Song_Heal_ID}),   not
-a mis-split @code{--} group.
-
-MOVE, @code{emit-6502-load-expr}, compares, and  ALU RHS paths must load
-immediates  (@code{lda  #  Song_Heal_ID}), not  @code{lda  (Self),y}  on
-a slot offset."
   (if (slot-of-self-p from)
       (if (and (listp (second (slot-of-expr from)))
                (eql :subscript (first (second (slot-of-expr from)))))
           (second (slot-of-expr from))
           ;; else: no subscript
-          (let ((n (string (second (slot-of-expr from)))))
-            (if (constant-p n)
-                (constant-cobol-name-for-assembly n)
-                from)))
+          from)
       from))
 
 (defun %6502-move-source-byte-width (from)
@@ -332,8 +332,7 @@ and @code{operand-width}.
 
 Ensures PIC 99 sources (e.g.  @code{Character-Max-HP OF Self}) use width
 2 when the copybook row is two bytes."
-  (max (expression-operand-width from)
-       (operand-width from)))
+  (expression-operand-width from))
 
 (defun 6502-object-pointer-label (obj-expr class-id)
   "Return 64tass label for object pointer OBJ-EXPR (ZP pair), e.g. Current-Actor → CurrentActor.
@@ -349,8 +348,6 @@ Ignored (reserved for typed object refs).
 String usable as @code{lda (Label), y} base."
   (declare (ignore class-id))
   (cond
-    ((member obj-expr '(:self "Self" self) :test #'string-equal)
-     "Self")
     ((stringp obj-expr)
      (cobol-global-data-name-to-assembly-symbol obj-expr))
     (t
@@ -366,13 +363,19 @@ A holds the other operand."
   (let ((expr (%move-from-resolve-constant-of-self expr)))
     (cond
       ((expr-is-constant-p expr)
-       (format out "~&~10T~a ~a" mnemonic (emit-6502-immediate-operand expr)))
-      ((and (slot-of-expr expr) (not (slot-of-self-p expr)))
+       (format out "~&~10T~a # ~a" mnemonic expr))
+      ((slot-of-expr expr) 
        (let* ((slot-of-expression (slot-of-expr expr))
-              (offset (slot-symbol (second slot-of-expression) class-id))
+              (offset (apply #'slot-symbol (rest slot-of-expression)))
               (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
          (format out "~&~10Tldy # ~a" offset)
          (format out "~&~10T~a (~a), y" mnemonic pointer)))
+      ((slot-on-expr expr) 
+       (let* ((slot-on-expression (slot-on-expr expr))
+              (offset (apply #'slot-symbol (rest slot-on-expression)))
+              (pointer (6502-object-pointer-label (third slot-on-expression)
+                                                  class-id)))
+         (format out "~&~10T~a ~a + ~a, y" mnemonic pointer offset)))
       (t (format out "~&~10T~a ~a" mnemonic (emit-6502-value expr)))))
   (%invalidate-6502-accumulator-a))
 
@@ -381,20 +384,7 @@ A holds the other operand."
 Explicit   @code{Max-HP   OF  Self}   and   bare   instance  slots   use
 @code{ldy}/@code{cmp (Self),y}, not @code{cmp (Max-HP)}."
   (let ((expr (%move-from-resolve-constant-of-self expr)))
-    (cond
-      ((expr-is-constant-p expr)
-       (format out "~&~10Tcmp ~a" (emit-6502-immediate-operand expr)))
-      ((slot-of-self-p expr)
-       (let ((offset (slot-symbol (second (slot-of-expr expr)) class-id)))
-         (format out "~&~10Tldy # ~a" offset)
-         (format out "~&~10Tcmp (Self), y")))
-      ((and (slot-of-expr expr) (not (slot-of-self-p expr)))
-       (let* ((slot-of-expression (slot-of-expr expr))
-              (offset (slot-symbol (second slot-of-expression) class-id))
-              (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
-         (format out "~&~10Tldy # ~a" offset)
-         (format out "~&~10Tcmp (~a), y" pointer)))
-      (t (format out "~&~10Tcmp ~a" (emit-6502-value expr))))))
+    (emit-6502-alu-with-memory-rhs out "cmp" expr class-id)))
 
 (defun %emit-6502-alu-byte-n-of-expr (out mnemonic expr class-id n w)
   "Emit  MNEMONIC (@code{cmp},  @code{adc},  or @code{sbc})  on  byte N  of
@@ -415,12 +405,12 @@ W-byte EXPR. A  holds the accumulated other operand  (same addressing as
        (format out "~&~10Tpla")
        (format out "~&~10T~a ~a + ~d, x" mnemonic (second expr) n))
       ((slot-of-self-p expr)
-       (let ((offset (slot-symbol (second (slot-of-expr expr)) class-id)))
+       (let ((offset (apply #'slot-symbol (rest (slot-of-expr expr)))))
          (format out "~&~10Tldy # ~a~[~:;~:* + ~d~]" offset n)
          (format out "~&~10T~a (Self), y" mnemonic)))
       ((and (slot-of-expr expr) (not (slot-of-self-p expr)))
        (let* ((slot-of-expression (slot-of-expr expr))
-              (offset (slot-symbol (second slot-of-expression) class-id))
+              (offset (apply #'slot-symbol (rest slot-of-expression)))
               (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
          (format out "~&~10Tldy # ~a~[~:;~:* + ~d~]" offset n)
          (format out "~&~10T~a (~a), y" mnemonic pointer)))
@@ -462,7 +452,7 @@ emits @code{(slotname)} (see branch below), not the full @code{OriginClassSlot} 
 @item EXPR
 Rvalue expression; @code{NIL} signals @code{backend-error} (avoids emitting a @code{NIL} label).
 @end table"
-  (when (and (not (numberp expr)) (null expr))
+  (when (null expr)
     (error 'backend-error
            :message "emit-6502-value: missing expression (NIL)"
            :cpu :6502
@@ -476,7 +466,6 @@ Rvalue expression; @code{NIL} signals @code{backend-error} (avoids emitting a @c
          (cobol-constant-to-assembly-symbol (constant-cobol-name-for-assembly expr))
          expr))
     ((eq expr :self) "Self")
-    ((eq expr :null) "0")
     ((slot-of-expr expr)
      (error 'backend-error
             :message "emit-6502-value: slot OF … is not a plain address; use emit-6502-load-expr / load-byte-n"
@@ -522,6 +511,10 @@ Constant expressions are arithmetic/bit ops whose operands are all constant."
      (and (expr-is-constant-p (second expr)) (expr-is-constant-p (third expr))))
     ((and (listp expr) (eq (first expr) :bit-or))
      (and (expr-is-constant-p (second expr)) (expr-is-constant-p (third expr))))
+    ((and (listp expr) (eq (first expr) :low))
+     (expr-is-constant-p (second expr)) )
+    ((and (listp expr) (eq (first expr) :high))
+     (expr-is-constant-p (second expr)))
     ((and (listp expr) (eq (first expr) :bit-xor))
      (and (expr-is-constant-p (second expr)) (expr-is-constant-p (third expr))))
     ((and (listp expr) (eq (first expr) :bit-not))
@@ -559,6 +552,10 @@ Folds constant expressions (add/subtract/multiply/divide/bit/shift) at compile t
      (logxor (expr-constant-value (second expr)) (expr-constant-value (third expr))))
     ((and (listp expr) (eq (first expr) :bit-not))
      (logand #xff (lognot (expr-constant-value (second expr)))))
+    ((and (listp expr) (eq (first expr) :low))
+     (logand #xff (expr-constant-value (second expr))))
+    ((and (listp expr) (eq (first expr) :high))
+     (ash (logand #xff00 (expr-constant-value (second expr))) -8))
     ((and (listp expr) (eq (first expr) :shift-left))
      (ash (expr-constant-value (second expr))
           (if (third expr) (expr-constant-value (third expr)) 1)))
@@ -570,11 +567,15 @@ Folds constant expressions (add/subtract/multiply/divide/bit/shift) at compile t
 (defun emit-6502-immediate-operand (expr)
   "Full immediate operand for 64tass: folded numeric (@code{#$xx}) or named constant (@code{# Symbol}).
 
-EXPR must satisfy @code{expr-is-constant-p}. Named 77/78 constants use @code{cobol-constant-to-assembly-symbol} on @code{constant-cobol-name-for-assembly} so class-qualified names map to @code{Song_Heal_ID}, not a bad @code{--} split (e.g. @code{Character-Song--Heal--ID})."
+EXPR must  satisfy @code{expr-is-constant-p}. Named 77/78  constants use
+@code{cobol-constant-to-assembly-symbol}                              on
+@code{constant-cobol-name-for-assembly} so class-qualified  names map to
+@code{Song_Heal_ID},    not     a    bad    @code{--}     split    (e.g.
+@code{Character-Song--Heal--ID})."
   (cond
     ((and (stringp expr) (constant-p expr))
      (format nil "# ~a" (cobol-constant-to-assembly-symbol
-                           (constant-cobol-name-for-assembly expr))))
+                         (constant-cobol-name-for-assembly expr))))
     ((expr-is-constant-p expr)
      (emit-6502-immediate (expr-constant-value expr)))
     (t (error "emit-6502-immediate-operand: not a constant ~s" expr))))
@@ -603,7 +604,7 @@ then      @code{tax}.      @var{OUT},     @var{CLASS-ID}      as      in
     (cond
       ((and (slot-of-expr expr) (6502-use-undocumented-p))
        (let ((so (slot-of-expr expr)))
-         (format out "~&~10Tldy # ~a" (slot-symbol (second so) (third so) class-id))
+         (format out "~&~10Tldy # ~a" (apply #'slot-symbol (rest so)))
          (format out "~&~10Tlax (Self), y"))
        (%invalidate-6502-accumulator-a))
       (t
@@ -622,121 +623,125 @@ Compound bit/shift  expressions are  computed in-line.  Skips @code{lda}
 when @code{*6502-accumulator-expr*}  is @code{equal} to EXPR.  When EXPR
 is @code{(:of Name  Self)} and NAME is a  77/78 in @code{*const-table*},
 treat as bare NAME (immediate @code{lda #}), not an instance slot."
-  (let ((expr (%move-from-resolve-constant-of-self expr)))
-    (when (and *6502-accumulator-expr*
-               (equal expr *6502-accumulator-expr*))
-      (return-from emit-6502-load-expr))
-    (when (expr-is-constant-p expr)
-      (if (and (stringp expr) (constant-p expr))
-          (format out "~&~10Tlda # ~a"
-                  (cobol-constant-to-assembly-symbol (constant-cobol-name-for-assembly expr)))
-          (format out "~&~10Tlda ~a" (emit-6502-immediate (expr-constant-value expr))))
-      (setf *6502-accumulator-expr* expr)
-      (return-from emit-6502-load-expr))
-    (cond
-      ;; Arithmetic: a + b
-      ((and (listp expr) (eq (first expr) :add-expr))
+  (cond
+    ((and *6502-accumulator-expr*
+          (equalp expr *6502-accumulator-expr*))
+     (return-from emit-6502-load-expr))
+    ((expr-is-constant-p expr)
+     (format out "~&~10Tlda # ~a" (pascal-case expr))
+     (setf *6502-accumulator-expr* expr)
+     (return-from emit-6502-load-expr))
+    ;; Arithmetic: a + b
+    ((and (listp expr) (eq (first expr) :add-expr))
+     (emit-6502-load-expr out (second expr) class-id)
+     (format out "~&~10Tclc")
+     (emit-6502-alu-with-memory-rhs out "adc" (third expr) class-id)
+     (setf *6502-accumulator-expr* expr))
+    ;; Arithmetic: a - b
+    ((and (listp expr) (eq (first expr) :subtract-expr))
+     (emit-6502-load-expr out (second expr) class-id)
+     (format out "~&~10Tsec")
+     (emit-6502-alu-with-memory-rhs out "sbc" (third expr) class-id)
+     (setf *6502-accumulator-expr* expr))
+    ;; Arithmetic: a * k (k must be power of 2)
+    ((and (listp expr) (eq (first expr) :multiply-expr))
+     (let ((e1 (second expr)) (e2 (third expr)))
+       (when (expr-is-constant-p e2)
+         (let ((shift (log2 (expr-constant-value e2))))
+           (when shift
+             (emit-6502-load-expr out e1 class-id)
+             (dotimes (_ shift) (format out "~&~10Tasl a"))
+             (setf *6502-accumulator-expr* expr)
+             (return-from emit-6502-load-expr))))
+       (error 'backend-error
+              :message "6502: multiply by non-power-of-2 requires software routine"
+              :cpu :6502 :detail (list :multiply-expr e1 e2))))
+    ;; Arithmetic: a / k (k must be power of 2)
+    ((and (listp expr) (eq (first expr) :divide-expr))
+     (let ((e1 (second expr)) (e2 (third expr)))
+       (when (expr-is-constant-p e2)
+         (let ((shift (log2 (expr-constant-value e2))))
+           (when shift
+             (emit-6502-load-expr out e1 class-id)
+             (dotimes (_ shift) (format out "~&~10Tlsr a"))
+             (setf *6502-accumulator-expr* expr)
+             (return-from emit-6502-load-expr))))
+       (error 'backend-error
+              :message "6502: divide by non-power-of-2 requires software routine"
+              :cpu :6502 :detail (list :divide-expr e1 e2))))
+    ;; Subscripted array: base(index) — load index into X, then lda base, x
+    ((and (listp expr) (eq (first expr) :subscript))
+     (emit-6502-load-expr-into-x out (third expr) class-id)
+     (format out "~&~10Tlda ~a" (emit-6502-value expr))
+     (setf *6502-accumulator-expr* expr))
+    ;; Slot OF Self -- indexed indirect via Self pointer
+    ((slot-of-expr expr)
+     #+ () (format *trace-output* "~&~10T ~s is slot-of expr" expr)
+     (let ((so (slot-of-expr expr)))
+       (format out "~&~10Tldy # ~a" (apply #'slot-symbol (rest so)))
+       (format out "~&~10Tlda (~a), y" (third so)))
+     (setf *6502-accumulator-expr* expr))
+    ;; Shift left — asl A, n times
+    ((and (listp expr) (eq (first expr) :shift-left))
+     (let ((n (if (numberp (third expr)) (third expr) 1)))
        (emit-6502-load-expr out (second expr) class-id)
-       (format out "~&~10Tclc")
-       (emit-6502-alu-with-memory-rhs out "adc" (third expr) class-id)
-       (setf *6502-accumulator-expr* expr))
-      ;; Arithmetic: a - b
-      ((and (listp expr) (eq (first expr) :subtract-expr))
+       (dotimes (_ n) (format out "~&~10Tasl a"))
+       (setf *6502-accumulator-expr* expr)))
+    ;; Shift right — lsr A, n times
+    ((and (listp expr) (eq (first expr) :shift-right))
+     (let ((n (if (numberp (third expr)) (third expr) 1)))
        (emit-6502-load-expr out (second expr) class-id)
-       (format out "~&~10Tsec")
-       (emit-6502-alu-with-memory-rhs out "sbc" (third expr) class-id)
-       (setf *6502-accumulator-expr* expr))
-      ;; Arithmetic: a * k (k must be power of 2)
-      ((and (listp expr) (eq (first expr) :multiply-expr))
-       (let ((e1 (second expr)) (e2 (third expr)))
-         (when (expr-is-constant-p e2)
-           (let ((shift (log2 (expr-constant-value e2))))
-             (when shift
-               (emit-6502-load-expr out e1 class-id)
-               (dotimes (_ shift) (format out "~&~10Tasl a"))
-               (setf *6502-accumulator-expr* expr)
-               (return-from emit-6502-load-expr))))
-         (error 'backend-error
-                :message "6502: multiply by non-power-of-2 requires software routine"
-                :cpu :6502 :detail (list :multiply-expr e1 e2))))
-      ;; Arithmetic: a / k (k must be power of 2)
-      ((and (listp expr) (eq (first expr) :divide-expr))
-       (let ((e1 (second expr)) (e2 (third expr)))
-         (when (expr-is-constant-p e2)
-           (let ((shift (log2 (expr-constant-value e2))))
-             (when shift
-               (emit-6502-load-expr out e1 class-id)
-               (dotimes (_ shift) (format out "~&~10Tlsr a"))
-               (setf *6502-accumulator-expr* expr)
-               (return-from emit-6502-load-expr))))
-         (error 'backend-error
-                :message "6502: divide by non-power-of-2 requires software routine"
-                :cpu :6502 :detail (list :divide-expr e1 e2))))
-      ;; Subscripted array: base(index) — load index into X, then lda base, x
-      ((and (listp expr) (eq (first expr) :subscript))
-       (emit-6502-load-expr-into-x out (third expr) class-id)
-       (format out "~&~10Tlda ~a" (emit-6502-value expr))
-       (setf *6502-accumulator-expr* expr))
-      ;; Slot OF Self -- indexed indirect via Self pointer
-      ((slot-of-expr expr)
-       (let ((so (slot-of-expr expr)))
-         (format out "~&~10Tldy ~a" (emit-6502-immediate (slot-symbol (second so) (third so))))
-         (format out "~&~10Tlda (~a), y" (third so)))
-       (setf *6502-accumulator-expr* expr))
-      ;; Slot OF other object (e.g. Decal OF Current-Actor) — lda (Pointer),y
-      ;; Shift left — asl A, n times
-      ((and (listp expr) (eq (first expr) :shift-left))
-       (let ((n (if (numberp (third expr)) (third expr) 1)))
-         (emit-6502-load-expr out (second expr) class-id)
-         (dotimes (_ n) (format out "~&~10Tasl a"))
-         (setf *6502-accumulator-expr* expr)))
-      ;; Shift right — lsr A, n times
-      ((and (listp expr) (eq (first expr) :shift-right))
-       (let ((n (if (numberp (third expr)) (third expr) 1)))
-         (emit-6502-load-expr out (second expr) class-id)
-         (dotimes (_ n) (format out "~&~10Tlsr a"))
-         (setf *6502-accumulator-expr* expr)))
-      ;; Bitwise AND (mask — used for bit testing too)
-      ((and (listp expr) (eq (first expr) :bit-and))
-       (emit-6502-load-expr out (second expr) class-id)
-       (emit-6502-alu-with-memory-rhs out "and" (third expr) class-id)
-       (setf *6502-accumulator-expr* expr))
-      ;; Bitwise OR
-      ((and (listp expr) (eq (first expr) :bit-or))
-       (emit-6502-load-expr out (second expr) class-id)
-       (emit-6502-alu-with-memory-rhs out "ora" (third expr) class-id)
-       (setf *6502-accumulator-expr* expr))
-      ;; Bitwise XOR
-      ((and (listp expr) (eq (first expr) :bit-xor))
-       (emit-6502-load-expr out (second expr) class-id)
-       (emit-6502-alu-with-memory-rhs out "eor" (third expr) class-id)
-       (setf *6502-accumulator-expr* expr))
-      ;; Bitwise NOT (complement all bits)
-      ((and (listp expr) (eq (first expr) :bit-not))
-       (emit-6502-load-expr out (second expr) class-id)
-       (format out "~&~10Teor #$ff")
-       (setf *6502-accumulator-expr* expr))
-      ;; Numeric literal (:literal n) from VALUE clause
-      ((and (listp expr) (eq (first expr) :literal))
-       (format out "~&~10Tlda ~a" (emit-6502-immediate (second expr)))
-       (setf *6502-accumulator-expr* expr))
-      ;; Numeric literal
-      ((numberp expr)
-       (format out "~&~10Tlda ~a" (emit-6502-immediate expr))
-       (setf *6502-accumulator-expr* expr))
-      ;; Bare data name: constants immediate; instance slots via (Self),y; else absolute (bare-data)
-      ((stringp expr)
-       (cond
-         ((expr-is-constant-p expr)
-          (format out "~&~10Tlda ~a" (emit-6502-immediate-operand expr)))
-         ;; Grouped 77/78 names (Song--Hurt--ID): symbolic immediate even if *CONST-TABLE* missed merge.
-         ((and (cobol-double-hyphen-grouped-name-p expr) (not (expr-is-constant-p expr)))
-          (format out "~&~10Tlda # ~a" (cobol-constant-to-assembly-symbol expr)))
-         (t (format out "~&~10Tlda ~a" expr)))
-       (setf *6502-accumulator-expr* expr))
-      (t
-       (format out "~&~10Tlda ~a" (emit-6502-value expr))
-       (setf *6502-accumulator-expr* expr)))))
+       (dotimes (_ n) (format out "~&~10Tlsr a"))
+       (setf *6502-accumulator-expr* expr)))
+    ;; Bitwise AND (mask — used for bit testing too)
+    ((and (listp expr) (eq (first expr) :bit-and))
+     (emit-6502-load-expr out (second expr) class-id)
+     (emit-6502-alu-with-memory-rhs out "and" (third expr) class-id)
+     (setf *6502-accumulator-expr* expr))
+    ;; Bitwise OR
+    ((and (listp expr) (eq (first expr) :bit-or))
+     (emit-6502-load-expr out (second expr) class-id)
+     (emit-6502-alu-with-memory-rhs out "ora" (third expr) class-id)
+     (setf *6502-accumulator-expr* expr))
+    ;; Bitwise XOR
+    ((and (listp expr) (eq (first expr) :bit-xor))
+     (emit-6502-load-expr out (second expr) class-id)
+     (emit-6502-alu-with-memory-rhs out "eor" (third expr) class-id)
+     (setf *6502-accumulator-expr* expr))
+    ;; Bitwise NOT (complement all bits)
+    ((and (listp expr) (eq (first expr) :bit-not))
+     (emit-6502-load-expr out (second expr) class-id)
+     (format out "~&~10Teor #$ff")
+     (setf *6502-accumulator-expr* expr))
+    ;; Low value
+    ((and (listp expr) (eq (first expr) :low))
+     (format out "~&~10Tlda # <~a" (pascal-case (second expr)))
+     (setf *6502-accumulator-expr* expr))
+    ;; High value
+    ((and (listp expr) (eq (first expr) :high))
+     (format out "~&~10Tlda # >~a" (pascal-case (second expr)))
+     (setf *6502-accumulator-expr* expr))
+    ;; Numeric literal (:literal n) from VALUE clause
+    ((and (listp expr) (eq (first expr) :literal))
+     (format out "~&~10Tlda ~a" (emit-6502-immediate (second expr)))
+     (setf *6502-accumulator-expr* expr))
+    ;; Numeric literal
+    ((numberp expr)
+     (format out "~&~10Tlda ~a" (emit-6502-immediate expr))
+     (setf *6502-accumulator-expr* expr))
+    ;; Bare data name: constants immediate; instance slots via (Self),y; else absolute (bare-data)
+    ((stringp expr)
+     (cond
+       ((expr-is-constant-p expr)
+        (format out "~&~10Tlda ~a" (emit-6502-immediate-operand expr)))
+       ;; Grouped 77/78 names (Song--Hurt--ID): symbolic immediate even if *CONST-TABLE* missed merge.
+       ((and (cobol-double-hyphen-grouped-name-p expr) (not (expr-is-constant-p expr)))
+        (format out "~&~10Tlda # ~a" (cobol-constant-to-assembly-symbol expr)))
+       (t (format out "~&~10Tlda ~a" expr)))
+     (setf *6502-accumulator-expr* expr))
+    (t
+     (format out "~&~10Tlda ~a" (emit-6502-value expr))
+     (setf *6502-accumulator-expr* expr))))
 
 (defun emit-6502-load-hi-byte (out pointer-expr class-id)
   "Load the high byte of a 2-byte value into A. Handles literals, constants, variables.
@@ -773,7 +778,7 @@ Named     77/78     constants     with      byte     width     1     use
        (emit-6502-load-expr-into-x out (third expr) class-id)
        (format out "~&~10Tlda ~a~[~:;~:* + ~d~], x" (second expr) n))
       ((slot-of-self-p expr)
-       (let ((offset (slot-symbol (second (slot-of-expr expr)) (third (slot-of-expr expr)) class-id)))
+       (let ((offset (apply #'slot-symbol (rest (slot-of-expr expr)))))
          (format out "~&~10Tldy # ~a ~[~:;~:* + ~d~]" offset n)
          (format out "~&~10Tlda (Self), y")))
       ((slot-of-expr expr)
@@ -804,14 +809,14 @@ the slot offset from an immediately preceding @code{emit-6502-load-byte-n} to th
     (error "emit-6502-store-byte-n: index byte # ~d ≥ variable width ~d byte~:p" n w))
   (cond
     ((slot-of-expr dest)
-     (let* ((offset (slot-symbol (second dest) (third dest) class-id))
+     (let* ((offset (apply #'slot-symbol (rest dest)))
             (pointer (6502-object-pointer-label (third dest) class-id)))
        (unless skip-ldy
          (format out "~&~10Tldy # ~a~[~:;~:* + ~d~]" offset n))
        (format out "~&~10Tsta (~a), y" pointer)))
     ((stringp dest)
      (format out "~&~10Tsta ~a~[~:;~:* + ~d~]"
-             dest n))
+             (pascal-case dest) n))
     (t
      (format out "~&~10Tsta ~a~[~:;~:* + ~d~]"
              (emit-6502-value dest) n)))
@@ -842,18 +847,28 @@ Used for STZ when MOVE ZERO to a direct-memory destination on 65c02+."
 Uses @code{lax (Self),y} for the low byte (A and X), @code{iny}/@code{lda (Self),y} for high,
 stores high then @code{txa}/@code{sta (Self),y} for low — 6502 has no @code{stx (zp),y}.
 NMOS 6502 only (@code{lax}); other CPUs use the generic byte loop."
-  (let ((src (slot-symbol (second (slot-of-expr from)) class-id))
-        (dst (slot-symbol (second (slot-of-expr to-dest)) class-id)))
+  (let ((src (apply #'slot-symbol (rest (slot-of-expr from))))
+        (source-object (third from))
+        (dst (apply #'slot-symbol (rest (slot-of-expr to-dest))))
+        (dest-object (third from)))
     (format out "~&~10Tldy ~a" (emit-6502-immediate src))
-    (format out "~&~10Tlax (Self), y")
+    (ecase (first from)
+      (:of (format out "~&~10Tlax (~a), y" source-object))
+      (:on (format out "~&~10Tlax (~a), y" source-object)))
     (format out "~&~10Tiny")
-    (format out "~&~10Tlda (Self), y")
+    (ecase (first from)
+      (:of (format out "~&~10Tlda (~a), y" source-object))
+      (:on (format out "~&~10Tlda (~a), y" source-object)))
     (format out "~&~10Tldy ~a" (emit-6502-immediate (format nil "(~a+1)" dst)))
-    (format out "~&~10Tsta (Self), y")
+    (ecase (first from)
+      (:of (format out "~&~10Tsta (~a), y" source-object))
+      (:on (format out "~&~10Tsta (~a), y" source-object)))
     (format out "~&~10Tdey")
     ;; 6502 has no stx (zp),y — only sta (zp),y; low byte is in X from lax.
     (format out "~&~10Ttxa")
-    (format out "~&~10Tsta (Self), y"))
+    (ecase (first from)
+      (:of (format out "~&~10Tsta (~a), y" source-object))
+      (:on (format out "~&~10Tsta (~a), y" source-object))))
   (%invalidate-6502-accumulator-a))
 
 (defun emit-6502-move-n-bytes (out from to-dest from-w to-w class-id &key sign-extend)
@@ -923,7 +938,7 @@ Array fetches use X or Y; when true, avoid using X for temp storage."
   (cond
     ((and (listp expr) (eq (first expr) :subscript)) t)
     ((and (listp expr) (member (first expr) '(:add-expr :subtract-expr :multiply-expr :divide-expr
-                                            :shift-left :shift-right :bit-and :bit-or :bit-xor :bit-not)))
+                                              :shift-left :shift-right :bit-and :bit-or :bit-xor :bit-not)))
      (or (expr-contains-subscript-p (second expr))
          (expr-contains-subscript-p (third expr))))
     ((and (listp expr) (eq (first expr) :of))
@@ -943,32 +958,33 @@ Array fetches use X or Y; when true, avoid using X for temp storage."
     (flet ((load-index-into-x (idx-expr)
              "Load subscript index byte into X (see @code{emit-6502-load-expr-into-x})."
              (emit-6502-load-expr-into-x out idx-expr class-id)))
-    (cond
-      ;; MOVE NULL TO pointer — 6502: set pointer to NULL by zeroing high byte
-      ((string-equal (princ-to-string from) :null)
-       (format out "~&~10Tlda # 0")
-       (emit-6502-store-byte-n out to-dest class-id (1- to-w) to-w))
-      ;; Destination is subscripted: base(index) — load index into X, then store
-      ((and (listp to-dest) (eq (first to-dest) :subscript))
-       (load-index-into-x (third to-dest))
-       (emit-6502-load-expr out from class-id)
-       (format out "~&~10Tsta ~a" (emit-6502-value to-dest)))
-      ;; Source is subscripted: use @code{emit-6502-move-n-bytes} (same as general case).
-      ;; A dedicated @code{lda}/@code{sta} path used @code{emit-6502-value} on the destination,
-      ;; which fails for @code{slot OF} non-Self (e.g. Waypoint-Y OF Current-Course): those
-      ;; need @code{emit-6502-store-byte-n} and @code{sta (Pointer), y}.
-      ;; Destination is slot OF Self
-      ((slot-of-self-p to-dest)
-       (let ((from-w (%6502-move-source-byte-width from)))
-         (emit-6502-move-n-bytes out from to-dest from-w to-w class-id :sign-extend sign-extend)))
-      ;; Source is slot OF Self, destination is a variable
-      ((slot-of-self-p from)
-       (let ((from-w (%6502-move-source-byte-width from)))
-         (emit-6502-move-n-bytes out from to-dest from-w to-w class-id :sign-extend sign-extend)))
-      ;; General: variable or constant to variable
-      (t
-       (let ((from-w (%6502-move-source-byte-width from)))
-         (emit-6502-move-n-bytes out from to-dest from-w to-w class-id :sign-extend sign-extend)))))))
+      (cond
+        ;; MOVE NULL TO pointer — 6502: set pointer to NULL by zeroing high byte
+        ((string-equal (princ-to-string from) :null)
+         (format out "~&~10Tlda # 0")
+         (emit-6502-store-byte-n out to-dest class-id (1- to-w) to-w))
+        ;; Destination is subscripted: base(index) — load index into X, then store
+        ((and (listp to-dest) (eq (first to-dest) :subscript))
+         (load-index-into-x (third to-dest))
+         (emit-6502-load-expr out from class-id)
+         (format out "~&~10Tsta ~a" (emit-6502-value to-dest)))
+        ;; Source  is   subscripted:  use  @code{emit-6502-move-n-bytes}
+        ;; (same  as general  case).  A dedicated  @code{lda}/@code{sta}
+        ;; path  used @code{emit-6502-value}  on the  destination, which
+        ;; fails  for  @code{slot  OF}   non-Self  (e.g.  Waypoint-Y  OF
+        ;; Current-Course): those need @code{emit-6502-store-byte-n} and
+        ;; @code{sta (Pointer), y}. Destination is slot OF Self
+        ((slot-of-self-p to-dest)
+         (let ((from-w (%6502-move-source-byte-width from)))
+           (emit-6502-move-n-bytes out from to-dest from-w to-w class-id :sign-extend sign-extend)))
+        ;; Source is slot OF Self, destination is a variable
+        ((slot-of-self-p from)
+         (let ((from-w (%6502-move-source-byte-width from)))
+           (emit-6502-move-n-bytes out from to-dest from-w to-w class-id :sign-extend sign-extend)))
+        ;; General: variable or constant to variable
+        (t
+         (let ((from-w (%6502-move-source-byte-width from)))
+           (emit-6502-move-n-bytes out from to-dest from-w to-w class-id :sign-extend sign-extend)))))))
 
 ;;; STRING BLT (block transfer)
 ;;; STRING source DELIMITED BY SIZE INTO dest [LENGTH length]
@@ -1016,19 +1032,20 @@ constant expression, or nil."
     (unless (and len-val (integerp len-val) (plusp len-val))
       (error "EIGHTBOL: STRING BLT length must be a positive integer constant"))
     (let ((src-addr (string-operand-address source class-id))
-          (dst-addr (string-operand-address dest class-id)))
+          (dst-addr (string-operand-address dest class-id))
+          (label (string (new-6502-label "BLT_"))))
       (%invalidate-6502-accumulator-a)
       (format out "~&~10T;; STRING ~a DELIMITED BY SIZE INTO ~a (~d bytes)"
               (if (listp source) (safe-getf (rest source) :base) source)
               (if (listp dest) (safe-getf (rest dest) :base) dest)
               len-val)
       (format out "~&~10Tldy ~a" (emit-6502-immediate 0))
-      (format out "~&~10T:_blt")
+      (format out "~&~10T~a:" label)
       (format out "~&~10Tlda ~a, y" src-addr)
       (format out "~&~10Tsta ~a, y" dst-addr)
       (format out "~&~10Tiny")
       (format out "~&~10Tcpy #~d" len-val)
-      (format out "~&~10Tbne :_blt"))))
+      (format out "~&~10Tbne ~a" label))))
 
 ;;; GOTO and paragraph
 
@@ -1226,15 +1243,15 @@ TARGETS is list of paragraph names (1-based indices). LO, HI are 1-based inclusi
            (format out "~&~a:" label-done)))
         (repl-by
          ;; INSPECT id REPLACING CHARACTERS BY expr — fill string with expr
-         (let ((len (or (pic-size (format nil "~a" target)) 64)))
+         (let ((len (operand-width target)))
            (format out "~&~10T;; INSPECT ~a REPLACING CHARACTERS BY ~a" target repl-by)
            (emit-6502-load-expr out repl-by class-id)
-           (format out "~&~10Tldy ~a" (emit-6502-immediate 0))
+           (format out "~&~10Tldy # 0")
            (let ((label (new-6502-label "InspLoop")))
              (format out "~&~a:" label)
              (format out "~&~10Tsta ~a, y" target-sym)
              (format out "~&~10Tiny")
-             (format out "~&~10Tcpy #~d" len)
+             (format out "~&~10Tcpy # ~d" len)
              (format out "~&~10Tbne ~a" label))))))))
 
 ;;; INVOKE statement
@@ -1322,7 +1339,7 @@ When ITEM-SYM already has a @code{Service} prefix (case-insensitive), return it 
 
 (defun new-6502-label (prefix)
   "Generate unique label with meaningful name (L prefix, letter-start for 64tass)."
-  (format nil "L~a~d" prefix (incf *6502-label-counter*)))
+  (format nil "L8_~a_~d" prefix (incf *6502-label-counter*)))
 
 (defun compile-6502-if (out stmt cpu)
   (let ((condition (safe-getf (rest stmt) :condition))
@@ -1424,7 +1441,7 @@ Current class for slot symbols.
 @item BRANCH-LABEL
 Label when value is not all zeros (condition false for IS-ZERO).
 @end table"
-  (let ((w (max 1 (operand-width expr))))
+  (let ((w (max 1 (expression-operand-width expr))))
     (if (= w 1)
         (progn
           (emit-6502-load-expr out expr class-id)
@@ -1447,7 +1464,7 @@ Current class for slot symbols.
 @item BRANCH-LABEL
 Label when value is all zeros (IS-NOT-ZERO is false).
 @end table"
-  (let ((w (max 1 (operand-width expr))))
+  (let ((w (max 1 (expression-operand-width expr))))
     (if (= w 1)
         (progn
           (emit-6502-load-expr out expr class-id)
@@ -1769,7 +1786,7 @@ Current class (slot labels).
          (w (max (operand-width result)
                  (expression-operand-width from)
                  (operand-width to-op)))
-         (bcd-p (when result (usage-bcd-p (expr-to-width-name result)))))
+         (bcd-p (when result (operand-bcd-p result))))
     (unless (or giving to-op)
       (error 'backend-error
              :message "ADD requires TO or GIVING"
@@ -1815,11 +1832,9 @@ Current class (slot labels).
                    (let ((v (expr-constant-value to-op)))
                      (format out "~&~10Tadc #<~d" v))
                    (cond
-                     ((slot-of-self-p to-op)
-                      (let ((offset (slot-symbol (second (slot-of-expr to-op)) class-id)))
-                        (format out "~&~10Tldy #~a" offset)
-                        (format out "~&~10Tadc (Self), y")))
-                     ((and (slot-of-expr to-op) (not (slot-of-self-p to-op)))
+                     ((and (listp to-op) (eql :on (first to-op)))
+                      (emit-6502-alu-with-memory-rhs out "adc" to-op class-id))
+                     ((slot-of-expr to-op)
                       (emit-6502-alu-with-memory-rhs out "adc" to-op class-id))
                      (t
                       (format out "~&~10Tadc ~a" (emit-6502-value to-op)))))
@@ -1834,12 +1849,12 @@ Current class (slot labels).
                      (format out "~&~10Tadc #>~d" v))
                    (cond
                      ((slot-of-self-p to-op)
-                      (let ((offset (slot-symbol (second (slot-of-expr to-op)) class-id)))
+                      (let ((offset (apply #'slot-symbol (rest (slot-of-expr to-op)))))
                         (format out "~&~10Tldy #~a" (format nil "(~a+1)" offset))
                         (format out "~&~10Tadc (Self), y")))
                      ((and (slot-of-expr to-op) (not (slot-of-self-p to-op)))
                       (let* ((slot-of-expression (slot-of-expr to-op))
-                             (offset (slot-symbol (second slot-of-expression) class-id))
+                             (offset (apply #'slot-symbol (rest slot-of-expression)))
                              (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
                         (format out "~&~10Tldy #~a" (format nil "(~a+1)" offset))
                         (format out "~&~10Tadc (~a), y" pointer)))
@@ -1850,14 +1865,14 @@ Current class (slot labels).
                        ;; Y already holds high-byte index from ldy #(slot+1) before adc (Self),y.
                        (format out "~&~10Tsta (Self), y")
                        (let ((n (slot-of-expr result)))
-                         (format out "~&~10Tldy #~a + 1" (slot-symbol (second n) class-id))
+                         (format out "~&~10Tldy #~a + 1" (apply #'slot-symbol (rest n)))
                          (format out "~&~10Tsta (Self), y")
                          (format out "~&~10Tdey")
                          (format out "~&~10T~a" (if use-stack "pla" "txa"))
                          (format out "~&~10Tsta (Self), y")))
                    (if (and (slot-of-expr result) (not (slot-of-self-p result)))
                        (let* ((n (slot-of-expr result))
-                              (offset (slot-symbol (second n) class-id))
+                              (offset (apply #'slot-symbol (rest n)))
                               (pointer (6502-object-pointer-label (third n) class-id)))
                          (format out "~&~10Tldy #~a + 1" offset)
                          (format out "~&~10Tsta (~a), y" pointer)
@@ -1883,7 +1898,7 @@ Current class (slot labels).
                  (cond
                    ((slot-of-self-p to-op)
                     (let ((n (slot-of-expr to-op)))
-                      (format out "~&~10Tldy ~a" (emit-6502-immediate (slot-symbol (second n) class-id)))
+                      (format out "~&~10Tldy ~a" (emit-6502-immediate (apply #'slot-symbol (rest n))))
                       (format out "~&~10Tadc (Self), y")))
                    ((and (slot-of-expr to-op) (not (slot-of-self-p to-op)))
                     (emit-6502-alu-with-memory-rhs out "adc" to-op class-id))
@@ -1891,13 +1906,7 @@ Current class (slot labels).
                     (format out "~&~10Tadc ~a" (emit-6502-value to-op)))))
              (emit-6502-store-byte-n out giving class-id 0 1))
            (cond
-             ((slot-of-self-p to-op)
-              (let ((n (slot-of-expr to-op)))
-                (format out "~&~10Tldy ~a" (emit-6502-immediate (slot-symbol (second n) class-id)))
-                (format out "~&~10Tadc (Self), y")
-                (format out "~&~10Tsta (Self), y")
-                (%6502-note-accumulator-holds-value-of to-op)))
-             ((and (slot-of-expr to-op) (not (slot-of-self-p to-op)))
+             ((slot-of-expr to-op) 
               (emit-6502-alu-with-memory-rhs out "adc" to-op class-id)
               (emit-6502-store-byte-n out to-op class-id 0 1)
               (%6502-note-accumulator-holds-value-of to-op))
@@ -1955,11 +1964,7 @@ Current class (slot labels).
                     (let ((v (expr-constant-value from)))
                       (format out "~&~10Tsbc #<~d" v))
                     (cond
-                      ((slot-of-self-p from)
-                       (let ((offset (slot-symbol (second (slot-of-expr from)) class-id)))
-                         (format out "~&~10Tldy #~a" offset)
-                         (format out "~&~10Tsbc (Self), y")))
-                      ((and (slot-of-expr from) (not (slot-of-self-p from)))
+                      ((slot-of-expr from) 
                        (emit-6502-alu-with-memory-rhs out "sbc" from class-id))
                       (t
                        (format out "~&~10Tsbc ~a" (emit-6502-value from)))))
@@ -1972,50 +1977,40 @@ Current class (slot labels).
                     (let ((v (expr-constant-value from)))
                       (format out "~&~10Tsbc #>~d" v))
                     (cond
-                      ((slot-of-self-p from)
-                       (let ((offset (slot-symbol (second (slot-of-expr from)) class-id)))
-                         (format out "~&~10Tldy #~a" (format nil "(~a+1)" offset))
-                         (format out "~&~10Tsbc (Self), y")))
-                      ((and (slot-of-expr from) (not (slot-of-self-p from)))
+                      ((slot-of-expr from) 
                        (let* ((slot-of-expression (slot-of-expr from))
-                              (offset (slot-symbol (second slot-of-expression) class-id))
+                              (offset (apply #'slot-symbol (rest slot-of-expression)))
                               (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
                          (format out "~&~10Tldy #~a" (format nil "(~a+1)" offset))
                          (format out "~&~10Tsbc (~a), y" pointer)))
                       (t
                        (format out "~&~10Tsbc ~a + 1" (emit-6502-value from)))))
-                (if (slot-of-self-p result)
-                    (let ((n (slot-of-expr result)))
-                      (format out "~&~10Tldy #~a + 1" (slot-symbol (second n) class-id))
-                      (format out "~&~10Tsta (Self), y")
+                (if (slot-of-expr result)
+                    (let* ((n (slot-of-expr result))
+                           (offset (apply #'slot-symbol (rest n)))
+                           (pointer (6502-object-pointer-label (third n) class-id)))
+                      (format out "~&~10Tldy #~a + 1" offset)
+                      (format out "~&~10Tsta (~a), y" pointer)
                       (format out "~&~10Tdey")
                       (format out "~&~10T~a" (if use-stack "pla" "txa"))
-                      (format out "~&~10Tsta (Self), y"))
-                    (if (and (slot-of-expr result) (not (slot-of-self-p result)))
-                        (let* ((n (slot-of-expr result))
-                               (offset (slot-symbol (second n) class-id))
-                               (pointer (6502-object-pointer-label (third n) class-id)))
-                          (format out "~&~10Tldy #~a + 1" offset)
-                          (format out "~&~10Tsta (~a), y" pointer)
-                          (format out "~&~10Tdey")
-                          (format out "~&~10T~a" (if use-stack "pla" "txa"))
-                          (format out "~&~10Tsta (~a), y" pointer))
-                        (let ((res-sym (emit-6502-value result)))
-                          (format out "~&~10Tsta ~a + 1" res-sym)
-                          (format out "~&~10T~a" (if use-stack "pla" "txa"))
-                          (format out "~&~10Tsta ~a" res-sym))))
+                      (format out "~&~10Tsta (~a), y" pointer))
+                    (let ((res-sym (emit-6502-value result)))
+                      (format out "~&~10Tsta ~a + 1" res-sym)
+                      (format out "~&~10T~a" (if use-stack "pla" "txa"))
+                      (format out "~&~10Tsta ~a" res-sym)))
                 (when bcd-p (format out "~&~10Tcld"))
                 (%invalidate-6502-accumulator-a))))))
-      ((slot-of-self-p from-target)
+      ((slot-of-expr from-target)
        (let* ((n (slot-of-expr from-target))
-              (slot-name (second n)))
-         (format out "~&~10Tldy ~a" (emit-6502-immediate (slot-symbol slot-name class-id)))
-         (format out "~&~10Tlda (Self), y")
+              (offset (apply #'slot-symbol (rest n)))
+              (pointer (6502-object-pointer-label (third n) class-id)))
+         (format out "~&~10Tldy # ~a" offset)
+         (format out "~&~10Tlda (~a), y" pointer)
          (format out "~&~10Tsec")
          (if (expr-is-constant-p from)
-             (format out "~&~10Tsbc ~a" (emit-6502-immediate-operand from))
+             (format out "~&~10Tsbc # ~a" from)
              (format out "~&~10Tsbc ~a" (emit-6502-value from)))
-         (format out "~&~10Tsta (Self), y")
+         (format out "~&~10Tsta (~a), y" pointer)
          (%6502-note-accumulator-holds-value-of from-target)))
       (giving
        (emit-6502-load-expr out from-target class-id)
@@ -2026,7 +2021,7 @@ Current class (slot labels).
            (cond
              ((slot-of-self-p from)
               (let ((n (slot-of-expr from)))
-                (format out "~&~10Tldy ~a" (emit-6502-immediate (slot-symbol (second n) class-id)))
+                (format out "~&~10Tldy ~a" (emit-6502-immediate (apply #'slot-symbol (rest n))))
                 (format out "~&~10Tsbc (Self), y")))
              ((and (slot-of-expr from) (not (slot-of-self-p from)))
               (emit-6502-alu-with-memory-rhs out "sbc" from class-id))
@@ -2043,7 +2038,7 @@ Current class (slot labels).
            (cond
              ((slot-of-self-p from)
               (let ((n (slot-of-expr from)))
-                (format out "~&~10Tldy ~a" (emit-6502-immediate (slot-symbol (second n) class-id)))
+                (format out "~&~10Tldy ~a" (emit-6502-immediate (apply #'slot-symbol (rest n))))
                 (format out "~&~10Tsbc (Self), y")))
              ((and (slot-of-expr from) (not (slot-of-self-p from)))
               (emit-6502-alu-with-memory-rhs out "sbc" from class-id))
@@ -2052,7 +2047,7 @@ Current class (slot labels).
        (cond
          ((slot-of-self-p from-target)
           (let ((n (slot-of-expr from-target)))
-            (format out "~&~10Tldy ~a" (emit-6502-immediate (slot-symbol (second n) class-id)))
+            (format out "~&~10Tldy ~a" (emit-6502-immediate (apply #'slot-symbol (rest n))))
             (format out "~&~10Tsta (Self), y")
             (%6502-note-accumulator-holds-value-of from-target)))
          ((and (slot-of-expr from-target) (not (slot-of-self-p from-target)))
@@ -2104,7 +2099,7 @@ For w=1, expr may be compound (add, subtract, etc.). For w>1, expr must be varia
        ;; SET target TO ADDRESS OF source: store address of source into target (2-byte pointer).
        (let ((source-id address-of))
          (if (slot-of-self-p source-id)
-             (let ((offset (slot-symbol (second (slot-of-expr source-id)) class-id)))
+             (let ((offset (apply #'slot-symbol (rest (slot-of-expr source-id)))))
                (format out "~&~10Tlda #<Self")
                (format out "~&~10Tclc")
                (format out "~&~10Tadc #~a" offset)
@@ -2343,6 +2338,12 @@ For w=1, expr may be compound (add, subtract, etc.). For w>1, expr must be varia
 (def-6502-statement :copy (ast-node-data)
   (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
          (safe-getf ast-node-data :name)))
+
+(def-6502-statement :invoke-super (ast-node-data)
+  (declare (ignore ast-node-data))
+  (format *output-stream* "~10Tjmp Call~a~a"
+          (pascal-case (gethash *class-id* *parent-classes*))
+          (pascal-case *method-id*)))
 
 (def-6502-statement :service-bank (ast-node-data)
   (declare (ignore ast-node-data))

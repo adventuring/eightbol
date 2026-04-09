@@ -1,19 +1,32 @@
 ;; src/ast-optimize.lisp — AST-level dead code elimination and tail-call detection
 ;;
 ;; Performs:
-;;   0. DIVIDE/MULTIPLY by constant power-of-two → :compute with shift (all backends).
-;;   1. Constant folding: pure literal arithmetic in :compute/:set/:move :from.
-;;   1b. Algebraic simplification on folded subexpressions: e.g. @code{x + (-k) → x - k},
-;;      @code{x - (-k) → x + k}, @code{±0} and @code{*1} identities, @code{*0} and
-;;      @code{/1} where operands are integer constants.
-;;   2. Unreachable code elimination: removes statements after terminal
-;;      control flow (:goback, :exit-method, :exit-program, :exit, :stop-run).
-;;   3. Dead store elimination: removes writes overwritten before being read.
-;;   4. Tail-call detection: annotates INVOKE/CALL in tail position with :tail-call-p.
-;;      (INVOKE with :returning cannot be tail-called; CALL has no return value.)
+
+;; 0.  DIVIDE/MULTIPLY by  constant power-of-two  → :compute  with shift
+;;   (all backends).
+
+;;   1.      Constant     folding:      pure     literal      arithmetic
+;;   in :compute/:set/:move :from.
+
+;;   1b. Algebraic simplification on folded subexpressions: e.g. @code{x
+;;      +  (-k) →  x  - k},  @code{x  - (-k)  → x  +  k}, @code{±0}  and
+;;      @code{*1} identities, @code{*0} and @code{/1} where operands are
+;;      integer constants.
+
+;;   2. Unreachable code elimination:  removes statements after terminal
+;;      control                                                     flow
+;;      (:goback, :exit-method, :exit-program, :exit, :stop-run).
+
+;;   3.  Dead  store  elimination:  removes  writes  overwritten  before
+;;   being read.
+
+;;   4.  Tail-call detection:  annotates  INVOKE/CALL  in tail  position
+;;      with   :tail-call-p.   (INVOKE   with   :returning   cannot   be
+;;      tail-called; CALL has no return value.)
 ;;
-;; Analysis is conservative: PERFORM and INVOKE are treated as potentially
-;; reading any location; subscripted accesses with variable indices may alias.
+;; Analysis  is   conservative:  PERFORM  and  INVOKE   are  treated  as
+;; potentially reading any location;  subscripted accesses with variable
+;; indices may alias.
 (in-package :eightbol)
 
 ;;; Location extraction (for data-flow analysis)

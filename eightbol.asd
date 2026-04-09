@@ -4,7 +4,7 @@
 (asdf:defsystem :eightbol
   :description "EIGHTBOL compiler for 8-bit systems"
   :author "Bruce-Robert Pocock"
-  :version "0.2.0"
+  :version "0.4"
   :maintainer "Bruce-Robert Pocock"
   :mailto "brpocock+skyline@star-hope.org"
   :licence "MIT"
@@ -24,15 +24,15 @@
   :components
   ((:module "src"
     :components ((:file "package")
-                 (:file "conditions"  :depends-on ("package"))
-                 (:file "main"        :depends-on ("package" "eightbol-compile"))
-                 (:file "lexer"       :depends-on ("package" "conditions"))
-                 (:file "ast"         :depends-on ("package"))
+                 (:file "conditions" :depends-on ("package"))
+                 (:file "main" :depends-on ("package" "eightbol-compile"))
+                 (:file "lexer" :depends-on ("package" "conditions"))
+                 (:file "ast" :depends-on ("package"))
                  (:file "ast-optimize" :depends-on ("package" "ast"))
                  (:file "ast-validate"
                   :depends-on ("package" "ast" "ast-optimize" "conditions"))
-                 (:file "parser"      :depends-on ("package" "conditions" "lexer" "ast"))
-                 (:file "backend"     :depends-on ("package" "conditions" "ast"))
+                 (:file "parser" :depends-on ("package" "conditions" "lexer" "ast"))
+                 (:file "backend" :depends-on ("package" "conditions" "ast"))
                  (:file "backend-6502"
                   :depends-on ("package" "ast" "backend"))
                  (:file "backend-RP2A03"
@@ -61,14 +61,14 @@
                   :depends-on ("package" "ast" "backend"))
                  (:file "eightbol-compile"
                   :depends-on ("package" "parser" "ast" "ast-optimize" "ast-validate"
-                               "backend" "backend-6502" "backend-RP2A03"
-                               "backend-65c02" "backend-65c816"
-                               "backend-HuC6280"
-                               "backend-cp1610" "backend-Z80"
-                               "backend-m68k" "backend-SM83" "backend-m6800"
-                               "backend-ARM7"
-                               "backend-i286"
-                               "backend-F8")))))
+                                         "backend" "backend-6502" "backend-RP2A03"
+                                         "backend-65c02" "backend-65c816"
+                                         "backend-HuC6280"
+                                         "backend-cp1610" "backend-Z80"
+                                         "backend-m68k" "backend-SM83" "backend-m6800"
+                                         "backend-ARM7"
+                                         "backend-i286"
+                                         "backend-F8")))))
   :in-order-to ((test-op (test-op #:eightbol/test))))
 
 (asdf:defsystem #:eightbol/test

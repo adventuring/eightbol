@@ -37,10 +37,11 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
       environment equal evaluate exit external
       false fault filler for format from function
       giving go goback greater
+      high
       id identification if imperative in indent inherits installation
-      inspect into invoke is
+      inspect instance into invoke is
       just justified
-      leading length less library linkage log
+      leading length less library linkage log low
       method method-id minifont
       move multiply native negative next not null nulls numeric
       object object-computer occurs of offset on or other outdent
@@ -50,7 +51,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
       search section security self sentence sentences service set
       shift-left shift-right sign signed size subtract
       source-computer special-names stop string super symbol
-      tallying test than then through thru times title to trailing true
+      tallying test than the then through thru times title to trailing true
       unicode unsigned until up usage
       value values varying
       when with working-storage
@@ -109,6 +110,9 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (unless (string-equal class-id end-class-name)
     (warn "Class-ID mismatch: starts with ~a, ends with ~a~@[, expected ~a~]"
 	class-id end-class-name (header-case (pathname-name *source-file-pathname*))))
+  (unless (string-equal (header-case class-id) class-id)
+    (warn "Class-ID seems to be bad syntax? ~s" class-id)
+    (setf class-id (header-case class-id)))
   (dolist (dd class-data-division)
     (ecase (first dd)
       (:comment (appendf c2* dd))
@@ -192,7 +196,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 (defun parse/id-field (field-name _stop field-value _stop2)
   (declare (ignore _stop _stop2))
   (list (intern (string-upcase field-name) :keyword)
-        (princ-to-string field-value)))
+        (format nil "~{~a~^ ~}" (flatten (ensure-list field-value)))))
 
 (defun parse/inherits (_inherits _dot parent _dot2)
   (declare (ignore _inherits _dot _dot2))
@@ -428,12 +432,9 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (declare (ignore _call _in _bank))
   (list :call :target target :bank bank))
 
-(defun parse/call-in-library (_call target _in _library _name)
-  "CALL target IN LIBRARY name.
-Library routines live in LastBank which is always resident at $c000.
-Generates a near jsr (no bank switch) regardless of the library name."
-  (declare (ignore _call _in _library _name))
-  (list :call :target target :bank nil :library t))
+(defun parse/call-in-library (_call target _in _library name)
+  (declare (ignore _call _in _library))
+  (error "Can't call LIBRARY ~a routine ~a" name target))
 
 (defun parse/call-in-library-omit-name (_call target _in _library)
   "CALL target IN LIBRARY. — library name omitted (LastBank implied)."
@@ -947,10 +948,6 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                (lambda (_p _i pic) (declare (ignore _p _i)) (list :pic pic)))
           (pic picture-string
                (lambda (_p pic) (declare (ignore _p)) (list :pic pic)))
-          (object reference obj-ref-class
-                  (lambda (_obj _ref class)
-                    (declare (ignore _obj _ref))
-                    (list :usage :object-ref :class class)))
           ())
 
          (redefines-clause (redefines data-name) ())
@@ -976,8 +973,6 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (usage native (lambda (&rest _) (declare (ignore _)) (list :usage :native)))
           (usage is display (lambda (&rest _) (declare (ignore _)) (list :usage :display)))
           (usage display (lambda (&rest _) (declare (ignore _)) (list :usage :display)))
-          (usage is packed-decimal (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
-          (usage packed-decimal (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
           (usage is decimal (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
           (usage decimal (lambda (&rest _) (declare (ignore _)) (list :usage :bcd)))
           (usage is pointer (lambda (&rest _) (declare (ignore _)) (list :usage :pointer)))
@@ -994,10 +989,14 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                   (lambda (_o _r cn) (declare (ignore _o _r)) (list :usage :object-ref :class cn)))
           (object reference string
                   (lambda (_o _r cn) (declare (ignore _o _r)) (list :usage :object-ref :class cn)))
-          ;; OBJECT REFERENCE VALUE NULL — untyped null pointer (e.g. Self)
-          (object reference value null
-                  (lambda (_o _r _v _n) (declare (ignore _o _r _v _n))
-                    (list :usage :object-ref :class nil)))
+          (usage object instance symbol
+                 (lambda (_u _o _r cn) (declare (ignore _u _o _r)) (list :usage :object :class cn)))
+          (usage object instance string
+                 (lambda (_u _o _r cn) (declare (ignore _u _o _r)) (list :usage :object :class cn)))
+          (object instance symbol
+                  (lambda (_o _r cn) (declare (ignore _o _r)) (list :usage :object :class cn)))
+          (object instance string
+                  (lambda (_o _r cn) (declare (ignore _o _r)) (list :usage :object :class cn)))
           ())
 
          (value-clause
@@ -1063,9 +1062,17 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (high |(| identifier |)| (lambda (_low _p1 id _p2)
                                      (declare (ignore _low _p1 _p2))
                                      (list :high id)))
-          (data-name of data-name as data-name
-                     (lambda (slot _of object _as class)
-                       (declare (ignore _of _as))
+          (data-name on the data-name data-name
+                     (lambda (slot _on _the class object)
+                       (declare (ignore _on _the))
+                       (list :on slot object class)))
+          (data-name on data-name
+                     (lambda (slot _on object)
+                       (declare (ignore _on))
+                       (list :on slot object)))
+          (data-name of the data-name data-name
+                     (lambda (slot _of _the class object)
+                       (declare (ignore _of _the))
                        (list :of slot object class)))
           (data-name of data-name
                      (lambda (slot _of object)
@@ -1075,9 +1082,9 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                      (lambda (slot _1 subscript _2 _of object)
                        (declare (ignore _1 _2 _of))
                        (list :of (list :subscript slot subscript) object)))
-          (data-name |(| subscript |)| of data-name as data-name
-                     (lambda (slot _1 subscript _2 _of object _as class)
-                       (declare (ignore _1 _2 _of _as))
+          (data-name |(| subscript |)| of the data-name data-name
+                     (lambda (slot _1 subscript _2 _of _the class object)
+                       (declare (ignore _1 _2 _of _the))
                        (list :of (list :subscript slot subscript) object class)))
           (data-name |(| subscript |)| #'parse/identifier-subscript))
 
@@ -1090,7 +1097,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (address of identifier)
           null nulls)
 
-         (object-expression self identifier super)
+         (object-expression self identifier)
 
          (expression
           literal
@@ -1325,6 +1332,8 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          (invoke-statement
           (invoke object-expression method-name returning identifier
                   #'parse/invoke-returning)
+          (invoke super (lambda (&rest _) (declare (ignore _))
+                          (list :invoke-super)))
           (invoke object-expression method-name #'parse/invoke))
 
          (log-fault-statement

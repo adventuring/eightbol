@@ -48,7 +48,7 @@ Buildapp passes argv as single argument; use uiop:command-line-arguments when av
         (start-time (get-universal-time)))
     (cond
       ((getf options :version)
-       (format t "EIGHTBOL Compiler version 0.3~%"))
+       (format t "EIGHTBOL Compiler version 0.4~%"))
       ((getf options :help)
        (let ((cpus (append (mapcar #'cdr +cpu-display-names+)
                            (list "all"))))
@@ -70,21 +70,27 @@ Buildapp passes argv as single argument; use uiop:command-line-arguments when av
               (copybook-paths (loop for (key value) on options by #'cddr
                                     when (and (eql key :include-path)
                                               (or (stringp value) (pathnamep value)))
-                                    collect (uiop:ensure-directory-pathname
-                                             (merge-pathnames (pathname value) (truename "."))))))
+                                      collect (uiop:ensure-directory-pathname
+                                               (merge-pathnames (pathname value) (truename "."))))))
          (unless (probe-file input-file)
            (error "Can't find input file ~a" input-file))
-         (format t "~&Compiling ~a to ~a" input-file (or output-file "standard output"))
+         (format t "~&Compiling ~a to ~a" input-file
+                 (or output-file "standard output"))
          (compile-eightbol-class (list input-file)
                                  :cpus cpus
                                  :copybook-paths (when copybook-paths copybook-paths)
                                  :output-file (when output-file (pathname output-file))
-                                 :root-directory (truename "."))))
+                                 :root-directory (truename "."))
+         (fresh-line)
+         (format t " … completed in ~[less than a second~:;~~~:*~:d second~:p~]."
+                 (- (get-universal-time) start-time))
+         (terpri)
+         (finish-output)))
       (t (error 'usage-error
-		:option "input file"
-		:argument nil
-		:message
-		(format nil
-			"No input file specified. ~
+	      :option "input file"
+	      :argument nil
+	      :message
+	      (format nil
+		    "No input file specified. ~
 Use --help for usage information.
 Processed: ~s" options))))))

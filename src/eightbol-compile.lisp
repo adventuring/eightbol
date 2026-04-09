@@ -191,7 +191,7 @@ Returns the AST plist."
                                  (make-pathname
                                   :directory (list :relative "Source" "Generated" "Classes"
                                                    (cpu-directory-name cpu))
-                                  :name (concatenate 'string class-id "Class") :type "s")
+                                  :name (concatenate 'string (pascal-case class-id) "Class") :type "s")
                                  root-directory))))
               (ensure-directories-exist asm-path)
               (with-open-file (out asm-path
@@ -227,7 +227,6 @@ already calls optimize-ast before `compile-to-assembly`."
 (defun compile-eightbol-class-from-ast
     (ast
      &key (cpus +supported-cpus+)
-          (root-directory (truename "."))
           output-file)
   "Re-compile from a previously-parsed (or loaded) AST plist.
 Writes only assembly output (no AST write). Applies optimize-ast so the same
@@ -236,19 +235,12 @@ routine AST passes run as in `compile-eightbol-class`."
     (error "EIGHTBOL: not a :program AST node"))
   (setf ast (optimize-ast ast))
   (let ((class-id (ast-class-id ast)))
-    (do ((cpu-list cpus (rest cpu-list))
-         (cpu (first cpus) (first (rest cpu-list)))
-         (first-p t nil))
-        ((null cpu-list))
+    (dolist (cpu cpus)
       (handler-case
-          (let ((asm-path (if (and first-p output-file)
-                              (pathname output-file)
-                              (merge-pathnames
-                               (make-pathname
-                                :directory (list :relative "Source" "Generated" "Classes"
-                                                 (cpu-directory-name cpu))
-                                :name (concatenate 'string class-id "Class") :type "s")
-                               root-directory))))
+          (let ((asm-path (make-pathname
+                           :directory (list :relative "Source" "Generated" "Classes"
+                                            (cpu-directory-name cpu))
+                           :name (concatenate 'string class-id "Class") :type "s")))
             (ensure-directories-exist asm-path)
             (with-open-file (out asm-path
                                  :direction :output
@@ -266,21 +258,19 @@ routine AST passes run as in `compile-eightbol-class`."
     (read-ast stream)))
 
 (defvar *class-methods* (make-hash-table :test 'equalp))
-(defvar *class-slots* (make-hash-table :test 'equalp))
 (defvar *parent-classes* (make-hash-table :test 'equalp))
 
 (defun method-class (class-id method-id)
-  (let ((canon-class (pascal-case class-id))
-        (canon-method (pascal-case method-id)))
+  (let ((canon-method (pascal-case method-id)))
     #+()(format *trace-output* "~&Method ~s Class ~s" canon-method canon-class)
     #+()(force-output *trace-output*)
     (if (equal "Destroy" canon-method)
         (return-from method-class "Basic-Object")
-        (when (equal "BasicObject" canon-class)
+        (when (equal "Basic-Object" class-id)
 	(error "~s is not a method of Basic-Object" method-id)))
-    (unless (gethash canon-class *parent-classes*)
+    (unless (gethash class-id *parent-classes*)
       (load-classes))
-    (let ((consider-class canon-class)
+    (let ((consider-class class-id)
           (seen nil))
       (loop
         #+()(format *trace-output* "~&~4TLooking for ~s in ~s" canon-method consider-class)
@@ -292,42 +282,34 @@ routine AST passes run as in `compile-eightbol-class`."
             (setf consider-class (gethash consider-class *parent-classes*))
             (when (or (null consider-class) (equal consider-class "BasicObject"))
 	    (error "~s is not a method of class ~s, nor its parent classes up to ~s~2%Seen: ~{~s~^, ~}"
-		 (header-case method-id) (header-case canon-class) (header-case consider-class)
+		 method-id class-id consider-class
                      (mapcar #'header-case (flatten seen))))))))
 
-(defun slot-class (object slot-id &optional class-id)
+(defun slot-class (object slot-id &optional (class-id
+                                             (if (string-equal "Self" object)
+                                                 *class-id*
+                                                 (oops-class-of object))))
   (when (and (listp slot-id) (eql :subscript (first slot-id)))
     (setf slot-id (second slot-id)))
   (when (string-equal "Destroy" slot-id)
     (return-from slot-class "Basic-Object"))
-  (let ((canon-class (pascal-case (or class-id
-                                      (if (string-equal "Self" object)
-                                          *class-id*
-                                          (oops-class-of object)))))
-        (canon-slot (pascal-case slot-id)))
-    #+()(format *trace-output* "~&Slot ~s Class ~s" canon-slot canon-class)
-    #+()(force-output *trace-output*)
+  (let ((canon-class (pascal-case class-id)))
     (unless (plusp (length canon-class))
       (error "Unable to determine the class of ~s when trying to access slot ~s"
-             (header-case object) (header-case canon-slot)))
+             object slot-id))
     (unless (gethash canon-class *parent-classes*)
       (load-classes))
-    (let ((consider-class canon-class)
-          (seen nil))
+    (let ((consider-class class-id))
       (loop
-        #+()(format *trace-output* "~&~4TLooking for ~s in ~s" canon-slot consider-class)
-        #+()(force-output *trace-output*)
-            (push (gethash consider-class *class-slots*) seen)
-            (when (find canon-slot (gethash consider-class *class-slots*)
-		    :test #'string-equal)
-	    (return-from slot-class (header-case consider-class)))
-            (setf consider-class (gethash consider-class *parent-classes*))
-            (when (or (null consider-class) (equal consider-class "BasicObject"))
-              (if (string-equal canon-class (oops-class-of object))
-	        (error "~s is not a slot of class ~s, nor its parent classes up to ~s~2%Slots: ~{~a~^, ~}"
-		     (header-case slot-id) (header-case canon-class) (header-case consider-class)
-                         (mapcar #'header-case (flatten seen)))
-                  (slot-class object slot-id (oops-class-of object))))))))
+        #+ () (format *trace-output* "~&~4TLooking for ~s in ~s" slot-id consider-class)
+              (when (gethash (list :of slot-id consider-class) *working-storage*)
+	      (return-from slot-class (header-case consider-class)))
+              (setf consider-class (gethash consider-class *parent-classes*))
+              (when (or (null consider-class) (equal consider-class "Basic-Object"))
+                (if (string-equal class-id (oops-class-of object))
+	          (error "~s is not a slot of class ~s, nor its parent classes up to ~s"
+		       slot-id class-id consider-class)
+                    (slot-class object slot-id (oops-class-of object))))))))
 
 (defun load-classes ()
   (when (plusp (hash-table-count *parent-classes*))
@@ -341,11 +323,8 @@ routine AST passes run as in `compile-eightbol-class`."
 		    (mapcar (lambda (word)
 			    (string-trim #(#\Space #\Tab) word))
 			  (split-sequence #\< line))
-		  (setf (gethash child *parent-classes*) parent
-		        last-class child)))
+		  (setf (gethash (header-case child) *parent-classes*) (header-case parent)
+		        last-class (header-case child))))
 	         ((and (< 2 (length line)) (char= #\# (char line 0)))
 		(appendf (gethash last-class *class-methods* '())
-		         (cons (subseq line 1) nil)))
-	         ((and (< 2 (length line)) (char= #\. (char line 0)))
-		(appendf (gethash last-class *class-slots* '())
-		         (cons (subseq line 1 (position #\Space line)) nil)))))))
+		         (cons (subseq line 1) nil)))))))
