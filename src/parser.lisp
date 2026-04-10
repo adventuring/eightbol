@@ -37,11 +37,11 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
       environment equal evaluate exit external
       false fault filler for format from function
       giving go goback greater
-      high
+      high hi-values high-values
       id identification if imperative in indent inherits installation
       inspect instance into invoke is
       just justified
-      leading length less library linkage log low
+      leading length less library linkage log low low-values lo-values
       method method-id minifont
       move multiply native negative next not null nulls numeric
       object object-computer occurs of offset on or other outdent
@@ -282,11 +282,11 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 
 (defun parse/subtract-from (_sub expr _from identifier)
   (declare (ignore _sub _from))
-  (list :subtract :from expr :from-target identifier))
+  (list :subtract :subtrahend expr :from identifier))
 
 (defun parse/subtract-giving (_sub expr1 _from expr2 _giving identifier)
   (declare (ignore _sub _from _giving))
-  (list :subtract :from expr1 :from-target expr2 :giving identifier))
+  (list :subtract :subtrahend expr1 :from expr2 :giving identifier))
 
 (defun parse/compute-eq (_compute identifier _eq expr)
   (declare (ignore _compute _eq))
@@ -294,19 +294,19 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 
 (defun parse/expr-add (e1 _op e2)
   (declare (ignore _op))
-  (list :add-expr e1 e2))
+  (list :add :from e1 :to e2 :giving nil))
 
 (defun parse/expr-subtract (e1 _op e2)
   (declare (ignore _op))
-  (list :subtract-expr e1 e2))
+  (list :subtract :subtrahend e2 :from e1 :giving nil))
 
 (defun parse/expr-multiply (e1 _op e2)
   (declare (ignore _op))
-  (list :multiply-expr e1 e2))
+  (list :multiply :by e1 :multiplier e2 :giving nil))
 
 (defun parse/expr-divide (e1 _op e2)
   (declare (ignore _op))
-  (list :divide-expr e1 e2))
+  (list :divide :numerator e1 :denominator e2 :giving nil))
 
 (defun parse/shift-left (expr _op n)
   (declare (ignore _op))
@@ -330,19 +330,19 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 
 (defun parse/cond-is-null (expr _is _null)
   (declare (ignore _is _null))
-  (list '= expr :null))
+  (list :null expr))
 
 (defun parse/cond-is-not-null (expr _is _not _null)
   (declare (ignore _is _not _null))
-  (list :not (list '= expr :null)))
+  (list :not-null expr))
 
 (defun parse/cond-is-zero (expr _is _zero)
   (declare (ignore _is _zero))
-  (list :is-zero expr))
+  (list '= expr 0))
 
 (defun parse/cond-is-not-zero (expr _is _not _zero)
   (declare (ignore _is _not _zero))
-  (list :is-not-zero expr))
+  (list '/= expr 0))
 
 (defun parse/cond-eq (expr1 _op expr2 &optional expr3)
   (declare (ignore _op))
@@ -393,12 +393,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 (defun parse/expr-zero (_zero)
   "ZERO as expression (78-level constant) — yields literal 0."
   (declare (ignore _zero))
-  '(:literal 0))
-
-(defun parse/expr-zeroes (_zeroes)
-  "ZEROES as expression (78-level constant) — yields literal 0."
-  (declare (ignore _zeroes))
-  '(:literal 0))
+  0)
 
 (defun parse/expr-null (_null)
   "NULL as pointer / aggregate source in MOVE, COMPUTE, etc."
@@ -537,15 +532,15 @@ OUTPUT: perform AST plist."
 ;;; INTO id, INTO expr GIVING id, BY expr GIVING id. Remainder forms unsupported.
 (defun parse/divide-into-id (_div expr _into id)
   (declare (ignore _div _into))
-  (list :divide :into id :divisor expr))
+  (list :divide :denominator id :numerator expr))
 
 (defun parse/divide-into-giving (_div divisor _into dividend _giving id)
   (declare (ignore _div _into _giving))
-  (list :divide :into dividend :giving id :divisor divisor))
+  (list :divide :denominator dividend :giving id :numerator divisor))
 
 (defun parse/divide-by-giving (_div divisor _by dividend _giving id)
   (declare (ignore _div _by _giving))
-  (list :divide :divisor divisor :by dividend :giving id))
+  (list :divide :numerator divisor :denominator dividend :giving id))
 
 (defun parse/divide-into-remainder-unsupported (&rest _) (declare (ignore _))
   (unsupported-statement "DIVIDE ... REMAINDER ... is not supported"))
@@ -1092,7 +1087,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          
          (integer number)
          
-         (pointer-value-expression
+         (pointer-valueession
           self identifier
           (address of identifier)
           null nulls)
@@ -1117,9 +1112,10 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (expression bit-xor expression #'parse/bit-xor)
           (bit-not expression #'parse/bit-not)
           (zero #'parse/expr-zero)
-          (zeroes #'parse/expr-zeroes)
-          (null #'parse/expr-null)
-          )
+          (zeroes #'parse/expr-zero)
+          (lo-values #'parse/expr-zero)
+          (low-values #'parse/expr-zero)
+          (null #'parse/expr-null))
 
          (function-identifier
           (function symbol |(| argument-list |)|)
@@ -1132,7 +1128,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
 
          ;; Conditions
          ;; pointer-condition is omitted: its rules are all covered by relation-condition
-         ;; since pointer-value-expression derives from expression.
+         ;; since pointer-valueession derives from expression.
          (condition
           relation-condition
           class-condition

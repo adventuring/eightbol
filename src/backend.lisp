@@ -332,19 +332,15 @@ only surrounding space is normalized."
 
 Looks up @code{*CONST-TABLE*} by trimmed name, canonical slot key, and by stripping a leading
 @code{Class-} prefix when @code{*CLASS-ID*} is bound (matches unqualified copybook 77/78 names)."
-  (unless name
-    (return-from %const-table-resolve (values nil nil)))
-  (multiple-value-bind (value presentp) (gethash (header-case name) *const-table*)
-    (when presentp
-      (values value (pascal-case name)))))
+  (getf (gethash name *working-storage*) :value))
 
 (defun constant-value (name)
   "Return the integer value of constant NAME, or NIL. Uses *CONST-TABLE*."
   (%const-table-resolve name))
 
 (defun constant-p (name)
-  "True if NAME is a known compile-time constant. Uses *CONST-TABLE*."
-  (%const-table-resolve name))
+  "True if NAME is a known compile-time constant."
+  (constantp name))
 
 (defun constant-cobol-name-for-assembly (name)
   "Return the COBOL identifier to pass to @code{cobol-constant-to-assembly-symbol} for NAME.
@@ -363,55 +359,55 @@ String suitable for @code{cobol-constant-to-assembly-symbol}."
     (declare (ignore val))
     (or sym name)))
 
-(defun expr-slot-of-slot-name (expr)
-  "Return slot data name for @code{*pic-width-table*} when EXPR is slot OF object.
+(defun expression-slot-of-slot-name (expression)
+  "Return slot data name for @code{*pic-width-table*} when EXPRESSION is slot OF object.
 
 Parser @code{(data-name of data-name)} yields @code{(\"HP\" \"OF\" \"Self\")}; backend
 prefers @code{(:of \"HP\" :self)}. Both must resolve the same PIC width (e.g. 16-bit HP).
 
 @table @asis
-@item EXPR
+@item EXPRESSION
 Expression AST leaf or nested form.
 @end table
 
 @subsection Outputs
 Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
-  (when (listp expr) (eql :of (first expr))
-        (second expr)))
+  (when (listp expression) (eql :of (first expression))
+        (second expression)))
 
-(defun expr-to-width-name (expr)
+(defun expression-to-width-name (expression)
   "Return variable name for pic-width lookup. NIL for literals/constants."
   (cond
-    ((stringp expr) (format nil "~a" expr))
-    ((and (listp expr) (eq (first expr) :subscript))
-     (format nil "~a" (second expr)))
-    (t (expr-slot-of-slot-name expr))))
+    ((stringp expression) (format nil "~a" expression))
+    ((and (listp expression) (eq (first expression) :subscript))
+     (format nil "~a" (second expression)))
+    (t (expression-slot-of-slot-name expression))))
 
 (defun object-reference-storage-width ()
   (case *cpu*
     (otherwise 2)))
 
-(defun operand-signed-p (expr)
+(defun operand-signed-p (expression)
   (cond
-    ((numberp expr)
+    ((numberp expression)
      (cond
-       ((minusp expr) t)
+       ((minusp expression) t)
        (t nil)))
-    ((eql :null expr) nil)
-    ((eql :zero expr) nil)
-    (t (let ((token (slot-token expr)))
+    ((eql :null expression) nil)
+    ((eql :zero expression) nil)
+    (t (let ((token (slot-token expression)))
          (when-let (var (gethash token *working-storage*))
            (getf var :signed nil))))))
 
-(defun operand-bcd-p (expr)
+(defun operand-bcd-p (expression)
   (cond
-    ((numberp expr) nil)
-    ((eql :zero expr) nil)
-    (t (let ((token (slot-token expr)))
+    ((numberp expression) nil)
+    ((eql :zero expression) nil)
+    (t (let ((token (slot-token expression)))
          (when-let (var (gethash token *working-storage*))
            (eql :decimal (getf var :usage nil)))))))
 
-(defun usage-bcd-p (expr) (operand-bcd-p expr))
+(defun usage-bcd-p (expression) (operand-bcd-p expression))
 
 (defun pic-length-bytes (pic)
   (ceiling (if (find #\( pic)
@@ -420,32 +416,32 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
                (count-if (lambda (ch) (find ch "9X")) pic))
            2))
 
-(defun slot-token (expr)
-  (cond ((and (listp expr) (eql :of (first expr)))
-         (list :of (second expr)
-               (if (< 3 (length expr))
-                   (fourth expr)
-                   (slot-class (third expr) (second expr)))))
-        ((and (listp expr) (eql :on (first expr)))
-         (list :of (second expr)
-               (if (> 3 (length expr))
-                   (fourth expr)
-                   (slot-class (third expr) (second expr)))))
-        ((and (listp expr) (eql :subscript (first expr)))
-         (slot-token (second expr)))
-        (t expr)))
+(defun slot-token (expression)
+  (cond ((and (listp expression) (eql :of (first expression)))
+         (list :of (second expression)
+               (if (< 3 (length expression))
+                   (fourth expression)
+                   (slot-class (third expression) (second expression)))))
+        ((and (listp expression) (eql :on (first expression)))
+         (list :of (second expression)
+               (if (> 3 (length expression))
+                   (fourth expression)
+                   (slot-class (third expression) (second expression)))))
+        ((and (listp expression) (eql :subscript (first expression)))
+         (slot-token (second expression)))
+        (t expression)))
 
-(defun operand-width (expr &optional (pic-width-table *pic-width-table*))
-  "Return byte width (1–8) for EXPR."
+(defun operand-width (expression &optional (pic-width-table *pic-width-table*))
+  "Return byte width (1–8) for EXPRESSION."
   (cond
-    ((numberp expr) (cond
-                      ((zerop expr) 1)
-                      ((minusp expr) (ceiling (log (1+ (abs expr)) 2) 8))
-                      (t (ceiling (log expr 2) 8))))
-    ((eql :null expr) 1)
-    ((eql :zero expr) 1)
-    ((and (listp expr) (member (first expr) '(:low :high))) 1)
-    (t (let ((token (slot-token expr)))
+    ((numberp expression) (cond
+                      ((zerop expression) 1)
+                      ((minusp expression) (ceiling (log (1+ (abs expression)) 2) 8))
+                      (t (ceiling (log expression 2) 8))))
+    ((eql :null expression) 1)
+    ((eql :zero expression) 1)
+    ((and (listp expression) (member (first expression) '(:low :high))) 1)
+    (t (let ((token (slot-token expression)))
          (if-let (var (gethash token *working-storage*))
            (ecase (getf var :usage)
              (:binary
@@ -457,15 +453,15 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
              (:object-ref 2))
            (error "No such variable: ~s" token))))))
 
-(defun expression-operand-width (expr &optional (pic-width-table *pic-width-table*))
-  "Return max byte width (1–8) for EXPR and its leaves.
+(defun expression-operand-width (expression &optional (pic-width-table *pic-width-table*))
+  "Return max byte width (1–8) for EXPRESSION and its leaves.
 
-For composite arithmetic (@code{:add-expr}, @code{:subtract-expr}, @dots{}) returns
+For composite arithmetic (@code{:add-expression}, @code{:subtract-expression}, @dots{}) returns
 the maximum of recursive leaf widths. For other forms, @code{operand-width}.
 Use when MOVE/ADD/SUB sources may be expressions so width matches the widest operand.
 
 @table @asis
-@item EXPR
+@item EXPRESSION
 Expression AST or bare identifier.
 @item PIC-WIDTH-TABLE
 Optional width table (defaults to @code{*pic-width-table*}).
@@ -476,22 +472,60 @@ Integer byte count at least 1."
   (labels ((rec (e)
              (cond
                ((not (listp e)) (operand-width e))
-               ((eql :literal (first e))
-                (rec (second e)))
+               ((eql :literal (first e)) 1) ;; FIXME?
+               ((eql :add (first e))
+                (max (rec (getf (rest e) :from)) (rec (getf (rest e) :to))))
+               ((eql :subtract (first e))
+                (max (rec (getf (rest e) :from)) (rec (getf (rest e) :subtrahend))))
+               ((eql :mulitply (first e))
+                (max (rec (getf (rest e) :multiplier)) (rec (getf (rest e) :by))))
+               ((eql :divide (first e))
+                (max (rec (getf (rest e) :numerator)) (rec (getf (rest e) :denominator))))
                ((member (first e)
-                        '(:add-expr :subtract-expr
-                          :multiply-expr :divide-expr
-                          :shift-left :shift-right :bit-and :bit-or :bit-xor)
-                        :test #'eq)
+                        '(:shift-left :shift-right :bit-and :bit-or :bit-xor))
                 (max (rec (second e)) (rec (third e))))
                ((and (string= "(" (first e))
                      (string= ")" (lastcar e)))
-                (loop for el in (subseq e 1 (- (length e) 2))
+                (loop for el in (subseq e 1 (1- (length e)))
                       maximize (rec el)))
                ((eq (first e) :bit-not)
                 (rec (second e)))
                (t (operand-width e)))))
-    (max 1 (rec expr))))
+    (max 1 (rec expression))))
+
+(defun expression-operand-signed-p (expression)
+  "Return max byte width (1–8) for EXPRESSION and its leaves.
+
+For composite arithmetic (@code{:add-expression}, @code{:subtract-expression}, @dots{}) returns
+the maximum of recursive leaf widths. For other forms, @code{operand-width}.
+Use when MOVE/ADD/SUB sources may be expressions so width matches the widest operand.
+
+@table @asis
+@item EXPRESSION
+Expression AST or bare identifier.
+@item PIC-WIDTH-TABLE
+Optional width table (defaults to @code{*pic-width-table*}).
+@end table
+
+@subsection Outputs
+Integer byte count at least 1."
+  (labels ((rec (e)
+             (cond
+               ((not (listp e)) (operand-signed-p e))
+               ((eql :literal (first e))
+                (rec (second e)))
+               ((member (first e)
+                        '(:add :subtract :multiply :divide
+                          :shift-left :shift-right :bit-and :bit-or :bit-xor)
+                        :test #'eq)
+                (or (rec (second e)) (rec (third e))))
+               ((and (string= "(" (first e))
+                     (string= ")" (lastcar e)))
+                (some (lambda (el) (rec el)) (subseq e 1 (1- (length e)))))
+               ((eq (first e) :bit-not)
+                (rec (second e)))
+               (t nil))))
+    (rec expression)))
 
 (defun pic-frac-bits (name)
   "Return fractional bit count for NAME from @code{*pic-frac-bits-table*}, or NIL.
