@@ -421,20 +421,6 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (declare (ignore _call _service))
   (list :call :service target :bank nil))
 
-(defun parse/call-in-service (_call target _in _service bank)
-  "CALL target IN SERVICE bank. — service-dispatch call with explicit bank."
-  (declare (ignore _call _in _service))
-  (list :call :service target :bank bank))
-
-(defun parse/call-in-bank (_call target _in _bank bank)
-  "CALL target IN BANK bank. — far call to an explicit bank."
-  (declare (ignore _call _in _bank))
-  (list :call :target target :bank bank))
-
-(defun parse/call-in-library (_call target _in _library name)
-  (declare (ignore _call _in _library))
-  (error "Can't call LIBRARY ~a routine ~a" name target))
-
 (defun parse/call-in-library-omit-name (_call target _in _library
                                         &optional _ret return)
   "CALL target IN LIBRARY. — library name omitted (LastBank implied)."
@@ -607,8 +593,7 @@ OUTPUT: perform AST plist."
   (list :inspect :target id :replacing :characters :by repl))
 
 ;;; GOTO — implemented
-(defun parse/paragraph (name _dot)
-  (declare (ignore _dot))
+(defun parse/paragraph (name)
   (list :paragraph (princ-to-string name)))
 
 (defun parse/goto (go token-or-to &optional target)
@@ -1049,7 +1034,6 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
 
          (statement-item
           (statement |.| #'parse/statement-item-with-dot)
-          (statement #'parse/statement-item-no-dot)
           (eightbol-comment (lambda (c) (list :comment c))))
 
          ;; Identifiers and expressions
@@ -1209,10 +1193,9 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
 
          ;; Statements
          (statement
-          add-statement call-statement cancel-statement
-          compute-statement 
-          debug-break-statement
-          divide-statement
+          add-statement
+          call-statement cancel-statement compute-statement 
+          debug-break-statement divide-statement
           evaluate-statement
           exit-method-statement exit-program-statement exit-statement
           goback-statement goto-statement
@@ -1226,7 +1209,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           unstring-statement)
 
          (paragraph-statement
-          (paragraph-name |.| #'parse/paragraph))
+          (paragraph-name #'parse/paragraph))
 
          (add-statement
           (add expression to expression giving identifier #'parse/add-giving)
@@ -1235,17 +1218,15 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          (call-statement
           ;; CALL SERVICE Target. — service dispatch, bank resolved at link time
           (call service call-target #'parse/call-service)
-          ;; CALL Target IN BANK BankName. — far call to explicit bank (.FarJSR)
-          (call call-target in bank bank-identifier #'parse/call-in-bank)
-          ;; CALL Target IN LIBRARY [LibraryName]. — near jsr (LastBank is always resident)
+          ;; CALL Target IN LIBRARY. — near jsr (LastBank is always resident)
           (call call-target in library #'parse/call-in-library-omit-name)
           (call call-target in library returning identifier #'parse/call-in-library-omit-name)
           ;; CALL Target. — local jsr
           (call call-target #'parse/call))
-
+         
          (call-target identifier literal symbol)
          (cancel-statement (cancel identifier) (cancel literal))
-
+         
          (compute-statement
           (compute identifier = expression #'parse/compute-eq)
           (compute identifier equal expression #'parse/compute-eq)
