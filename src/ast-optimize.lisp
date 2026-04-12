@@ -370,65 +370,71 @@ Arithmetic AST node, identifier, or integer; copybook symbols are not folded.
 
 @subsection Outputs
 Integer, simplified list, or EXPRESSION unchanged for non-arithmetic leaves."
-  (unless (listp expression)
-    (return-from fold-literal-expression
-      (cond
-        ((numberp expression) expression)
-        ((stringp expression) (list :literal (pascal-case expression)))
-        (t (error "unknown expression ~s" expression)))))
-  
-  ;; Normalize integer (:literal n) to N so binary ops see negative constants.
-  (when (and (eq (first expression) :literal) (integerp (second expression)))
-    (return-from fold-literal-expression (second expression)))
-  
-  (when (and (equal "(" (first expression))
-             (equal ")" (lastcar expression)))
-    (return-from fold-literal-expression
-      (apply #'fold-literal-expression (subseq expression 1 (1- (length expression))))))
-  
-  (case (first expression)
+  (block nil
+    (unless (listp expression)
+      (return-from fold-literal-expression
+        (cond
+          ((numberp expression) expression)
+          ((stringp expression) expression)
+          ((eql :zero expression) 0)
+          ((eql :null expression) :null)
+          ((eql :self expression) "Self")
+          (t (error "unknown expression ~s" expression)))))
     
-    (:add
-     (let ((a (fold-literal-expression (getf (rest expression) :from)))
-           (b (fold-literal-expression (getf (rest expression) :to))))
-       (cond ((and (integerp a) (integerp b)) (+ a b))
-             (t (let ((s (%algebraic-simplify-add a b)))
-                  (if (and (listp s) (eq (first s) :subtract))
-                      (fold-literal-expression s)
-                      s))))))
-    (:subtract
-     (let ((a (fold-literal-expression (getf (rest expression) :from)))
-           (b (fold-literal-expression (getf (rest expression) :subtrahend))))
-       (cond ((and (integerp a) (integerp b)) (- a b))
-             (t (let ((s (%algebraic-simplify-subtract a b)))
-                  (if (and (listp s) (eq (first s) :add))
-                      (fold-literal-expression s)
-                      s))))))
-    (:multiply
-     (let ((a (fold-literal-expression (getf (rest expression) :multiplier)))
-           (b (fold-literal-expression (getf (rest expression) :by))))
-       (%algebraic-simplify-multiply a b)))
+    ;; Normalize integer (:literal n) to N so binary ops see negative constants.
+    (when (and (eq (first expression) :literal) (integerp (second expression)))
+      (return (second expression)))
     
-    (:divide
-     (let ((a (fold-literal-expression (getf (rest expression) :numerator)))
-           (b (fold-literal-expression (getf (rest expression) :denominator))))
-       (%algebraic-simplify-divide a b)))
+    (when (and (equal "(" (first expression))
+               (equal ")" (lastcar expression)))
+      (when (= 3 (length expression))
+        (return (fold-literal-expression (second expression))))
+      (return-from fold-literal-expression
+        (mapcar #'fold-literal-expression (subseq expression 1 (1- (length expression))))))
     
-    (:shift-left
-     (let ((a (fold-literal-expression (second expression)))
-           (n (third expression)))
-       (if (and (integerp a) (integerp n))
-           (ash a n)
-           (list :shift-left a n))))
-    
-    (:shift-right
-     (let ((a (fold-literal-expression (second expression)))
-           (n (third expression)))
-       (if (and (integerp a) (integerp n))
-           (ash a (- n))
-           (list :shift-right a n))))
-    
-    (otherwise expression)))
+    (case (first expression)
+      
+      (:add
+       (let ((a (fold-literal-expression (getf (rest expression) :from)))
+             (b (fold-literal-expression (getf (rest expression) :to))))
+         (cond ((and (integerp a) (integerp b)) (+ a b))
+               (t (let ((s (%algebraic-simplify-add a b)))
+                    (if (and (listp s) (eq (first s) :subtract))
+                        (fold-literal-expression s)
+                        s))))))
+      (:subtract
+       (let ((a (fold-literal-expression (getf (rest expression) :from)))
+             (b (fold-literal-expression (getf (rest expression) :subtrahend))))
+         (cond ((and (integerp a) (integerp b)) (- a b))
+               (t (let ((s (%algebraic-simplify-subtract a b)))
+                    (if (and (listp s) (eq (first s) :add))
+                        (fold-literal-expression s)
+                        s))))))
+      (:multiply
+       (let ((a (fold-literal-expression (getf (rest expression) :multiplier)))
+             (b (fold-literal-expression (getf (rest expression) :by))))
+         (%algebraic-simplify-multiply a b)))
+      
+      (:divide
+       (let ((a (fold-literal-expression (getf (rest expression) :numerator)))
+             (b (fold-literal-expression (getf (rest expression) :denominator))))
+         (%algebraic-simplify-divide a b)))
+      
+      (:shift-left
+       (let ((a (fold-literal-expression (second expression)))
+             (n (third expression)))
+         (if (and (integerp a) (integerp n))
+             (ash a n)
+             (list :shift-left a n))))
+      
+      (:shift-right
+       (let ((a (fold-literal-expression (second expression)))
+             (n (third expression)))
+         (if (and (integerp a) (integerp n))
+             (ash a (- n))
+             (list :shift-right a n))))
+      
+      (otherwise expression))))
 
 (defun fold-constants-in-statement (statement)
   "Return STATEMENT with literal sub-expressions folded where safe."
@@ -439,7 +445,7 @@ Integer, simplified list, or EXPRESSION unchanged for non-arithmetic leaves."
     (return-from fold-constants-in-statement
       (fold-constants-in-list (subseq statement 1 (1- (length statement))))))
   (case (first statement)
-
+    
     (:divide
      (let ((numerator (safe-getf (rest statement) :numerator))
            (dividend (safe-getf (rest statement) :dividend))
@@ -523,22 +529,35 @@ Integer, simplified list, or EXPRESSION unchanged for non-arithmetic leaves."
             :then (fold-constants-in-list (safe-getf (rest statement) :then))
             :else (fold-constants-in-list (safe-getf (rest statement) :else)))
       statement))
+
     (:compute
      (let ((e (fold-literal-expression (safe-getf (rest statement) :expression)))
            (tgt (safe-getf (rest statement) :target)))
        (if (integerp e)
            (%append-statement-source-location (list :move :to tgt :from e) statement)
            (%append-statement-source-location (list :compute :target tgt :expression e) statement))))
+    
     (:set
      (let ((pl (copy-list (rest statement))))
        (when (getf pl :value)
          (setf (getf pl :value) (fold-literal-expression (getf pl :value))))
        ;; copy-list preserves :source-line and other keys from STATEMENT
        (cons :set pl)))
+    
     (:move
      (let ((f (fold-literal-expression (safe-getf (rest statement) :from)))
            (to (safe-getf (rest statement) :to)))
        (%append-statement-source-location (list :move :to to :from f) statement)))
+
+    (:comment
+      (let ((expression (second statement)))
+        (cond
+          ((and (listp expression) (eql :comment (first expression)))
+           (list :comment (format nil "~{~a~^~%~}" (flatten (rest expression)))))
+          ((and (listp expression) (= 1 (length expression)))
+           (list :comment (first expression)))
+          (t statement))))
+    
     (t statement)))
 
 (defun fold-constants-in-list (statements)

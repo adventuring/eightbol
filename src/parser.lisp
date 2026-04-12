@@ -255,7 +255,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 
 (defun parse/method-name-from-symbol (sym)
   "METHOD-ID. identifier (unquoted) — return string for AST (e.g. Energize → \"Energize\")."
-  (string-capitalize (princ-to-string sym)))
+  (header-case (string sym)))
 
 (defun parse/identifier-subscript (name _lp sub _rp)
   "Action for: data-name |(| subscript |)| — subscripted identifier.
@@ -272,49 +272,49 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (declare (ignore _move _to))
   (list :move :from from :to identifier))
 
-(defun parse/add-to (_add expr _to identifier)
+(defun parse/add-to (_add expression _to identifier)
   (declare (ignore _add _to))
-  (list :add :from expr :to identifier))
+  (list :add :from expression :to identifier))
 
-(defun parse/add-giving (_add expr1 _to expr2 _giving identifier)
+(defun parse/add-giving (_add expression1 _to expression2 _giving identifier)
   (declare (ignore _add _to _giving))
-  (list :add :from expr1 :to expr2 :giving identifier))
+  (list :add :from expression1 :to expression2 :giving identifier))
 
-(defun parse/subtract-from (_sub expr _from identifier)
+(defun parse/subtract-from (_sub expression _from identifier)
   (declare (ignore _sub _from))
-  (list :subtract :subtrahend expr :from identifier))
+  (list :subtract :subtrahend expression :from identifier))
 
-(defun parse/subtract-giving (_sub expr1 _from expr2 _giving identifier)
+(defun parse/subtract-giving (_sub expression1 _from expression2 _giving identifier)
   (declare (ignore _sub _from _giving))
-  (list :subtract :subtrahend expr1 :from expr2 :giving identifier))
+  (list :subtract :subtrahend expression1 :from expression2 :giving identifier))
 
-(defun parse/compute-eq (_compute identifier _eq expr)
+(defun parse/compute-eq (_compute identifier _eq expression)
   (declare (ignore _compute _eq))
-  (list :compute :target identifier :expression expr))
+  (list :compute :target identifier :expression expression))
 
-(defun parse/expr-add (e1 _op e2)
+(defun parse/expression-add (e1 _op e2)
   (declare (ignore _op))
   (list :add :from e1 :to e2 :giving nil))
 
-(defun parse/expr-subtract (e1 _op e2)
+(defun parse/expression-subtract (e1 _op e2)
   (declare (ignore _op))
   (list :subtract :subtrahend e2 :from e1 :giving nil))
 
-(defun parse/expr-multiply (e1 _op e2)
+(defun parse/expression-multiply (e1 _op e2)
   (declare (ignore _op))
   (list :multiply :by e1 :multiplier e2 :giving nil))
 
-(defun parse/expr-divide (e1 _op e2)
+(defun parse/expression-divide (e1 _op e2)
   (declare (ignore _op))
   (list :divide :numerator e1 :denominator e2 :giving nil))
 
-(defun parse/shift-left (expr _op n)
+(defun parse/shift-left (expression _op n)
   (declare (ignore _op))
-  (list :shift-left expr n))
+  (list :shift-left expression n))
 
-(defun parse/shift-right (expr _op n)
+(defun parse/shift-right (expression _op n)
   (declare (ignore _op))
-  (list :shift-right expr n))
+  (list :shift-right expression n))
 
 (defun parse/bit-and (e1 _op e2)
   (declare (ignore _op))
@@ -328,25 +328,25 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (declare (ignore _op))
   (list :or cond1 cond2))
 
-(defun parse/cond-is-null (expr _is _null)
+(defun parse/cond-is-null (expression _is _null)
   (declare (ignore _is _null))
-  (list :null expr))
+  (list :null expression))
 
-(defun parse/cond-is-not-null (expr _is _not _null)
+(defun parse/cond-is-not-null (expression _is _not _null)
   (declare (ignore _is _not _null))
-  (list :not-null expr))
+  (list :not-null expression))
 
-(defun parse/cond-is-zero (expr _is _zero)
+(defun parse/cond-is-zero (expression _is _zero)
   (declare (ignore _is _zero))
-  (list '= expr 0))
+  (list '= expression 0))
 
-(defun parse/cond-is-not-zero (expr _is _not _zero)
+(defun parse/cond-is-not-zero (expression _is _not _zero)
   (declare (ignore _is _not _zero))
-  (list '/= expr 0))
+  (list '/= expression 0))
 
-(defun parse/cond-eq (expr1 _op expr2 &optional expr3)
+(defun parse/cond-eq (expression1 _op expression2 &optional expression3)
   (declare (ignore _op))
-  (list '= expr1 (or expr3 expr2)))
+  (list '= expression1 (or expression3 expression2)))
 
 (defun parse/cond-rel-equal-is (e1 _is _equal _to e2)
   "Relation @code{(= E1 E2)} from @samp{E1 IS EQUAL TO E2}."
@@ -386,16 +386,16 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (declare (ignore _op))
   (list :bit-xor e1 e2))
 
-(defun parse/bit-not (_bit_not expr)
+(defun parse/bit-not (_bit_not expression)
   (declare (ignore _bit_not))
-  (list :bit-not expr))
+  (list :bit-not expression))
 
-(defun parse/expr-zero (_zero)
+(defun parse/expression-zero (_zero)
   "ZERO as expression (78-level constant) — yields literal 0."
   (declare (ignore _zero))
   0)
 
-(defun parse/expr-null (_null)
+(defun parse/expression-null (_null)
   "NULL as pointer / aggregate source in MOVE, COMPUTE, etc."
   (declare (ignore _null))
   :null)
@@ -403,6 +403,10 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 (defun parse/invoke (_invoke obj method)
   (declare (ignore _invoke))
   (list :invoke :object obj :method method))
+
+(defun parse/invoke-as (_invoke obj _as class method)
+  (declare (ignore _invoke _as))
+  (list :invoke :object obj :method method :as class))
 
 (defun parse/invoke-returning (_invoke obj method _returning result)
   (declare (ignore _invoke _returning))
@@ -431,10 +435,13 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (declare (ignore _call _in _library))
   (error "Can't call LIBRARY ~a routine ~a" name target))
 
-(defun parse/call-in-library-omit-name (_call target _in _library)
+(defun parse/call-in-library-omit-name (_call target _in _library
+                                        &optional _ret return)
   "CALL target IN LIBRARY. — library name omitted (LastBank implied)."
-  (declare (ignore _call _in _library))
-  (list :call :target target :bank nil :library t))
+  (declare (ignore _call _in _library _ret))
+  (if return
+      (list :call :target target :bank nil :library t :returning return)
+      (list :call :target target :bank nil :library t)))
 
 (defun parse/if-then (_if condition _then statements _end_if)
   (declare (ignore _if _then _end_if))
@@ -475,18 +482,18 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (declare (ignore _perform))
   (list :perform :procedure name))
 
-(defun parse/perform-times (_perform name expr _times)
+(defun parse/perform-times (_perform name expression _times)
   (declare (ignore _perform _times))
-  (list :perform :procedure name :times expr))
+  (list :perform :procedure name :times expression))
 
-(defun parse/perform-cobol-times (_perform name _times expr)
-  "Build @code{(:perform :procedure NAME :times EXPR)} for PERFORM NAME TIMES EXPR.
+(defun parse/perform-cobol-times (_perform name _times expression)
+  "Build @code{(:perform :procedure NAME :times EXPRESSION)} for PERFORM NAME TIMES EXPRESSION.
 
-INPUTS: PERFORM token, procedure NAME, TIMES keyword, count EXPR.
+INPUTS: PERFORM token, procedure NAME, TIMES keyword, count EXPRESSION.
 
 OUTPUT: perform AST plist."
   (declare (ignore _perform _times))
-  (list :perform :procedure name :times expr))
+  (list :perform :procedure name :times expression))
 
 (defun parse/perform-until (_perform name _until cond)
   (declare (ignore _perform _until))
@@ -497,9 +504,9 @@ OUTPUT: perform AST plist."
   (declare (ignore _perform _varying _from _by _until))
   (list :perform :procedure name :varying id :from start :by step :until cond))
 
-(defun parse/set-to (_set identifier _to expr)
+(defun parse/set-to (_set identifier _to expression)
   (declare (ignore _set _to))
-  (list :set :target identifier :value expr))
+  (list :set :target identifier :value expression))
 
 (defun parse/stop-run (_stop _run)
   (declare (ignore _stop _run))
@@ -513,7 +520,7 @@ OUTPUT: perform AST plist."
 ;;; INSPECT — implemented: TALLYING … FOR CHARACTERS, CONVERTING … TO …,
 ;;; REPLACING CHARACTERS BY … (see parse/inspect-* below).
 ;;;
-;;; GOTO — implemented: GO/GO TO procedure-name, GO TO id DEPENDING ON expr.
+;;; GOTO — implemented: GO/GO TO procedure-name, GO TO id DEPENDING ON expression.
 ;;;
 ;;; EVALUATE — implemented: EVALUATE subject WHEN ... [WHEN OTHER ...] END-EVALUATE.
 ;;;
@@ -529,10 +536,10 @@ OUTPUT: perform AST plist."
          :message message))
 
 ;;; DIVIDE — supported only when divisor is constant power-of-two (1, 2, 4, 8, ...).
-;;; INTO id, INTO expr GIVING id, BY expr GIVING id. Remainder forms unsupported.
-(defun parse/divide-into-id (_div expr _into id)
+;;; INTO id, INTO expression GIVING id, BY expression GIVING id. Remainder forms unsupported.
+(defun parse/divide-into-id (_div expression _into id)
   (declare (ignore _div _into))
-  (list :divide :denominator id :numerator expr))
+  (list :divide :denominator id :numerator expression))
 
 (defun parse/divide-into-giving (_div divisor _into dividend _giving id)
   (declare (ignore _div _into _giving))
@@ -546,9 +553,9 @@ OUTPUT: perform AST plist."
   (unsupported-statement "DIVIDE ... REMAINDER ... is not supported"))
 
 ;;; MULTIPLY — supported only when multiplier is constant power-of-two.
-(defun parse/multiply-by-id (_mul expr _by id)
+(defun parse/multiply-by-id (_mul expression _by id)
   (declare (ignore _mul _by))
-  (list :multiply :by id :multiplier expr))
+  (list :multiply :by id :multiplier expression))
 
 (defun parse/multiply-by-giving (_mul mult _by op _giving id)
   (declare (ignore _mul _by _giving))
@@ -587,9 +594,9 @@ OUTPUT: perform AST plist."
   (unsupported-statement "UNSTRING is not supported"))
 
 ;;; INSPECT — implemented
-(defun parse/inspect-tallying (_insp id _tally expr _for _chars)
+(defun parse/inspect-tallying (_insp id _tally expression _for _chars)
   (declare (ignore _insp _tally _for _chars))
-  (list :inspect :target id :tallying expr :for :characters))
+  (list :inspect :target id :tallying expression :for :characters))
 
 (defun parse/inspect-converting (_insp id _conv from _to to)
   (declare (ignore _insp _conv _to))
@@ -615,13 +622,13 @@ OUTPUT: perform AST plist."
   (declare (ignore _comma))
   (append (ensure-list list) (list name)))
 
-(defun parse/goto-depending (_go target _depending _on expr)
+(defun parse/goto-depending (_go target _depending _on expression)
   (declare (ignore _go _depending _on))
-  (list :goto :target target :depending-on expr))
+  (list :goto :target target :depending-on expression))
 
-(defun parse/goto-depending-multi (_go targets _depending _on expr)
+(defun parse/goto-depending-multi (_go targets _depending _on expression)
   (declare (ignore _go _depending _on))
-  (list :goto :targets (ensure-list targets) :depending-on expr))
+  (list :goto :targets (ensure-list targets) :depending-on expression))
 
 ;;; EVALUATE — implemented
 (defun parse/when-clause (_when phrases statements)
@@ -631,9 +638,6 @@ OUTPUT: perform AST plist."
 (defun parse/when-other-clause (_when _other statements)
   (declare (ignore _when _other))
   (list :when-other (if (listp statements) statements (list statements))))
-
-(defun parse/when-clauses-append (clauses clause)
-  (append (ensure-list clauses) (list clause)))
 
 (defun parse/evaluate (_evaluate subject when-clauses _end-evaluate)
   "Return (:evaluate  :subject SUBJECT  :when-clauses …).
@@ -650,14 +654,14 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                                      (list wc))
                                     (t (ensure-list wc))))))
 
-;;; SET — UP BY, DOWN BY, TO ADDRESS OF, TO SELF (TO expr and TO NULL implemented above)
-(defun parse/set-up-by (_set identifier _up _by expr)
+;;; SET — UP BY, DOWN BY, TO ADDRESS OF, TO SELF (TO expression and TO NULL implemented above)
+(defun parse/set-up-by (_set identifier _up _by expression)
   (declare (ignore _set _up _by))
-  (list :set :up-by identifier :by expr))
+  (list :set :up-by identifier :by expression))
 
-(defun parse/set-down-by (_set identifier _down _by expr)
+(defun parse/set-down-by (_set identifier _down _by expression)
   (declare (ignore _set _down _by))
-  (list :set :down-by identifier :by expr))
+  (list :set :down-by identifier :by expression))
 
 (defun parse/set-condition-unsupported (&rest _) (declare (ignore _))
   (unsupported-statement "SET condition-name TO TRUE is not supported"))
@@ -767,7 +771,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          ;; named to avoid t/nt collision with terminal class-name (corrupts lalr table).
          (obj-ref-class symbol)
          (end-class-name symbol)
-         (expr-class obj-ref-class)
+         (expression-class obj-ref-class)
          ;; method names: quoted string (method-id. "think".) or identifier (method-id. energize.)
          (method-name string (symbol #'parse/method-name-from-symbol))
          ;; picture-string: picture-sequence (from lexer when after pic/picture),
@@ -785,7 +789,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                class-id |.| symbol |.|
                identification-division-clauses
                #'parse/class-id))
-
+         
          (identification-division-clauses
           (identification-division-clauses identification-division-clause
                                            (lambda (cs c) (append cs c)))
@@ -1057,6 +1061,9 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (high |(| identifier |)| (lambda (_low _p1 id _p2)
                                      (declare (ignore _low _p1 _p2))
                                      (list :high id)))
+          (address of data-name (lambda (_a _s data)
+                                  (declare (ignore _a _s))
+                                  (list :address-of data)))
           (data-name on the data-name data-name
                      (lambda (slot _on _the class object)
                        (declare (ignore _on _the))
@@ -1087,11 +1094,6 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          
          (integer number)
          
-         (pointer-valueession
-          self identifier
-          (address of identifier)
-          null nulls)
-
          (object-expression self identifier)
 
          (expression
@@ -1099,23 +1101,23 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           identifier
           function-identifier
           (|(| expression |)|)
-          (expression + expression #'parse/expr-add)
-          (expression - expression #'parse/expr-subtract)
-          (expression * expression #'parse/expr-multiply)
-          (expression × expression #'parse/expr-multiply)
-          (expression / expression #'parse/expr-divide)
-          (expression ÷ expression #'parse/expr-divide)
+          (expression + expression #'parse/expression-add)
+          (expression - expression #'parse/expression-subtract)
+          (expression * expression #'parse/expression-multiply)
+          (expression × expression #'parse/expression-multiply)
+          (expression / expression #'parse/expression-divide)
+          (expression ÷ expression #'parse/expression-divide)
           (expression shift-left expression #'parse/shift-left)
           (expression shift-right expression #'parse/shift-right)
           (expression bit-and expression #'parse/bit-and)
           (expression bit-or expression #'parse/bit-or)
           (expression bit-xor expression #'parse/bit-xor)
           (bit-not expression #'parse/bit-not)
-          (zero #'parse/expr-zero)
-          (zeroes #'parse/expr-zero)
-          (lo-values #'parse/expr-zero)
-          (low-values #'parse/expr-zero)
-          (null #'parse/expr-null))
+          (zero #'parse/expression-zero)
+          (zeroes #'parse/expression-zero)
+          (lo-values #'parse/expression-zero)
+          (low-values #'parse/expression-zero)
+          (null #'parse/expression-null))
 
          (function-identifier
           (function symbol |(| argument-list |)|)
@@ -1128,7 +1130,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
 
          ;; Conditions
          ;; pointer-condition is omitted: its rules are all covered by relation-condition
-         ;; since pointer-valueession derives from expression.
+         ;; since pointer-value-expression derives from expression.
          (condition
           relation-condition
           class-condition
@@ -1153,8 +1155,8 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (expression is not zero #'parse/cond-is-not-zero)
           (expression is null #'parse/cond-is-null)
           (expression is not null #'parse/cond-is-not-null)
-          (expression is expr-class)
-          (expression is not expr-class))
+          (expression is expression-class)
+          (expression is not expression-class))
 
          (sign-condition
           (expression is positive)
@@ -1233,13 +1235,11 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          (call-statement
           ;; CALL SERVICE Target. — service dispatch, bank resolved at link time
           (call service call-target #'parse/call-service)
-          ;; CALL Target IN SERVICE BankName. — service dispatch with explicit bank (.FarCall)
-          (call call-target in service bank-identifier #'parse/call-in-service)
           ;; CALL Target IN BANK BankName. — far call to explicit bank (.FarJSR)
           (call call-target in bank bank-identifier #'parse/call-in-bank)
           ;; CALL Target IN LIBRARY [LibraryName]. — near jsr (LastBank is always resident)
-          (call call-target in library bank-identifier #'parse/call-in-library)
           (call call-target in library #'parse/call-in-library-omit-name)
+          (call call-target in library returning identifier #'parse/call-in-library-omit-name)
           ;; CALL Target. — local jsr
           (call call-target #'parse/call))
 
@@ -1258,9 +1258,11 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (divide expression into identifier #'parse/divide-into-id)
           (divide expression into expression giving identifier #'parse/divide-into-giving)
           (divide expression by expression giving identifier #'parse/divide-by-giving)
-          (divide expression into expression giving identifier remainder identifier #'parse/divide-into-remainder-unsupported)
-          (divide expression by expression giving identifier remainder identifier #'parse/divide-into-remainder-unsupported))
-
+          (divide expression into expression giving identifier remainder identifier
+                  #'parse/divide-into-remainder-unsupported)
+          (divide expression by expression giving identifier remainder identifier
+                  #'parse/divide-into-remainder-unsupported))
+         
          (evaluate-statement
           (evaluate eval-subject when-clauses end-evaluate #'parse/evaluate))
 
@@ -1273,8 +1275,8 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (eval-subject also eval-subject))
 
          (when-clauses
-          (when-clauses when-clause #'parse/when-clauses-append)
-          when-clause)
+          (when-clauses when-clause (lambda (cs c) (append cs (list c)) ))
+          (when-clause #'list))
 
          (when-clause
           (when evaluate-phrases imperative-statements #'parse/when-clause)
@@ -1330,8 +1332,9 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                   #'parse/invoke-returning)
           (invoke super (lambda (&rest _) (declare (ignore _))
                           (list :invoke-super)))
-          (invoke object-expression method-name #'parse/invoke))
-
+          (invoke object-expression method-name #'parse/invoke)
+          (invoke object-expression as symbol method-name #'parse/invoke-as))
+         
          (log-fault-statement
           (log fault expression #'parse/log-fault))
 
@@ -1384,7 +1387,8 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          (string-delimiter size expression)
          (string-statement
           (string string-operand delimited by string-delimiter into string-operand #'parse/string-blt-or-unsupported)
-          (string string-operand delimited by string-delimiter into string-operand length expression #'parse/string-blt-length-or-unsupported))
+          (string string-operand delimited by string-delimiter into string-operand
+                  length expression #'parse/string-blt-length-or-unsupported))
 
          (subtract-statement
           (subtract expression from expression giving identifier #'parse/subtract-giving)

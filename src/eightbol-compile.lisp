@@ -106,7 +106,7 @@ rebuilding the compiler triggers recompilation of all .s outputs."
                  for first-p = t then nil
                  collect (if (and first-p
                                   output-file
-                                  (not (string= (namestring (pathname output-file)) "")))
+                                  (not (zerop (length (namestring (pathname output-file))))))
                              (merge-pathnames (pathname output-file) root-directory)
                              (merge-pathnames
                               (make-pathname
@@ -180,12 +180,9 @@ Returns the AST plist."
       ;;  Phase 3: backends 
       ;; Step CPU from (REST CPU-LIST): (FIRST CPU-LIST) would repeat the first
       ;; CPU and skip the last (e.g. F8 never emitted in ALL-BACKENDS-ONE-FIXTURE).
-      (do ((cpu-list cpus (rest cpu-list))
-           (cpu (first cpus) (first (rest cpu-list)))
-           (first-p t nil))
-          ((null cpu-list))
+      (dolist (cpu cpus)
         (handler-case
-            (let ((asm-path (if (and first-p output-file)
+            (let ((asm-path (if (and (eql cpu (first cpus)) output-file)
                                 (pathname output-file)
                                 (merge-pathnames
                                  (make-pathname
@@ -261,9 +258,8 @@ routine AST passes run as in `compile-eightbol-class`."
 (defvar *parent-classes* (make-hash-table :test 'equalp))
 
 (defun method-class (class-id method-id)
-  (let ((canon-method (pascal-case method-id)))
-    #+()(format *trace-output* "~&Method ~s Class ~s" canon-method canon-class)
-    #+()(force-output *trace-output*)
+  (let ((canon-method (pascal-case method-id))
+        (most-general-class nil))
     (if (equal "Destroy" canon-method)
         (return-from method-class "Basic-Object")
         (when (equal "Basic-Object" class-id)
@@ -273,43 +269,43 @@ routine AST passes run as in `compile-eightbol-class`."
     (let ((consider-class class-id)
           (seen nil))
       (loop
-        #+()(format *trace-output* "~&~4TLooking for ~s in ~s" canon-method consider-class)
-        #+()(force-output *trace-output*)
-            (push (gethash consider-class *class-methods*) seen)
-            (when (find canon-method (gethash consider-class *class-methods*)
-		    :test #'string-equal)
-	    (return-from method-class (header-case consider-class)))
-            (setf consider-class (gethash consider-class *parent-classes*))
-            (when (or (null consider-class) (equal consider-class "BasicObject"))
-	    (error "~s is not a method of class ~s, nor its parent classes up to ~s~2%Seen: ~{~s~^, ~}"
-		 method-id class-id consider-class
-                     (mapcar #'header-case (flatten seen))))))))
+         (push (gethash consider-class *class-methods*) seen)
+         (when (find canon-method (gethash consider-class *class-methods*)
+	           :test #'string-equal)
+	 (setf most-general-class consider-class))
+         (setf consider-class (gethash consider-class *parent-classes*))
+         (when (or (null consider-class) (equal consider-class "BasicObject"))
+           (if most-general-class
+               (return-from method-class most-general-class)
+               (error "~s is not a method of class ~s, nor its parent classes up to ~s
 
-(defun slot-class (object slot-id &optional (class-id
-                                             (if (string-equal "Self" object)
-                                                 *class-id*
-                                                 (oops-class-of object))))
+Seen: ~{~s~^, ~}"
+	            method-id class-id consider-class
+                      (sort (mapcar #'header-case (flatten seen)) #'string<))))))))
+
+(defun slot-class (object slot-id
+                   &optional (class-id
+                              (header-case (if (string-equal "Self" object)
+                                               *class-id*
+                                               (oops-class-of object)))))
   (when (and (listp slot-id) (eql :subscript (first slot-id)))
     (setf slot-id (second slot-id)))
   (when (string-equal "Destroy" slot-id)
     (return-from slot-class "Basic-Object"))
-  (let ((canon-class (pascal-case class-id)))
-    (unless (plusp (length canon-class))
-      (error "Unable to determine the class of ~s when trying to access slot ~s"
-             object slot-id))
-    (unless (gethash canon-class *parent-classes*)
-      (load-classes))
-    (let ((consider-class class-id))
-      (loop
-        #+ () (format *trace-output* "~&~4TLooking for ~s in ~s" slot-id consider-class)
-              (when (gethash (list :of slot-id consider-class) *working-storage*)
-	      (return-from slot-class (header-case consider-class)))
-              (setf consider-class (gethash consider-class *parent-classes*))
-              (when (or (null consider-class) (equal consider-class "Basic-Object"))
-                (if (string-equal class-id (oops-class-of object))
-	          (error "~s is not a slot of class ~s, nor its parent classes up to ~s"
-		       slot-id class-id consider-class)
-                    (slot-class object slot-id (oops-class-of object))))))))
+  (unless (gethash class-id *parent-classes*)
+    (load-classes))
+  (let ((consider-class class-id))
+    (loop
+       (when (gethash (list :of slot-id consider-class)
+                      *working-storage*)
+         (return-from slot-class (header-case consider-class)))
+       (setf consider-class (gethash consider-class *parent-classes*))
+       (when (or (null consider-class)
+                 (equal consider-class "Basic-Object"))
+         (if (string-equal class-id (oops-class-of object))
+	   (error "~s is not a slot of class ~s, nor its parent classes up to ~s"
+		slot-id class-id consider-class)
+             (slot-class object slot-id (oops-class-of object)))))))
 
 (defun load-classes ()
   (when (plusp (hash-table-count *parent-classes*))

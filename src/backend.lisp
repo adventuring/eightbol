@@ -293,16 +293,11 @@ NIL origin means “unknown” — not global; see @code{bare-data-assembly-symb
 (defun slot-name-to-assembly-segment (name)
   (pascal-case name))
 
-(defun slot-symbol (slot-name object-name &optional
-                                            (cast-class (slot-class object-name slot-name)))
-  "Return assembly copybook offset symbol for SLOT-NAME. Uses *SLOT-TABLE* for origin class.
-
-When the hyphenated slot segment already begins with the origin class’s PascalCase name
-(e.g. origin @code{Course}, name @code{Course-Last-Frame} → segment @code{CourseLastFrame}),
-returns the segment alone (@code{CourseLastFrame}) so labels match OOPS copybooks, not
-@code{CourseCourseLastFrame}. When the copybook origin is a subclass (e.g. MummyCourse) but
-the slot name is parent-prefixed (@code{Course-Last-Frame}), returns @code{CourseLastFrame},
-not @code{MummyCourseCourseLastFrame}. Otherwise @code{{OriginClass}{SlotSegment}} (e.g. @code{CharacterHP})."
+(defun slot-symbol (slot-name object-name
+                    &optional
+                      (cast-class (slot-class object-name slot-name)))
+  "Return assembly copybook offset symbol for SLOT-NAME. Uses *SLOT-TABLE*
+for origin class."
   (let* ((origin cast-class))
     (when (and (listp slot-name) (eql :subscript (first slot-name)))
       (setf slot-name (second slot-name)))
@@ -435,12 +430,23 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
   "Return byte width (1–8) for EXPRESSION."
   (cond
     ((numberp expression) (cond
-                      ((zerop expression) 1)
-                      ((minusp expression) (ceiling (log (1+ (abs expression)) 2) 8))
-                      (t (ceiling (log expression 2) 8))))
+                            ((zerop expression) 1)
+                            ((minusp expression) (ceiling (log (1+ (abs expression)) 2) 8))
+                            (t (ceiling (log expression 2) 8))))
     ((eql :null expression) 1)
     ((eql :zero expression) 1)
+    ((eql :self expression) 2)
+    ((equalp '(:literal :self) expression) 2)
     ((and (listp expression) (member (first expression) '(:low :high))) 1)
+    ((and (listp expression) (member (first expression) '(:address-of))) 2)
+    ((and (listp expression)
+          (string= "(" (first expression))
+          (string= ")" (lastcar expression)))
+     (loop for el in (subseq expression 1 (1- (length expression)))
+           maximize (operand-width el)))
+    ((and (listp expression) (member (first expression) '(:bit-and :bit-or :bit-xor)))
+     (loop for el in (subseq expression 1)
+           maximize (operand-width el)))
     (t (let ((token (slot-token expression)))
          (if-let (var (gethash token *working-storage*))
            (ecase (getf var :usage)
@@ -472,7 +478,8 @@ Integer byte count at least 1."
   (labels ((rec (e)
              (cond
                ((not (listp e)) (operand-width e))
-               ((eql :literal (first e)) 1) ;; FIXME?
+               ((eql :literal (first e))
+                (expression-operand-width (second e)))
                ((eql :add (first e))
                 (max (rec (getf (rest e) :from)) (rec (getf (rest e) :to))))
                ((eql :subtract (first e))
