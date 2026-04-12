@@ -56,9 +56,8 @@ Controls opcode choice: bra vs jmp, stz vs lda/sta, undocumented opcodes.")
 
 (defun %6502-subtract-2byte-inplace-eligible-p (from from-target result
                                                 giving class-id w bcd-p)
-  "True  when  SUBTRACT can  use  one  @code{ldy}  to  the low  slot  byte,
-@code{sta}/@code{iny}/@code{lda}/@code{sbc}/@code{sta} for high byte (no
-@code{tax}/@code{dey} dance)."
+  "True  when   SUBTRACT  can   use  one   ldy  to   the  low   slot  byte,
+sta/iny/lda/sbc/sta for high byte (no tax/dey)."
   (declare (ignore class-id))
   (and (= w 2)
        (not bcd-p)
@@ -82,19 +81,23 @@ Controls opcode choice: bra vs jmp, stz vs lda/sta, undocumented opcodes.")
   (let ((v (gensym "VALUE-"))
         (cv (gensym "CONST-VALUE-")))
     `(let ((,v ,value))
-       (if (equalp ,v *6502-accumulator-expression*)
-           (format out "~%~10T;; accumulator still valid")
-           (prog1
-               (progn ,@body)
-             (setf *6502-accumulator-expression*
-                   (if (and (expression-constant-p ,v)
-                            (let ((,cv (expression-constant-value ,v)))
-                              (and (numberp ,cv) (zerop ,cv))))
-                       0
-                       ,v)))))))
+       (cond
+         ((equalp ,v *6502-accumulator-expression*)
+          (format out "~%~10T;; accumulator still valid"))
+         ((equalp ,v *6502-x-index-expression*)
+          (format out "~%~10Ttxa"))
+         (t (prog1
+                (progn ,@body)
+              (setf *6502-accumulator-expression*
+                    (if (and (expression-constant-p ,v)
+                             (let ((,cv (expression-constant-value ,v)))
+                               (and (numberp ,cv) (zerop ,cv))))
+                        0
+                        ,v))))))))
 
-(defun emit-6502-subtract-2byte-self-inplace (out from result class-id bcd-p)
-  "Emit 16-bit SUBTRACT @code{FROM} from @code{RESULT} (same Self slot), little-endian, in place."
+(defun emit-6502-subtract-2byte-self-inplace (out from result
+                                              class-id bcd-p)
+  "Emit 16-bit SUBTRACT FROM from RESULT (same slot), little-endian, in place."
   (declare (ignore class-id))
   (when bcd-p
     (error 'backend-error
@@ -120,7 +123,9 @@ Controls opcode choice: bra vs jmp, stz vs lda/sta, undocumented opcodes.")
   (setf *6502-accumulator-expression* :trash/subtraction))
 
 (defun emit-6502-store-zero (out addr)
-  "Emit code to store zero to memory at ADDR. Uses stz for 65c02+, lda # 0 + sta for 6502/RP2A03."
+  "Emit code to store zero to memory at ADDR. 
+
+Uses stz for 65c02+, lda # 0 + sta for 6502/RP2A03."
   (if (6502-has-stz-p)
       (progn
         (format out "~%~10Tstz ~a" addr))
@@ -131,7 +136,7 @@ Controls opcode choice: bra vs jmp, stz vs lda/sta, undocumented opcodes.")
 ;;; Top-level entry point
 
 (defun method-statements-list (method)
-  "Return METHOD's @code{:statements} as a list with @code{NIL} placeholders removed.
+  "Return METHOD's :statements as a list with NIL placeholders removed.
 Parser or optimization must not leave junk entries, but filtering keeps shape predicates robust."
   (remove nil (ensure-list (safe-getf (rest method) :statements))))
 
@@ -140,18 +145,18 @@ Parser or optimization must not leave junk entries, but filtering keeps shape pr
 
 @itemize @bullet
 @item
-@code{:statements} is absent or @code{nil}.
+:statements is absent or nil.
 @end itemize"
   (null (method-statements-list method)))
 
 (defun method-trivial-return-only-p (method)
   "True   if   METHOD   has   exactly    one   statement   that   is   only
-a  return  (@code{:goback},  @code{:exit-method},  @code{:exit-program},
-@code{:exit}, @code{:stop-run}).
+a  return  (:goback,  :exit-method,  :exit-program,
+:exit, :stop-run).
 
 @itemize @bullet
 @item
-METHOD — a @code{:method} AST node.
+METHOD — a :method AST node.
 @end itemize"
   (let ((statements (method-statements-list method)))
     (and (= (length statements) 1)
@@ -162,31 +167,31 @@ METHOD — a @code{:method} AST node.
                                      :exit :stop-run :comment)))))))))
 
 (defun method-true-method-alias-p (method)
-  "True if METHOD should be emitted as @code{MethodClassM = TrueMethod} (no @code{.block}).
+  "True if METHOD should be emitted as MethodClassM = TrueMethod (no .block).
 
 Blank   methods  and   single-statement   GOBACK/EXIT*/STOP  RUN   match
 Phantasia's hand-written stubs.
 
 @itemize @bullet
 @item
-METHOD — a @code{:method} AST node.
+METHOD — a :method AST node.
 @end itemize"
   (or (method-blank-p method)
       (method-trivial-return-only-p method)))
 
 (defun method-last-statement-6502-no-trailing-rts-p (last-statement)
   "True     if    LAST-STATEMENT     already     ends     control    flow     so
-@code{compile-6502-method} must not emit a trailing @code{rts}.
+compile-6502-method must not emit a trailing rts.
 
-Covers  returns   and  tail  @code{CALL}  that   emits  @code{jmp}  when
-@code{:tail-call-p} is  set (e.g.  @code{CALL …  GOBACK}). @code{INVOKE}
-uses @code{.CallMethod} (@code{jsr DoCallMethod}),  so the method always
-needs  a trailing  @code{rts}. Far  @code{CALL} never  uses a  bare tail
-@code{jmp}.
+Covers  returns   and  tail  CALL  that   emits  jmp  when
+:tail-call-p is  set (e.g.  CALL …  GOBACK). INVOKE
+uses .CallMethod (jsr DoCallMethod),  so the method always
+needs  a trailing  rts. Far  CALL never  uses a  bare tail
+jmp.
 
 @itemize @bullet
 @item
-LAST-STATEMENT — last statement in a method’s @code{:statements} list, or NIL.
+LAST-STATEMENT — last statement in a method’s :statements list, or NIL.
 @end itemize"
   (when (and last-statement (listp last-statement))
     (case (first last-statement)
@@ -200,24 +205,24 @@ LAST-STATEMENT — last statement in a method’s @code{:statements} list, or NI
 
 (defun emit-one-6502-family-method (output-stream class-id method
                                     cpu compile-method-fn)
-  "Emit one method: @code{MethodClassM = TrueMethod}, or a @code{.block} body from COMPILE-METHOD-FN.
+  "Emit one method: MethodClassM = TrueMethod, or a .block body from COMPILE-METHOD-FN.
 
-COMPILE-METHOD-FN  must accept  @code{(METHOD  CLASS-ID  CPU)} and  emit
-a    @code{.block}    body     (e.g.    @code{compile-6502-method}    or
-@code{compile-rp2a03-method}). CPU  selects opcodes for the  shared 6502
+COMPILE-METHOD-FN  must accept  (METHOD  CLASS-ID  CPU) and  emit
+a    .block    body     (e.g.    compile-6502-method    or
+compile-rp2a03-method). CPU  selects opcodes for the  shared 6502
 statement helpers.
 
 @table @asis
 @item OUTPUT-STREAM
 Assembly destination.
 @item CLASS-ID
-Compiling class id string (e.g. @code{\"Character\"}).
+Compiling class id string (e.g. \"Character\").
 @item METHOD
-@code{:method} AST plist.
+:method AST plist.
 @item CPU
-Target keyword (@code{:6502}, @code{:rp2a03}, @dots{}).
+Target keyword (:6502}, :rp2a03, @dots{).
 @item COMPILE-METHOD-FN
-Function of three arguments used when the method is not a @code{TrueMethod} alias.
+Function of three arguments used when the method is not a TrueMethod alias.
 @end table"
   (cond
     ((method-true-method-alias-p method)
@@ -230,8 +235,8 @@ Function of three arguments used when the method is not a @code{TrueMethod} alia
 
 CPU    is    the    keyword    (:6502    :65c02    :65c816    :huc6280).
 Binds  *6502-family-cpu*  for  opcode selection.  Trivial  methods  emit
-@code{MethodClassM    =    TrueMethod};    @code{INVOKE    Self}    uses
-@code{.CallMethod} in the method body."
+MethodClassM    =    TrueMethod;    INVOKE    Self    uses
+.CallMethod in the method body."
   (let ((*6502-family-cpu* cpu)
         (cpu-label (cpu-display-name cpu))
         (*output-stream* output-stream))
@@ -265,17 +270,17 @@ Binds  *6502-family-cpu*  for  opcode selection.  Trivial  methods  emit
 (defun compile-6502-method (method class-id cpu)
   "Emit one METHOD for CLASS-ID using CPU variant keyword.
 
-Binds  @code{*6502-family-cpu*}   to  CPU  so  opcode   selection  (e.g.
-@code{lax} vs @code{lda}/@code{tax}) matches standalone compilation, not
-only @code{compile-6502-family}.
+Binds  *6502-family-cpu*   to  CPU  so  opcode   selection  (e.g.
+lax vs lda/tax) matches standalone compilation, not
+only compile-6502-family.
 
 @table @asis
 @item METHOD
-@code{:method} AST node.
+:method AST node.
 @item CLASS-ID
-Compiling class string (e.g. @code{\"Character\"}).
+Compiling class string (e.g. \"Character\").
 @item CPU
-@code{:6502}, @code{:65c02}, @code{:65c816}, or @code{:huc6280}.
+:6502, :65c02, :65c816, or :huc6280.
 @end table"
   (let* ((*6502-family-cpu* cpu)
          (*method-id* (safe-getf (rest method) :method-id))
@@ -325,13 +330,13 @@ Compiling class string (e.g. @code{\"Character\"}).
 
 @table @asis
 @item OBJ-EXPRESSION
-@code{:self} / @code{Self} / string data name.
+:self / Self / string data name.
 @item CLASS-ID
 Ignored (reserved for typed object refs).
 @end table
 
 @subsection Outputs
-String usable as @code{lda (Label), y} base."
+String usable as lda (Label), y base."
   (declare (ignore class-id))
   (cond
     ((stringp obj-expression)
@@ -343,7 +348,7 @@ String usable as @code{lda (Label), y} base."
             :detail obj-expression))))
 
 (defun emit-6502-alu-with-memory-rhs (out mnemonic expression class-id)
-  "Emit MNEMONIC (@code{adc}, @code{sbc}, @code{and}, @code{ora}, @code{eor}) with RHS EXPRESSION
+  "Emit MNEMONIC (adc, sbc, and, ora, eor) with RHS EXPRESSION
 
 A holds the other operand."
   (cond
@@ -375,24 +380,24 @@ A holds the other operand."
   (setf *6502-accumulator-expression* :trash/alu))
 
 (defun emit-6502-cmp-memory-rhs (out expression class-id)
-  "Emit @code{cmp} for single-byte RHS EXPRESSION after A holds the left side.
-Explicit   @code{Max-HP   OF  Self}   and   bare   instance  slots   use
-@code{ldy}/@code{cmp (Self),y}, not @code{cmp (Max-HP)}."
+  "Emit cmp for single-byte RHS EXPRESSION after A holds the left side.
+Explicit   Max-HP   OF  Self   and   bare   instance  slots   use
+ldy/cmp (Self),y, not cmp (Max-HP)."
   (emit-6502-alu-with-memory-rhs out "cmp" expression class-id))
 
 (defun %emit-6502-alu-byte-n-of-expression (out mnemonic expression
                                             class-id n w)
-  "Emit  MNEMONIC (@code{cmp},  @code{adc},  or @code{sbc})  on  byte N  of
+  "Emit  MNEMONIC (cmp,  adc,  or sbc)  on  byte N  of
 W-byte EXPRESSION. A  holds the accumulated other operand  (same addressing as
-@code{emit-6502-load-byte-n} / @code{emit-6502-cmp-byte-n-of-expression})."
+emit-6502-load-byte-n / emit-6502-cmp-byte-n-of-expression)."
   (declare (type string mnemonic))
   (when (>= n w)
     (error "%emit-6502-alu-byte-n-of-expression: n ~d >= w ~d" n w))
   (cond
     ((expression-constant-p expression)
-     (if (= n 0)
+     (if (and (= w 1) (= n 0))
          (format out "~%~10T~a # ~a" mnemonic (expression-constant-value expression))
-         (format out "~%~10T~a # $ff & ( ~a >> ~d )"
+         (format out "~%~10T~a # $ff & ~a~[~:;~:* >> ~d~]"
                  mnemonic (expression-constant-value expression) (* 8 n))))
     
     ((and (listp expression) (eq :subscript (first expression)))
@@ -401,16 +406,19 @@ W-byte EXPRESSION. A  holds the accumulated other operand  (same addressing as
      (format out "~%~10Tpla")
      (format out "~%~10T~a ~a + ~d, x" mnemonic (second expression) n))
     
-    ((slot-of-self-p expression)
-     (let ((offset (apply #'slot-symbol (rest (slot-of-expression expression)))))
-       (format out "~%~10Tldy # ~a~[~:;~:* + ~d~]" offset n)
-       (format out "~%~10T~a (Self), y" mnemonic)))
-    ((and (slot-of-expression expression) (not (slot-of-self-p expression)))
+    ((slot-of-expression expression) 
      (let* ((slot-of-expression (slot-of-expression expression))
             (offset (apply #'slot-symbol (rest slot-of-expression)))
             (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
        (format out "~%~10Tldy # ~a~[~:;~:* + ~d~]" offset n)
        (format out "~%~10T~a (~a), y" mnemonic pointer)))
+    
+    ((slot-on-expression expression) 
+     (let* ((slot-on-expression (slot-on-expression expression))
+            (offset (apply #'slot-symbol (rest slot-on-expression)))
+            (pointer (6502-object-pointer-label (third slot-on-expression) class-id)))
+       (format out "~%~10T~a ~a + ~a~[~:;~:* + ~d~]" mnemonic pointer offset n)))
+    
     ((stringp expression)
      (format out "~%~10T~a ~a~[~:;~:* + ~d~]"
              mnemonic (emit-6502-value expression) n))
@@ -419,36 +427,36 @@ W-byte EXPRESSION. A  holds the accumulated other operand  (same addressing as
              mnemonic (emit-6502-value expression) n))))
 
 (defun emit-6502-cmp-byte-n-of-expression (out expression class-id n w)
-  "Compare A to byte N (0-based) of W-byte RHS EXPRESSION (multi-byte @code{=} / @code{NOT =}).
-Mirrors addressing in @code{emit-6502-load-byte-n}; @code{CMP} does not change A."
+  "Compare A to byte N (0-based) of W-byte RHS EXPRESSION (multi-byte = / NOT =).
+Mirrors addressing in emit-6502-load-byte-n; CMP does not change A."
   (%emit-6502-alu-byte-n-of-expression out "cmp" expression class-id n w))
 
 (defun emit-6502-adc-byte-n-of-expression (out expression class-id n w)
-  "Add-with-carry byte N of W-byte RHS EXPRESSION into A (same addressing as @code{emit-6502-cmp-byte-n-of-expression})."
+  "Add-with-carry byte N of W-byte RHS EXPRESSION into A (same addressing as emit-6502-cmp-byte-n-of-expression)."
   (%emit-6502-alu-byte-n-of-expression out "adc" expression class-id n w))
 
 (defun emit-6502-sbc-byte-n-of-expression (out expression class-id n w)
-  "Subtract-with-borrow byte N of W-byte RHS EXPRESSION from A (same addressing as @code{emit-6502-cmp-byte-n-of-expression})."
+  "Subtract-with-borrow byte N of W-byte RHS EXPRESSION from A (same addressing as emit-6502-cmp-byte-n-of-expression)."
   (%emit-6502-alu-byte-n-of-expression out "sbc" expression class-id n w))
 
 (defun emit-6502-inc-dec-instance-or-bare (out opcode expression class-id)
-  "Emit OPCODE (@code{inc} or @code{dec}) for 1-byte EXPRESSION (implicit slot or absolute label)."
+  "Emit OPCODE (inc or dec) for 1-byte EXPRESSION (implicit slot or absolute label)."
   (declare (ignore class-id))
-  (format out "~%~10T~a ~a" opcode expression)
+  (format out "~%~10T~a ~a" opcode (emit-6502-value expression))
   (setf *6502-accumulator-expression* :trash/inc/dec))
 
 ;;; Expression emission
 
 (defun emit-6502-value (expression)
   "Return a 64tass expression string for EXPRESSION.
-Constants use @code{cobol-constant-to-assembly-symbol}. Non-constant bare identifiers use
-@code{bare-data-assembly-symbol}. Indexed @code{:subscript} bases use @code{bare-data-assembly-symbol}
-so global CartRAM labels match @code{emit-6502-load-byte-n}. @code{slot OF obj} in address context
-emits @code{(slotname)} (see branch below), not the full @code{OriginClassSlot} label.
+Constants use cobol-constant-to-assembly-symbol. Non-constant bare identifiers use
+bare-data-assembly-symbol. Indexed :subscript bases use bare-data-assembly-symbol
+so global CartRAM labels match emit-6502-load-byte-n. slot OF obj in address context
+emits (slotname) (see branch below), not the full OriginClassSlot label.
 
 @table @asis
 @item EXPRESSION
-Rvalue expression; @code{NIL} signals @code{backend-error} (avoids emitting a @code{NIL} label).
+Rvalue expression; NIL signals backend-error (avoids emitting a NIL label).
 @end table"
   (when (null expression)
     (error 'backend-error
@@ -458,7 +466,7 @@ Rvalue expression; @code{NIL} signals @code{backend-error} (avoids emitting a @c
   (cond
     ((and (listp expression) (= 1 (length expression)))
      (emit-6502-value (first expression)))
-
+    
     ((expression-constant-p expression)
      (let ((value (expression-constant-value expression)))
        (if (numberp value)
@@ -485,13 +493,8 @@ use emit-6502-load-expression / load-byte-n for ~s" expression)
           (string= ")" (lastcar expression)))
      (if (= 3 (length expression))
          (emit-6502-value (second expression))
-         (format nil "(~{~a~^ ~})" (mapcar #'emit-6502-value
-                                           (subseq expression 1 (1- (length expression)))))))
-    
-    ((and (stringp expression)
-          (when-let (var (gethash expression *working-storage*))
-            (getf var :value)))
-     (to-identifier expression))
+         (format nil "+(~{~a~^ ~})" (mapcar #'emit-6502-value
+                                            (subseq expression 1 (1- (length expression)))))))
     
     ((and (stringp expression)
           (gethash expression *working-storage*))
@@ -623,10 +626,10 @@ Folds constant expressions (add/subtract/multiply/divide/bit/shift) at compile t
 (defun emit-6502-load-expression-into-x (out expression class-id)
   "Load EXPRESSION into X for subscript indexing.
 
-When @code{*6502-family-cpu*}  is :6502 (undocumented  opcodes allowed),
-object slots  use @code{lax (Self),  y} instead of @code{lda  (Self), y}
-then      @code{tax}.      @var{OUT},     @var{CLASS-ID}      as      in
-@code{emit-6502-load-expression}."
+When *6502-family-cpu*  is :6502 (undocumented  opcodes allowed),
+object slots  use lax (Self),  y instead of lda  (Self), y
+then      tax}.      @var{OUT},     @var{CLASS-ID      as      in
+emit-6502-load-expression."
   (cond
     ((and expression (equalp expression *6502-x-index-expression*))
      (format out "~%~10T;; x still valid"))
@@ -659,10 +662,10 @@ then      @code{tax}.      @var{OUT},     @var{CLASS-ID}      as      in
 Constants  (numeric  literals  and  named  77/78  items)  use  immediate
 mode (#). Constant expressions are folded at compile time and emitted as
 one  immediate  load.  Variables  and  slots  use  direct/indexed  mode.
-Compound bit/shift  expressions are  computed in-line.  Skips @code{lda}
-when @code{*6502-accumulator-expression*}  is @code{equal} to EXPRESSION.  When EXPRESSION
-is @code{(:of Name  Self)} and NAME is a  77/78 in @code{*const-table*},
-treat as bare NAME (immediate @code{lda #}), not an instance slot."
+Compound bit/shift  expressions are  computed in-line.  Skips lda
+when *6502-accumulator-expression*  is equal to EXPRESSION.  When EXPRESSION
+is (:of Name  Self) and NAME is a  77/78 in *const-table*,
+treat as bare NAME (immediate lda #), not an instance slot."
   (block nil
     (cond
       ((equalp expression *6502-accumulator-expression*)
@@ -744,11 +747,17 @@ treat as bare NAME (immediate @code{lda #}), not an instance slot."
       
       ;; Slot OF Object -- indexed indirect via pointer
       ((slot-of-expression expression)
-       #+ () (format *trace-output* "~%~10T ~s is slot-of expression" expression)
        (let ((so (slot-of-expression expression)))
          (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest so)))
          (with-accumulator-value (so)
            (format out "~%~10Tlda (~a), y" (to-identifier (third so))))))
+
+      ((slot-on-expression expression)
+       (let ((so (slot-on-expression expression)))
+         (with-accumulator-value (so)
+           (format out "~%~10Tlda ~a + ~a"
+                   (to-identifier (third so))
+                   (apply #'slot-symbol (rest so))))))
       
       ;; Shift left — asl A, n times
       ((and (listp expression) (eq (first expression) :shift-left))
@@ -848,20 +857,30 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
   "Load byte N (0-based) of W-byte EXPRESSION into A. N must be < W.
 Handles  literals,  constants,  variables,   slot  OF  Self,  subscript.
 Named     77/78     constants     with      byte     width     1     use
-   (symbolic   @code{#   Name}),   not
-@code{#$nn}, matching @code{emit-6502-load-expression}."
+   (symbolic   #   Name),   not
+#$nn, matching emit-6502-load-expression."
   (when (>= n w)
     (error "emit-6502-load-byte-n: n ~d ≥ width ~d" n w))
   (flet ((rithmetic (mnemonic arg0 arg1 &key (swap-allowed-p t))
            (cond
              ((expression-constant-p arg1)
               (emit-6502-load-byte-n out arg0 nil n w)
-              (format out "~%~10T~a # ~a~[~:;~:* + ~d~]"
-                      mnemonic (emit-6502-value arg1) n))
+              (format out "~%~10T~a # $ff & ~a ~[~:;~:* >> ~d~]"
+                      mnemonic (emit-6502-value arg1) (* 8 n)))
              ((and swap-allowed-p (expression-constant-p arg0))
               (emit-6502-load-byte-n out arg1 nil n w)
-              (format out "~%~10T~a ~a~[~:;~:* + ~d~]"
-                      mnemonic (emit-6502-value arg0) n))
+              (format out "~%~10T~a # $ff & ~a ~[~:;~:* >> ~d~]"
+                      mnemonic (emit-6502-value arg0) (* 8 n)))
+             ((and (listp arg1) (eql :on (first arg1)))
+              (emit-6502-load-byte-n out arg0 nil n w)
+              (format out "~%~10T~a ~a + ~a~[~:;~:* + ~d~]"
+                      mnemonic (emit-6502-value (third arg1))
+                      (apply #'slot-symbol (rest arg1)) n))
+             ((and swap-allowed-p (listp arg0) (eql :on (first arg0)))
+              (emit-6502-load-byte-n out arg1 nil n w)
+              (format out "~%~10T~a ~a + ~a~[~:;~:* + ~d~]"
+                      mnemonic (emit-6502-value (third arg0))
+                      (apply #'slot-symbol (rest arg0)) n))
              (t
               (emit-6502-load-byte-n out arg0 nil n w)
               (format out "~%~10Tpha")
@@ -917,7 +936,7 @@ Named     77/78     constants     with      byte     width     1     use
            (with-accumulator-value (expression)
              (format out "~%~10Tlda # $ff & ~a" (expression-constant-value expression)))
            (with-accumulator-value ((list :subscript expression n))
-             (format out "~%~10Tlda # $ff & ( ~a << ~d )"
+             (format out "~%~10Tlda # $ff & ( ~a~[~:;~:* << ~d~] )"
                      (expression-constant-value expression)
                      (* 8 n)))))
       
@@ -935,6 +954,18 @@ Named     77/78     constants     with      byte     width     1     use
       ((and (listp expression) (keywordp (first expression)))
        (ecase (first expression)
          
+         (:of
+          (format out "~%~10Tldy # ~a~[~:;~:* + ~d~]" (apply #'slot-symbol (rest expression)) n)
+          (format out "~%~10Tlda (~a), y" (second expression))
+          (setf *6502-accumulator-expression* :trash/of
+                *6502-x-index-expression* :trash/of))
+         
+         (:on
+          (format out "~%~10Tlda ~a + ~a~[~:;~:* + ~d~]"
+                  (second expression) (apply #'slot-symbol (rest expression)) n)
+          (setf *6502-accumulator-expression* :trash/on
+                *6502-x-index-expression* :trash/on))
+         
          (:address-of
           (assert (= 2 w))
           (assert (stringp (second expression)))
@@ -945,7 +976,8 @@ Named     77/78     constants     with      byte     width     1     use
          
          (:add
           (when (zerop n) (format out "~&~10Tclc"))
-          (rithmetic "adc" (getf (rest expression) :from) (getf (rest expression) :to)))
+          (rithmetic "adc" (getf (rest expression) :from) (getf (rest expression) :to)
+                     :swap-allowed-p t))
          
          (:subtract
           (when (zerop n) (format out "~&~10Tsec"))
@@ -959,13 +991,13 @@ Named     77/78     constants     with      byte     width     1     use
           (emit-6502-load-byte-n out (second expression) nil 1 2))
          
          (:bit-or
-          (rithmetic "ora" (second expression) (third expression))          )
+          (rithmetic "ora" (second expression) (third expression) :swap-allowed-p t))
          (:bit-xor
-          (rithmetic "eor" (second expression) (third expression)))
+          (rithmetic "eor" (second expression) (third expression) :swap-allowed-p t))
          (:bit-not
-          (rithmetic "eor" (second expression) #xff))
+          (rithmetic "eor" (second expression) #xff :swap-allowed-p t))
          (:bit-and
-          (rithmetic "and" (second expression) (third expression)))))
+          (rithmetic "and" (second expression) (third expression) :swap-allowed-p t))))
       (t
        (with-accumulator-value (expression)
          (format out "~%~10Tlda ~a~[~:;~:* + ~d~]"
@@ -974,8 +1006,8 @@ Named     77/78     constants     with      byte     width     1     use
 (defun emit-6502-store-byte-n (out dest class-id n w &key skip-ldy)
   "Store A to byte N (0-based) of W-byte DEST. Handles slot OF Self, variable.
 
-When SKIP-LDY is true, emit only @code{sta (Self), y} / @code{sta (Pointer), y} — Y must already hold
-the slot offset from an immediately preceding @code{emit-6502-load-byte-n} to the same lvalue byte
+When SKIP-LDY is true, emit only sta (Self), y / sta (Pointer), y — Y must already hold
+the slot offset from an immediately preceding emit-6502-load-byte-n to the same lvalue byte
 (multi-byte ADD/SUBTRACT/COMPUTE loops)."
   (when (>= n w)
     (error "emit-6502-store-byte-n: index byte # ~d ≥ variable width ~d byte~:p" n w))
@@ -1032,32 +1064,33 @@ Used for STZ when MOVE ZERO to a direct-memory destination on 65c02+."
 (defun emit-6502-move-two-slots-16bit-lax (out from to-dest &rest _)
   "Copy 16 bits from source slot OF Self to dest slot OF Self.
 
-Uses @code{lax (Self),y} for the low byte (A and X), @code{iny}/@code{lda (Self),y} for high,
-stores high then @code{txa}/@code{sta (Self),y} for low — 6502 has no @code{stx (zp),y}.
-NMOS 6502 only (@code{lax}); other CPUs use the generic byte loop."
+Uses lax (Self),y for the low byte (A and X), iny/lda (Self),y for high,
+stores high then txa/sta (Self),y for low — 6502 has no stx (zp),y.
+NMOS 6502 only (lax); other CPUs use the generic byte loop."
   (declare (ignore _))
   (let ((source (apply #'slot-symbol (rest (slot-of-expression from))))
         (source-object (third from))
         (dest (apply #'slot-symbol (rest (slot-of-expression to-dest))))
         (dest-object (third from)))
-    (format out "~%~10Tldy # ~a" source)
     (ecase (first from)
-      (:of (format out "~%~10Tlax (~a), y" source-object))
-      (:on (format out "~%~10Tlax ~a, y" source-object)))
-    (format out "~%~10Tiny")
-    (ecase (first from)
-      (:of (format out "~%~10Tlda (~a), y" source-object))
-      (:on (format out "~%~10Tlda ~a, y" source-object)))
-    (format out "~%~10Tldy # ~a + 1" dest)
-    (ecase (first from)
-      (:of (format out "~%~10Tsta (~a), y" dest-object))
-      (:on (format out "~%~10Tsta ~a, y" dest-object)))
-    (format out "~%~10Tdey")
-    ;; 6502 has no stx (zp),y — only sta (zp),y; low byte is in X from lax.
-    (format out "~%~10Ttxa")
-    (ecase (first from)
-      (:of (format out "~%~10Tsta (~a), y" dest-object))
-      (:on (format out "~%~10Tsta ~a, y" dest-object))))
+      (:of
+       (format out "~%~10Tldy # ~a" source)
+       (format out "~%~10Tlax (~a), y" source-object)
+       (format out "~%~10Tiny")
+       (format out "~%~10Tlda (~a), y" source-object))
+      (:on
+       (format out "~%~10Tlax ~a + ~a" source-object source)
+       (format out "~%~10Tlda ~a + ~a + 1" source-object source)))
+    (ecase (first to-dest)
+      (:of
+       (format out "~%~10Tldy # ~a + 1" dest)
+       (format out "~%~10Tsta (~a), y" dest-object)
+       (format out "~%~10Tdey")
+       (format out "~%~10Ttxa")
+       (format out "~%~10Tsta (~a), y" dest-object))
+      (:on
+       (format out "~%~10Tsta ~a + ~a + 1" dest-object dest)
+       (format out "~%~10Tstx ~a + ~a" dest-object dest))))
   (setf *6502-accumulator-expression* :trash/move.w
         *6502-x-index-expression* :trash/move.w))
 
@@ -1490,28 +1523,31 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
 
 ;;; INVOKE statement
 
-(defun compile-6502-invoke (out statement class-id)
-  (let ((object (safe-getf (rest statement) :object))
-        (method (safe-getf (rest statement) :method))
-        (as (safe-getf (rest statement) :as))
-        (returning (safe-getf (rest statement) :returning)))
-    (let ((method-sym (to-identifier (string method))))
-      (cond
-        ((string-equal object "Self")
-         ;; Same  OOPS  path as  INVOKE  on  a named  object:  Phantasia
-         ;; CallMethod macro (DoCallMethod).
+(defun compile-6502-invoke (out statement &optional class-id)
+  (let* ((object (safe-getf (rest statement) :object))
+         (method (safe-getf (rest statement) :method))
+         (as-class (safe-getf (rest statement) :as))
+         (returning (safe-getf (rest statement) :returning)))
+    (cond
+      ((string-equal method "Class-P")
+       (format out "~%~10Tjsr Lib.BasicObjectClassP"))
+      ((string-equal object "Self")
+       ;; Same  OOPS  path as  INVOKE  on  a named  object:  Phantasia
+       ;; CallMethod macro (DoCallMethod).
+       (let ((class (or as-class *class-id*)))
          (format out "~%~10T.CallMethod Call~a~a, ~aClass~%"
-                 (to-identifier (method-class (or as class-id) method-sym))
-	       (to-identifier method-sym)
-	       (to-identifier (method-class (or as class-id) method-sym))))
-        (t
-         (let* ((unknown '#:Unknown)
-                (obj-class (or as (var-class object) unknown)))
-           (if (eq obj-class Unknown)
-               (error "Unknown class of method ~a" method-sym)
+                 (to-identifier (method-class class method))
+	       (to-identifier method)
+	       (to-identifier (method-class class method)))))
+      (t (let* ((Unknown '#:Unknown)
+                (class (or as-class (oops-class-of object) class-id Unknown)))
+           (if (eq class Unknown)
+               (error "Unknown class of method ~a" method)
                (format out "~%~10T.CallMethod Call~a~a, ~aClass, ~a~%"
-                       (to-identifier obj-class) (to-identifier method-sym)
-		   (to-identifier obj-class) (to-identifier object)))))))
+                       (to-identifier (method-class class method))
+	             (to-identifier method)
+	             (to-identifier (method-class class method))
+	             (to-identifier object))))))
     (setf *6502-accumulator-expression* :trash/call-method
           *6502-x-index-expression* :trash/call-method)
     (when returning
@@ -1525,8 +1561,8 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
   (to-identifier (if (listp x) (second x) x)))
 
 (defun %service-call-dispatch-symbol (item-sym)
-  "Map CALL SERVICE routine stem to assembly dispatch label (@code{ServiceFoo} for LUT / .FarCall).
-When ITEM-SYM already has a @code{Service} prefix (case-insensitive), return it unchanged."
+  "Map CALL SERVICE routine stem to assembly dispatch label (ServiceFoo for LUT / .FarJSR).
+When ITEM-SYM already has a Service prefix (case-insensitive), return it unchanged."
   (let ((s (if (stringp item-sym) item-sym (format nil "~a" item-sym))))
     (if (and (>= (length s) 7)
              (string-equal (subseq s 0 7) "Service"))
@@ -1551,7 +1587,7 @@ When ITEM-SYM already has a @code{Service} prefix (case-insensitive), return it 
        (assert (not jmp-p))
        (if resolved-bank
            (let ((bank-sym (sym-string resolved-bank)))
-             (format out "~%~10T.FarCall ~a, ~a~%" dispatch-sym bank-sym))
+             (format out "~%~10T.FarJSR ~a, ~a~%" dispatch-sym bank-sym))
            (error "EIGHTBOL: CALL SERVICE ~a requires bank (not in service-bank table)"
                   service)))
       ;; CALL target IN LIBRARY. — always call LastBank library thunk label.
@@ -1569,13 +1605,6 @@ When ITEM-SYM already has a @code{Service} prefix (case-insensitive), return it 
          (format out "~%~10T.FarJSR ~a, ~a~%" bank-sym item-sym)
          (setf *6502-accumulator-expression* :trash/far-jsr
                *6502-x-index-expression* :trash/far-jsr)))
-      ;; CALL ServiceName. — bare target matches *service-bank-table* (same as dispatch); far call.
-      ;; Tail @code{:tail-call-p} must not become @code{jmp} — cross-bank services need @code{.FarCall}.
-      ((and resolved-bank (not service) (not bank) (not libraryp))
-       (assert (not jmp-p))
-       (format out "~%~10T.FarCall ~a, ~a~%" item-sym (sym-string resolved-bank))
-       (setf *6502-accumulator-expression* :trash/far-call
-             *6502-x-index-expression* :trash/far-call))
       ;; CALL target. — local near call (unknown label in current bank)
       (t
        (format out "~%~10T~a ~a~%" (if jmp-p "jmp" "jsr") item-sym)
@@ -1667,9 +1696,9 @@ return (op lhs rhs). Otherwise return CONDITION unchanged."
 (defun emit-6502-false-when-not-unsigned-greater-than-zero (out lhs class-id branch-label)
   "Emit code that jumps to BRANCH-LABEL when unsigned LHS is not greater than zero.
 
-For rhs zero, @code{unsigned > 0} is equivalent to “any byte non-zero” for multi-byte values.
-Uses @code{lda} zero flag for width 1 (no redundant @code{cmp #0}). Avoids @code{blt} after
-@code{cmp #0} (unsigned nothing is below zero)."
+For rhs zero, unsigned > 0 is equivalent to “any byte non-zero” for multi-byte values.
+Uses lda zero flag for width 1 (no redundant cmp #0). Avoids blt after
+cmp #0 (unsigned nothing is below zero)."
   (let ((w (max 1 (operand-width lhs))))
     (cond
       ((= w 1)
@@ -1689,9 +1718,9 @@ Uses @code{lda} zero flag for width 1 (no redundant @code{cmp #0}). Avoids @code
 (defun emit-6502-branch-if-expression-not-all-zero (out expression class-id branch-label)
   "Jump to BRANCH-LABEL if unsigned EXPRESSION is not all-zero bytes.
 
-Used for @code{IF (IS ZERO X)}, @code{(= X 0)}, and @code{(= 0 X)}: the false branch
-runs when any byte is non-zero. W is @code{operand-width} of EXPRESSION; W=1 uses
-@code{emit-6502-load-expression} + @code{bne}.
+Used for IF (IS ZERO X), (= X 0), and (= 0 X): the false branch
+runs when any byte is non-zero. W is operand-width of EXPRESSION; W=1 uses
+emit-6502-load-expression + bne.
 
 @table @asis
 @item EXPRESSION
@@ -1713,8 +1742,8 @@ Label when value is not all zeros (condition false for IS-ZERO).
 (defun emit-6502-branch-if-expression-all-zero (out expression class-id branch-label)
   "Jump to BRANCH-LABEL if unsigned EXPRESSION is all-zero bytes (W-wide).
 
-Used for @code{IS NOT ZERO} false path and @code{(NOT (= X 0))} when X is zero:
-condition is false when every byte is zero. W=1 uses @code{emit-6502-load-expression} + @code{beq}.
+Used for IS NOT ZERO false path and (NOT (= X 0)) when X is zero:
+condition is false when every byte is zero. W=1 uses emit-6502-load-expression + beq.
 
 @table @asis
 @item EXPRESSION
@@ -1880,9 +1909,9 @@ Otherwise return NIL."
   "Emit unsigned compare of LHS vs RHS for W-byte values (little-endian in memory).
 
 Unsigned semantics: treat each W-byte value as an integer; compare from the most significant
-stored byte (index @code{W-1}) to least (index @code{0}). If any byte differs, @code{bne} skips
-remaining compares; the last @code{cmp} (low byte) only runs when all higher bytes were equal.
-Last @code{cmp} leaves flags for @code{emit-6502-condition} (@code{blt}/@code{bge}/@code{beq} on 6502)."
+stored byte (index W-1) to least (index 0). If any byte differs, bne skips
+remaining compares; the last cmp (low byte) only runs when all higher bytes were equal.
+Last cmp leaves flags for emit-6502-condition (blt/bge/beq on 6502)."
   (let ((label-done (new-6502-label "CmpU")))
     (when (> w 1)
       (loop for i from (1- w) downto 1 do
@@ -1899,12 +1928,12 @@ Last @code{cmp} leaves flags for @code{emit-6502-condition} (@code{blt}/@code{bg
 (defun emit-6502-compare (out lhs rhs class-id)
   "Emit unsigned compare LHS vs RHS for relational IF branches.
 
-When max @code{operand-width} of LHS and RHS is 1: @code{lda} LHS then @code{cmp} RHS.
-When width is 2 or more: @code{emit-6502-compare-unsigned} (high byte first, then low).
+When max operand-width of LHS and RHS is 1: lda LHS then cmp RHS.
+When width is 2 or more: emit-6502-compare-unsigned (high byte first, then low).
 
 @table @asis
 @item LHS, RHS
-Expressions; widths from @code{*pic-width-table*}.
+Expressions; widths from *pic-width-table*.
 @item CLASS-ID
 Current class (slot labels).
 @end table"
@@ -1940,7 +1969,7 @@ Current class (slot labels).
     (cond
       ;; Optimise: ADD 1 TO variable (no GIVING) → inc variable (byte only)
       ((and (literal-one-p from) (not giving) (stringp to-op) (= (operand-width to-op) 1))
-       (format out "~%~10Tinc ~a" to-op)
+       (format out "~%~10Tinc ~a" (emit-6502-value to-op))
        (setf *6502-accumulator-expression* :trash/+1))
       ;; Multi-byte ADD (w >= 2): result = from + to, carry propagates
       ((>= w 2)
@@ -2071,7 +2100,7 @@ Current class (slot labels).
     (cond
       ;; Optimise: SUBTRACT 1 SUBTRAHEND variable (no GIVING, plain variable) → dec (byte only)
       ((and (literal-one-p subtrahend) (not giving) (stringp from) (= w 1))
-       (format out "~%~10Tdec ~a" from)
+       (format out "~%~10Tdec ~a" (emit-6502-value from))
        (setf *6502-accumulator-expression* :trash/1-))
       ;; Multi-byte SUBTRACT (w >= 2): result = from - subtrahend
       ((>= w 2)
@@ -2432,7 +2461,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
   (compile-6502-move *output-stream* (statement :move ast-node-data) *class-id*))
 
 (define-6502-statement :invoke (ast-node-data)
-  (compile-6502-invoke *output-stream* (statement :invoke ast-node-data) *class-id*))
+  (compile-6502-invoke *output-stream* (statement :invoke ast-node-data)))
 
 (define-6502-statement :call (ast-node-data)
   (compile-6502-call *output-stream* (statement :call ast-node-data)))
@@ -2496,9 +2525,13 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
 
 (define-6502-statement :invoke-super (_)
   (declare (ignore _))
-  (format *output-stream* "~%~10Tjsr Method~a~a~%"
-          (gethash *class-id* *parent-classes*)
-          (to-identifier *method-id*)))
+  (unless (gethash *class-id* *parent-classes*)
+    (load-classes))
+  (if-let (parent-class (gethash *class-id* *parent-classes*))
+    (format *output-stream* "~%~10Tjsr Method~a~a~%"
+            (to-identifier parent-class)
+            (to-identifier *method-id*))
+    (error "Can't figure out parent class of ~a" *class-id*)))
 
 (define-6502-statement :service-bank (ast-node-data)
   (declare (ignore ast-node-data))

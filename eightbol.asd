@@ -4,7 +4,7 @@
 (asdf:defsystem :eightbol
   :description "EIGHTBOL compiler for 8-bit systems"
   :author "Bruce-Robert Pocock"
-  :version "0.4"
+  :version "0.5"
   :maintainer "Bruce-Robert Pocock"
   :mailto "brpocock+skyline@star-hope.org"
   :licence "MIT"

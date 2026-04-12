@@ -48,7 +48,7 @@ Buildapp passes argv as single argument; use uiop:command-line-arguments when av
         (start-time (get-universal-time)))
     (cond
       ((getf options :version)
-       (format t "EIGHTBOL Compiler version 0.4~%"))
+       (format t "EIGHTBOL Compiler version 0.5~%"))
       ((getf options :help)
        (let ((cpus (append (mapcar #'cdr +cpu-display-names+)
                            (list "all"))))

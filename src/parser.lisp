@@ -847,10 +847,8 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          (data-division-section
           (working-storage section |.| data-item-description-entries)
           (linkage section |.| data-item-description-entries)
-          ;; OOP COBOL OBJECT DATA DIVISION: items may appear without a section header
-          ;; (e.g. COPY-expanded copybooks in DATA DIVISION.). Requires at least one
-          ;; entry to stay unambiguous with data-division-sections → ().
-          (data-item-description-entry data-item-description-entries))
+          (data-item-description-entry data-item-description-entries)
+          comments*)
 
          (data-item-description-entries
           (data-item-description-entries data-item-description-entry
@@ -860,9 +858,6 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
            (lambda (item) (cons item nil)))
           ())
 
-         ;; pic/usage/occurs: canonical order is PIC [USAGE] [OCCURS [min TO max] TIMES [DEPENDING ON x]]
-         ;; e.g. 10 My-Variable PIC 9999 USAGE BINARY OCCURS 0 TO 15 TIMES DEPENDING ON My-Length
-         ;; Parser accepts flexible order for compatibility with existing copybooks.
          (data-item-description-entry
           (level-number data-name
                         redefines-clause external-clause global-clause
@@ -871,9 +866,9 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                         value-clause date-format-clause |.| #'parse/dd)
           (level-number data-name
                         redefines-clause external-clause global-clause
-                        justified-clause occurs-clause picture-clause
+                        justified-clause picture-clause
                         sign-clause usage-clause
-                        value-clause date-format-clause |.| #'parse/dd)
+                        value-clause date-format-clause occurs-clause |.| #'parse/dd)
           (level-number data-name
                         redefines-clause external-clause global-clause
                         justified-clause picture-clause usage-clause occurs-clause
