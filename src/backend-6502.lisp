@@ -1580,7 +1580,10 @@ When ITEM-SYM already has a Service prefix (case-insensitive), return it unchang
          (dispatch-sym (if service (%service-call-dispatch-symbol item-sym) item-sym))
          (resolved-bank (or bank (service-bank-table-lookup dispatch-sym)))
          (jmp-p tail-call-p)
-         (returning (safe-getf (rest statement) :returning)))
+         (returning (safe-getf (rest statement) :returning))
+         (using (safe-getf (rest statement) :using)))
+    (when using
+      (emit-6502-load-expression out using))
     (cond
       ;; CALL target IN SERVICE bank. / CALL SERVICE target. — service dispatch
       (service

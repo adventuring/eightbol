@@ -421,14 +421,6 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
   (declare (ignore _call _service))
   (list :call :service target :bank nil))
 
-(defun parse/call-in-library-omit-name (_call target _in _library
-                                        &optional _ret return)
-  "CALL target IN LIBRARY. — library name omitted (LastBank implied)."
-  (declare (ignore _call _in _library _ret))
-  (if return
-      (list :call :target target :bank nil :library t :returning return)
-      (list :call :target target :bank nil :library t)))
-
 (defun parse/if-then (_if condition _then statements _end_if)
   (declare (ignore _if _then _end_if))
   (list :if :condition condition :then statements :else '()))
@@ -1214,8 +1206,22 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           ;; CALL SERVICE Target. — service dispatch, bank resolved at link time
           (call service call-target #'parse/call-service)
           ;; CALL Target IN LIBRARY. — near jsr (LastBank is always resident)
-          (call call-target in library #'parse/call-in-library-omit-name)
-          (call call-target in library returning identifier #'parse/call-in-library-omit-name)
+          (call call-target in library
+                (lambda (_call call-target _in _lib)
+                  (declare (ignore _call _in _lib))
+                  (list :call :target target :bank nil :library t :returning nil :using nil)))
+          (call call-target in library returning identifier
+                (lambda (_call call-target _in _lib _returning return)
+                  (declare (ignore _call _in _lib _returning))
+                  (list :call :target target :bank nil :library t :returning return :using nil)))
+          (call call-target in library using expression
+                (lambda (_call call-target _in _lib _using using)
+                  (declare (ignore _call _in _lib _using))
+                  (list :call :target target :bank nil :library t :returning nil :using using)))
+          (call call-target in library using expression returning identifier
+                (lambda (_call call-target _in _lib _using using _returning return)
+                  (declare (ignore _call _in _lib _using _returning))
+                  (list :call :target target :bank nil :library t :returning return :using using)))
           ;; CALL Target. — local jsr
           (call call-target #'parse/call))
          
