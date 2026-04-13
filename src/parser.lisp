@@ -666,7 +666,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
 
 ;;; YACC grammar definition
 (eval `(yacc:define-parser *eightbol-parser*
-         (:start-symbol eightbol-program)
+           (:start-symbol eightbol-program)
          (:terminals (,@(token-list) number string symbol bareword picture-sequence))
          (:precedence ((:left * / × ÷) (:left + -)))
          (:muffle-conflicts :some)
@@ -1209,19 +1209,19 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (call call-target in library
                 (lambda (_call call-target _in _lib)
                   (declare (ignore _call _in _lib))
-                  (list :call :target target :bank nil :library t :returning nil :using nil)))
+                  (list :call :target call-target :bank nil :library t :returning nil :using nil)))
           (call call-target in library returning identifier
                 (lambda (_call call-target _in _lib _returning return)
                   (declare (ignore _call _in _lib _returning))
-                  (list :call :target target :bank nil :library t :returning return :using nil)))
+                  (list :call :target call-target :bank nil :library t :returning return :using nil)))
           (call call-target in library using expression
                 (lambda (_call call-target _in _lib _using using)
                   (declare (ignore _call _in _lib _using))
-                  (list :call :target target :bank nil :library t :returning nil :using using)))
+                  (list :call :target call-target :bank nil :library t :returning nil :using using)))
           (call call-target in library using expression returning identifier
                 (lambda (_call call-target _in _lib _using using _returning return)
                   (declare (ignore _call _in _lib _using _returning))
-                  (list :call :target target :bank nil :library t :returning return :using using)))
+                  (list :call :target call-target :bank nil :library t :returning return :using using)))
           ;; CALL Target. — local jsr
           (call call-target #'parse/call))
          
