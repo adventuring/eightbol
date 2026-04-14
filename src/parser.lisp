@@ -52,7 +52,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
       shift-left shift-right sign signed size subtract
       source-computer special-names stop string super symbol
       tallying test than the then through thru times title to trailing true
-      unicode unsigned until up usage
+      unicode unsigned until up usage using
       value values varying
       when with working-storage
       zero zeroes)))
