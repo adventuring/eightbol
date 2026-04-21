@@ -14,11 +14,11 @@
 ;;
 ;; Key conventions: Method labels: MethodCharacterThink: .block ...
 
-;; {Class}Class INVOKE Var "M": .CallMethod Call{Type}M, {Type}Class,
-;; Var Slot access: ldy #{OriginClass}{Slot} / lda (Self), y Array
-;; access: ldx index / lda base, x (X for subscript; Y for slot)
-;; Constants (78/77): lda #ConstName (immediate addressing) Variables:
-;; lda VarName (direct/absolute addressing) Fault: .LogFault "code"
+;; {Class}Class  INVOKE Var  "M": .CallMethod  Call{Type}M, {Type}Class,
+;; Var  Slot access:  ldy  #{OriginClass}{Slot} /  lda  (Self), y  Array
+;; access:  ldx index  /  lda base,  x  (X for  subscript;  Y for  slot)
+;; Constants (78/77):  lda #ConstName (immediate  addressing) Variables:
+;; lda  VarName  (direct/absolute  addressing) Fault:  .LogFault  "code"
 ;; (4-char string; assembler does minifont)
 ;;
 ;; Register  usage: A=accumulator,  X=subscript  index  or temp,  Y=slot
