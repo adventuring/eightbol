@@ -1814,9 +1814,9 @@ Otherwise return NIL."
                         (setf *6502-accumulator-expression* :trash/≤
                               *6502-x-index-expression* :trash/≤)))
                      ((string= op "≠")
-		  (format out "~%~10tbne ~a~%" branch-label))
+		  (format out "~%~10tbeq ~a~%" branch-label))
                      ((string= op "=")
-		  (format out "~%~10tbeq ~a~%" branch-label)))))))
+		  (format out "~%~10tbne ~a~%" branch-label)))))))
       
       ;; IS NOT NULL — must come before Negated zero test so (:not (= x :null)) matches here
       ((and (string-equal op :not)
