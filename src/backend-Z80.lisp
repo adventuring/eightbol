@@ -59,10 +59,17 @@
     (declare (special *slot-table* *type-table* *const-table* *pic-size-table*
                       *pic-width-table* *class-id*))
     (let* ((method-id (getf (rest method) :method-id))
-           (stmts (ensure-list (getf (rest method) :statements)))
+           (dispatch-label (format nil "Method~a~a"
+                                   (z80-symbol class-id)
+                                   (z80-symbol (format nil "~a" method-id))))
+           (custom-entry (nth-value 0 (split-method-leading-assembly-entry
+                                       (getf (rest method) :statements))))
+           (stmts (nth-value 1 (split-method-leading-assembly-entry
+                                (getf (rest method) :statements))))
            (last-stmt (car (last stmts))))
-      (format out "~&Method~a~a:"
-              (z80-symbol class-id) (z80-symbol (format nil "~a" method-id)))
+      (when custom-entry
+        (format out "~&~a:" (z80-symbol custom-entry)))
+      (format out "~&~a:" dispatch-label)
       (dolist (stmt stmts)
         (compile-z80-statement out stmt class-id slot-table type-table const-table
                                pic-size-table pic-width-table))
@@ -590,6 +597,7 @@
                  (expression-operand-width from pic-width-table)
                  (operand-width to pic-width-table)))
          (bcd-p (when result (usage-bcd-p (expr-to-width-name result)))))
+    (assert-pic-decimal-add-compiled :z80 stmt)
     (backend-unsupported-operand-width :z80 :add w 2)
     (if (= (or w 1) 2)
         (progn
@@ -611,34 +619,35 @@
               (format out "~&~10tld (~a), a" (z80-symbol (format nil "~a" dest)))))))))
 
 (defun compile-z80-subtract (out stmt class-id slot-table const-table pic-width-table)
-  (let* ((from (getf (rest stmt) :from))
-         (from-target (getf (rest stmt) :from-target))
-         (giving (getf (rest stmt) :giving))
-         (dest (or giving from-target))
-         (w (max (operand-width dest pic-width-table)
-                 (expression-operand-width from pic-width-table)
-                 (operand-width from-target pic-width-table)))
-         (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest)))))
-    (backend-unsupported-operand-width :z80 :subtract w 2)
-    (if (= (or w 1) 2)
-        (progn
-          ;; 16-bit: use DE for temp; HL=from_target, DE=from, then ex de,hl for sbc
-          (compile-z80-load out from-target class-id slot-table const-table pic-width-table 2)
-          (format out "~&~10tex de, hl")
-          (compile-z80-load out from class-id slot-table const-table pic-width-table 2)
-          (format out "~&~10tex de, hl")
-          (format out "~&~10tscf")
-          (format out "~&~10tsbc hl, de")
-          (format out "~&~10tld (~a), hl" (z80-symbol (format nil "~a" dest))))
-        (progn
-          (compile-z80-load out from-target class-id slot-table const-table pic-width-table)
-          (format out "~&~10tld b, a")
-          (compile-z80-load out from class-id slot-table const-table pic-width-table)
-          (format out "~&~10tld c, a")
-          (format out "~&~10tld a, b")
-          (format out "~&~10tsub c")
-          ;; Z80 has no DAS; BCD subtract needs software correction (deferred)
-          (format out "~&~10tld (~a), a" (z80-symbol (format nil "~a" dest)))))))
+  (multiple-value-bind (minuend subtrahend)
+      (subtract-statement-minuend-and-subtrahend stmt)
+    (let* ((giving (getf (rest stmt) :giving))
+           (dest (or giving minuend))
+           (w (max (operand-width dest pic-width-table)
+                   (expression-operand-width subtrahend pic-width-table)
+                   (operand-width minuend pic-width-table)))
+           (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest)))))
+      (assert-pic-decimal-subtract-compiled :z80 stmt)
+      (backend-unsupported-operand-width :z80 :subtract w 2)
+      (if (= (or w 1) 2)
+          (progn
+            ;; 16-bit: use DE for temp; HL=minuend, DE=subtrahend, then ex de,hl for sbc
+            (compile-z80-load out minuend class-id slot-table const-table pic-width-table 2)
+            (format out "~&~10tex de, hl")
+            (compile-z80-load out subtrahend class-id slot-table const-table pic-width-table 2)
+            (format out "~&~10tex de, hl")
+            (format out "~&~10tscf")
+            (format out "~&~10tsbc hl, de")
+            (format out "~&~10tld (~a), hl" (z80-symbol (format nil "~a" dest))))
+          (progn
+            (compile-z80-load out minuend class-id slot-table const-table pic-width-table)
+            (format out "~&~10tld b, a")
+            (compile-z80-load out subtrahend class-id slot-table const-table pic-width-table)
+            (format out "~&~10tld c, a")
+            (format out "~&~10tld a, b")
+            (format out "~&~10tsub c")
+            ;; Z80 has no DAS; BCD subtract needs software correction (deferred)
+            (format out "~&~10tld (~a), a" (z80-symbol (format nil "~a" dest))))))))
 
 (defun compile-z80-compute (out stmt class-id slot-table const-table pic-width-table)
  (let* ((target (getf (rest stmt) :target))

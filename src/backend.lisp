@@ -59,6 +59,11 @@ Used by backends to locate generated copybook files.")
 ;;; Dynamic bindings for copybook tables (bound during compilation)
 (defvar *output-stream* nil "Assembly output stream; bound during compile-to-assembly.")
 (defvar *class-id* nil)
+
+(define-constant +object-reference-storage-width+ 2
+  :test 'eql
+  :documentation
+  "Byte width for an OBJECT REFERENCE operand when no PIC row exists in @code{*pic-width-table*}.")
 (defvar *method-id* nil "Current method being compiled; used for paragraph labels.")
 (defvar *slot-table* (make-hash-table :test 'equal)
   "Slot name → origin class string or global section label (e.g. Phantasia-Globals).
@@ -80,65 +85,82 @@ parser mixed-case identifiers (see @code{load-copybook-tables}).")
   "Variable-name → T when copybook PIC is single-digit @code{9}/@code{S9} (logical @code{#x0}--@code{#xF});
 @code{NIL} in table means @code{PIC 99} or wider numeric picture. Storage is still byte-aligned.")
 
+(defun cobol-slot-table-name-key (name)
+  "Normalize COBOL identifier for @code{*slot-table*} and related gethash keys.
+
+NAME is trimmed and uppercased so mixed-case sources match copybook rows."
+  (string-upcase (string-trim " " (if (stringp name) name (format nil "~a" name)))))
+
+(defun operand-nybble-semantics-p (name)
+  "True when NAME is listed in @code{*pic-nybble-semantics-table*} (single-digit @code{PIC 9} row)."
+  (and *pic-nybble-semantics-table*
+       (let ((n (if (stringp name) name (format nil "~a" name))))
+         (or (gethash (cobol-slot-table-name-key n) *pic-nybble-semantics-table*)
+             (gethash n *pic-nybble-semantics-table*)))))
+
 ;;; In-memory service→bank LUT for CALL SERVICE resolution (no copybook file).
 ;;; Populated by build-service-bank-lut-from-banks when scanning Source/Code/{machine}/Banks.
 (defvar *service-bank-lut* (make-hash-table :test 'equal)
   "In-memory LUT: service name (string) → bank symbol (string). Used for CALL SERVICE target.")
 
-(defun build-service-bank-lut-from-banks ()
+(defun build-service-bank-lut-from-banks (&optional (root-directory nil) (machine-directory nil))
   "Scan Source/Code/{MACHINE-DIR}/Banks/**/*.s and Common/Enums.s.
-Populate *service-bank-lut* with service→bank mappings. MACHINE-DIR is e.g. \"7800\"."
+Populate *service-bank-lut* with service→bank mappings. MACHINE-DIR is e.g. \"7800\".
+
+When ROOT-DIRECTORY is non-NIL (unit tests), paths are merged from it instead of
+@code{*eightbol-root-directory*}. When MACHINE-DIRECTORY is non-NIL, it overrides
+@code{infer-machine-from-copybook-paths}."
   (clrhash *service-bank-lut*)
-  (let* ((common (make-pathname :directory `(:relative "Source" "Code"
-                                                       ,(machine-directory-name) "Common")))
-         (enums-path (merge-pathnames "Enums.s" common))
-         (banks-dir (make-pathname :directory `(:relative "Source" "Code"
-                                                          ,(machine-directory-name) "Banks")))
-         (bank-num->symbol ()))
-    ;; Parse Enums.s for BankXxx = $YY
-    (when (probe-file enums-path)
-      (with-open-file (stream enums-path :direction :input)
-        (loop for line = (read-line stream nil nil) while line do
-          (cl-ppcre:register-groups-bind (sym hex)
-	    ("^\\s*\\b(Bank[-A-Za-z0-9_]+)\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
-	  (when (and sym hex)
-	    (push (cons (parse-integer hex :radix 16) sym) bank-num->symbol))))))
-    ;; Scan bank .s files for BANK = $NN and .Dispatch ServiceXxx, Label
-    (when (and (probe-file banks-dir) bank-num->symbol)
-      (setf bank-num->symbol (nreverse bank-num->symbol))
-      (let ((bank-num->symbol-alist bank-num->symbol))
-        (loop for n from 0 to 31
-              for subdir = (merge-pathnames
-                            (make-pathname :directory `(:relative ,(format nil "Bank~2,'0x" n)))
-                            banks-dir)
-              when (probe-file subdir)
-                do (dolist (path (directory (merge-pathnames
-                                             (make-pathname :name :wild :type "s")
-                                             subdir)))
-                     (let ((bank-num nil)
-                           (bank-sym nil))
-                       ;; Swallow read/open errors per bank file (permissions, encoding, etc.).
-                       (ignore-errors
-                        (with-open-file (stream path :direction :input)
-                          (loop for line = (read-line stream nil nil) while line do
-                            (cl-ppcre:register-groups-bind
-                                (hex)
-		            ("^\\s*BANK\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
-		          (when hex
-			  (setf bank-num (parse-integer hex :radix 16))
-			  (setf bank-sym (cdr (assoc bank-num bank-num->symbol-alist)))))
-                            (cl-ppcre:register-groups-bind
-                                (service)
-		            ("^\\s*\\.Dispatch\\s+(Service[-A-Za-z0-9_]+)\\s*," line)
-		          (when (and service bank-sym)
-			  (setf (gethash service *service-bank-lut*) bank-sym))))))))))))
-  ;; Temp trees (unit tests) often lack Source/Code/.../Banks — allow empty LUT there.
-  ;; When Banks exists under ROOT-DIR but the LUT is still empty, Enums.s or .Dispatch scan failed.
-  (when (and (zerop (hash-table-count *service-bank-lut*))
-             (probe-file (make-pathname :directory `(:relative "Source" "Code"
-                                                               ,(machine-directory-name) "Banks"))))
-    (error "EIGHTBOL: empty service:bank LUT for machine"))
-  *service-bank-lut*)
+  (let* ((m (or machine-directory (machine-directory-name)))
+         (root (or root-directory *eightbol-root-directory* (truename "."))))
+    (unless m
+      (return-from build-service-bank-lut-from-banks *service-bank-lut*))
+    (let* ((common (merge-pathnames
+                    (make-pathname :directory `(:relative "Source" "Code" ,m "Common"))
+                    root))
+           (enums-path (merge-pathnames "Enums.s" common))
+           (banks-dir (merge-pathnames
+                       (make-pathname :directory `(:relative "Source" "Code" ,m "Banks"))
+                       root))
+           (bank-num->symbol ()))
+      ;; Parse Enums.s for BankXxx = $YY
+      (when (probe-file enums-path)
+        (with-open-file (stream enums-path :direction :input)
+          (loop for line = (read-line stream nil nil) while line do
+            (cl-ppcre:register-groups-bind (sym hex)
+                ("^\\s*\\b(Bank[-A-Za-z0-9_]+)\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
+              (when (and sym hex)
+                (push (cons (parse-integer hex :radix 16) sym) bank-num->symbol))))))
+      ;; Scan bank .s files for BANK = $NN and .Dispatch ServiceXxx, Label
+      (when (and (probe-file banks-dir) bank-num->symbol)
+        (setf bank-num->symbol (nreverse bank-num->symbol))
+        (let ((bank-num->symbol-alist bank-num->symbol))
+          (loop for n from 0 to 31
+                for subdir = (merge-pathnames
+                              (make-pathname :directory `(:relative ,(format nil "Bank~2,'0x" n)))
+                              banks-dir)
+                when (probe-file subdir)
+                  do (dolist (path (directory (merge-pathnames
+                                               (make-pathname :name :wild :type "s")
+                                               subdir)))
+                       (let ((bank-num nil)
+                             (bank-sym nil))
+                         (ignore-errors
+                          (with-open-file (stream path :direction :input)
+                            (loop for line = (read-line stream nil nil) while line do
+                              (cl-ppcre:register-groups-bind (hex)
+                                  ("^\\s*BANK\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
+                                (when hex
+                                  (setf bank-num (parse-integer hex :radix 16))
+                                  (setf bank-sym (cdr (assoc bank-num bank-num->symbol-alist)))))
+                              (cl-ppcre:register-groups-bind (service)
+                                  ("^\\s*\\.Dispatch\\s+(Service[-A-Za-z0-9_]+)\\s*," line)
+                                (when (and service bank-sym)
+                                  (setf (gethash service *service-bank-lut*) bank-sym)))))))))))
+      (when (and (zerop (hash-table-count *service-bank-lut*))
+                 (probe-file banks-dir))
+        (error "EIGHTBOL: empty service:bank LUT for machine"))
+      *service-bank-lut*)))
 
 (defun machine-directory-name ()
   (infer-machine-from-copybook-paths))
@@ -179,6 +201,98 @@ Boolean."
       (declare (ignore sign))
       (and run (= (length run) 1)))))
 
+(defun %pic-strip-leading-picture-keyword (pic-str)
+  "Strip leading @code{PIC}/@code{PICTURE} keyword from PIC-STR when present; trim spaces."
+  (if (not (stringp pic-str))
+      ""
+      (string-trim " " (cl-ppcre:regex-replace "(?i)^(PIC|PICTURE)\\s+" pic-str ""))))
+
+(defun %pic-count-9-x-slots (segment)
+  "Count display digit positions in SEGMENT: each @code{9} or @code{X} counts 1; @code{9(n)} / @code{X(n)} count N.
+Ignores @code{.}, @code{V}, sign @code{S}, and other COBOL picture punctuation."
+  (let ((i 0)
+        (n (length segment))
+        (total 0))
+    (loop while (< i n)
+          do (let ((c (char-upcase (char segment i))))
+               (cond
+                 ((or (char= c #\9) (char= c #\X))
+                  (if (and (< (1+ i) n) (char= (char segment (1+ i)) #\())
+                      (let ((close (position #\) segment :start (+ i 2))))
+                        (unless close
+                          (return-from %pic-count-9-x-slots total))
+                        (incf total (parse-integer (subseq segment (+ i 2) close)))
+                        (setf i (1+ close)))
+                      (progn
+                        (incf i)
+                        (incf total 1))))
+                 (t
+                  (incf i)))))
+    total))
+
+(defun pic-fractional-decimal-digits (pic-str)
+  "Return count of digit positions (@code{9}/@code{X} and @code{9(n)}) right of the first @code{V} or @code{.}.
+
+Used for implied-decimal alignment on ADD/SUBTRACT/COMPUTE: packed integers are scaled by
+@code{10^-k} where @code{k} is this count. When no radix appears, return 0.
+
+@table @asis
+@item PIC-STR
+Copybook @code{PIC} clause or parser picture string (with or without @code{PIC} keyword).
+@end table
+
+@subsection Outputs
+Non-negative integer."
+  (unless (stringp pic-str)
+    (return-from pic-fractional-decimal-digits 0))
+  (let ((s (string-upcase (%pic-strip-leading-picture-keyword pic-str))))
+    (let ((radix (or (position #\V s) (position #\. s))))
+      (if radix
+          (%pic-count-9-x-slots (subseq s (1+ radix)))
+          0))))
+
+(defun fixed-pic-decimal-aligned-sum-integer (from-int from-frac-digits to-int to-frac-digits result-frac-digits)
+  "Return integer sum aligned to RESULT-FRAC-DIGITS implied decimal places.
+
+Computes @code{from-int * 10^(result-from) + to-int * 10^(result-to)} with non-negative
+exponents (operands widened to the result scale). FROM-INT and TO-INT are packed digit
+integers at their respective PICTURE scales.
+
+@table @asis
+@item FROM-INT, TO-INT
+Unsigned digit concatenations (e.g. @code{PIC 99.9999} max @code{999999}).
+@item FROM-FRAC-DIGITS, TO-FRAC-DIGITS, RESULT-FRAC-DIGITS
+Fractional decimal digit counts from @code{pic-fractional-decimal-digits}.
+@end table
+
+@subsection Outputs
+Integer sum before any final modulo by the result field width (caller must clip/MOVE)."
+  (let ((dr result-frac-digits)
+        (df from-frac-digits)
+        (dt to-frac-digits))
+    (+ (* from-int (expt 10 (- dr df)))
+       (* to-int (expt 10 (- dr dt))))))
+
+(defun fixed-pic-decimal-aligned-diff-integer (from-int from-frac sub-int sub-frac result-frac)
+  "Return integer @code{FROM - SUB} at RESULT-FRAC implied decimal places.
+
+Each packed integer is at its PICTURE scale; widened to RESULT-FRAC before subtract.
+
+@table @asis
+@item FROM-INT, SUB-INT
+Unsigned digit concatenations at their respective PICTURE scales.
+@item FROM-FRAC, SUB-FRAC, RESULT-FRAC
+Fractional digit counts from @code{pic-fractional-decimal-digits}.
+@end table
+
+@subsection Outputs
+Integer difference before any modulo by the result field width."
+  (let ((dr result-frac)
+        (df from-frac)
+        (ds sub-frac))
+    (- (* from-int (expt 10 (- dr df)))
+       (* sub-int (expt 10 (- dr ds))))))
+
 (defun pic-digits-to-width (pic-rest)
   "From PIC clause rest, return byte width (1–8) for packed storage in RAM.
 Examples: 1 byte = S9/99 USAGE DECIMAL or BINARY, S99 USAGE BINARY;
@@ -187,15 +301,27 @@ Formula: max(1, ceiling(digits/2)). For BCD, S9 = 1 byte (sign nybble + 1 digit)
 Single-digit @code{PIC 9} and two-digit @code{PIC 99} both allocate one byte in
 generated copybooks; runtime nybble packing (where used) is documented in Phantasia
 class design notes."
-  (or (cl-ppcre:register-groups-bind (digits n)
-	("(?i)(?:PIC|PICTURE)\\s+(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
-        (let ((d (or (when digits (length digits)) (when n (parse-integer n)))))
-	(when d (max 1 (ceiling d 2)))))
-      ;; S9, S99, S9(n) — signed; for BCD, S9 = 1 byte (1 digit + sign nybble)
-      (cl-ppcre:register-groups-bind (sdigits sn)
-	("(?i)(?:PIC|PICTURE)\\s+S(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
-        (let ((d (or (when sdigits (length sdigits)) (when sn (parse-integer sn)))))
-	(when d (max 1 (ceiling d 2)))))))
+  (or
+   ;; Dotted or V implied decimal first: @code{(\\d+)} would otherwise match only digits
+   ;; before @code{.} (e.g. @code{PIC 999999.999999} → 3 bytes instead of 6).
+   (when (and (stringp pic-rest)
+              (let ((s (%pic-strip-leading-picture-keyword pic-rest)))
+                (or (find #\. s) (find #\V s))))
+     (max 1 (ceiling (%pic-count-9-x-slots (%pic-strip-leading-picture-keyword pic-rest)) 2)))
+   (cl-ppcre:register-groups-bind (digits n)
+       ("(?i)(?:PIC|PICTURE)\\s+(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
+     (let ((d (or (when digits (length digits)) (when n (parse-integer n)))))
+       (when d (max 1 (ceiling d 2)))))
+   ;; PIC(99) / PICTURE(9) parenthesized digit count (AssetIDs.cpy style)
+   (cl-ppcre:register-groups-bind (n)
+       ("(?i)(?:PIC|PICTURE)\\s*\\(\\s*(\\d+)\\s*\\)" pic-rest)
+     (let ((d (parse-integer n)))
+       (max 1 (ceiling d 2))))
+   ;; S9, S99, S9(n) — signed; for BCD, S9 = 1 byte (1 digit + sign nybble)
+   (cl-ppcre:register-groups-bind (sdigits sn)
+       ("(?i)(?:PIC|PICTURE)\\s+S(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
+     (let ((d (or (when sdigits (length sdigits)) (when sn (parse-integer sn)))))
+       (when d (max 1 (ceiling d 2)))))))
 
 (defun oops-class-of (symbol)
   (if (string-equal "Self" symbol)
@@ -268,6 +394,44 @@ Data name from source.
 Single concatenated symbol (no @code{--} → underscore rule)."
   (pascal-case name))
 
+(defun cobol-hyphenated-to-pascal-concat (name)
+  "Join COBOL hyphen-separated words into one PascalCase identifier (no hyphens).
+
+When NAME contains no hyphens, return @code{pascal-case} of NAME; otherwise split on
+hyphens, apply @code{pascal-case} to each segment, and concatenate (e.g. Decal-Animation-On-Tick
+→ DecalAnimationOnTick).
+
+@table @asis
+@item NAME
+COBOL identifier or already-camel token string.
+@end table
+
+@subsection Outputs
+Single assembly-safe symbol string."
+  (let ((s (string-trim " " (if (stringp name) name (format nil "~a" name)))))
+    (if (find #\- s)
+        (apply #'concatenate 'string
+               (mapcar #'pascal-case (split-sequence #\- s :remove-empty-subseqs t)))
+        (pascal-case s))))
+
+(defun implicit-instance-slot-p (slot-name class-id)
+  "True when SLOT-NAME is an instance field of CLASS-ID per @code{*slot-table*} origin.
+
+Globals (e.g. Phantasia-Globals) yield NIL when origin does not match CLASS-ID.
+
+@table @asis
+@item SLOT-NAME
+COBOL data name (hyphenated spelling).
+@item CLASS-ID
+Declaring class id string (e.g. @code{\"TestClass\"}).
+@end table
+
+@subsection Outputs
+Boolean."
+  (when (and *slot-table* slot-name class-id)
+    (let ((origin (gethash (cobol-slot-table-name-key slot-name) *slot-table*)))
+      (and origin (string-equal origin class-id)))))
+
 (defun slot-origin-global-data-p (origin)
   "True if copybook ORIGIN names global/section data (e.g. Phantasia-Globals), not an OOPS class slot block.
 
@@ -302,6 +466,25 @@ for origin class."
     (when (and (listp slot-name) (eql :subscript (first slot-name)))
       (setf slot-name (second slot-name)))
     (concatenate 'string (pascal-case origin) (pascal-case slot-name))))
+
+(defun bare-data-assembly-symbol (name class-id)
+  "Assembly symbol for bare data NAME in compilation context of CLASS-ID.
+
+Uses @code{slot-symbol} for implicit instance slots; otherwise @code{cobol-global-data-name-to-assembly-symbol}.
+
+@table @asis
+@item NAME
+COBOL data name.
+@item CLASS-ID
+Current class id (binds @code{*class-id*} for @code{slot-symbol} of Self).
+@end table
+
+@subsection Outputs
+Identifier string without leading class prefix when data is global / external."
+  (let ((*class-id* class-id))
+    (if (implicit-instance-slot-p name class-id)
+        (slot-symbol name "Self")
+        (cobol-global-data-name-to-assembly-symbol name))))
 
 (defun cobol-double-hyphen-grouped-name-p (name)
   "True when NAME uses COBOL 77/78 grouped spelling with @code{--} (e.g. @code{Song--Hurt--ID}).
@@ -379,8 +562,8 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
     (t (expression-slot-of-slot-name expression))))
 
 (defun object-reference-storage-width ()
-  (case *cpu*
-    (otherwise 2)))
+  "Return pointer width for OBJECT REFERENCE; matches @code{+object-reference-storage-width+}."
+  +object-reference-storage-width+)
 
 (defun operand-signed-p (expression)
   (cond
@@ -426,6 +609,178 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
          (slot-token (second expression)))
         (t expression)))
 
+(defun %operand-pic-fractional-decimal-digits (expression)
+  "Fractional decimal digit count from EXPRESSION's @code{:pic} in @code{*working-storage*}, or 0.
+
+Literals and unresolved names yield 0."
+  (handler-case
+      (pic-fractional-decimal-digits
+       (or (when-let (tok (slot-token expression))
+             (when-let (var (gethash tok *working-storage*))
+               (getf var :pic)))
+           ""))
+    (error () 0)))
+
+(defun add-picture-decimal-scales-mismatch-p (giving result from to-op)
+  "True when ADD mixes implied decimal (@code{V}/@code{.}) fractional digit counts.
+
+With @code{GIVING}, the result field's fractional digit count differs from an operand (each
+operand must be scaled to the result picture). Without @code{GIVING}, the addend and target
+differ in fractional digit count."
+  (let ((dr (%operand-pic-fractional-decimal-digits result))
+        (df (%operand-pic-fractional-decimal-digits from))
+        (dt (%operand-pic-fractional-decimal-digits to-op)))
+    (if giving
+        (or (/= dr df) (/= dr dt))
+        (/= df dt))))
+
+(defun subtract-picture-decimal-scales-mismatch-p (giving result subtrahend minuend)
+  "True when SUBTRACT mixes implied decimal (@code{V}/@code{.}) fractional digit counts.
+
+With @code{GIVING}, the result's fractional digit count differs from an operand. Without
+@code{GIVING}, the minuend and subtrahend differ in fractional digit count.
+
+@table @asis
+@item MINUEND
+The value @emph{after} @code{FROM} in @code{SUBTRACT @dots{} FROM @dots{}} (parser @code{:from}, or
+legacy @code{:from-target} when @code{:subtrahend} is absent).
+@item SUBTRAHEND
+The value subtracted (parser @code{:subtrahend}, or legacy @code{:from} when @code{:subtrahend}
+is absent).
+@end table"
+  (let ((dr (%operand-pic-fractional-decimal-digits result))
+        (ds (%operand-pic-fractional-decimal-digits subtrahend))
+        (dm (%operand-pic-fractional-decimal-digits minuend)))
+    (if giving
+        (or (/= dr ds) (/= dr dm))
+        (/= ds dm))))
+
+(defun subtract-statement-minuend-and-subtrahend (stmt)
+  "Return @code{(values MINUEND SUBTRAHEND)} for a @code{:subtract} statement plist.
+
+Supports parser output (@code{:subtrahend} and @code{:from}) and legacy tests that use only
+@code{:from} (subtrahend) and @code{:from-target} (minuend).
+
+@table @asis
+@item STMT
+@code{(:subtract @dots{})} plist.
+@end table"
+  (let ((plist (rest stmt))
+        (s (getf plist :subtrahend))
+        (f (getf plist :from))
+        (ft (getf plist :from-target)))
+    (if s
+        (values (or f ft) s)
+        (values ft f))))
+
+(defun pic-decimal-binary-add-scaling-supported-p (giving from to-op)
+  "True when misaligned implied-decimal ADD can use widen-only binary scaling (multiply by @code{10^n}).
+
+@code{n} is bounded by 12 per operand path. Narrowing (divide by @code{10^n}) is not supported.
+
+@table @asis
+@item GIVING
+When non-NIL, result scale @code{dr} must be @code{>=} each operand scale (@code{dr-df},
+@code{dr-dt} in @code{0..12}). When NIL, target scale @code{dt} must be @code{>=} addend
+scale @code{df} with @code{dt-df} in @code{0..12}.
+@item FROM, TO-OP
+ADD addend and target (from @code{*working-storage*} @code{:pic} strings).
+@end table
+
+@subsection Outputs
+Generalized Boolean."
+  (let ((dr (%operand-pic-fractional-decimal-digits (if giving (or giving to-op) to-op)))
+        (df (%operand-pic-fractional-decimal-digits from))
+        (dt (%operand-pic-fractional-decimal-digits to-op)))
+    (if giving
+        (and (>= dr df) (>= dr dt)
+             (<= (- dr df) 12)
+             (<= (- dr dt) 12))
+        (and (>= dt df) (<= (- dt df) 12)))))
+
+(defun pic-decimal-binary-subtract-scaling-supported-p (giving minuend subtrahend)
+  "True when misaligned implied-decimal SUBTRACT can use widen-only binary scaling.
+
+Same @code{10^n} bound (12) as @code{pic-decimal-binary-add-scaling-supported-p}.
+
+@table @asis
+@item GIVING
+When non-NIL, widen minuend and subtrahend to result fractional digit count. When NIL, widen
+subtrahend to minuend scale only.
+@item MINUEND, SUBTRAHEND
+Packed values at their respective PICTURE scales.
+@end table
+
+@subsection Outputs
+Generalized Boolean."
+  (let ((dr (%operand-pic-fractional-decimal-digits (if giving
+                                                        (or giving minuend)
+                                                        minuend)))
+        (dm (%operand-pic-fractional-decimal-digits minuend))
+        (ds (%operand-pic-fractional-decimal-digits subtrahend)))
+    (if giving
+        (and (>= dr dm) (>= dr ds)
+             (<= (- dr dm) 12)
+             (<= (- dr ds) 12))
+        (and (>= dm ds) (<= (- dm ds) 12)))))
+
+(defun %cpu-has-6502-pic-decimal-scaling-p (cpu)
+  "True when CPU shares the 6502-family backend that implements widen-only PIC decimal ADD/SUBTRACT."
+  (member cpu '(:6502 :rp2a03 :65c02 :65c816 :huc6280) :test #'eq))
+
+(defun pic-decimal-add-scales-uncompiled-on-this-cpu-p (cpu giving from to-op)
+  "True when ADD has mismatched implied-decimal scales and CPU cannot emit correct widen-only code.
+
+6502-family with USAGE BINARY and @code{pic-decimal-binary-add-scaling-supported-p} is compiled;
+other CPUs signal @code{backend-error}. USAGE DECIMAL misaligned is rejected on 6502 as well."
+  (let ((result (or giving to-op)))
+    (and (add-picture-decimal-scales-mismatch-p giving result from to-op)
+         (not (and (%cpu-has-6502-pic-decimal-scaling-p cpu)
+                   (not (operand-bcd-p from))
+                   (not (operand-bcd-p to-op))
+                   (not (operand-bcd-p result))
+                   (pic-decimal-binary-add-scaling-supported-p giving from to-op))))))
+
+(defun pic-decimal-subtract-scales-uncompiled-on-this-cpu-p (cpu giving minuend subtrahend)
+  "True when SUBTRACT has mismatched implied-decimal scales and CPU cannot emit correct widen-only code."
+  (let ((result (or giving minuend)))
+    (and (subtract-picture-decimal-scales-mismatch-p giving result subtrahend minuend)
+         (not (and (%cpu-has-6502-pic-decimal-scaling-p cpu)
+                   (not (operand-bcd-p minuend))
+                   (not (operand-bcd-p subtrahend))
+                   (not (operand-bcd-p result))
+                   (pic-decimal-binary-subtract-scaling-supported-p giving minuend subtrahend))))))
+
+(defun assert-pic-decimal-add-compiled (cpu stmt)
+  "Signal @code{backend-error} when STMT is ADD with misaligned PIC decimals this CPU cannot compile.
+
+@table @asis
+@item CPU
+Backend keyword (e.g. @code{:z80}, @code{:6502}).
+@item STMT
+Statement plist whose @code{car} is @code{:add}.
+@end table"
+  (let ((from (getf (rest stmt) :from))
+        (to-op (getf (rest stmt) :to))
+        (giving (getf (rest stmt) :giving)))
+    (when (pic-decimal-add-scales-uncompiled-on-this-cpu-p cpu giving from to-op)
+      (error 'backend-error
+             :message
+             "ADD mixes implied decimal (PIC V/.) fractional scales; widen-only scaling is implemented only for 6502-family USAGE BINARY (or use matching fractional digit counts)"
+             :cpu cpu
+             :detail (list :add stmt :from from :to to-op :giving giving)))))
+
+(defun assert-pic-decimal-subtract-compiled (cpu stmt)
+  "Signal @code{backend-error} when STMT is SUBTRACT with misaligned PIC decimals this CPU cannot compile."
+  (multiple-value-bind (minuend subtrahend) (subtract-statement-minuend-and-subtrahend stmt)
+    (let ((giving (getf (rest stmt) :giving)))
+      (when (pic-decimal-subtract-scales-uncompiled-on-this-cpu-p cpu giving minuend subtrahend)
+        (error 'backend-error
+               :message
+               "SUBTRACT mixes implied decimal (PIC V/.) fractional scales; widen-only scaling is implemented only for 6502-family USAGE BINARY (or use matching fractional digit counts)"
+               :cpu cpu
+               :detail (list :subtract stmt :minuend minuend :subtrahend subtrahend :giving giving))))))
+
 (defun operand-width (expression &optional (pic-width-table *pic-width-table*))
   "Return byte width (1–8) for EXPRESSION."
   (cond
@@ -445,10 +800,10 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
      (if (= 3 (length expression))
          (second expression)
          (loop for el in (subseq expression 1 (1- (length expression)))
-               maximize (operand-width el))))
+               maximize (operand-width el pic-width-table))))
     ((and (listp expression) (member (first expression) '(:bit-and :bit-or :bit-xor)))
      (loop for el in (subseq expression 1)
-           maximize (operand-width el)))
+           maximize (operand-width el pic-width-table)))
     (t (let ((token (slot-token expression)))
          (if-let (var (gethash token *working-storage*))
            (ecase (getf var :usage)
@@ -459,7 +814,10 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
              (:pointer 2)
              (:procedure-pointer 2)
              (:object-ref 2))
-           (error "No such variable: ~s" token))))))
+           (cond
+             ((and *type-table* (gethash token *type-table*))
+              +object-reference-storage-width+)
+             (t 1)))))))
 
 (defun expression-operand-width (expression &optional (pic-width-table *pic-width-table*))
   "Return max byte width (1–8) for EXPRESSION and its leaves.
@@ -499,7 +857,7 @@ Integer byte count at least 1."
                       maximize (rec el)))
                ((eq (first e) :bit-not)
                 (rec (second e)))
-               (t (operand-width e)))))
+               (t (operand-width e pic-width-table)))))
     (max 1 (rec expression))))
 
 (defun expression-operand-signed-p (expression)

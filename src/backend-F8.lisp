@@ -78,10 +78,19 @@
     (declare (special *slot-table* *type-table* *const-table* *pic-size-table*
                       *pic-width-table* *class-id*))
     (let* ((method-id (getf (rest method) :method-id))
-           (stmts (ensure-list (getf (rest method) :statements)))
+           (dispatch-label (format nil "Method~a~a"
+                                   (f8-symbol class-id)
+                                   (f8-symbol (format nil "~a" method-id))))
+           (custom-entry (nth-value 0 (split-method-leading-assembly-entry
+                                       (getf (rest method) :statements))))
+           (stmts (nth-value 1 (split-method-leading-assembly-entry
+                                (getf (rest method) :statements))))
            (last (car (last stmts))))
-      (format out "~&~%Method~a~a:"
-              (f8-symbol class-id) (f8-symbol (format nil "~a" method-id)))
+      (if custom-entry
+          (progn
+            (format out "~&~%~a:" (f8-symbol custom-entry))
+            (format out "~&~a:" dispatch-label))
+          (format out "~&~%~a:" dispatch-label))
       (dolist (stmt stmts)
         (compile-f8-statement out stmt class-id slot-table type-table const-table
                               pic-size-table pic-width-table))
@@ -716,6 +725,7 @@ uses @code{constant-p} on EXPR only."
          (result (or giving (and (stringp to) to)))
          (w (operand-width (or result to) pic-width-table))
          (bcd-p (when result (usage-bcd-p (expr-to-width-name result)))))
+    (assert-pic-decimal-add-compiled :f8 stmt)
     (if (= (or w 1) 2)
         (progn
           (compile-f8-load out to class-id slot-table const-table pic-width-table 2)
@@ -739,32 +749,33 @@ uses @code{constant-p} on EXPR only."
               (%f8-store-dest out class-id slot-table const-table dest pic-width-table nil)))))))
 
 (defun compile-f8-subtract (out stmt class-id slot-table const-table pic-width-table)
-  (let* ((from (getf (rest stmt) :from))
-         (from-target (getf (rest stmt) :from-target))
-         (giving (getf (rest stmt) :giving))
-         (dest (or giving from-target))
-         (w (operand-width dest pic-width-table))
-         (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest)))))
-    (if (= (or w 1) 2)
-        (progn
-          (compile-f8-load out from-target class-id slot-table const-table pic-width-table 2)
-          (format out "~&~10tLR      12, 10")
-          (format out "~&~10tLR      13, 11")
-          (compile-f8-load out from class-id slot-table const-table pic-width-table 2)
-          (unless bcd-p
-            (%f8-negate-16-10 out)
-            (%f8-add-16 out))
-          (when bcd-p (format out "~&~10t;; | BCD 16-bit SUB — deferred"))
-          (%f8-store-dest out class-id slot-table const-table dest pic-width-table t))
-        (progn
-          (compile-f8-load out from-target class-id slot-table const-table pic-width-table 1)
-          (format out "~&~10tLR      8, A")
-          (compile-f8-load out from class-id slot-table const-table pic-width-table 1)
-          (format out "~&~10tCOM")
-          (format out "~&~10tINC")
-          (format out "~&~10tAS      8")
-          (when bcd-p (format out "~&~10t;; | BCD byte subtract — deferred"))
-          (%f8-store-dest out class-id slot-table const-table dest pic-width-table nil)))))
+  (multiple-value-bind (minuend subtrahend)
+      (subtract-statement-minuend-and-subtrahend stmt)
+    (let* ((giving (getf (rest stmt) :giving))
+           (dest (or giving minuend))
+           (w (operand-width dest pic-width-table))
+           (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest)))))
+      (assert-pic-decimal-subtract-compiled :f8 stmt)
+      (if (= (or w 1) 2)
+          (progn
+            (compile-f8-load out minuend class-id slot-table const-table pic-width-table 2)
+            (format out "~&~10tLR      12, 10")
+            (format out "~&~10tLR      13, 11")
+            (compile-f8-load out subtrahend class-id slot-table const-table pic-width-table 2)
+            (unless bcd-p
+              (%f8-negate-16-10 out)
+              (%f8-add-16 out))
+            (when bcd-p (format out "~&~10t;; | BCD 16-bit SUB — deferred"))
+            (%f8-store-dest out class-id slot-table const-table dest pic-width-table t))
+          (progn
+            (compile-f8-load out minuend class-id slot-table const-table pic-width-table 1)
+            (format out "~&~10tLR      8, A")
+            (compile-f8-load out subtrahend class-id slot-table const-table pic-width-table 1)
+            (format out "~&~10tCOM")
+            (format out "~&~10tINC")
+            (format out "~&~10tAS      8")
+            (when bcd-p (format out "~&~10t;; | BCD byte subtract — deferred"))
+            (%f8-store-dest out class-id slot-table const-table dest pic-width-table nil))))))
 
 (defun compile-f8-compute (out stmt class-id slot-table const-table pic-width-table)
   (let* ((target (getf (rest stmt) :target))

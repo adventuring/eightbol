@@ -3,7 +3,7 @@
 ;; All tests are driven by the canonical Character.cob example.
 ;; Canonical file: /home/brpocock/Projects/Phantasia/Source/Classes/Character.cob
 ;;
-;; To run:  (asdf:test-system :eightbol)
+;; To run:  (asdf:test-system :eightbol)  ; runs :eightbol-test via :in-order-to
 ;;          — or —  (fiveam:run! :eightbol)
 
 (in-package :eightbol/test)
@@ -98,6 +98,29 @@ statements, not the method wrapper boilerplate."
          (ast (eightbol::parse-eightbol-string src))
          (method (first (eightbol::ast-methods ast))))
     (eightbol::ast-method-statements method)))
+
+(test parser/assembly-entry-first-statement
+  "ASSEMBLY ENTRY name . parses as leading :assembly-entry on the method."
+  (let ((stmts (parse-procedure-stmts "000110             ASSEMBLY ENTRY HookX.")))
+    (is (>= (length stmts) 2))
+    (is (eq :assembly-entry (first (first stmts))))
+    (is (string-equal "HOOKX" (getf (rest (first stmts)) :label)))))
+
+(test backend-6502/assembly-entry-emits-primary-label-and-dispatch-alias
+  "Leading :assembly-entry names the .block; MethodClassMethod = label after .bend."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M"
+                :statements ((:assembly-entry :label "HookX")
+                             (:goback)))
+              "Actor" :6502)))
+    (is (cl-ppcre:scan "(?i)hookx:\\s*\\.block" asm))
+    (is (cl-ppcre:scan "MethodActorM\\s*=\\s*Hook" asm))))
+
+(test basic/transpile-assembly-entry-line
+  "BASIC ASSEMBLY ENTRY emits one COBOL ASSEMBLY ENTRY line (uppercase name)."
+  (let ((lines (eightbol::basic-transpile-statement-one-line "ASSEMBLY ENTRY MyHook")))
+    (is (= 1 (length lines)))
+    (is (cl-ppcre:scan "ASSEMBLY ENTRY MYHOOK" (first lines)))))
 
 ;;;; Test data
 
@@ -561,9 +584,53 @@ statements, not the method wrapper boilerplate."
 
 (test backend/pic-nybble-semantics-pic-9-vs-99
   "pic-nybble-semantics-p is true for single-digit PIC 9, false for PIC 99 and PIC 9(n)."
-  (is-true (eightbol::pic-nybble-semantics-p "PIC 99 USAGE BINARY."))
+  (is-true (eightbol::pic-nybble-semantics-p "PIC 9 USAGE BINARY."))
   (is (null (eightbol::pic-nybble-semantics-p "PIC 99 USAGE BINARY.")))
   (is (null (eightbol::pic-nybble-semantics-p "PIC 9(4) USAGE BINARY."))))
+
+(test backend/pic-fractional-decimal-digits-from-picture
+  "pic-fractional-decimal-digits counts 9/X slots right of V or period (misaligned virtual radix)."
+  (is (= 4 (eightbol::pic-fractional-decimal-digits "PIC 99.9999")))
+  (is (= 2 (eightbol::pic-fractional-decimal-digits "PIC 9999.99")))
+  (is (= 6 (eightbol::pic-fractional-decimal-digits "PIC 999999.999999")))
+  (is (= 4 (eightbol::pic-fractional-decimal-digits "99V9999")))
+  (is (zerop (eightbol::pic-fractional-decimal-digits "PIC 9999")))
+  (is (= 2 (eightbol::pic-fractional-decimal-digits "PIC 9(3)V99"))))
+
+(test backend/pic-digits-to-width-dotted-picture
+  "pic-digits-to-width uses all digit positions when V or . appears (not only digits before the radix)."
+  (is (= 3 (eightbol::pic-digits-to-width "PIC 99.9999")))
+  (is (= 3 (eightbol::pic-digits-to-width "PIC 9999.99")))
+  (is (= 6 (eightbol::pic-digits-to-width "PIC 999999.999999"))))
+
+(test backend/fixed-pic-decimal-aligned-sum-integer-reference
+  "Reference integer at result fractional scale: 99.9999 + 9999.99 → 10099.9899 (scale 6); same-scale add."
+  (is (= 10099989900
+         (eightbol::fixed-pic-decimal-aligned-sum-integer 999999 4 999999 2 6)))
+  (is (= 30 (eightbol::fixed-pic-decimal-aligned-sum-integer 10 1 20 1 1))))
+
+(test backend/fixed-pic-decimal-aligned-diff-integer-reference
+  "Reference integer at result fractional scale: widen minuend/subtrahend like ADD (same-scale and cross-scale)."
+  (is (= -9899990100
+         (eightbol::fixed-pic-decimal-aligned-diff-integer 999999 4 999999 2 6)))
+  (is (= 20 (eightbol::fixed-pic-decimal-aligned-diff-integer 30 1 10 1 1)))
+  (is (= 14999 (eightbol::fixed-pic-decimal-aligned-diff-integer 19999 2 50 0 2))))
+
+(test backend/pic-decimal-binary-add-scaling-widen-only-not-narrow
+  "pic-decimal-binary-add-scaling-supported-p is false when the target scale is below the addend (narrowing)."
+  (let ((ws (make-hash-table :test 'equalp)))
+    (setf (gethash "HiFrac" ws) '(:pic "99.99" :usage :binary))
+    (setf (gethash "LoFrac" ws) '(:pic "9999" :usage :binary))
+    (let ((eightbol::*working-storage* ws))
+      (is (null (eightbol::pic-decimal-binary-add-scaling-supported-p nil "HiFrac" "LoFrac"))))))
+
+(test backend/pic-decimal-binary-subtract-scaling-widen-only-not-narrow
+  "pic-decimal-binary-subtract-scaling-supported-p is false when the minuend scale is below the subtrahend."
+  (let ((ws (make-hash-table :test 'equalp)))
+    (setf (gethash "HiFrac" ws) '(:pic "99.99" :usage :binary))
+    (setf (gethash "LoFrac" ws) '(:pic "9999" :usage :binary))
+    (let ((eightbol::*working-storage* ws))
+      (is (null (eightbol::pic-decimal-binary-subtract-scaling-supported-p nil "LoFrac" "HiFrac"))))))
 
 (test backend/constraints-skyline-default-pic-one-byte-merge-width
   "Skyline-Tool default PIC for a 1-byte slot yields pic-digits-to-width 1 (aligns with Classes.Defs)."
@@ -571,7 +638,7 @@ statements, not the method wrapper boilerplate."
     (is (= 1 (eightbol::pic-digits-to-width pic)))))
 
 (test backend/load-copybook-merges-pic-nybble-semantics
-  "Tenth table marks single-digit PIC 99 rows for operand-nybble-semantics-p."
+  "Tenth table marks single-digit PIC 9 rows for operand-nybble-semantics-p."
   (with-temporary-directory (:prefix "eightbol-nyb-")
     (let* ((root (uiop:pathname-directory-pathname (uiop:getcwd)))
            (gen  (merge-pathnames
@@ -581,7 +648,7 @@ statements, not the method wrapper boilerplate."
       (with-open-file (f (merge-pathnames (make-pathname :name (eightbol-test-slots-cpy-name "TestClass") :type "cpy") gen)
                          :direction :output :if-exists :supersede)
         (write-line "* Own slots (TestClass):" f)
-        (write-line "05 Nyb PIC 99 USAGE BINARY." f))
+        (write-line "05 Nyb PIC 9 USAGE BINARY." f))
       (multiple-value-bind (slot-table type-table const-table service-bank-table usage-table sign-table
                                         pic-size-table pic-width-table pic-frac-bits-table
                                         pic-nybble-semantics-table)
@@ -647,12 +714,14 @@ statements, not the method wrapper boilerplate."
                                              (pic-width-table (make-hash-table :test 'equalp))
                                              (pic-frac-bits-table (make-hash-table :test 'equalp))
                                              (pic-nybble-semantics-table (make-hash-table :test 'equalp))
-                                             (service-bank-table (make-hash-table :test 'equalp)))
+                                             (service-bank-table (make-hash-table :test 'equalp))
+                                             (working-storage eightbol::*working-storage*))
   "Compile a :method AST with explicit copybook tables; return assembly string.
 CPU is a supported backend keyword: 6502 family (:6502 :rp2a03 :65c02 :65c816 :huc6280),
 :z80 :cp1610 :sm83 :m6800 :m68k :i286 :arm7 :f8."
   (with-output-to-string (s)
     (let ((eightbol::*output-stream* s)
+          (eightbol::*cpu* cpu)
           (eightbol::*class-id* class-id)
           (eightbol::*slot-table* slot-table)
           (eightbol::*type-table* type-table)
@@ -663,7 +732,8 @@ CPU is a supported backend keyword: 6502 family (:6502 :rp2a03 :65c02 :65c816 :h
           (eightbol::*pic-size-table* pic-size-table)
           (eightbol::*pic-width-table* pic-width-table)
           (eightbol::*pic-frac-bits-table* pic-frac-bits-table)
-          (eightbol::*pic-nybble-semantics-table* pic-nybble-semantics-table))
+          (eightbol::*pic-nybble-semantics-table* pic-nybble-semantics-table)
+          (eightbol::*working-storage* working-storage))
       (ecase cpu
         ((:6502) (eightbol::compile-6502-method method class-id :6502))
         ((:rp2a03) (eightbol::compile-rp2a03-method method class-id))
@@ -845,6 +915,28 @@ AST is a :method plist (not full :program)."
         (is (numberp p1))
         (is (search needle asm :start2 (+ p1 (length needle)))
             "2-byte add uses adc (Self),y for low and high byte")))))
+
+(test backend-6502/add-misaligned-picture-decimal-giving-emits-scaled-binary
+  "ADD … GIVING with different implied decimal (V/.) scales emits widen-only PIC binary scaling (6502)."
+  (let ((ws (make-hash-table :test 'equalp))
+        (slots (make-hash-table :test 'equalp))
+        (picw (make-hash-table :test 'equalp)))
+    (dolist (name '("A" "B" "C"))
+      (setf (gethash name slots) "PicScale"))
+    (setf (gethash (list :of "A" "PicScale") ws) '(:pic "99.9999" :usage :binary))
+    (setf (gethash (list :of "B" "PicScale") ws) '(:pic "9999.99" :usage :binary))
+    (setf (gethash (list :of "C" "PicScale") ws) '(:pic "999999.999999" :usage :binary))
+    (setf (gethash "A" picw) 3 (gethash "B" picw) 3 (gethash "C" picw) 6)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:add :from (:of "A" :self)
+                                     :to (:of "B" :self)
+                                     :giving (:of "C" :self))))
+                "PicScale" :6502
+                :slot-table slots :pic-width-table picw :working-storage ws)))
+      (is (search ";; PIC implied-decimal scaled ADD (binary)" asm))
+      (is (search "PicS1_" asm))
+      (is (search "PicS2_" asm)))))
 
 (test backend-6502/subtract-hurt-hp-from-hp-of-self-16bit-inplace-iny
   "SUBTRACT Hurt-H-P FROM HP OF Self (w=2, same slot) uses ldy low, sta, iny, lda/sbc/sta — no tax/dey dance."
@@ -2814,6 +2906,21 @@ AST is a :method plist (not full :program)."
     (let ((dir (pathname-directory (first (eightbol::default-copybook-paths #p"/tmp/" :6502)))))
       (is (not (member nil dir :test #'equal))))))
 
+(test compile/project-copybook-paths-order-for-basic
+  "project-copybook-paths puts a complete Generated/…/Classes tree before Source/Classes."
+  (with-temporary-directory (:prefix "eightbol-projcpy-")
+    (let ((tmp (uiop:ensure-directory-pathname (uiop:getcwd))))
+      (ensure-directories-exist (merge-pathnames "Source/Classes/" tmp))
+      (ensure-directories-exist (merge-pathnames "Source/Generated/7800/Classes/" tmp))
+      (dolist (f '("Phantasia-Globals.cpy" "Classes.cpy" "Asset-IDs.cpy"))
+        (with-open-file (out (merge-pathnames (format nil "Source/Generated/7800/Classes/~a" f) tmp)
+                             :direction :output :if-does-not-exist :create)
+          (write-line "      * stub" out)))
+      (let ((paths (eightbol::project-copybook-paths tmp :6502)))
+        (is (<= 2 (length paths)))
+        (is (equalp (merge-pathnames "Source/Generated/7800/Classes/" tmp) (first paths)))
+        (is (find (merge-pathnames "Source/Classes/" tmp) paths :test #'equalp)))))
+
 (test backend-6502/service-bank-statement-is-error
   "Corrupt AST with :service-bank as statement type signals a clear error."
   (signals error
@@ -3444,25 +3551,55 @@ AST is a :method plist (not full :program)."
     (is (string= "/path/to/copybooks" (getf opts :include-path)))))
 
 (test main/parse-args-cpu-option
-  "parse-arguments recognises -m 6502 as CPU keyword."
-  (let ((opts (eightbol::parse-arguments '("-m" "6502" "File.cob"))))
-    (is (eq :6502 (getf opts :cpu)))))
+  "parse-arguments stores -m 6502 on :machine for @code{parse-cli-cpu-arg}."
+  (let* ((opts (eightbol::parse-arguments '("-m" "6502" "File.cob")))
+         (m (getf opts :machine)))
+    (is (string= "6502" m))
+    (is (eq :6502 (eightbol::parse-cli-cpu-arg m)))))
 
 (test main/parse-args-unknown-cpu-errors
-  "parse-arguments signals error for unknown CPU."
+  "parse-cli-cpu-arg signals for unknown CPU label."
   (signals error
-    (eightbol::parse-arguments '("-m" "pdp11" "File.cob"))))
+    (eightbol::parse-cli-cpu-arg "pdp11")))
 
 (test main/parse-args-m-all
-  "parse-arguments recognises -m all for all backends."
-  (let ((opts (eightbol::parse-arguments '("-m" "all" "File.cob"))))
-    (is (eq :all (getf opts :cpu)))))
+  "parse-cli-cpu-arg maps -m all string to @code{:all}."
+  (let* ((opts (eightbol::parse-arguments '("-m" "all" "File.cob")))
+         (m (getf opts :machine)))
+    (is (string-equal "all" m))
+    (is (eq :all (eightbol::parse-cli-cpu-arg m)))))
 
 (test main/parse-args-multiple-input-files
   "parse-arguments collects all positional args as input files."
   (let ((opts (eightbol::parse-arguments '("a.cob" "b.cob"))))
     (is (equal '("a.cob" "b.cob")
                (loop for (k v) on opts by #'cddr when (eq k :input-file) collect v)))))
+
+(test main/extract-basic-cli-with-file
+  "extract-basic-cli removes @code{--basic} and a following non-option path."
+  (multiple-value-bind (p file rest)
+      (eightbol::extract-basic-cli '("--basic" "Demo.bas" "-m" "6502"))
+    (is-true p)
+    (is (string= "Demo.bas" file))
+    (is (equal '("-m" "6502") rest))))
+
+(test main/extract-basic-cli-no-file
+  "extract-basic-cli leaves @code{-m} as first token when no path follows @code{--basic}."
+  (multiple-value-bind (p file rest)
+      (eightbol::extract-basic-cli '("-I" "x" "--basic" "-m" "6502"))
+    (is-true p)
+    (is (null file))
+    (is (equal '("-I" "x" "-m" "6502") rest))))
+
+(test basic/transpile-emits-class-and-method
+  "transpile-basic-to-cobol-string emits CLASS-ID and METHOD-ID for a tiny program."
+  (let* ((src "100 METHOD \"Think\"
+110 REM hello
+120 END
+")
+         (cob (eightbol::transpile-basic-to-cobol-string "TestBas" src)))
+    (is (search "CLASS-ID. TestBas." cob))
+    (is (search "METHOD-ID. \"Think\"" cob))))
 
 (test lexer/valid-copybook-name-p
   "valid-copybook-name-p rejects path traversal and accepts valid names."
@@ -3487,4 +3624,4 @@ AST is a :method plist (not full :program)."
                           (and (eq (first tok) 'bareword)
                                (string= (cadr tok) ").")))
                        tokens))
-          "Should not have bareword )."))))
+          "Should not have bareword )."))))))

@@ -56,9 +56,16 @@
          (*method-id* (getf (rest method) :method-id))
          (method-dispatch-suffix (pascal-case
                                   (format nil "~a" *method-id*)))
-         (stmts (method-statements-list method))
+         (dispatch-label (format nil "Method~a~a" class-id method-dispatch-suffix))
+         (custom-entry (nth-value 0 (split-method-leading-assembly-entry
+                                     (getf (rest method) :statements))))
+         (block-label (if custom-entry
+                          (to-identifier custom-entry)
+                          (to-identifier dispatch-label)))
+         (stmts (nth-value 1 (split-method-leading-assembly-entry
+                              (getf (rest method) :statements))))
          (last-stmt (car (last stmts))))
-    (format *output-stream* "~&Method~a~a: .block" class-id method-dispatch-suffix)
+    (format *output-stream* "~&~a: .block" block-label)
     (format *output-stream* "~&~10tcld~40t; RP2A03: ensure binary mode (no decimal)")
     (let ((*6502-accumulator-expr* nil))
       (dolist (stmt stmts)
@@ -68,9 +75,13 @@
            (error "EIGHTBOL: malformed procedure statement (expected list): ~s" stmt))
           ((first stmt)
            (compile-statement :rp2a03 (first stmt) (rest stmt))))))
-    (unless (method-last-stmt-6502-no-trailing-rts-p last-stmt)
+    (unless (method-last-statement-6502-no-trailing-rts-p last-stmt)
       (format *output-stream* "~&~10trts"))
-    (format *output-stream* "~&~10t.bend")))
+    (format *output-stream* "~&~10t.bend")
+    (when custom-entry
+      (format *output-stream* "~&~a = ~a"
+              (to-identifier dispatch-label)
+              block-label))))
 
 ;;; RP2A03 compile-statement methods — same as 6502 except add/subtract
 
@@ -279,26 +290,26 @@ Uses only 6502 instructions (BRA is 65c02-only); RP2A03-compatible."
 
 (defun compile-rp2a03-subtract-bcd (out stmt class-id)
   ;; 16-bit BCD subtract TODO
-  (let ((from        (getf (rest stmt) :from))
-        (from-target (getf (rest stmt) :from-target))
-        (giving      (getf (rest stmt) :giving)))
-    (cond
-      ((slot-of-self-p from-target)
-       (let ((n (slot-of-expr from-target)))
-         (format out "~&~10tldy #~a" (slot-symbol (second n) class-id))
-         (format out "~&~10tlda (Self),y")
+  (multiple-value-bind (minuend subtrahend)
+      (subtract-statement-minuend-and-subtrahend stmt)
+    (let ((giving (getf (rest stmt) :giving)))
+      (cond
+        ((slot-of-self-p minuend)
+         (let ((n (slot-of-expr minuend)))
+           (format out "~&~10tldy #~a" (slot-symbol (second n) class-id))
+           (format out "~&~10tlda (Self),y")
+           (format out "~&~10tsec")
+           (if (expr-is-constant-p subtrahend)
+               (format out "~&~10tsbc #~a" (emit-6502-value subtrahend))
+               (format out "~&~10tsbc ~a" (emit-6502-value subtrahend)))
+           (emit-rp2a03-bcd-sub-correction out)
+           (format out "~&~10tsta (Self),y")))
+        (t
+         (emit-6502-load-expr out minuend class-id)
          (format out "~&~10tsec")
-         (if (expr-is-constant-p from)
-             (format out "~&~10tsbc #~a" (emit-6502-value from))
-             (format out "~&~10tsbc ~a" (emit-6502-value from)))
+         (if (expr-is-constant-p subtrahend)
+             (format out "~&~10tsbc #~a" (emit-6502-value subtrahend))
+             (format out "~&~10tsbc ~a" (emit-6502-value subtrahend)))
          (emit-rp2a03-bcd-sub-correction out)
-         (format out "~&~10tsta (Self),y")))
-      (t
-       (emit-6502-load-expr out from-target class-id)
-       (format out "~&~10tsec")
-       (if (expr-is-constant-p from)
-           (format out "~&~10tsbc #~a" (emit-6502-value from))
-           (format out "~&~10tsbc ~a" (emit-6502-value from)))
-       (emit-rp2a03-bcd-sub-correction out)
-       (format out "~&~10tsta ~a"
-               (emit-6502-value (or giving from-target)))))))
+         (format out "~&~10tsta ~a"
+                 (emit-6502-value (or giving minuend))))))))

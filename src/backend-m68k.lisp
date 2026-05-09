@@ -48,10 +48,19 @@
         (*class-id* class-id))
     (declare (special *slot-table* *type-table* *const-table* *pic-size-table*
                       *pic-width-table* *class-id*))
-    (let ((method-id  (getf (rest method) :method-id))
-          (statements (getf (rest method) :statements)))
-      (format out "~&~%Method~a~a:"
-              (m68k-symbol class-id) (m68k-symbol (format nil "~a" method-id)))
+    (let* ((method-id (getf (rest method) :method-id))
+           (dispatch-label (format nil "Method~a~a"
+                                   (m68k-symbol class-id)
+                                   (m68k-symbol (format nil "~a" method-id))))
+           (custom-entry (nth-value 0 (split-method-leading-assembly-entry
+                                       (getf (rest method) :statements))))
+           (statements (nth-value 1 (split-method-leading-assembly-entry
+                                     (getf (rest method) :statements)))))
+      (if custom-entry
+          (progn
+            (format out "~&~%~a:" (m68k-symbol custom-entry))
+            (format out "~&~a:" dispatch-label))
+          (format out "~&~%~a:" dispatch-label))
       (dolist (stmt (ensure-list statements))
         (compile-m68k-statement out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
       (format out "~&~10trts"))))
@@ -444,6 +453,7 @@
          (w (operand-width (or result to) pic-width-table))
          (bcd-p (when result (usage-bcd-p (expr-to-width-name result))))
          (sz (m68k-size-suffix w)))
+    (assert-pic-decimal-add-compiled :m68k stmt)
     (compile-m68k-load out to class-id slot-table const-table pic-width-table)
     (format out "~&~10tmove~a  %d0, %d1" sz)
     (compile-m68k-load out from class-id slot-table const-table pic-width-table)
@@ -457,26 +467,27 @@
       (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol (format nil "~a" result))))))
 
 (defun compile-m68k-subtract (out stmt class-id slot-table const-table pic-width-table)
-  (let* ((from (getf (rest stmt) :from))
-         (from-target (getf (rest stmt) :from-target))
-         (giving (getf (rest stmt) :giving))
-         (dest (or giving from-target))
-         (w (operand-width dest pic-width-table))
-         (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest))))
-         (sz (m68k-size-suffix w)))
-    (compile-m68k-load out from-target class-id slot-table const-table pic-width-table)
-    (format out "~&~10tmove~a  %d0, %d1" sz)
-    (compile-m68k-load out from class-id slot-table const-table pic-width-table)
-    (if (and bcd-p (= (or w 1) 1))
-        (progn
-          (format out "~&~10tmoveq   #0, %%d2")
-          (format out "~&~10tmove    %%d2, %%ccr")
-          (format out "~&~10tsbcd    %%d0, %%d1")
-          (format out "~&~10tmove.b  %d1, %d0"))
-        (progn
-          (format out "~&~10tsub~a   %d0, %d1" sz)
-          (format out "~&~10tmove~a  %d1, %d0" sz)))
-    (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol (format nil "~a" dest)))))
+  (multiple-value-bind (minuend subtrahend)
+      (subtract-statement-minuend-and-subtrahend stmt)
+    (let* ((giving (getf (rest stmt) :giving))
+           (dest (or giving minuend))
+           (w (operand-width dest pic-width-table))
+           (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest))))
+           (sz (m68k-size-suffix w)))
+      (assert-pic-decimal-subtract-compiled :m68k stmt)
+      (compile-m68k-load out minuend class-id slot-table const-table pic-width-table)
+      (format out "~&~10tmove~a  %d0, %d1" sz)
+      (compile-m68k-load out subtrahend class-id slot-table const-table pic-width-table)
+      (if (and bcd-p (= (or w 1) 1))
+          (progn
+            (format out "~&~10tmoveq   #0, %%d2")
+            (format out "~&~10tmove    %%d2, %%ccr")
+            (format out "~&~10tsbcd    %%d0, %%d1")
+            (format out "~&~10tmove.b  %d1, %d0"))
+          (progn
+            (format out "~&~10tsub~a   %d0, %d1" sz)
+            (format out "~&~10tmove~a  %d1, %d0" sz)))
+      (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol (format nil "~a" dest))))))
 
 (defun compile-m68k-compute (out stmt class-id slot-table const-table pic-width-table)
   (let* ((target (getf (rest stmt) :target))

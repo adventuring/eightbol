@@ -54,6 +54,9 @@ Controls opcode choice: bra vs jmp, stz vs lda/sta, undocumented opcodes.")
 
 (defvar *6502-x-index-expression* :trash/init)
 
+(defvar *6502-pic-scale-seq* 0
+  "Incremented for unique @code{PicS*} scratch labels when emitting PIC implied-decimal scaling.")
+
 (defun %6502-subtract-2byte-inplace-eligible-p (from from-target result
                                                 giving class-id w bcd-p)
   "True  when   SUBTRACT  can   use  one   ldy  to   the  low   slot  byte,
@@ -147,7 +150,8 @@ Parser or optimization must not leave junk entries, but filtering keeps shape pr
 @item
 :statements is absent or nil.
 @end itemize"
-  (null (method-statements-list method)))
+  (null (nth-value 1 (split-method-leading-assembly-entry
+                      (getf (rest method) :statements)))))
 
 (defun method-trivial-return-only-p (method)
   "True   if   METHOD   has   exactly    one   statement   that   is   only
@@ -158,8 +162,10 @@ a  return  (:goback,  :exit-method,  :exit-program,
 @item
 METHOD — a :method AST node.
 @end itemize"
-  (let ((statements (method-statements-list method)))
-    (and (= (length statements) 1)
+  (let ((statements (nth-value 1 (split-method-leading-assembly-entry
+                                  (getf (rest method) :statements)))))
+    (and statements
+         (= (length statements) 1)
          (let ((s (first statements)))
            (and (listp s)
                 (not (null (member (first s)
@@ -176,6 +182,9 @@ Phantasia's hand-written stubs.
 @item
 METHOD — a :method AST node.
 @end itemize"
+  (when (nth-value 0 (split-method-leading-assembly-entry
+                     (getf (rest method) :statements)))
+    (return-from method-true-method-alias-p nil))
   (or (method-blank-p method)
       (method-trivial-return-only-p method)))
 
@@ -274,6 +283,11 @@ Binds  *6502-family-cpu*   to  CPU  so  opcode   selection  (e.g.
 lax vs lda/tax) matches standalone compilation, not
 only compile-6502-family.
 
+When the method's statements begin with @code{(:assembly-entry :label …)},
+the @code{.block} opens on that label (for external @code{jsr}), and
+@code{MethodClassMethod = …} is emitted after @code{.bend} so dispatch
+still matches @code{Method~a~a}.
+
 @table @asis
 @item METHOD
 :method AST node.
@@ -285,11 +299,18 @@ Compiling class string (e.g. \"Character\").
   (let* ((*6502-family-cpu* cpu)
          (*method-id* (safe-getf (rest method) :method-id))
          (method-dispatch-suffix (to-identifier *method-id*))
-         (statements (method-statements-list method))
+         (dispatch-label (format nil "Method~a~a"
+                                 (to-identifier class-id)
+                                 method-dispatch-suffix))
+         (custom-entry (nth-value 0 (split-method-leading-assembly-entry
+                                     (getf (rest method) :statements))))
+         (block-label (if custom-entry
+                          (to-identifier custom-entry)
+                          dispatch-label))
+         (statements (nth-value 1 (split-method-leading-assembly-entry
+                                   (getf (rest method) :statements))))
          (last-statement (car (last statements))))
-    (format *output-stream* "~%Method~a~a: .block"
-	  (to-identifier class-id)
-	  method-dispatch-suffix)
+    (format *output-stream* "~%~a: .block" block-label)
     (let ((*6502-accumulator-expression* :trash/method-top)
           (*6502-x-index-expression* :trash/method-top))
       (dolist (statement statements)
@@ -302,7 +323,9 @@ Compiling class string (e.g. \"Character\").
     ;; Fall-through only: returns and tail jmp/jsr paths that never reach here.
     (unless (method-last-statement-6502-no-trailing-rts-p last-statement)
       (format *output-stream* "~%~10Trts~%"))
-    (format *output-stream* "~%~10T.bend")))
+    (format *output-stream* "~%~10T.bend")
+    (when custom-entry
+      (format *output-stream* "~%~a = ~a" dispatch-label block-label))))
 
 ;;; Statement dispatch via generic functions (compile-statement-* methods below)
 
@@ -1947,6 +1970,169 @@ Current class (slot labels).
                                                            (expression-operand-width rhs))))
     (t (error "Signed logic not implemented"))))
 
+(defun emit-6502-pic-scratch-pads (out w-work buf1 buf2 cmem skip)
+  "Emit @code{jmp} over zero-initialized scratch for PIC decimal widen-then-add/sub."
+  (format out "~%~10Tjmp ~a" skip)
+  (format out "~%~a .fill ~d, 0" buf1 w-work)
+  (format out "~%~a .fill ~d, 0" buf2 w-work)
+  (format out "~%~a .byte 0" cmem)
+  (format out "~%~a:" skip))
+
+(defun emit-6502-pic-copy-to-buffer (out expr class-id w-expr buf w-work)
+  "Copy W-EXPR bytes of EXPR into BUF[0..], zero-fill through W-WORK-1."
+  (dotimes (i w-expr)
+    (emit-6502-load-byte-n out expr class-id i w-expr)
+    (format out "~%~10Tsta ~a+~d" buf i))
+  (when (< w-expr w-work)
+    (format out "~%~10Tlda #0")
+    (loop for i from w-expr below w-work
+          do (format out "~%~10Tsta ~a+~d" buf i))))
+
+(defun emit-6502-pic-mul-le-buffer-by-10-once (out buf w cmem)
+  "In-place LE unsigned multiply: BUF[0..W-1] *= 10. CMEM holds 8-bit carry between limbs."
+  (format out "~%~10Tlda #0~%~10Tsta ~a" cmem)
+  (dotimes (i w)
+    (let* ((uid (incf *6502-pic-scale-seq*))
+           (tb (format nil "PicTb~d" uid))
+           (lo (format nil "PicLo~d" uid))
+           (hi (format nil "PicHi~d" uid))
+           (lp (format nil "PicLp~d" uid)))
+      (format out "~%~10Tlda ~a+~d" buf i)
+      (format out "~%~10Tsta ~a" tb)
+      (format out "~%~10Tlda #0~%~10Tsta ~a~%~10Tsta ~a" lo hi)
+      (format out "~%~10Tldx #10")
+      (format out "~%~a:" lp)
+      (format out "~%~10Tclc~%~10Tlda ~a~%~10Tadc ~a~%~10Tsta ~a" lo tb lo)
+      (format out "~%~10Tlda ~a~%~10Tadc #0~%~10Tsta ~a" hi hi)
+      (format out "~%~10Tdex~%~10Tbne ~a" lp)
+      (format out "~%~10Tclc~%~10Tlda ~a~%~10Tadc ~a~%~10Tsta ~a+~d" lo cmem buf i)
+      (format out "~%~10Tlda ~a~%~10Tadc #0~%~10Tsta ~a" hi cmem))))
+
+(defun emit-6502-pic-add-le-buffers (out buf1 buf2 w)
+  "LE unsigned add BUF2 into BUF1 for W bytes."
+  (format out "~%~10Tclc")
+  (dotimes (i w)
+    (format out "~%~10Tlda ~a+~d" buf1 i)
+    (format out "~%~10Tadc ~a+~d" buf2 i)
+    (format out "~%~10Tsta ~a+~d" buf1 i)))
+
+(defun emit-6502-pic-sub-le-buffers (out buf1 buf2 w)
+  "LE unsigned subtract BUF2 from BUF1 for W bytes."
+  (format out "~%~10Tsec")
+  (dotimes (i w)
+    (format out "~%~10Tlda ~a+~d" buf1 i)
+    (format out "~%~10Tsbc ~a+~d" buf2 i)
+    (format out "~%~10Tsta ~a+~d" buf1 i)))
+
+(defun compile-6502-add-pic-decimal-scaled-binary (out statement class-id)
+  "ADD with mismatched implied decimal (PIC @code{V}/@code{.}): widen binary operands by @code{* 10^n}, add, store.
+
+Supports @code{GIVING} (result fractional scale @code{>=} both operands) and @code{ADD @dots{} TO} when the
+target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed) is not implemented here."
+  (let* ((from (safe-getf (rest statement) :from))
+         (to-op (safe-getf (rest statement) :to))
+         (giving (safe-getf (rest statement) :giving))
+         (result (or giving to-op))
+         (dr (%operand-pic-fractional-decimal-digits (if giving (or giving to-op) to-op)))
+         (df (%operand-pic-fractional-decimal-digits from))
+         (dt (%operand-pic-fractional-decimal-digits to-op))
+         (w-from (expression-operand-width from))
+         (w-to (operand-width to-op))
+         (w-res (operand-width result))
+         (w-work (min 16 (+ 2 (max w-from w-to w-res)))))
+    (when (or (operand-bcd-p from) (operand-bcd-p to-op) (operand-bcd-p result))
+      (error 'backend-error
+             :message "EIGHTBOL/6502: misaligned PIC decimal scaling with USAGE DECIMAL is not yet implemented"
+             :cpu :6502
+             :detail (list :giving giving :from from :to to-op)))
+    (unless (pic-decimal-binary-add-scaling-supported-p giving from to-op)
+      (error 'backend-error
+             :message "EIGHTBOL/6502: ADD misaligned PIC needs narrowing (divide by 10^n) which is not yet implemented"
+             :cpu :6502
+             :detail (list :giving giving :from from :to to-op)))
+    (let* ((id (incf *6502-pic-scale-seq*))
+           (buf1 (format nil "PicS1_~d" id))
+           (buf2 (format nil "PicS2_~d" id))
+           (cmem (format nil "PicCm_~d" id))
+           (skip (format nil "PicSk_~d" id)))
+      (format out "~%~10T;; PIC implied-decimal scaled ADD (binary)")
+      (emit-6502-pic-scratch-pads out w-work buf1 buf2 cmem skip)
+      (if giving
+          (progn
+            (emit-6502-pic-copy-to-buffer out from class-id w-from buf1 w-work)
+            (dotimes (_ (- dr df))
+              (emit-6502-pic-mul-le-buffer-by-10-once out buf1 w-work cmem))
+            (emit-6502-pic-copy-to-buffer out to-op class-id w-to buf2 w-work)
+            (dotimes (_ (- dr dt))
+              (emit-6502-pic-mul-le-buffer-by-10-once out buf2 w-work cmem))
+            (emit-6502-pic-add-le-buffers out buf1 buf2 w-work)
+            (dotimes (i w-res)
+              (format out "~%~10Tlda ~a+~d" buf1 i)
+              (emit-6502-store-byte-n out result class-id i w-res)))
+          (progn
+            (emit-6502-pic-copy-to-buffer out to-op class-id w-to buf1 w-work)
+            (emit-6502-pic-copy-to-buffer out from class-id w-from buf2 w-work)
+            (dotimes (_ (- dt df))
+              (emit-6502-pic-mul-le-buffer-by-10-once out buf2 w-work cmem))
+            (emit-6502-pic-add-le-buffers out buf1 buf2 w-work)
+            (dotimes (i w-to)
+              (format out "~%~10Tlda ~a+~d" buf1 i)
+              (emit-6502-store-byte-n out to-op class-id i w-to)))))
+    (setf *6502-accumulator-expression* :trash/pic-scale)))
+
+(defun compile-6502-subtract-pic-decimal-scaled-binary (out statement class-id)
+  "SUBTRACT with mismatched implied decimal: widen binary operands, subtract, store."
+  (multiple-value-bind (minuend subtrahend)
+      (subtract-statement-minuend-and-subtrahend statement)
+    (let* ((giving (safe-getf (rest statement) :giving))
+           (result (or giving minuend))
+           (dr (%operand-pic-fractional-decimal-digits (if giving (or giving minuend) minuend)))
+           (dm (%operand-pic-fractional-decimal-digits minuend))
+           (ds (%operand-pic-fractional-decimal-digits subtrahend))
+           (w-min (max (operand-width minuend) (expression-operand-width minuend)))
+           (w-sub (max (operand-width subtrahend) (expression-operand-width subtrahend)))
+           (w-res (operand-width result))
+           (w-work (min 16 (+ 2 (max w-min w-sub w-res)))))
+      (when (or (operand-bcd-p minuend) (operand-bcd-p subtrahend) (operand-bcd-p result))
+        (error 'backend-error
+               :message "EIGHTBOL/6502: misaligned PIC decimal scaling with USAGE DECIMAL is not yet implemented"
+               :cpu :6502
+               :detail (list :giving giving :minuend minuend :subtrahend subtrahend)))
+      (unless (pic-decimal-binary-subtract-scaling-supported-p giving minuend subtrahend)
+        (error 'backend-error
+               :message "EIGHTBOL/6502: SUBTRACT misaligned PIC needs narrowing (divide by 10^n) which is not yet implemented"
+               :cpu :6502
+               :detail (list :giving giving :minuend minuend :subtrahend subtrahend)))
+      (let* ((id (incf *6502-pic-scale-seq*))
+             (buf1 (format nil "PicS1_~d" id))
+             (buf2 (format nil "PicS2_~d" id))
+             (cmem (format nil "PicCm_~d" id))
+             (skip (format nil "PicSk_~d" id)))
+        (format out "~%~10T;; PIC implied-decimal scaled SUBTRACT (binary)")
+        (emit-6502-pic-scratch-pads out w-work buf1 buf2 cmem skip)
+        (if giving
+            (progn
+              (emit-6502-pic-copy-to-buffer out minuend class-id w-min buf1 w-work)
+              (dotimes (_ (- dr dm))
+                (emit-6502-pic-mul-le-buffer-by-10-once out buf1 w-work cmem))
+              (emit-6502-pic-copy-to-buffer out subtrahend class-id w-sub buf2 w-work)
+              (dotimes (_ (- dr ds))
+                (emit-6502-pic-mul-le-buffer-by-10-once out buf2 w-work cmem))
+              (emit-6502-pic-sub-le-buffers out buf1 buf2 w-work)
+              (dotimes (i w-res)
+                (format out "~%~10Tlda ~a+~d" buf1 i)
+                (emit-6502-store-byte-n out result class-id i w-res)))
+            (progn
+              (emit-6502-pic-copy-to-buffer out minuend class-id w-min buf1 w-work)
+              (emit-6502-pic-copy-to-buffer out subtrahend class-id w-sub buf2 w-work)
+              (dotimes (_ (- dm ds))
+                (emit-6502-pic-mul-le-buffer-by-10-once out buf2 w-work cmem))
+              (emit-6502-pic-sub-le-buffers out buf1 buf2 w-work)
+              (dotimes (i w-min)
+                (format out "~%~10Tlda ~a+~d" buf1 i)
+                (emit-6502-store-byte-n out minuend class-id i w-min)))))
+      (setf *6502-accumulator-expression* :trash/pic-scale))))
+
 ;;; ADD / SUBTRACT / COMPUTE
 
 (defun literal-one-p (expression)
@@ -1969,6 +2155,9 @@ Current class (slot labels).
              :message "ADD requires TO or GIVING"
              :cpu :6502
              :detail statement))
+    (when (add-picture-decimal-scales-mismatch-p giving result from to-op)
+      (compile-6502-add-pic-decimal-scaled-binary out statement class-id)
+      (return-from compile-6502-add nil))
     (cond
       ;; Optimise: ADD 1 TO variable (no GIVING) → inc variable (byte only)
       ((and (literal-one-p from) (not giving) (stringp to-op) (= (operand-width to-op) 1))
@@ -2091,145 +2280,148 @@ Current class (slot labels).
        (when bcd-p (format out "~%~10Tcld"))))))
 
 (defun compile-6502-subtract (out statement class-id)
-  ;; LET* so RESULT and W use FROM / GIVING from this statement (same parallel-binding issue as ADD).
-  (let* ((subtrahend (safe-getf (rest statement) :subtrahend))
-         (from (safe-getf (rest statement) :from))
-         (giving (safe-getf (rest statement) :giving))
-         (result (or giving from))
-         (w (max (operand-width result)
-                 (expression-operand-width subtrahend)
-                 (operand-width from)))
-         (bcd-p (when result (usage-bcd-p (expression-to-width-name result)))))
-    (cond
-      ;; Optimise: SUBTRACT 1 SUBTRAHEND variable (no GIVING, plain variable) → dec (byte only)
-      ((and (literal-one-p subtrahend) (not giving) (stringp from) (= w 1))
-       (format out "~%~10Tdec ~a" (emit-6502-value from))
-       (setf *6502-accumulator-expression* :trash/1-))
-      ;; Multi-byte SUBTRACT (w >= 2): result = from - subtrahend
-      ((>= w 2)
-       (when (and bcd-p (> w 2))
-         (error "EIGHTBOL: BCD SUBTRACT with width ~d not yet implemented" w))
-       (if (> w 2)
-           (progn
-             (when bcd-p (format out "~%~10Tsed"))
-             (format out "~%~10Tsec")
-             (dotimes (i w)
-               (emit-6502-load-byte-n out from class-id i w)
-               (if (expression-constant-p subtrahend)
-                   (format out "~%~10Tsbc # $ff & ( ~a >> ~d )"
-                           (expression-constant-value subtrahend) (* 8 i))
-                   (emit-6502-sbc-byte-n-of-expression out subtrahend class-id i w))
-               (emit-6502-store-byte-n out result class-id i w
-                                       :skip-ldy (equal from result)))
-             (when bcd-p (format out "~%~10Tcld")))
-           (cond
-             ((%6502-subtract-2byte-inplace-eligible-p subtrahend from result giving class-id w bcd-p)
-              (emit-6502-subtract-2byte-self-inplace out subtrahend result class-id bcd-p))
-             (t
-              (let ((use-stack (expression-contains-subscript-p from)))
-                (when (or use-stack (expression-contains-subscript-p subtrahend) (expression-contains-subscript-p result))
-                  (setf use-stack t))
-                (when bcd-p (format out "~%~10Tsed"))
-                ;; Low bytes: save result_lo (tax or pha)
-                (emit-6502-load-expression out from class-id)
-                (format out "~%~10Tsec")
-                (if (expression-constant-p subtrahend)
-                    (let ((v (expression-constant-value subtrahend)))
-                      (format out "~%~10Tsbc #<~d" v))
-                    (cond
-                      ((slot-of-expression subtrahend) 
-                       (emit-6502-alu-with-memory-rhs out "sbc" subtrahend class-id))
-                      (t
-                       (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))))
-                (if use-stack
-                    (format out "~%~10Tpha")
-                    (progn
-                      (format out "~%~10Ttax")
-                      (setf *6502-x-index-expression* *6502-accumulator-expression*)))
-                ;; High bytes: result_hi = from_hi - subtrahend_hi - borrow
-                (emit-6502-load-hi-byte out from class-id)
-                (if (expression-constant-p subtrahend)
-                    (let ((v (expression-constant-value subtrahend)))
-                      (format out "~%~10Tsbc #>~d" v))
-                    (cond
-                      ((slot-of-expression subtrahend) 
-                       (let* ((slot-of-expression (slot-of-expression subtrahend))
-                              (offset (apply #'slot-symbol (rest slot-of-expression)))
-                              (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
-                         (format out "~%~10Tldy # ~a + 1" offset)
-                         (format out "~%~10Tsbc (~a), y" pointer)))
-                      (t
-                       (format out "~%~10Tsbc ~a + 1" (emit-6502-value subtrahend)))))
-                (if (slot-of-expression result)
-                    (let* ((n (slot-of-expression result))
-                           (offset (apply #'slot-symbol (rest n)))
-                           (pointer (6502-object-pointer-label (third n) class-id)))
-                      (format out "~%~10Tldy # ~a + 1" offset)
-                      (format out "~%~10Tsta (~a), y" pointer)
-                      (format out "~%~10Tdey")
-                      (format out "~%~10T~a" (if use-stack "pla" "txa"))
-                      (format out "~%~10Tsta (~a), y" pointer))
-                    (let ((res-sym (emit-6502-value result)))
-                      (format out "~%~10Tsta ~a + 1" res-sym)
-                      (format out "~%~10T~a" (if use-stack "pla" "txa"))
-                      (format out "~%~10Tsta ~a" res-sym)))
-                (when bcd-p (format out "~%~10Tcld"))
-                (setf *6502-accumulator-expression* :trash/--))))))
-      ((slot-of-expression from)
-       (let* ((n (slot-of-expression from))
-              (offset (apply #'slot-symbol (rest n)))
-              (pointer (6502-object-pointer-label (third n) class-id)))
-         (format out "~%~10Tldy # ~a" offset)
-         (with-accumulator-value (from)
-           (format out "~%~10Tlda (~a), y" pointer))
+  ;; LET* so RESULT and W use minuend / GIVING from this statement (same parallel-binding issue as ADD).
+  (multiple-value-bind (minuend subtrahend)
+      (subtract-statement-minuend-and-subtrahend statement)
+    (let* ((giving (safe-getf (rest statement) :giving))
+           (result (or giving minuend))
+           (w (max (operand-width result)
+                   (expression-operand-width subtrahend)
+                   (operand-width minuend)))
+           (bcd-p (when result (usage-bcd-p (expression-to-width-name result)))))
+      (when (subtract-picture-decimal-scales-mismatch-p giving result subtrahend minuend)
+        (compile-6502-subtract-pic-decimal-scaled-binary out statement class-id)
+        (return-from compile-6502-subtract nil))
+      (cond
+        ;; Optimise: SUBTRACT 1 SUBTRAHEND variable (no GIVING, plain variable) → dec (byte only)
+        ((and (literal-one-p subtrahend) (not giving) (stringp minuend) (= w 1))
+         (format out "~%~10Tdec ~a" (emit-6502-value minuend))
+         (setf *6502-accumulator-expression* :trash/1-))
+        ;; Multi-byte SUBTRACT (w >= 2): result = minuend - subtrahend
+        ((>= w 2)
+         (when (and bcd-p (> w 2))
+           (error "EIGHTBOL: BCD SUBTRACT with width ~d not yet implemented" w))
+         (if (> w 2)
+             (progn
+               (when bcd-p (format out "~%~10Tsed"))
+               (format out "~%~10Tsec")
+               (dotimes (i w)
+                 (emit-6502-load-byte-n out minuend class-id i w)
+                 (if (expression-constant-p subtrahend)
+                     (format out "~%~10Tsbc # $ff & ( ~a >> ~d )"
+                             (expression-constant-value subtrahend) (* 8 i))
+                     (emit-6502-sbc-byte-n-of-expression out subtrahend class-id i w))
+                 (emit-6502-store-byte-n out result class-id i w
+                                         :skip-ldy (equal minuend result)))
+               (when bcd-p (format out "~%~10Tcld")))
+             (cond
+               ((%6502-subtract-2byte-inplace-eligible-p subtrahend minuend result giving class-id w bcd-p)
+                (emit-6502-subtract-2byte-self-inplace out subtrahend result class-id bcd-p))
+               (t
+                (let ((use-stack (expression-contains-subscript-p minuend)))
+                  (when (or use-stack (expression-contains-subscript-p subtrahend) (expression-contains-subscript-p result))
+                    (setf use-stack t))
+                  (when bcd-p (format out "~%~10Tsed"))
+                  ;; Low bytes: save result_lo (tax or pha)
+                  (emit-6502-load-expression out minuend class-id)
+                  (format out "~%~10Tsec")
+                  (if (expression-constant-p subtrahend)
+                      (let ((v (expression-constant-value subtrahend)))
+                        (format out "~%~10Tsbc #<~d" v))
+                      (cond
+                        ((slot-of-expression subtrahend) 
+                         (emit-6502-alu-with-memory-rhs out "sbc" subtrahend class-id))
+                        (t
+                         (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))))
+                  (if use-stack
+                      (format out "~%~10Tpha")
+                      (progn
+                        (format out "~%~10Ttax")
+                        (setf *6502-x-index-expression* *6502-accumulator-expression*)))
+                  ;; High bytes: result_hi = minuend_hi - subtrahend_hi - borrow
+                  (emit-6502-load-hi-byte out minuend class-id)
+                  (if (expression-constant-p subtrahend)
+                      (let ((v (expression-constant-value subtrahend)))
+                        (format out "~%~10Tsbc #>~d" v))
+                      (cond
+                        ((slot-of-expression subtrahend) 
+                         (let* ((slot-of-expression (slot-of-expression subtrahend))
+                                (offset (apply #'slot-symbol (rest slot-of-expression)))
+                                (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
+                           (format out "~%~10Tldy # ~a + 1" offset)
+                           (format out "~%~10Tsbc (~a), y" pointer)))
+                        (t
+                         (format out "~%~10Tsbc ~a + 1" (emit-6502-value subtrahend)))))
+                  (if (slot-of-expression result)
+                      (let* ((n (slot-of-expression result))
+                             (offset (apply #'slot-symbol (rest n)))
+                             (pointer (6502-object-pointer-label (third n) class-id)))
+                        (format out "~%~10Tldy # ~a + 1" offset)
+                        (format out "~%~10Tsta (~a), y" pointer)
+                        (format out "~%~10Tdey")
+                        (format out "~%~10T~a" (if use-stack "pla" "txa"))
+                        (format out "~%~10Tsta (~a), y" pointer))
+                      (let ((res-sym (emit-6502-value result)))
+                        (format out "~%~10Tsta ~a + 1" res-sym)
+                        (format out "~%~10T~a" (if use-stack "pla" "txa"))
+                        (format out "~%~10Tsta ~a" res-sym)))
+                  (when bcd-p (format out "~%~10Tcld"))
+                  (setf *6502-accumulator-expression* :trash/--))))))
+        ((slot-of-expression minuend)
+         (let* ((n (slot-of-expression minuend))
+                (offset (apply #'slot-symbol (rest n)))
+                (pointer (6502-object-pointer-label (third n) class-id)))
+           (format out "~%~10Tldy # ~a" offset)
+           (with-accumulator-value (minuend)
+             (format out "~%~10Tlda (~a), y" pointer))
+           (format out "~%~10Tsec")
+           (if (expression-constant-p subtrahend)
+               (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
+               (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))
+           (format out "~%~10Tsta (~a), y" pointer)))
+        (giving
+         (emit-6502-load-expression out minuend class-id)
+         (when bcd-p (format out "~%~10Tsed"))
          (format out "~%~10Tsec")
          (if (expression-constant-p subtrahend)
              (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
-             (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))
-         (format out "~%~10Tsta (~a), y" pointer)))
-      (giving
-       (emit-6502-load-expression out from class-id)
-       (when bcd-p (format out "~%~10Tsed"))
-       (format out "~%~10Tsec")
-       (if (expression-constant-p subtrahend)
-           (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
-           (cond
-             ((slot-of-self-p subtrahend)
-              (let ((n (slot-of-expression subtrahend)))
-                (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest n)))
-                (format out "~%~10Tsbc (Self), y")))
-             ((and (slot-of-expression subtrahend) (not (slot-of-self-p subtrahend)))
-              (emit-6502-alu-with-memory-rhs out "sbc" subtrahend class-id))
-             (t
-              (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))))
-       (emit-6502-store-byte-n out giving class-id 0 1)
-       (when bcd-p (format out "~%~10Tcld")))
-      (t
-       (emit-6502-load-expression out from class-id)
-       (when bcd-p (format out "~%~10Tsed"))
-       (format out "~%~10Tsec")
-       (if (expression-constant-p subtrahend)
-           (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
-           (cond
-             ((slot-of-self-p subtrahend)
-              (let ((n (slot-of-expression subtrahend)))
-                (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest n)))
-                (format out "~%~10Tsbc (Self), y")))
-             ((and (slot-of-expression subtrahend) (not (slot-of-self-p subtrahend)))
-              (emit-6502-alu-with-memory-rhs out "sbc" subtrahend class-id))
-             (t
-              (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))))
-       (cond
-         ((slot-of-self-p from)
-          (let ((n (slot-of-expression from)))
-            (format out "~%~10Tldy # ~a" (expression-constant-value
-                                          (apply #'slot-symbol (rest n))))
-            (format out "~%~10Tsta (Self), y")))
-         ((and (slot-of-expression from) (not (slot-of-self-p from)))
-          (emit-6502-store-byte-n out from class-id 0 1))
-         (t
-          (format out "~%~10Tsta ~a" (emit-6502-value from))))
-       (when bcd-p (format out "~%~10Tcld"))))))
+             (cond
+               ((slot-of-self-p subtrahend)
+                (let ((n (slot-of-expression subtrahend)))
+                  (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest n)))
+                  (format out "~%~10Tsbc (Self), y")))
+               ((and (slot-of-expression subtrahend) (not (slot-of-self-p subtrahend)))
+                (emit-6502-alu-with-memory-rhs out "sbc" subtrahend class-id))
+               (t
+                (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))))
+         (emit-6502-store-byte-n out giving class-id 0 1)
+         (when bcd-p (format out "~%~10Tcld")))
+        (t
+         (emit-6502-load-expression out minuend class-id)
+         (when bcd-p (format out "~%~10Tsed"))
+         (format out "~%~10Tsec")
+         (if (expression-constant-p subtrahend)
+             (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
+             (cond
+               ((slot-of-self-p subtrahend)
+                (let ((n (slot-of-expression subtrahend)))
+                  (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest n)))
+                  (format out "~%~10Tsbc (Self), y")))
+               ((and (slot-of-expression subtrahend) (not (slot-of-self-p subtrahend)))
+                (emit-6502-alu-with-memory-rhs out "sbc" subtrahend class-id))
+               (t
+                (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))))
+         (cond
+           ((slot-of-self-p minuend)
+            (let ((n (slot-of-expression minuend)))
+              (format out "~%~10Tldy # ~a" (expression-constant-value
+                                            (apply #'slot-symbol (rest n))))
+              (format out "~%~10Tsta (Self), y")))
+           ((and (slot-of-expression minuend) (not (slot-of-self-p minuend)))
+            (emit-6502-store-byte-n out minuend class-id 0 1))
+           (t
+            (format out "~%~10Tsta ~a" (emit-6502-value minuend))))
+         (when bcd-p (format out "~%~10Tcld")))))))
 
 (defun compile-6502-compute (out statement class-id)
   "COMPUTE target = expression. Supports arbitrary width 1–8 bytes.

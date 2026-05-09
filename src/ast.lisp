@@ -6,6 +6,9 @@
 ;; Node shapes:
 ;;   Program:   (:program  :class-id "Character" :data (...) :methods (...))
 ;;   Method:    (:method   :method-id "Think" :statements (...))
+;;              Optional first statement:
+;;   (:assembly-entry :label "MyRoutine") — names the assembly entry symbol
+;;              for this method body (see Programmers Reference).
 ;;
 ;; Statement nodes:
 ;;   (:move       :from expr :to identifier)
@@ -28,6 +31,7 @@
 ;;   (:debug-break :code expr)
 ;;   (:copy       :name "CopybookName")   ; residual after failed expansion
 ;;   (:string-blt :source operand :dest operand [:length expr])  ; STRING DELIMITED BY SIZE
+;;   (:assembly-entry :label "Symbol")  ; must be first executable-area statement
 ;;
 ;; Expression/operand values:
 ;;   literal number or string
@@ -78,6 +82,33 @@
 
 (defun ast-method-statements (method-node)
   (safe-getf (rest method-node) :statements))
+
+(defun split-method-leading-assembly-entry (statements)
+  "Return (values entry-label-string-or-nil body-statements).
+
+If the first non-NIL item in STATEMENTS is @code{(:assembly-entry :label …)},
+return that label (as a string) and the remaining statements (NIL entries
+removed from the head only). Otherwise return @code{(values nil cleaned)} where
+@code{cleaned} is @code{(remove nil (ensure-list statements))}.
+
+@table @asis
+@item STATEMENTS
+Raw @code{:statements} list from a @code{:method} node (may contain NIL).
+@end table"
+  (let ((lst (remove nil (ensure-list statements))))
+    (if (and lst (listp (car lst)) (eq :assembly-entry (first (car lst))))
+        (let ((lab (getf (rest (car lst)) :label)))
+          (values (when lab (string lab)) (cdr lst)))
+        (values nil lst))))
+
+(defun ast-method-statements-for-validation (method-node)
+  "Return METHOD's statements with an optional leading @code{:assembly-entry} removed.
+
+Used by termination validation: @code{:assembly-entry} is not executable code."
+  (multiple-value-bind (_ body) (split-method-leading-assembly-entry
+                                 (ast-method-statements method-node))
+    (declare (ignore _))
+    body))
 
 ;;; S-expression I/O
 

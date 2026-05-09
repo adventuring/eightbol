@@ -54,7 +54,7 @@
     (is (member :null cond :test #'equal))))
 
 (test parser-structure/condition-is-not-null
-  "IF ptr IS NOT NULL produces (:not (= expr :null)) in condition."
+  "IF ptr IS NOT NULL produces (:not-null expr) in condition (see @code{parse/cond-is-not-null})."
   (let* ((ast (eightbol::parse-eightbol-string
                (minimal-class-with-stmt
                 "IF HP IS NOT NULL THEN MOVE 1 TO HP. END-IF.")))
@@ -63,8 +63,8 @@
          (if-stmt (find :if (eightbol::ast-method-statements think) :key #'first))
          (cond (getf (rest if-stmt) :condition)))
     (is (not (null cond)))
-    (is (eq :not (first cond)))
-    (is (listp (second cond)))))
+    (is (eq :not-null (first cond)))
+    (is (string= "HP" (second cond)))))
 
 (test parser-structure/condition-relation-equal
   "IF x IS EQUAL TO y produces (= lhs rhs) in condition."
@@ -107,13 +107,13 @@
 ;;;; Expression structure tests
 
 (test parser-structure/subtract-giving-structure
-  "SUBTRACT x FROM y GIVING z produces (:subtract :from :from-target :giving)."
+  "SUBTRACT x FROM y GIVING z produces (:subtract :subtrahend :from :giving) (parser @code{parse/subtract-giving})."
   (let* ((stmts (parse-procedure-stmts
                  "000200             SUBTRACT 1 FROM A GIVING C."))
          (sub (find :subtract stmts :key #'first)))
     (is (not (null sub)))
-    (is (eql 1 (getf (rest sub) :from)))
-    (is (string= "A" (getf (rest sub) :from-target)))
+    (is (eql 1 (getf (rest sub) :subtrahend)))
+    (is (string= "A" (getf (rest sub) :from)))
     (is (string= "C" (getf (rest sub) :giving)))))
 
 (test parser-structure/invoke-returning-structure
@@ -194,41 +194,48 @@
     (is (not (null (getf (rest perf) :until))))))
 
 (test parser-structure/add-expr-in-compute
-  "COMPUTE x = a + b produces :add-expr in expression."
+  "COMPUTE x = a + b produces (:add :from … :to …) (see @code{parse/expression-add})."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = A + B."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :add-expr (first expr))))
-      (is (= 3 (length expr))))))
+      (is (and (listp expr) (eq :add (first expr))))
+      (is (string= "A" (getf (rest expr) :from)))
+      (is (string= "B" (getf (rest expr) :to))))))
 
 (test parser-structure/subtract-expr-in-compute
-  "COMPUTE x = a - b produces :subtract-expr in expression."
+  "COMPUTE x = a - b produces (:subtract :subtrahend … :from …) (see @code{parse/expression-subtract})."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = A - B."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :subtract-expr (first expr)))))))
+      (is (and (listp expr) (eq :subtract (first expr))))
+      (is (string= "A" (getf (rest expr) :from)))
+      (is (string= "B" (getf (rest expr) :subtrahend))))))
 
 (test parser-structure/multiply-expr-in-compute
-  "COMPUTE x = a * b produces :multiply-expr in expression."
+  "COMPUTE x = a * n produces (:multiply :by … :multiplier …) (see @code{parse/expression-multiply})."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = A * 2."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :multiply-expr (first expr)))))))
+      (is (and (listp expr) (eq :multiply (first expr))))
+      (is (string= "A" (getf (rest expr) :by)))
+      (is (eql 2 (getf (rest expr) :multiplier))))))
 
 (test parser-structure/divide-expr-in-compute
-  "COMPUTE x = a / b produces :divide-expr in expression."
+  "COMPUTE x = a / n produces (:divide :numerator … :denominator …) (see @code{parse/expression-divide})."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = A / 2."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :divide-expr (first expr)))))))
+      (is (and (listp expr) (eq :divide (first expr))))
+      (is (string= "A" (getf (rest expr) :numerator)))
+      (is (eql 2 (getf (rest expr) :denominator))))))
 
 (test parser-structure/if-else-structure
   "IF cond THEN stmts ELSE stmts produces :else in AST."

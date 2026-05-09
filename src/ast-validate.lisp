@@ -95,6 +95,33 @@
   "True if METHOD node has no statements (blank method / shared stub)."
   (null (ensure-list (ast-method-statements method-node))))
 
+(defun validate-method-assembly-entry-rules (ast)
+  "Signal @code{compiler-error} if @code{:assembly-entry} is misplaced or duplicated."
+  (unless (and (listp ast) (eq (first ast) :program))
+    (return-from validate-method-assembly-entry-rules nil))
+  (dolist (m (ensure-list (ast-methods ast)))
+    (when (and (listp m) (eq (first m) :method))
+      (let ((before-exec t)
+            (entry-count 0))
+        (dolist (s (ensure-list (ast-method-statements m)))
+          (unless (null s)
+            (if (and (listp s) (eq :assembly-entry (first s)))
+                (progn
+                  (unless before-exec
+                    (error 'compiler-error
+                           :message (format nil
+                                            "ASSEMBLY ENTRY must be the first procedure statement (~a / ~a)"
+                                            (ast-method-name m)
+                                            (safe-getf (rest ast) :class-id))))
+                  (incf entry-count)
+                  (when (> entry-count 1)
+                    (error 'compiler-error
+                           :message (format nil
+                                            "Only one ASSEMBLY ENTRY is allowed per method (~a / ~a)"
+                                            (ast-method-name m)
+                                            (safe-getf (rest ast) :class-id)))))
+                (setf before-exec nil))))))))
+
 (defun validate-method-terminations (ast)
   "Signal ROUTINE-NOT-TERMINATED for any non-blank method that can fall through past its last statement."
   (unless (and (listp ast) (eq (first ast) :program))
@@ -102,7 +129,7 @@
   (dolist (m (ensure-list (ast-methods ast)))
     (when (and (listp m) (eq (first m) :method))
       (unless (method-blank-ast-p m)
-        (unless (statement-list-completes-method-p (ast-method-statements m))
+        (unless (statement-list-completes-method-p (ast-method-statements-for-validation m))
           (error 'routine-not-terminated
                  :message (format nil "Method ~s (class ~s) lacks terminating GOBACK/EXIT/STOP/jump/tail-call"
                                   (ast-method-name m)
@@ -113,6 +140,7 @@
   "Run validations on AST (typically after OPTIMIZE-AST). When DEFINED-CLASS-IDS is non-NIL, check OBJECT REFERENCE classes in :data. When VALIDATE-TERMINATION, check each method ends properly."
   (when defined-class-ids
     (validate-object-reference-classes ast defined-class-ids))
+  (validate-method-assembly-entry-rules ast)
   (when validate-termination
     (validate-method-terminations ast))
   ast)

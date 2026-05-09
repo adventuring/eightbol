@@ -36,9 +36,19 @@
         (*class-id* class-id))
     (declare (special *slot-table* *type-table* *const-table* *pic-size-table*
                       *pic-width-table* *class-id*))
-    (let ((method-id (getf (rest method) :method-id))
-          (stmts (ensure-list (getf (rest method) :statements))))
-      (format out "~&~%Method~a~a:" (m6800-symbol class-id) (m6800-symbol (format nil "~a" method-id)))
+    (let* ((method-id (getf (rest method) :method-id))
+           (dispatch-label (format nil "Method~a~a"
+                                   (m6800-symbol class-id)
+                                   (m6800-symbol (format nil "~a" method-id))))
+           (custom-entry (nth-value 0 (split-method-leading-assembly-entry
+                                       (getf (rest method) :statements))))
+           (stmts (nth-value 1 (split-method-leading-assembly-entry
+                                (getf (rest method) :statements)))))
+      (if custom-entry
+          (progn
+            (format out "~&~%~a:" (m6800-symbol custom-entry))
+            (format out "~&~a:" dispatch-label))
+          (format out "~&~%~a:" dispatch-label))
       (dolist (stmt stmts)
         (compile-m6800-statement out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
       (format out "~&~8tRTS"))))
@@ -151,17 +161,21 @@
        (when name
          (format out "~&~a:" (m6800-symbol (format nil "~a" name))))))
     (:add
+     (assert-pic-decimal-add-compiled :m6800 stmt)
      (compile-m6800-load-a out (getf (rest stmt) :to) class-id slot-table const-table pic-width-table)
      (format out "~&~8tTAB")
      (compile-m6800-load-a out (getf (rest stmt) :from) class-id slot-table const-table pic-width-table)
      (format out "~&~8tABA")
      (compile-m6800-store-a out (or (getf (rest stmt) :giving) (getf (rest stmt) :to)) class-id))
     (:subtract
-     (compile-m6800-load-a out (getf (rest stmt) :from-target) class-id slot-table const-table pic-width-table)
-     (format out "~&~8tTAB")
-     (compile-m6800-load-a out (getf (rest stmt) :from) class-id slot-table const-table pic-width-table)
-     (format out "~&~8tSBA")
-     (compile-m6800-store-a out (or (getf (rest stmt) :giving) (getf (rest stmt) :from-target)) class-id))
+     (assert-pic-decimal-subtract-compiled :m6800 stmt)
+     (multiple-value-bind (minuend subtrahend)
+         (subtract-statement-minuend-and-subtrahend stmt)
+       (compile-m6800-load-a out minuend class-id slot-table const-table pic-width-table)
+       (format out "~&~8tTAB")
+       (compile-m6800-load-a out subtrahend class-id slot-table const-table pic-width-table)
+       (format out "~&~8tSBA")
+       (compile-m6800-store-a out (or (getf (rest stmt) :giving) minuend) class-id)))
     (:compute
      (compile-m6800-load-a out (getf (rest stmt) :expression) class-id slot-table const-table pic-width-table)
      (compile-m6800-store-a out (getf (rest stmt) :target) class-id))

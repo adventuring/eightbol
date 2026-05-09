@@ -9,14 +9,22 @@ There will also be support for some 16-bit CPUs.
 ## Usage
 
 ```bash
-
 eightbol --version
-
 eightbol --help
-
 eightbol src/my-cool-file.cob -o obj/my-cool-file.s -m 6502 -I lib/
-
 ```
+
+## Dartmouth BASIC (optional)
+
+```bash
+eightbol --basic
+eightbol --basic Source/Classes/MyClass.bas -m 6502 -o Source/Generated/Classes/6502/MyClassClass.s \
+  -I Source/Generated/7800/Classes -I Source/Classes
+```
+
+* `Source/Classes/{Class}.bas` is the on-disk authoring format; the compiler transpiles to COBOL in memory, then runs the normal pipeline.
+* `eightbol --basic` with no file starts the interactive shell on a TTY; in batch, pass the `.bas` path.
+* Generated Makefiles prefer `*.bas` over a same-stem `*.cob` when both exist.
 
 ## Output stages supported
 
@@ -35,8 +43,10 @@ eightbol src/my-cool-file.cob -o obj/my-cool-file.s -m 6502 -I lib/
 ## Pipeline
 
 ```
-Source/Classes/{ClassName}.cob
+Source/Classes/{ClassName}.cob   or   Source/Classes/{ClassName}.bas
   │
+  ├─ (.bas only) BASIC → COBOL string (basic-transpile.lisp)
+  │     ↓
   ├─ Lexer (lexer.lisp) — COPY expansion inline at lex time
   │     ↓
   ├─ YACC Parser (parser.lisp) → AST plist

@@ -17,7 +17,7 @@ under the terms of the MIT License, which can be found at
 @titlepage
 @title EIGHTBOL Compiler Manual
 @subtitle An EIGHTBOL for 8-bit and 16-bit Microprocessors
-@subtitle Edition 0.1, for EIGHTBOL version 0.1
+@subtitle Edition 0.6, for EIGHTBOL version 0.6
 @author Bruce-Robert Pocock
 
 @page
@@ -42,10 +42,12 @@ the 6502, Z80, cp1610, and m68k.
 * Introduction::                What is EIGHTBOL?
 * Installation::                Getting EIGHTBOL up and running
 * Quick Start::                 Your first EIGHTBOL program
+* Programmers Reference::       Architecture, entry points, and workflow
 * Language Reference::          EIGHTBOL features supported
 * CPU Backends::                Target processor specifics
 * Examples::                    Complete example programs
 * Troubleshooting::             Common issues and solutions
+* Appendix Dartmouth BASIC::   Optional @code{.bas} authoring and @code{--basic}
 * Index::                       Complete index
 @end menu
 
@@ -380,6 +382,64 @@ In this chapter, you learned:
 Great job on your first program! In the next chapter, we'll dive deeper
 into variables and data types.
 
+@node Programmers Reference
+@chapter Programmers Reference
+
+@cindex programmers reference
+@cindex AST
+@cindex assembly entry
+@cindex jsr
+
+This chapter is the technical hub for integrating EIGHTBOL with hand-written
+assembly and build tooling.  It complements the tutorial tone of
+@ref{Quick Start} and the syntax inventory in @ref{Language Reference}.
+
+@section Pipeline overview
+
+An EIGHTBOL class file is lexed and parsed into a @code{:program} AST: a plist
+with @code{:class-id}, optional @code{:data}, and @code{:methods}.  Each method
+is a @code{(:method :method-id … :statements …)} node.  The AST is validated,
+optionally optimized, and passed to the backend selected with @code{-m}
+(@pxref{CPU Backends}).
+
+@section External assembly entry points
+
+Sometimes a method body should be reachable both from the game's method
+dispatch table (@emph{INVOKE}) and from plain assembly in another translation
+unit (@code{jsr} on 6502-family targets, or the analogous call instruction on
+other CPUs).
+
+Place one optional declaration as the @strong{first} procedure statement in
+that method:
+
+@example
+ASSEMBLY ENTRY MyRoutine.
+@end example
+
+The parser records @code{(:assembly-entry :label "MyRoutine")}.  Backends then:
+
+@enumerate
+@item
+Emit the executable block under the identifier produced from @code{MyRoutine}
+(PascalCase / assembler rules for that CPU).
+@item
+Keep the usual dispatch label (@code{MethodClassMethod} on 6502-family output)
+as an alias (@code{=} in 64tass-style listings, a second label on the same line
+for some CPUs, @code{EQU}/@code{endp} pairing on others) so existing
+@code{INVOKE} paths still resolve.
+@end enumerate
+
+Only one @code{ASSEMBLY ENTRY} is allowed per method, and it must precede every
+executable COBOL statement (comments and the entry line itself may appear
+first).
+
+@section Dartmouth BASIC and this manual
+
+The Dartmouth BASIC front-end is documented in @ref{Appendix Dartmouth BASIC}.
+It transpiles @file{.bas} sources to the same COBOL-shaped AST the lexer and
+parser already understand; you may emit @code{ASSEMBLY ENTRY} from BASIC with a
+line of the form @code{ASSEMBLY ENTRY Name} (see the appendix).
+
 @node Language Reference
 @chapter Language Reference
 
@@ -434,7 +494,7 @@ Defines the object structure and behavior
 Like the ingredient list - defines our object's data storage
 @item PROCEDURE DIVISION
 Like the methods - defines our object's behavior
-@end itemize
+@end table
 
 @section Naming Your Class
 
@@ -1401,6 +1461,37 @@ Deep recursion can cause stack overflow on 8-bit systems.
 
 @subsection Z80 Memory Banking
 Z80 systems may require bank switching for large programs.
+
+@node Appendix Dartmouth BASIC
+@appendix Dartmouth BASIC Compiler
+
+@cindex BASIC
+@cindex .bas
+@cindex eightbol --basic
+
+You may author a class as UTF-8 Dartmouth-style BASIC in
+@file{Source/Classes/@var{ClassName}.bas}.  The compiler transpiles that text
+to an EIGHTBOL-shaped COBOL program in memory (no sibling @file{.cob} is written),
+then runs the usual lexer, parser, and backends described in
+@ref{Programmers Reference}.
+
+@table @asis
+@item @kbd{eightbol --basic}
+On an interactive terminal, starts the BASIC shell (@code{eightbol-basic}) on
+@code{*query-io*}.  In batch, pass a @file{.bas} file path after @code{--basic}.
+@item @kbd{eightbol --basic @var{file}.bas -m @var{cpu} -o @var{out}}
+Transpiles and compiles one class for one CPU (or @code{-m all}).
+@item Make integration
+Skyline-tool emits one rule per class stem from the union of @file{*.cob} and
+@file{*.bas}; when both exist for one stem, the @file{.bas} recipe wins.
+@end table
+
+@section Assembly entry from BASIC
+
+Inside a method (after a @code{METHOD "Name"} line), a line of the form
+@code{ASSEMBLY ENTRY Foo} transpiles to COBOL @code{ASSEMBLY ENTRY FOO.} as the
+first statement of that method's procedure division, which selects the
+assembly label for the generated routine (@pxref{Programmers Reference}).
 
 @node Index
 @chapter Index

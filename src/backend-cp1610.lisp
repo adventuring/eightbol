@@ -35,14 +35,24 @@
 ;;; Method compilation
 
 (defun compile-cp1610-method (method class-id)
-  (let ((method-id  (getf (rest method) :method-id))
-        (statements (getf (rest method) :statements)))
-    (format *output-stream* "~&~%Method~a~a PROC"
-            (cp1610-symbol class-id) (cp1610-symbol (format nil "~a" method-id)))
+  (let* ((method-id (getf (rest method) :method-id))
+         (dispatch-label (format nil "Method~a~a"
+                                 (cp1610-symbol class-id)
+                                 (cp1610-symbol (format nil "~a" method-id))))
+         (custom-entry (nth-value 0 (split-method-leading-assembly-entry
+                                     (getf (rest method) :statements))))
+         (block-label (if custom-entry
+                          (cp1610-symbol custom-entry)
+                          dispatch-label))
+         (statements (nth-value 1 (split-method-leading-assembly-entry
+                                   (getf (rest method) :statements)))))
+    (format *output-stream* "~&~%~a PROC" block-label)
     (dolist (stmt (ensure-list statements))
       (compile-cp1610-statement *output-stream* stmt class-id method-id))
     (format *output-stream* "~&~10tJR      R5")
-    (format *output-stream* "~&~10tENDP")))
+    (format *output-stream* "~&~10tENDP")
+    (when custom-entry
+      (format *output-stream* "~&~a EQU ~a" dispatch-label block-label))))
 
 ;;; Statement dispatch
 
@@ -428,6 +438,7 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
          (giving (getf (rest stmt) :giving))
          (result (or giving (and (stringp to-op) to-op)
                      (and (listp to-op) (eq (first to-op) :subscript) to-op))))
+    (assert-pic-decimal-add-compiled :cp1610 stmt)
     (compile-cp1610-load out from class-id 1 #|fixme size|# :r0)
     (compile-cp1610-load out to-op class-id 1 :r1)
     (format out "~&~10tADDR    R1, R0")
@@ -448,13 +459,14 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
         (t (format out "~&~10tMVO     R0, ~a" (cp1610-symbol (format nil "~a" result))))))))
 
 (defun compile-cp1610-subtract (out stmt class-id)
-  (let* ((from (getf (rest stmt) :from))
-        (from-target (getf (rest stmt) :from-target))
-        (giving (getf (rest stmt) :giving))
-        (dest (or giving from-target)))
-    (compile-cp1610-load out from-target class-id)
+  (multiple-value-bind (minuend subtrahend)
+      (subtract-statement-minuend-and-subtrahend stmt)
+    (let* ((giving (getf (rest stmt) :giving))
+           (dest (or giving minuend)))
+    (assert-pic-decimal-subtract-compiled :cp1610 stmt)
+    (compile-cp1610-load out minuend class-id)
     (format out "~&~10tMOVR    R0, R1")
-    (compile-cp1610-load out from class-id)
+    (compile-cp1610-load out subtrahend class-id)
     (format out "~&~10tSUBR    R0, R1")
     (format out "~&~10tMOVR    R1, R0")
     (cond
@@ -470,7 +482,7 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
          (format out "~&~10tADDR    R0, R4")
          (format out "~&~10tMOVR    R1, R0")
          (format out "~&~10tMVO@    R0, R4")))
-      (t (format out "~&~10tMVO     R0, ~a" (cp1610-symbol (format nil "~a" dest)))))))
+      (t (format out "~&~10tMVO     R0, ~a" (cp1610-symbol (format nil "~a" dest))))))))
 
 (defun cp1610-store-r0-to-set-target (out target target-w class-id)
   "Store R0 into SET destination TARGET (identifier, @code{:of}, or @code{:subscript})."

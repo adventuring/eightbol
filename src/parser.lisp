@@ -26,7 +26,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (defun token-list ()
     '(|(| |)| |:| |,| + - * / × ÷ |.| /= < <= = > >= ≠ ≤ ≥
-      add address after all alphabet alphabetic also and any are as
+      add address after all alphabet alphabetic also and any are as assembly
       argument ascii atascii at author
       bank before binary bit-and bit-not bit-or bit-xor blank break by
       call cancel characters class class-id comment compute
@@ -34,7 +34,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
       data date date-compiled date-written debug decimal
       delimited delimiter depending display divide division down
       else end end-evaluate end-if end-method end-perform end-search
-      environment equal evaluate exit external
+      entry environment equal evaluate exit external
       false fault filler for format from function
       giving go goback greater
       high hi-values high-values
@@ -59,15 +59,40 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 
 ;;; Parser action functions
 
+(defun parse/class-object-procedures-only (proc)
+  "Action when OBJECT is followed directly by PROCEDURE DIVISION (no inline DATA)."
+  proc)
+
+(defun parse/class-object-with-data-division (dd-sections _comments proc)
+  "Action when OBJECT has DATA DIVISION then PROCEDURE DIVISION.
+DD-SECTIONS is the list from @code{data-division} (same shape as in @code{parse/class-dd})."
+  (declare (ignore _comments))
+  (list :with-object-data (ensure-list dd-sections) proc))
+
 (defun parse/class-file (c1* id c2*
                          env c3*
                          _object _object_dot c4*
-                         proc c6*
+                         obj-contents c6*
                          _end_object _object_end _end_object_dot c6a*
                          _end _class end-class-name _dot c7*)
   (declare (ignore _end _class _dot _object _object_dot
                    _end_object _object_end _end_object_dot))
-  (let* ((class-id (safe-getf id :class-id)))
+  (let* ((class-id (safe-getf id :class-id))
+         (dd-items nil)
+         (proc obj-contents))
+    (when (and (listp obj-contents) (eq :with-object-data (first obj-contents)))
+      (setf dd-items (second obj-contents)
+            proc (third obj-contents)))
+    (dolist (dd dd-items)
+      (ecase (first dd)
+        (:comment nil)
+        (:dd (let* ((key (list :of (getf (rest dd) :label) class-id))
+                    (attributes (getf (rest dd) :attr))
+                    (value (reduce (curry #'concatenate 'list)
+                                   (if (string-equal "." (lastcar attributes))
+                                       (butlast attributes)
+                                       attributes))))
+               (setf (gethash key *working-storage*) value)))))
     (unless (string-equal class-id end-class-name)
       (warn "Class-ID mismatch: starts with ~a, ends with ~a~@[, expected ~a~]"
 	  class-id end-class-name (header-case (pathname-name *source-file-pathname*))))
@@ -181,6 +206,12 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 (defun parse/statement-item-no-dot (statement)
   "statement-item: statement without optional period (same grammar as COBOL allows)."
   (statement-with-source-location statement))
+
+(defun parse/assembly-entry-statement (_assembly _entry name)
+  "Parse ASSEMBLY ENTRY name — declares an external assembly label for this method.
+The trailing period is consumed by @code{statement-item} like other statements."
+  (declare (ignore _assembly _entry))
+  (list :assembly-entry :label (string name)))
 
 (defun parse/eightbol-program (struct _comments)
   "Top-level program rule: ignore trailing comments, return the program plist."
@@ -712,11 +743,16 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (comments* class-identification-division
                      comments* environment-division
                      comments* object |.|
-                     comments* object-procedure-division
+                     comments* class-object-contents
                      comments* end object |.|
                      comments* end class end-class-name |.|
                      comments*
                      #'parse/class-file))
+
+         (class-object-contents
+          (data-division comments* object-procedure-division
+                         #'parse/class-object-with-data-division)
+          (object-procedure-division #'parse/class-object-procedures-only))
          
          (comments* ()
                     eightbol-comment
@@ -1181,6 +1217,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          ;; Statements
          (statement
           add-statement
+          assembly-entry-statement
           call-statement cancel-statement compute-statement 
           debug-break-statement divide-statement
           evaluate-statement
@@ -1222,6 +1259,12 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                 (lambda (_call call-target _in _lib _using using _returning return)
                   (declare (ignore _call _in _lib _using _returning))
                   (list :call :target call-target :bank nil :library t :returning return :using using)))
+          ;; CALL Target IN BANK bank-id. — far dispatch with explicit bank symbol
+          (call call-target in bank identifier
+                (lambda (_call call-target _in _bank bank-id)
+                  (declare (ignore _call _in _bank))
+                  (list :call :target call-target :bank bank-id :library nil
+                        :returning nil :using nil)))
           ;; CALL Target. — local jsr
           (call call-target #'parse/call))
          
@@ -1282,6 +1325,9 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          (exit-method-statement (exit method #'parse/exit-method))
          (exit-program-statement (exit program #'parse/exit-program))
          (goback-statement (goback (constantly (list :goback))))
+
+         (assembly-entry-statement
+          (assembly entry symbol #'parse/assembly-entry-statement))
          (stop-statement (stop run #'parse/stop-run))
 
          (goto-statement
@@ -1405,21 +1451,86 @@ As a side effect, each consumed token's source location is stored in
                (setf (getf *current-token-location* :source-line-text) text)))
            (return (values (first token) (second token))))))))
 
-(defun find-copybook-on-path (copybook)
+(defun %copybook-path-candidates (dir copybook library)
+  "Return ordered pathnames to probe for COPYBOOK under DIR (library path first)."
+  (let ((dir (uiop:ensure-directory-pathname dir)))
+    (if library
+        (list (merge-pathnames (make-pathname :name copybook :type "cpy")
+                               (uiop:ensure-directory-pathname
+                                (merge-pathnames (make-pathname :directory `(:relative ,library))
+                                                 dir)))
+              (merge-pathnames (make-pathname :name copybook :type "cpy") dir))
+        (list (merge-pathnames (make-pathname :name copybook :type "cpy") dir)))))
+
+(defun find-copybook (copybook &optional library)
+  "Locate COPYBOOK (.cpy) on @code{*COPYBOOK-PATHS*}.
+
+When LIBRARY is non-NIL, probe @code{{dir}/{library}/{name}.cpy} before
+@code{{dir}/{name}.cpy} for each directory in @code{*COPYBOOK-PATHS*}.
+
+@table @asis
+@item COPYBOOK
+Basename without @code{.cpy} suffix.
+@item LIBRARY
+Optional subdirectory name (no slashes); when present, library path is tried first.
+@end table
+
+Returns the pathname of the first existing file, or signals @code{copybook-not-found}."
+  (unless (valid-copybook-name-p copybook)
+    (error 'copybook-invalid-name
+           :message "Invalid copybook name"
+           :copybook-name copybook
+           :library library
+           :kind :copybook))
+  (when library
+    (unless (valid-copybook-name-p library)
+      (error 'copybook-invalid-name
+             :message "Invalid COPY library name"
+             :copybook-name copybook
+             :library library
+             :kind :library)))
+  (unless *copybook-paths*
+    (error 'copybook-not-found
+           :message "No copybook include path configured (*copybook-paths* is NIL)"
+           :copybook-name copybook
+           :library library))
   (dolist (dir *copybook-paths*)
-    (let ((path (make-pathname :defaults dir
-                               :name copybook
-                               :type "cpy")))
+    (dolist (path (%copybook-path-candidates dir copybook library))
       (when (probe-file path)
-        (return-from find-copybook-on-path path))))
-  (error "Can't find copybook ~a on path~%Tried ~{~a~^, ~}"
-         copybook
-         (mapcar #'enough-namestring *copybook-paths*)))
+        (return-from find-copybook path))))
+  (error 'copybook-not-found
+         :message "Copybook not found on configured path"
+         :copybook-name copybook
+         :library library))
 
 (defun read-copybook (copybook &key library)
-  (unless (null library)
-    (error "LIBRARY of COPY not supported: COPY ~a IN ~a" copybook library))
-  (lex-file (find-copybook-on-path copybook)))
+  "Lex the copybook COPYBOOK (optionally COPY … IN LIBRARY) and return its token list."
+  (let ((path (find-copybook copybook library)))
+    (when (consp *copybook-dependencies*)
+      (pushnew (truename path) *copybook-dependencies* :test #'equalp))
+    (lex-file path)))
+
+(defun expand-copy-tokens (tokens)
+  "Expand leading @code{COPY name .} token prefix using @code{read-copybook}.
+
+TOKENS must begin with @code{(copy)}, a name token (@code{(symbol …)} or
+@code{(bareword …)}), and @code{(|.|)}. Returns the flat token list from the
+resolved copybook (no surrounding COPY markers)."
+  (unless (and tokens (listp (first tokens)) (eq 'copy (first (first tokens))))
+    (error "EIGHTBOL: expand-copy-tokens expected COPY as first token"))
+  (let ((rest (cdr tokens)))
+    (when (null rest)
+      (error "EIGHTBOL: COPY not followed by copybook name"))
+    (let ((name-tok (first rest)))
+      (when (and (listp name-tok) (eq '|.| (first name-tok)))
+        (error "EIGHTBOL: COPY not followed by copybook name"))
+      (unless (member (first name-tok) '(symbol bareword) :test #'eq)
+        (error "EIGHTBOL: COPY must be followed by symbol or bareword, got ~s" name-tok))
+      (let ((name (second name-tok))
+            (after (cdr rest)))
+        (when (or (null after) (not (listp (first after))) (not (eq '|.| (first (first after)))))
+          (error "EIGHTBOL: COPY name must be followed by period token"))
+        (read-copybook name)))))
 
 (defun parse-eightbol-string (string &optional (pathname "<String>"))
   (with-input-from-string (stream string)

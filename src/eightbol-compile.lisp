@@ -93,6 +93,59 @@ A one-element list of pathname designators."
 		     :directory (list :relative "Source" "Generated"
 				  "Classes" (cpu-directory-name c))))))
 
+(defun %generated-classes-copybook-dir-p (dir)
+  "True when DIR exists and contains @file{Classes.cpy} (Generated …/Classes tree)."
+  (and (probe-file dir)
+       (probe-file (merge-pathnames (make-pathname :name "Classes" :type "cpy")
+                                    (uiop:ensure-directory-pathname dir)))))
+
+(defun project-copybook-paths (root-directory &optional cpu)
+  "Return COPY search directories for Phantasia-style class sources.
+
+Lists each @code{Source/Generated/@var{machine}/Classes/} that contains
+@file{Classes.cpy} and globals copybooks first so @code{load-copybook-tables}
+(which reads @code{*-Slots.cpy} and @code{Phantasia-Globals.cpy} from the
+@emph{first} path only) matches COBOL builds.  Then @code{Source/Classes}, then
+@code{default-copybook-paths} for CPU (flat @code{Source/Generated/Classes/@var{cpu}/}
+fallback).  This mirrors Skyline Tool @code{eightbol-compile} path set while
+satisfying the first-directory merge rule.
+
+BASIC compilation uses this list when @code{:copybook-paths} is not supplied so
+@code{COPY Classes.}, @code{COPY …-Globals.}, and @code{COPY Asset-IDs.} resolve
+like @file{Source/Classes/*.cob}.
+
+@table @asis
+@item ROOT-DIRECTORY
+Project root (directory pathname).
+@item CPU
+Optional ISA keyword for the final @code{default-copybook-paths} entry; defaults
+as for @code{default-copybook-paths}.
+@end table
+
+@subsection Outputs
+Ordered list of directory pathnames suitable for @code{compile-eightbol-class}
+@code{:copybook-paths}."
+  (let ((root (uiop:ensure-directory-pathname root-directory))
+        (ordered '()))
+    (flet ((add (dir)
+             (when dir
+               (let ((d (uiop:ensure-directory-pathname (merge-pathnames dir root))))
+                 (when (probe-file d)
+                   (unless (member d ordered :test #'equalp)
+                     (setf ordered (append ordered (list d)))))))))
+      (dolist (port '("7800" "Lynx" "Intv" "5200" "VCS800"))
+        (add (make-pathname :directory (list :relative "Source" "Generated" port "Classes"))))
+      (let ((gen (merge-pathnames #p"Source/Generated/" root)))
+        (when (probe-file gen)
+          (dolist (mach (uiop:directory* (merge-pathnames #p"*/" gen)))
+            (let ((d (merge-pathnames #p"Classes/" mach)))
+              (when (%generated-classes-copybook-dir-p d)
+                (add d))))))
+      (add #p"Source/Classes/")
+      (dolist (p (default-copybook-paths root-directory cpu))
+        (add p)))
+    ordered))
+
 (defun write-copybook-deps (input-file class-id cpus root-directory output-file
                             copybook-deps)
   "Write a Makefile .d file listing assembly targets and their dependencies.
@@ -131,10 +184,12 @@ rebuilding the compiler triggers recompilation of all .s outputs."
 			 &key (cpus '(:6502))
 			      copybook-paths
 			      (root-directory (truename #p"."))
-			      output-file)
+			      output-file
+			      ast-output-file)
   "Compile INPUT-FILE (.cob):
 
    1. Parse to AST and write to  {root}/Object/Classes/{ClassName}.eightbol
+      (or AST-OUTPUT-FILE when provided)
 
    2. For each cpu in CPUS compile to
       {root}/Source/Generated/Classes/{cpu}/{ClassName}Class.s
@@ -165,11 +220,13 @@ Returns the AST plist."
         (appendf optimum (remove-if #'null (mapcar #'optimize-ast ast)))))
     (let ((class-id (ast-class-id optimum)))
       ;;  Phase 2: write AST 
-      (let ((ast-path (merge-pathnames
-                       (make-pathname
-                        :directory '(:relative "Object" "Classes")
-                        :name class-id :type "eightbol")
-                       root-directory)))
+      (let ((ast-path (if ast-output-file
+			  (merge-pathnames (pathname ast-output-file) root-directory)
+			  (merge-pathnames
+			   (make-pathname
+			    :directory '(:relative "Object" "Classes")
+			    :name class-id :type "eightbol")
+			   root-directory))))
         (ensure-directories-exist ast-path)
         (with-open-file (out ast-path
                              :direction :output
@@ -199,22 +256,26 @@ Returns the AST plist."
                   (compile-to-assembly module cpu out)))
               (format t "~2&EIGHTBOL: wrote ~a assembly to ~a"
                       (cpu-display-name cpu) (enough-namestring asm-path)))
-          #+()(error (e)
-	      (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
-		    class-id (cpu-display-name cpu) e)
-	      (error e))))
+          (error (e)
+            (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
+                    class-id (cpu-display-name cpu) e)
+            (error e))))
       ;; ;;  Phase 4: dependency file for Make 
       ;; (write-copybook-deps (or primary-input-file (first input-files))
       ;;                      class-id cpus root-directory output-file
       ;;                      *copybook-dependencies*)
       optimum)))
 
-(defun compile-to-assembly-with-ast-passes (ast cpu output-stream)
+(defun compile-to-assembly-with-ast-passes (ast cpu output-stream
+                                            &key (validate-termination t))
   "Run optimize-ast (routine AST optimizations), optional VALIDATE-EIGHTBOL-PROGRAM, then compile.
 Use when AST comes from parse only (e.g. unit tests). `compile-eightbol-class`
-already calls optimize-ast before `compile-to-assembly`."
+already calls optimize-ast before `compile-to-assembly`.
+
+When VALIDATE-TERMINATION is NIL, skip @code{validate-method-terminations} (e.g. synthetic ASTs
+with non-terminating tails for tail-call layout tests)."
   (let ((opt (optimize-ast ast)))
-    (validate-eightbol-program opt)
+    (validate-eightbol-program opt :validate-termination validate-termination)
     (compile-to-assembly opt cpu output-stream)))
 
 (defun parse-eightbol-string-for-codegen (string &optional (pathname "<String>"))
