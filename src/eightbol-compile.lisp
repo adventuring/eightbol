@@ -186,7 +186,10 @@ rebuilding the compiler triggers recompilation of all .s outputs."
 			      (root-directory (truename #p"."))
 			      output-file
 			      ast-output-file)
-  "Compile INPUT-FILE (.cob):
+  "Compile INPUT-FILES (.cob pathnames): one file or a list.
+
+Skyline-Tool invokes this via APPLY with a single path string; normalize that
+to a one-element list so DOLIST does not iterate characters.
 
    1. Parse to AST and write to  {root}/Object/Classes/{ClassName}.eightbol
       (or AST-OUTPUT-FILE when provided)
@@ -198,6 +201,19 @@ rebuilding the compiler triggers recompilation of all .s outputs."
    3. Write {root}/Source/Generated/Classes/{ClassName}.d for Makefile includes
 
 Returns the AST plist."
+  (setf input-files
+        (cond
+          ((null input-files)
+           (error "EIGHTBOL: INPUT-FILES is empty"))
+          ((and (consp input-files)
+                (every (lambda (x) (or (pathnamep x) (stringp x))) input-files))
+           (mapcar (lambda (x) (if (pathnamep x) x (pathname x))) input-files))
+          ((or (pathnamep input-files) (stringp input-files))
+           (list (if (pathnamep input-files) input-files (pathname input-files))))
+          (t
+           (error "EIGHTBOL: INPUT-FILES must be a pathname designator or a proper ~
+list of pathname designators, got ~s"
+                  input-files))))
   (let ((*eightbol-root-directory* root-directory)
         (*copybook-paths* (or copybook-paths
                               (default-copybook-paths root-directory (first cpus))))

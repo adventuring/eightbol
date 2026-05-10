@@ -665,10 +665,10 @@ Supports parser output (@code{:subtrahend} and @code{:from}) and legacy tests th
 @item STMT
 @code{(:subtract @dots{})} plist.
 @end table"
-  (let ((plist (rest stmt))
-        (s (getf plist :subtrahend))
-        (f (getf plist :from))
-        (ft (getf plist :from-target)))
+  (let* ((plist (rest stmt))
+         (s (getf plist :subtrahend))
+         (f (getf plist :from))
+         (ft (getf plist :from-target)))
     (if s
         (values (or f ft) s)
         (values ft f))))
@@ -923,14 +923,16 @@ Collapses line breaks to spaces"
 
 (defun emit-assembly-source-line-comment (stream plist)
   "Emit a semicolon comment mapping generated assembly to COBOL source when PLIST
-contains @code{:source-text}, @code{:source-line}, @code{:source-sequence}, or
-@code{:source-file} (from parser @code{stmt-with-source-location}).
+(the statement tail, second argument) contains @code{:source-text},
+@code{:source-line}, @code{:source-sequence}, or @code{:source-file} (from parser
+@code{stmt-with-source-location}).
 
 @table @asis
 @item STREAM
 Where assembly text is written; comment uses @code{;} (64tass, Z80, et al.).
-@item PLIST
-Statement tail (e.g. @code{:from} … @code{:source-line} …), not the leading keyword.
+@item STMT-TAIL
+Statement tail (e.g. @code{:from} … @code{:source-line} …), not the leading keyword;
+same object as the PLIST argument.
 @end table
 
 @subsection Outputs
