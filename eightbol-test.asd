@@ -30,9 +30,14 @@
                             (:file "parser-structure-tests"
                              :depends-on ("eightbol-tests"))
                             (:file "service-bank-lut-tests"
+                             :depends-on ("eightbol-tests"))
+                            (:file "statement-parity-tests"
+                             :depends-on ("eightbol-tests"))
+                            (:file "basic-parity-tests"
                              :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
                          (dolist (suite '(:eightbol :backend-matrix :backend-operand-kinds :backend-6502-classification :ast-optimize :copybook-generation :compile-regression
                                           :phantasia-classes-compile :phantasia-method-port :backend-output
-                                          :parser-structure :service-bank-lut))
+                                          :parser-structure :service-bank-lut
+                                          :eightbol-cp1610-6502-parity :dartmouth-basic-parity))
                            (funcall (intern "RUN!" :fiveam) suite))))
