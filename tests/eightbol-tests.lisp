@@ -835,6 +835,7 @@ AST is a :method plist (not full :program)."
         (consts (make-hash-table :test 'equalp))
         (pic (make-hash-table :test 'equalp)))
     (setf (gethash "NPC-MOVEMENT-SPEED" consts) 0)
+    (setf (gethash "NPC-MOVEMENT-SPEED" pic) 2)
     (setf (gethash "Speed" slots) "Phantasia-Globals")
     (setf (gethash "Speed" pic) 2)
     (let ((asm (compile-method-ast-with-tables
@@ -842,9 +843,10 @@ AST is a :method plist (not full :program)."
                   :statements ((:move :from "NPC-Movement-Speed" :to "Speed")))
                 "NonPlayerCharacter" :6502
                 :slot-table slots :const-table consts :pic-width-table pic)))
-      (is (search "lda # NpcMovementSpeed" asm))
+      (is (search "lda # $ff & ( NpcMovementSpeed )" asm))
+      (is (search "lda # $ff & ( NpcMovementSpeed >> 8 )" asm))
       (is (search "sta Speed" asm))
-      (is (null (search "lda NpcMovementSpeed" asm)))))
+      (is (search "sta Speed + 1" asm)))))
 
 (test backend-6502/move-decal-of-self-to-decal-index-sta-bare-global
   "MOVE Decal OF Self TO Decal-Index emits sta DecalIndex (Phantasia-Globals), not ldy CharacterCurrentDecalIndex / sta (Self),y."

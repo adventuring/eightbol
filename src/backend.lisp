@@ -323,6 +323,60 @@ class design notes."
      (let ((d (or (when sdigits (length sdigits)) (when sn (parse-integer sn)))))
        (when d (max 1 (ceiling d 2)))))))
 
+(defun normalize-relation-condition (condition)
+  "If CONDITION is (lhs op rhs) with op in the middle, return (op lhs rhs).
+If CONDITION is (lhs IS LESS THAN rhs) or (lhs LESS THAN rhs) etc., return (op lhs rhs).
+Otherwise return CONDITION unchanged."
+  (when (listp condition)
+    (cond
+      ((= (length condition) 6)
+       (destructuring-bind (a b c d e f) condition
+         (flet ((token (x str) (string-equal (princ-to-string x) str)))
+           (when (and (token b "IS")
+                      (token c "NOT")
+                      (or (token d "=") (token d "EQUAL"))
+                      (token e "TO"))
+             (return-from normalize-relation-condition
+               (list :not (list '= a f)))))))
+      ((= (length condition) 4)
+       (destructuring-bind (a b c d) condition
+         (flet ((token (x str) (string-equal (princ-to-string x) str)))
+           (when (and (token b "NOT")
+                      (or (token c "=") (token c "EQUAL")))
+             (return-from normalize-relation-condition
+               (list :not (list '= a d)))))))
+      ((member (length condition) '(4 5))
+       (destructuring-bind (a b c d &optional e) condition
+         (flet ((token (x str) (string-equal (princ-to-string x) str)))
+           (let ((op (cond ((and (token b "IS") (token c "LESS") (token d "THAN")) '<)
+                           ((and (token b "LESS") (token c "THAN")) '<)
+                           ((and (token b "IS") (token c "GREATER") (token d "THAN")) '>)
+                           ((and (token b "GREATER") (token c "THAN")) '>)
+                           (t nil))))
+             (when op (return-from normalize-relation-condition (list op a e)))))))
+      ((= (length condition) 3)
+       (let ((a (first condition))
+             (b (second condition))
+             (c (third condition)))
+         (when (member (princ-to-string a) '(/= ≠ <>) :test #'string-equal)
+           (return-from normalize-relation-condition (list 'not (list '= b c))))
+         (when (member (princ-to-string b) '(/= ≠ <>) :test #'string-equal)
+           (return-from normalize-relation-condition (list 'not (list '= a c))))
+         (when (member (princ-to-string b) '(= equal < less > greater >= ≤ ≥ <=)
+                       :test #'string-equal)
+           (return-from normalize-relation-condition (list b a c)))))))
+  condition)
+
+(defun relation-op-canonical (op)
+  "If OP is a comparison operator, return canonical \">\", \"<\", \"≥\", \"≤\", \"=\", or \"≠\"."
+  (cond ((member op '(> greater) :test #'string-equal) ">")
+        ((member op '(< less) :test #'string-equal) "<")
+        ((member op '(>= ≥) :test #'string-equal) "≥")
+        ((member op '(<= ≤) :test #'string-equal) "≤")
+        ((member op '(/= ≠) :test #'string-equal) "≠")
+        ((member op '(= equal) :test #'string-equal) "=")
+        (t op)))
+
 (defun oops-class-of (symbol)
   (if (string-equal "Self" symbol)
       *class-id*
@@ -816,15 +870,25 @@ Statement plist whose @code{car} is @code{:add}.
            maximize (operand-width el pic-width-table)))
     (t (let ((token (slot-token expression)))
          (if-let (var (gethash token *working-storage*))
-           (ecase (getf var :usage)
-             (:binary
-              (pic-length-bytes (getf var :pic)))
-             (:decimal
-              (pic-length-bytes (getf var :pic)))
-             (:pointer 2)
-             (:procedure-pointer 2)
-             (:object-ref 2))
+           (let ((usage (getf var :usage)))
+             (ecase usage
+               (:binary (pic-length-bytes (getf var :pic)))
+               (:decimal (pic-length-bytes (getf var :pic)))
+               (:pointer 2)
+               (:procedure-pointer 2)
+               (:object 2)
+               (:object-ref 2)
+               ((nil) 1)))
            (cond
+             ((and (stringp expression) (constant-p expression))
+              (or (gethash (cobol-slot-table-name-key expression) pic-width-table)
+                  (gethash expression pic-width-table)
+                  1))
+             ((and (stringp expression)
+                   (or (gethash (cobol-slot-table-name-key expression) pic-width-table)
+                       (gethash expression pic-width-table)))
+              (or (gethash (cobol-slot-table-name-key expression) pic-width-table)
+                  (gethash expression pic-width-table)))
              ((and *type-table* (gethash token *type-table*))
               +object-reference-storage-width+)
              (t 1)))))))

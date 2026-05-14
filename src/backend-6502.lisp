@@ -536,14 +536,14 @@ Constant expressions are arithmetic/bit ops whose operands are all constant."
   (cond
     ((numberp expression) t)
     ((stringp expression)
-     (when-let (var (gethash expression *working-storage*))
-       (getf var :value)))
+     (or (when-let (var (gethash expression *working-storage*))
+           (getf var :value))
+         (constant-p expression)))
     ((and (listp expression) (eq (first expression) :literal)) t)
     ((and (listp expression)
           (string= "(" (first expression))
           (string= ")" (lastcar expression)))
      (every #'expression-constant-p (subseq expression 1 (1- (length expression)))))
-    ((constant-p expression) t)
     ((not (listp expression))
      nil)
     (t (ecase (first expression)
@@ -1795,17 +1795,6 @@ Label when value is all zeros (IS-NOT-ZERO is false).
           (format out "~%~a:" label-some)
           (setf *6502-accumulator-expression* :trash/if0
                 *6502-x-index-expression* :trash/if0)))))
-
-(defun relation-op-canonical (op)
-  "If OP is a comparison operator in any form, return canonical string \">\", \"<\", \">=\", \"/=\", or \"<=\".
-Otherwise return NIL."
-  (cond ((member op '(> greater) :test #'string-equal) ">")
-        ((member op '(< less) :test #'string-equal) "<")
-        ((member op '(>= ≥) :test #'string-equal) "≥")
-        ((member op '(<= ≤) :test #'string-equal) "≤")
-        ((member op '(/= ≠) :test #'string-equal) "≠")
-        ((member op '(= equal) :test #'string-equal) "=")
-        (t op)))
 
 (defun emit-6502-condition (out condition class-id branch-label)
   "Emit 6502 code to evaluate CONDITION and branch to BRANCH-LABEL if false."
