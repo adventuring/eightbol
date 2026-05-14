@@ -543,7 +543,7 @@ Constant expressions are arithmetic/bit ops whose operands are all constant."
           (string= "(" (first expression))
           (string= ")" (lastcar expression)))
      (every #'expression-constant-p (subseq expression 1 (1- (length expression)))))
-    ((constantp expression) t)
+    ((constant-p expression) t)
     ((not (listp expression))
      nil)
     (t (ecase (first expression)
@@ -598,6 +598,9 @@ Folds constant expressions (add/subtract/multiply/divide/bit/shift) at compile t
          (format nil "( ~{~a~^ ~} )"
                  (mapcar #'expression-constant-value
                          (subseq expression 1 (1- (length expression)))))))
+    ((and (stringp expression) (constant-p expression))
+     (cobol-constant-to-assembly-symbol
+      (constant-cobol-name-for-assembly expression)))
     ((stringp expression) (to-identifier expression))
     ((and (listp expression) (eq (first expression) :low))
      (format nil "< ~a" (expression-constant-value (second expression))))

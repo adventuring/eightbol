@@ -373,8 +373,10 @@ Seen: ~{~s~^, ~}"
     (load-classes))
   (let ((consider-class class-id))
     (loop
-       (when (gethash (list :of slot-id consider-class)
-                      *working-storage*)
+       (when (or (gethash (list :of slot-id consider-class) *working-storage*)
+                 (when *slot-table*
+                   (let ((origin (gethash (cobol-slot-table-name-key slot-id) *slot-table*)))
+                     (and origin (string-equal origin (header-case consider-class))))))
          (return-from slot-class (header-case consider-class)))
        (setf consider-class (gethash consider-class *parent-classes*))
        (when (or (null consider-class)

@@ -510,15 +510,25 @@ only surrounding space is normalized."
 
 Looks up @code{*CONST-TABLE*} by trimmed name, canonical slot key, and by stripping a leading
 @code{Class-} prefix when @code{*CLASS-ID*} is bound (matches unqualified copybook 77/78 names)."
-  (getf (gethash name *working-storage*) :value))
+  (let* ((trimmed (const-table-name-key name))
+         (candidates (remove-if #'null
+                                (list trimmed
+                                      (when *class-id*
+                                        (cobol-strip-class-copybook-prefix trimmed))))))
+    (dolist (key candidates)
+      (when-let (val (gethash key *const-table*))
+        (return-from %const-table-resolve (values val key))))
+    (values nil nil)))
 
 (defun constant-value (name)
   "Return the integer value of constant NAME, or NIL. Uses *CONST-TABLE*."
-  (%const-table-resolve name))
+  (multiple-value-bind (val _) (%const-table-resolve name)
+    val))
 
 (defun constant-p (name)
   "True if NAME is a known compile-time constant."
-  (constantp name))
+  (multiple-value-bind (val _) (%const-table-resolve name)
+    (not (null val))))
 
 (defun constant-cobol-name-for-assembly (name)
   "Return the COBOL identifier to pass to @code{cobol-constant-to-assembly-symbol} for NAME.

@@ -174,7 +174,14 @@ Project root; used for @code{AssetIDs.cpy} and service-bank scan.
         (%merge-one-cpy-file globals-path slot-table type-table const-table
                              usage-table sign-table pic-size-table pic-width-table
                              pic-frac-bits-table pic-nybble-semantics-table origin-class
-                             "Phantasia-Globals")))
+                             "Phantasia-Globals")
+        (let ((classes-cpy (merge-pathnames #p"Classes.cpy" copy-base)))
+          (when (probe-file classes-cpy)
+            (dolist (slots (directory (merge-pathnames #p"*-Slots.cpy" copy-base)))
+              (%merge-one-cpy-file slots slot-table type-table const-table
+                                   usage-table sign-table pic-size-table pic-width-table
+                                   pic-frac-bits-table pic-nybble-semantics-table
+                                   origin-class nil))))))
     (let ((machine (infer-machine-from-copybook-paths)))
       (when machine
         (let ((asset-ids (merge-pathnames

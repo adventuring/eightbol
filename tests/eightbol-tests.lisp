@@ -829,6 +829,23 @@ AST is a :method plist (not full :program)."
       (is (search "sta (Self), y" asm))
       (is (null (search "#$02" asm))))))
 
+(test backend-6502/move-npc-movement-speed-to-speed-global-symbolic-immediate
+  "MOVE NPC-Movement-Speed TO Speed uses lda # NpcMovementSpeed, not lda NpcMovementSpeed absolute."
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp))
+        (pic (make-hash-table :test 'equalp)))
+    (setf (gethash "npc-movement-speed" consts) 0)
+    (setf (gethash "Speed" slots) "Phantasia-Globals")
+    (setf (gethash "Speed" pic) 2)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:move :from "NPC-Movement-Speed" :to "Speed")))
+                "NonPlayerCharacter" :6502
+                :slot-table slots :const-table consts :pic-width-table pic)))
+      (is (search "lda # NpcMovementSpeed" asm))
+      (is (search "sta Speed" asm))
+      (is (null (search "lda NpcMovementSpeed" asm)))))
+
 (test backend-6502/move-decal-of-self-to-decal-index-sta-bare-global
   "MOVE Decal OF Self TO Decal-Index emits sta DecalIndex (Phantasia-Globals), not ldy CharacterCurrentDecalIndex / sta (Self),y."
   (let ((slots (make-hash-table :test 'equalp)))
