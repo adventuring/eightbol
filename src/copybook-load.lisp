@@ -86,6 +86,16 @@ Raw text from a @file{.cpy} file (may include leading spaces).
              (%parse-cpy-data-item (parse-integer lev) name tail))
            (list :blank))))))
 
+(defun %origin-class-from-slots-cpy (path)
+  "Read CLASS-ID from a generated @file{*-Slots.cpy} file, or NIL."
+  (with-open-file (in path :direction :input :if-does-not-exist nil)
+    (when in
+      (loop for line = (read-line in nil nil) while line
+            do (when-let (cls (cl-ppcre:register-groups-bind (c)
+                                  ("(?i)CLASS-ID\\.\\s+([^\\.]+)" line)
+                                (string-trim " " c)))
+                 (return (header-case cls)))))))
+
 (defun %merge-one-cpy-file (path slot-table type-table const-table
                             usage-table sign-table pic-size-table
                             pic-width-table pic-frac-bits-table
@@ -178,10 +188,11 @@ Project root; used for @code{AssetIDs.cpy} and service-bank scan.
         (let ((classes-cpy (merge-pathnames #p"Classes.cpy" copy-base)))
           (when (probe-file classes-cpy)
             (dolist (slots (directory (merge-pathnames #p"*-Slots.cpy" copy-base)))
-              (%merge-one-cpy-file slots slot-table type-table const-table
-                                   usage-table sign-table pic-size-table pic-width-table
-                                   pic-frac-bits-table pic-nybble-semantics-table
-                                   origin-class nil))))))
+              (let ((slots-origin (or (%origin-class-from-slots-cpy slots) origin-class)))
+                (%merge-one-cpy-file slots slot-table type-table const-table
+                                     usage-table sign-table pic-size-table pic-width-table
+                                     pic-frac-bits-table pic-nybble-semantics-table
+                                     slots-origin nil)))))))
     (let ((machine (infer-machine-from-copybook-paths)))
       (when machine
         (let ((asset-ids (merge-pathnames

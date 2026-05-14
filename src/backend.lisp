@@ -70,7 +70,7 @@ Used by backends to locate generated copybook files.")
 Bound to a hash table with @code{:test equalp} so copybook uppercase names match
 parser mixed-case identifiers (see @code{load-copybook-tables}).")
 (defvar *type-table* (make-hash-table :test 'equal))
-(defvar *const-table* (make-hash-table :test 'equal)
+(defvar *const-table* (make-hash-table :test 'equalp)
   "77/78 constant name → integer. Bound to a hash table with @code{:test equalp}
 (case-insensitive string keys; see @code{const-table-name-key}).")
 (defvar *service-bank-table* (make-hash-table :test 'equal))

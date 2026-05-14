@@ -834,7 +834,7 @@ AST is a :method plist (not full :program)."
   (let ((slots (make-hash-table :test 'equalp))
         (consts (make-hash-table :test 'equalp))
         (pic (make-hash-table :test 'equalp)))
-    (setf (gethash "npc-movement-speed" consts) 0)
+    (setf (gethash "NPC-MOVEMENT-SPEED" consts) 0)
     (setf (gethash "Speed" slots) "Phantasia-Globals")
     (setf (gethash "Speed" pic) 2)
     (let ((asm (compile-method-ast-with-tables
