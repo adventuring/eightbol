@@ -105,3 +105,35 @@
                 :slot-table slots)))
       (is (search "DestX" asm))
       (is (null (search "MummyCourseDestX" asm))))))
+
+(test matrix/z80-if-less-unsigned-branches-on-z-or-c
+  "IF A < B (8-bit): branch to else on Z (equal) or C (A>B unsigned); not jp nc alone."
+  (let ((pic (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:if :condition (:less "A" "B")
+                              :then ((:move :from 0 :to "A")))))
+                "T" :z80
+                :pic-width-table pic)))
+      (is (search "cp b" asm))
+      (is (search "jp z," asm))
+      (is (search "jp c," asm)))))
+
+(test matrix/z80-subtract-16-bit-clears-carry-before-sbc-hl-de
+  "16-bit SUBTRACT must not use SBC HL,DE with carry set (scf); use or a then sbc."
+  (let ((pic (make-hash-table :test 'equalp)))
+    (setf (gethash "M" pic) 2)
+    (setf (gethash "S" pic) 2)
+    (setf (gethash "R" pic) 2)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:subtract :from "S" :from-target "M" :giving "R")))
+                "T" :z80
+                :pic-width-table pic)))
+      (is (null (search "scf" asm)))
+      (let ((p (search "or a" asm))
+            (q (search "sbc hl, de" asm)))
+        (is (and p q))
+        (is (< p q)))))

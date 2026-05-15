@@ -143,20 +143,20 @@ When ROOT-DIRECTORY is non-NIL (unit tests), paths are merged from it instead of
                   do (dolist (path (directory (merge-pathnames
                                                (make-pathname :name :wild :type "s")
                                                subdir)))
-                       (let ((bank-num nil)
-                             (bank-sym nil))
+                       (let ((bank-num-from-file nil))
                          (ignore-errors
                           (with-open-file (stream path :direction :input)
                             (loop for line = (read-line stream nil nil) while line do
                               (cl-ppcre:register-groups-bind (hex)
                                   ("^\\s*BANK\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
                                 (when hex
-                                  (setf bank-num (parse-integer hex :radix 16))
-                                  (setf bank-sym (cdr (assoc bank-num bank-num->symbol-alist)))))
+                                  (setf bank-num-from-file (parse-integer hex :radix 16))))
                               (cl-ppcre:register-groups-bind (service)
                                   ("^\\s*\\.Dispatch\\s+(Service[-A-Za-z0-9_]+)\\s*," line)
-                                (when (and service bank-sym)
-                                  (setf (gethash service *service-bank-lut*) bank-sym)))))))))))
+                                (let* ((bank-num (or bank-num-from-file n))
+                                       (bank-sym (cdr (assoc bank-num bank-num->symbol-alist))))
+                                  (when (and service bank-sym)
+                                    (setf (gethash service *service-bank-lut*) bank-sym))))))))))));
       (when (and (zerop (hash-table-count *service-bank-lut*))
                  (probe-file banks-dir))
         (error "EIGHTBOL: empty service:bank LUT for machine"))
@@ -378,13 +378,38 @@ Otherwise return CONDITION unchanged."
         (t op)))
 
 (defun oops-class-of (symbol)
-  (if (string-equal "Self" symbol)
-      *class-id*
-      (let ((var (gethash symbol *working-storage*)))
-        (case (getf var :usage)
-          ((:object :object-ref)
-           (getf var :class))
-          (otherwise (error "Unable to find reference class for ~a: ~s" symbol var))))))
+  "Return PascalCase class name for OBJECT reference SYMBOL (INVOKE / slot typing).
+
+Resolves @code{Self} to @code{*CLASS-ID*}. Otherwise prefers the parsed COBOL
+@code{*working-storage*} entry (@code{:USAGE} @code{:OBJECT} or @code{:OBJECT-REF}
+and @code{:CLASS}), then @code{*TYPE-TABLE*} (merged copybooks, including
+@file{Phantasia-Globals.cpy} from RAM @code{; @Class} annotations), then built-in
+Phantasia globals when no table row exists.
+
+@table @asis
+@item SYMBOL
+Identifier string (e.g. @code{\"Current-Course\"}) or printable non-string.
+@end table
+
+@subsection Outputs
+Class name string (e.g. @code{\"Course\"}), or @code{*CLASS-ID*} for Self."
+  (let ((name (string-trim " "
+                           (if (stringp symbol) symbol (princ-to-string symbol)))))
+    (cond
+      ((string-equal "Self" name)
+       *class-id*)
+      (t
+       (let ((var (gethash name *working-storage*)))
+         (or (when (and var (member (getf var :usage) '(:object :object-ref)))
+               (getf var :class))
+             (when *type-table*
+               (or (gethash name *type-table*)
+                   (gethash (cobol-slot-table-name-key name) *type-table*)))
+             (when (string-equal name "Current-Course")
+               "Course")
+             (when (string-equal name "Current-Actor")
+               "Character")
+             (error "Unable to find reference class for ~a: ~s" symbol var)))))))
 
 (defun slot-table-origin-lookup (name symbol)
   "Resolve copybook origin for NAME using canonical key, raw NAME, then class-qualified strip.
@@ -556,7 +581,11 @@ only surrounding space is normalized."
   (string-trim " " (if (stringp name) name (format nil "~a" name))))
 
 (defun var-class (var-name)
-  "Return the OBJECT REFERENCE class for VAR-NAME, or NIL. Uses *TYPE-TABLE* then Phantasia fallbacks."
+  "Return OBJECT REFERENCE class name for VAR-NAME via @code{oops-class-of}.
+
+Uses @code{*working-storage*}, merged copybook @code{*type-table*} (e.g. globals from RAM
+@code{; @Class}), then built-in @code{Current-Course}/@code{Current-Actor} fallbacks.
+Signals an error if no class can be resolved."
   (oops-class-of var-name))
 
 (defun %const-table-resolve (name)

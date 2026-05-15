@@ -138,7 +138,7 @@
  (:string-blt
  (compile-z80-string-blt out stmt class-id slot-table const-table))
  (:goto
- (format out "~&~10tjp ~a" (z80-symbol (format nil "~a" (or (getf (rest stmt) :target) (first (getf (rest stmt) :targets)))))))
+ (compile-z80-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
  (:paragraph
  (let ((name (if (eq (first stmt) :paragraph)
                   (second stmt)
@@ -381,10 +381,13 @@
  (format out "~&~10tsbc hl, de")
  (ecase op
  ((= equal) (format out "~&~10tjp nz, ~a" branch-label))
- ((< less) (format out "~&~10tjp nc, ~a" branch-label))
+ ;; Unsigned < after HL = RHS - LHS: equal (Z) or LHS>RHS (C) => false.
+ ((< less)
+  (format out "~&~10tjp z, ~a" branch-label)
+  (format out "~&~10tjp c, ~a" branch-label))
  ((> greater)
- (format out "~&~10tjp z, ~a" branch-label)
- (format out "~&~10tjp nc, ~a" branch-label))))
+  (format out "~&~10tjp z, ~a" branch-label)
+  (format out "~&~10tjp nc, ~a" branch-label))))
  (progn
  (compile-z80-load out lhs class-id slot-table const-table pic-width-table)
  (format out "~&~10tld b, a")
@@ -392,8 +395,13 @@
  (format out "~&~10tcp b")
  (ecase op
  ((= equal) (format out "~&~10tjp nz, ~a" branch-label))
- ((< less) (format out "~&~10tjp nc, ~a" branch-label))
- ((> greater) (format out "~&~10tjp c, ~a" branch-label)))))))
+ ;; CP A,B with A=RHS, B=LHS: Z if equal; C if RHS<LHS (i.e. LHS>RHS).
+ ((< less)
+  (format out "~&~10tjp z, ~a" branch-label)
+  (format out "~&~10tjp c, ~a" branch-label))
+ ((> greater)
+  (format out "~&~10tjp z, ~a" branch-label)
+  (format out "~&~10tjp nc, ~a" branch-label)))))))
  ((and (listp condition) (eq (first condition) :is-zero))
  (let ((ex (second condition))
  (w (operand-width ex pic-width-table)))
@@ -636,7 +644,8 @@
             (format out "~&~10tex de, hl")
             (compile-z80-load out subtrahend class-id slot-table const-table pic-width-table 2)
             (format out "~&~10tex de, hl")
-            (format out "~&~10tscf")
+            ;; Clear carry so SBC HL,DE is minuend - subtrahend (not -1 extra).
+            (format out "~&~10tor a")
             (format out "~&~10tsbc hl, de")
             (format out "~&~10tld (~a), hl" (z80-symbol (format nil "~a" dest))))
           (progn
