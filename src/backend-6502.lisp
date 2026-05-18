@@ -398,6 +398,13 @@ A holds the other operand."
                                                 class-id)))
        (format out "~%~10T~a ~a + ~a" mnemonic pointer offset)))
     
+    ((and (listp expression) (member (first expression) '(:bit-and :bit-or :bit-xor :add :subtract :multiply :divide :BIT-AND :BIT-OR :BIT-XOR :ADD :SUBTRACT :MULTIPLY :DIVIDE)))
+     (format out "~%~10Tpha")
+     (emit-6502-load-expression out expression class-id)
+     (format out "~%~10Tsta WorkALU")
+     (format out "~%~10Tpla")
+     (format out "~%~10T~a WorkALU" mnemonic))
+    
     (t
      (format out "~%~10T~a ~a" mnemonic (emit-6502-value expression))))
   (setf *6502-accumulator-expression* :trash/alu))
