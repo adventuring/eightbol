@@ -360,3 +360,22 @@
   "Comment statement emits assembly comment."
   (let ((asm (cp1610-asm '(:comment "this is a test"))))
     (is (search "this is a test" asm))))
+
+(test cp1610/divide-signals-error
+  "DIVIDE on cp1610 signals backend-error."
+  (signals eightbol::backend-error
+    (cp1610-asm '(:divide :from "A" :into "B"))))
+
+(test cp1610/multiply-signals-error
+  "MULTIPLY on cp1610 signals backend-error."
+  (signals eightbol::backend-error
+    (cp1610-asm '(:multiply :by "A" :on "B"))))
+
+(test cp1610/invoke-super
+  "INVOKE SUPER emits JSR to parent class method."
+  (let ((eightbol::*parent-classes* (let ((h (make-hash-table :test 'equalp)))
+                                       (setf (gethash "Character" h) "Actor") h))
+        (eightbol::*method-id* "Think")
+        (eightbol::*class-id* "Character"))
+    (let ((asm (cp1610-asm '(:invoke-super))))
+      (is (search "JSR     R5, MethodActorThink" asm)))))
