@@ -74,25 +74,20 @@
           (is (probe-file cpy-path)
               "Expected ~a" (namestring cpy-path)))))))
 
-(test phantasia-classes-compile/all-cobs-6502
-  "Each Source/Classes/*.cob compiles for 6502 after copybooks in a temp tree.
-Skipped when Phantasia-Globals.cpy is missing (generate with skyline-tool first)."
-  (unless (phantasia-project-root)
-    (skip "Phantasia project root not found"))
-  (unless (phantasia-globals-cpy)
-    (skip "Phantasia-Globals.cpy not found under Source/Generated/7800/Classes/"))
+(defun compile-all-cobs-for-cpu (cpu)
+  "Compile all Phantasia Source/Classes/*.cob for CPU, return T if all succeeded."
   (let* ((proj (phantasia-project-root))
          (defs (phantasia-classes-defs-path))
          (cobs (phantasia-class-cob-files))
          (globals-dir (uiop:pathname-directory-pathname (phantasia-globals-cpy)))
          (tmp (uiop:ensure-directory-pathname
                (merge-pathnames
-                (make-pathname :directory (list :relative "phantasia-all-cob-"
+                (make-pathname :directory (list :relative (format nil "phantasia-all-cob-~a-" cpu)
                                                 (format nil "~a" (get-internal-real-time))))
                 (uiop:temporary-directory))))
-         (tmp-classes (merge-pathnames "Source/Generated/7800/Classes/" tmp)))
+         (tmp-classes (merge-pathnames "Source/Generated/7800/Classes/" tmp))
+         (all-ok t))
     (ensure-directories-exist tmp-classes)
-    ;; Service bank LUT is built from Source/Code/{machine}/ under root; symlink project tree.
     (let ((src-code7800 (merge-pathnames "Source/Code/7800/" proj))
           (dst-code-parent (merge-pathnames "Source/Code/" tmp)))
       (ensure-directories-exist dst-code-parent)
@@ -112,25 +107,58 @@ Skipped when Phantasia-Globals.cpy is missing (generate with skyline-tool first)
         (let (ast)
           (handler-case
               (setf ast (compile-eightbol-class (list cob)
-                                                 :cpus '(:6502)
+                                                 :cpus (list cpu)
                                                  :copybook-paths copybook-paths
                                                  :root-directory tmp))
             (error (e)
-              (fail "Compile failed for ~a: ~a" cob e)))
-          (is (listp ast))
-          (is (eq :program (first ast)))
+              (setf all-ok nil)
+              (format t "~&FAIL: ~a for ~a~%" e cob)))
+          (unless (and (listp ast) (eq :program (first ast)))
+            (setf all-ok nil))
           (let* ((class-id (pathname-name cob))
                  (out (merge-pathnames
                        (make-pathname
                         :directory (list :relative "Source" "Generated" "Classes"
-                                        (string (eightbol::cpu-display-name :6502)))
+                                        (string (eightbol::cpu-display-name cpu)))
                         :name (concatenate 'string class-id "Class")
                         :type "s")
                        tmp)))
-            (is (probe-file out) "Missing ~a" out)
-            (let ((content (alexandria:read-file-into-string out)))
-              (is (> (length content) 0))
-              (is (search class-id content)))))))))
+            (unless (and (probe-file out)
+                         (let ((content (alexandria:read-file-into-string out)))
+                           (and (> (length content) 0)
+                                (search class-id content))))
+              (setf all-ok nil))))))
+    all-ok))
+
+(test phantasia-classes-compile/all-cobs-6502
+  "Each Source/Classes/*.cob compiles for 6502 after copybooks in a temp tree.
+Skipped when Phantasia-Globals.cpy is missing (generate with skyline-tool first)."
+  (unless (phantasia-project-root)
+    (skip "Phantasia project root not found"))
+  (unless (phantasia-globals-cpy)
+    (skip "Phantasia-Globals.cpy not found under Source/Generated/7800/Classes/"))
+  (is (compile-all-cobs-for-cpu :6502)
+      "All 6502 compilations should succeed"))
+
+(test phantasia-classes-compile/all-cobs-cp1610
+  "Each Source/Classes/*.cob compiles for cp1610.
+Skipped when Phantasia-Globals.cpy is missing (generate with skyline-tool first)."
+  (unless (phantasia-project-root)
+    (skip "Phantasia project root not found"))
+  (unless (phantasia-globals-cpy)
+    (skip "Phantasia-Globals.cpy not found under Source/Generated/7800/Classes/"))
+  (is (compile-all-cobs-for-cpu :cp1610)
+      "All cp1610 compilations should succeed"))
+
+(test phantasia-classes-compile/all-cobs-z80
+  "Each Source/Classes/*.cob compiles for Z80.
+Skipped when Phantasia-Globals.cpy is missing (generate with skyline-tool first)."
+  (unless (phantasia-project-root)
+    (skip "Phantasia project root not found"))
+  (unless (phantasia-globals-cpy)
+    (skip "Phantasia-Globals.cpy not found under Source/Generated/7800/Classes/"))
+  (is (compile-all-cobs-for-cpu :z80)
+      "All Z80 compilations should succeed"))
 
 (test phantasia-classes-compile/library-vs-service-call-codegen
   "Regression: CALL ... IN LIBRARY emits @code{jsr Lib.*}; CALL SERVICE emits far call.
