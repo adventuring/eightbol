@@ -29,10 +29,12 @@
                              :depends-on ("eightbol-tests"))
                             (:file "phantasia-method-port-tests"
                              :depends-on ("phantasia-classes-compile-tests"))
-                            (:file "backend-output-tests"
-                             :depends-on ("eightbol-tests"))
-                            (:file "parser-structure-tests"
-                             :depends-on ("eightbol-tests"))
+                              (:file "backend-cp1610-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-output-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "parser-structure-tests"
+                              :depends-on ("eightbol-tests"))
                             (:file "service-bank-lut-tests"
                              :depends-on ("eightbol-tests"))
                             (:file "statement-parity-tests"
@@ -40,8 +42,8 @@
                             (:file "basic-parity-tests"
                              :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
-                           (dolist (suite '(:eightbol :pic-1-bit :s-decimal :backend-matrix :backend-operand-kinds :backend-6502-classification :ast-optimize :copybook-generation :compile-regression
-                                          :phantasia-classes-compile :phantasia-method-port :backend-output
-                                          :parser-structure :service-bank-lut
-                                          :eightbol-cp1610-6502-parity :dartmouth-basic-parity))
+                            (dolist (suite '(:eightbol :pic-1-bit :s-decimal :backend-matrix :backend-operand-kinds :backend-6502-classification :ast-optimize :copybook-generation :compile-regression
+                                           :phantasia-classes-compile :phantasia-method-port :backend-cp1610 :backend-output
+                                           :parser-structure :service-bank-lut
+                                           :eightbol-cp1610-6502-parity :dartmouth-basic-parity))
                            (funcall (intern "RUN!" :fiveam) suite))))
