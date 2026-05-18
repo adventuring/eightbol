@@ -255,10 +255,15 @@ Uses only 6502 instructions (BRA is 65c02-only); RP2A03-compatible."
       (compile-6502-add out stmt class-id)))
 
 (defun compile-rp2a03-add-bcd (out stmt class-id)
-  ;; 16-bit BCD add TODO
-  (let ((from   (getf (rest stmt) :from))
-        (to     (getf (rest stmt) :to))
-        (giving (getf (rest stmt) :giving)))
+  (let* ((from   (getf (rest stmt) :from))
+         (to     (getf (rest stmt) :to))
+         (giving (getf (rest stmt) :giving))
+         (result (or giving to))
+         (w (max (operand-width result)
+                 (expression-operand-width from)
+                 (operand-width to))))
+    (when (> w 1)
+      (error "EIGHTBOL: RP2A03 multi-byte BCD ADD not yet implemented (width ~d)" w))
     (emit-6502-load-expr out from class-id)
     (format out "~&~10tclc")
     (if (expr-is-constant-p to)
@@ -289,10 +294,15 @@ Uses only 6502 instructions (BRA is 65c02-only); RP2A03-compatible."
       (compile-6502-subtract out stmt class-id)))
 
 (defun compile-rp2a03-subtract-bcd (out stmt class-id)
-  ;; 16-bit BCD subtract TODO
   (multiple-value-bind (minuend subtrahend)
       (subtract-statement-minuend-and-subtrahend stmt)
-    (let ((giving (getf (rest stmt) :giving)))
+    (let* ((giving (getf (rest stmt) :giving))
+           (result (or giving minuend))
+           (w (max (operand-width result)
+                   (expression-operand-width subtrahend)
+                   (operand-width minuend))))
+      (when (> w 1)
+        (error "EIGHTBOL: RP2A03 multi-byte BCD SUBTRACT not yet implemented (width ~d)" w))
       (cond
         ((slot-of-self-p minuend)
          (let ((n (slot-of-expr minuend)))
