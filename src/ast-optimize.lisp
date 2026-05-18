@@ -440,7 +440,9 @@ Integer, simplified list, or EXPRESSION unchanged for non-arithmetic leaves."
   "Return STATEMENT with literal sub-expressions folded where safe."
   (unless (listp statement)
     (return-from fold-constants-in-statement statement))
-  (when (and (string= "(" (first statement))
+  (when (and (stringp (first statement))
+             (string= "(" (first statement))
+             (stringp (lastcar statement))
              (string= ")" (lastcar statement)))
     (return-from fold-constants-in-statement
       (fold-constants-in-list (subseq statement 1 (1- (length statement))))))
