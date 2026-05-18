@@ -352,17 +352,22 @@ Integer difference before any modulo by the result field width."
     (- (* from-int (expt 10 (- dr df)))
        (* sub-int (expt 10 (- dr ds))))))
 
+(defun %pic-has-s-p (segment)
+  "True when SEGMENT contains @code{S} (sign) in a PIC context."
+  (and (stringp segment)
+       (find #\S (string-upcase segment))))
+
 (defun pic-digits-to-width (pic-rest &key usage)
   "From PIC clause rest, return byte width for packed storage in RAM.
 Combines @code{9}/@code{X}-slot (2 per byte) and @code{1}-slot (8 per byte) counts.
-Pass @code{:USAGE :DECIMAL} for sign-nybble adjustment in Step B.
+When @code{:USAGE :DECIMAL} and the PIC contains @code{S} (sign), an extra nybble
+is added for the sign digit.
 
 Examples: 1 byte = S9/99 USAGE DECIMAL or BINARY, S99 USAGE BINARY;
-2 bytes = 9999/9(4)/S9(4); up to 8 bytes = 9(8)/S9(8) USAGE BINARY or DECIMAL.
+2 bytes = S99/9999/9(4)/S9(4) USAGE DECIMAL; up to 8 bytes = 9(8)/S9(8) USAGE BINARY or DECIMAL.
 Single-digit @code{PIC 9} and two-digit @code{PIC 99} both allocate one byte in
 generated copybooks; runtime nybble packing (where used) is documented in Phantasia
 class design notes."
-  (declare (ignore usage))
   (or
    ;; PIC(99) / PICTURE(9) parenthesized digit count (AssetIDs.cpy style)
    (cl-ppcre:register-groups-bind (n)
@@ -372,10 +377,11 @@ class design notes."
    ;; Universal: count 9/x and 1/1(n) slots from stripped PIC string
    (let ((s (and (stringp pic-rest) (%pic-strip-leading-picture-keyword pic-rest))))
      (when (and s (plusp (length s)))
-       (let ((n9 (%pic-count-9-x-slots s))
-             (n1 (%pic-count-bit-slots s)))
-         (when (plusp (+ n9 n1))
-           (max 1 (+ (ceiling n9 2) (ceiling n1 8)))))))))
+       (let* ((n9 (%pic-count-9-x-slots s))
+              (n1 (%pic-count-bit-slots s))
+              (s-nybble (if (and (eq usage :decimal) (%pic-has-s-p s)) 1 0)))
+         (when (plusp (+ n9 n1 s-nybble))
+           (max 1 (+ (ceiling (+ n9 s-nybble) 2) (ceiling n1 8)))))))))
 
 (defun normalize-relation-condition (condition)
   "If CONDITION is (lhs op rhs) with op in the middle, return (op lhs rhs).
