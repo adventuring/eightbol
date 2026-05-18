@@ -389,7 +389,7 @@ Seen: ~{~s~^, ~}"
 (defun load-classes ()
   (when (plusp (hash-table-count *parent-classes*))
     (return-from load-classes))
-  (with-input-from-file (classes.defs #p"Source/Classes/Classes.Defs")
+  (with-input-from-file (classes.defs (pathname "Source/Classes/Classes.Defs"))
     (loop with last-class = "BasicObject"
 	for line = (read-line classes.defs nil nil)
 	while line

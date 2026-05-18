@@ -465,11 +465,13 @@ Class name string (e.g. @code{\"Course\"}), or @code{*CLASS-ID*} for Self."
              (when *type-table*
                (or (gethash name *type-table*)
                    (gethash (cobol-slot-table-name-key name) *type-table*)))
-             (when (string-equal name "Current-Course")
-               "Course")
-             (when (string-equal name "Current-Actor")
-               "Character")
-             (error "Unable to find reference class for ~a: ~s" symbol var)))))))
+              (when (or (string-equal name "Current-Course")
+                         (string-equal name "CurrentCourse"))
+                "Course")
+              (when (or (string-equal name "Current-Actor")
+                         (string-equal name "CurrentActor"))
+                "Actor")
+              (error "Unable to find reference class for ~a: ~s" symbol var)))))))
 
 (defun slot-table-origin-lookup (name symbol)
   "Resolve copybook origin for NAME using canonical key, raw NAME, then class-qualified strip.

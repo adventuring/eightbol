@@ -146,9 +146,15 @@
  (when name (format out "~&~a:" (z80-symbol (format nil "~a" name))))))
  (:evaluate
  (compile-z80-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
- (:inspect
- (compile-z80-inspect out stmt class-id slot-table const-table pic-size-table pic-width-table))
- (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
+  (:inspect
+  (compile-z80-inspect out stmt class-id slot-table const-table pic-size-table pic-width-table))
+  (:comment
+  (format out "~%~10t;; ~a"
+          (let ((text (second stmt)))
+            (if (listp text)
+                (format nil "~{~a~%~10t;; ~}" (mapcar (lambda (s) (if (stringp s) s (princ-to-string s))) text))
+                (princ-to-string text)))))
+  (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
  (getf (rest stmt) :name)))))
 
 ;;; Expression / value emission
@@ -190,16 +196,16 @@
  ((and (listp expr) (eq (first expr) :of))
  (let ((slot (second expr)) (obj (third expr)))
  (when (member obj '(:self "Self" self) :test #'equal)
- (format out "~&~10tld hl, (Self)")
- (format out "~&~10tld de, #~a" (slot-symbol slot class-id))
- (format out "~&~10tadd hl, de")
- (if (= (or width 1) 2)
- (progn
- (format out "~&~10tld a, (hl)")
- (format out "~&~10tinc hl")
- (format out "~&~10tld h, (hl)")
- (format out "~&~10tld l, a"))
- (format out "~&~10tld a, (hl)")))))
+  (format out "~&~10tld hl, (Self)")
+   (format out "~&~10tld de, #~a" (slot-symbol slot obj))
+   (format out "~&~10tadd hl, de")
+   (if (= (or width 1) 2)
+  (progn
+  (format out "~&~10tld a, (hl)")
+  (format out "~&~10tinc hl")
+  (format out "~&~10tld h, (hl)")
+  (format out "~&~10tld l, a"))
+  (format out "~&~10tld a, (hl)")))))
  ((and (listp expr) (eq (first expr) :subscript))
  (compile-z80-load out (third expr) class-id slot-table const-table pic-width-table 1)
  (format out "~&~10tld c, a")
@@ -255,8 +261,8 @@
 
 ;;; MOVE
 
-(defun compile-z80-move (out stmt class-id slot-table const-table pic-width-table)
- (let ((from (getf (rest stmt) :from))
+ (defun compile-z80-move (out stmt class-id slot-table const-table pic-width-table)
+ (let* ((from (getf (rest stmt) :from))
  (to (getf (rest stmt) :to))
  (from-w (expression-operand-width from pic-width-table))
  (to-w (operand-width to pic-width-table)))
@@ -270,22 +276,22 @@
  ((and (listp to) (eq (first to) :of))
  (let ((slot (second to)) (obj (third to)))
  (when (member obj '(:self "Self" self) :test #'equal)
- (if (= (or to-w 1) 2)
- (progn
- (format out "~&~10tpush hl")
- (format out "~&~10tld hl, (Self)")
- (format out "~&~10tld de, #~a" (slot-symbol slot class-id))
- (format out "~&~10tadd hl, de")
- (format out "~&~10tpop de")
- (format out "~&~10tld (hl), e")
- (format out "~&~10tinc hl")
- (format out "~&~10tld (hl), d"))
- (progn
- (format out "~&~10tld hl, (Self)")
- (format out "~&~10tld de, #~a" (slot-symbol slot class-id))
- (format out "~&~10tadd hl, de")
- (format out "~&~10tld (hl), a"))))))
- ((and (listp to) (eq (first to) :subscript))
+  (if (= (or to-w 1) 2)
+  (progn
+  (format out "~&~10tpush hl")
+  (format out "~&~10tld hl, (Self)")
+  (format out "~&~10tld de, #~a" (slot-symbol slot obj))
+  (format out "~&~10tadd hl, de")
+  (format out "~&~10tpop de")
+  (format out "~&~10tld (hl), e")
+  (format out "~&~10tinc hl")
+  (format out "~&~10tld (hl), d"))
+  (progn
+  (format out "~&~10tld hl, (Self)")
+  (format out "~&~10tld de, #~a" (slot-symbol slot obj))
+  (format out "~&~10tadd hl, de")
+  (format out "~&~10tld (hl), a"))))))
+  ((and (listp to) (eq (first to) :subscript))
  (if (= (or to-w 1) 2)
  (progn
  (format out "~&~10tpush hl")
@@ -368,7 +374,7 @@
 (defun compile-z80-condition (out condition class-id slot-table type-table const-table pic-width-table branch-label)
  (cond
  ((and (listp condition) (member (first condition) '(= equal < less > greater) :test #'eq))
- (let ((lhs (second condition)) (rhs (third condition)) (op (first condition))
+ (let* ((lhs (second condition)) (rhs (third condition)) (op (first condition))
  (w (max (or (operand-width lhs pic-width-table) 1)
  (or (operand-width rhs pic-width-table) 1))))
  (if (= w 2)
@@ -583,7 +589,7 @@
  (format out "~&~10tjp ~a" lbl)
  (format out "~&~a:" lbl-done)))
  (repl-by
- (let ((len (or (pic-size (format nil "~a" target)) 64)))
+ (let ((len (or (gethash (format nil "~a" target) *pic-size-table*) 64)))
  (format out "~&~10t;; INSPECT ~a REPLACING CHARACTERS BY ~a" target repl-by)
  (compile-z80-load out repl-by class-id slot-table const-table pic-width-table 1)
  (format out "~&~10tld hl, ~a" tgt-sym)
@@ -604,7 +610,7 @@
          (w (max (operand-width (or result to) pic-width-table)
                  (expression-operand-width from pic-width-table)
                  (operand-width to pic-width-table)))
-         (bcd-p (when result (usage-bcd-p (expr-to-width-name result)))))
+         (bcd-p (when result (usage-bcd-p result))))
     (assert-pic-decimal-add-compiled :z80 stmt)
     (backend-unsupported-operand-width :z80 :add w 2)
     (if (= (or w 1) 2)
@@ -634,7 +640,7 @@
            (w (max (operand-width dest pic-width-table)
                    (expression-operand-width subtrahend pic-width-table)
                    (operand-width minuend pic-width-table)))
-           (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest)))))
+           (bcd-p (when dest (usage-bcd-p dest))))
       (assert-pic-decimal-subtract-compiled :z80 stmt)
       (backend-unsupported-operand-width :z80 :subtract w 2)
       (if (= (or w 1) 2)
@@ -689,7 +695,7 @@
         ((and (listp src) (eq :of (first src))
               (member (third src) '(:self "Self" self) :test #'equal))
          (format out "~&~10tld hl, (Self)")
-         (format out "~&~10tld de, #~a" (slot-symbol (second src) class-id))
+         (format out "~&~10tld de, #~a" (slot-symbol (second src) (third src)))
          (format out "~&~10tadd hl, de"))
         ((stringp src)
          (format out "~&~10tld hl, ~a" (bare-data-assembly-symbol src class-id))))
@@ -714,17 +720,17 @@
  (progn
  (format out "~&~10tex de, hl")
  (format out "~&~10tld hl, (Self)")
- (format out "~&~10tld bc, #~a" (slot-symbol slot class-id))
- (format out "~&~10tadd hl, bc")
- (format out "~&~10tld (hl), e")
- (format out "~&~10tinc hl")
- (format out "~&~10tld (hl), d"))
- (progn
- (format out "~&~10tld hl, (Self)")
- (format out "~&~10tld de, #~a" (slot-symbol slot class-id))
- (format out "~&~10tadd hl, de")
- (format out "~&~10tld (hl), a"))))))
- ((and (listp target) (eq (first target) :subscript))
+  (format out "~&~10tld bc, #~a" (slot-symbol slot obj))
+   (format out "~&~10tadd hl, bc")
+   (format out "~&~10tld (hl), e")
+   (format out "~&~10tinc hl")
+   (format out "~&~10tld (hl), d"))
+   (progn
+   (format out "~&~10tld hl, (Self)")
+   (format out "~&~10tld de, #~a" (slot-symbol slot obj))
+  (format out "~&~10tadd hl, de")
+  (format out "~&~10tld (hl), a"))))))
+  ((and (listp target) (eq (first target) :subscript))
  (if (= (or w 1) 2)
  (progn
  (format out "~&~10tex de, hl")
