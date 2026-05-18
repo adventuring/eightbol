@@ -11,8 +11,10 @@
                 :components ((:file "test-package")
                             (:file "eightbol-tests"
                              :depends-on ("test-package"))
-                            (:file "backend-matrix-tests"
-                             :depends-on ("eightbol-tests"))
+                             (:file "pic-1-bit-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "backend-matrix-tests"
+                              :depends-on ("eightbol-tests"))
                             (:file "backend-operand-kinds-tests"
                              :depends-on ("eightbol-tests"))
                             (:file "ast-optimize-tests"
@@ -36,7 +38,7 @@
                             (:file "basic-parity-tests"
                              :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
-                         (dolist (suite '(:eightbol :backend-matrix :backend-operand-kinds :backend-6502-classification :ast-optimize :copybook-generation :compile-regression
+                           (dolist (suite '(:eightbol :pic-1-bit :backend-matrix :backend-operand-kinds :backend-6502-classification :ast-optimize :copybook-generation :compile-regression
                                           :phantasia-classes-compile :phantasia-method-port :backend-output
                                           :parser-structure :service-bank-lut
                                           :eightbol-cp1610-6502-parity :dartmouth-basic-parity))

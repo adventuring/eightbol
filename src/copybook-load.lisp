@@ -131,7 +131,7 @@ FILE-LABEL is @code{\"Phantasia-Globals\"} when merging globals so slot origins 
                     (setf (gethash key slot-table) o)
                     (when pic
                       (setf (gethash key pic-width-table)
-                            (or (pic-digits-to-width pic) 1))
+                            (or (pic-digits-to-width pic :usage usage) 1))
                       (setf (gethash key pic-size-table) (gethash key pic-width-table))
                       (when (eq usage :binary)
                         (setf (gethash key usage-table) :binary))

@@ -223,6 +223,29 @@ Ignores @code{.}, @code{V}, sign @code{S}, and other COBOL picture punctuation."
                           (return-from %pic-count-9-x-slots total))
                         (incf total (parse-integer (subseq segment (+ i 2) close)))
                         (setf i (1+ close)))
+                (progn
+                         (incf i)
+                         (incf total 1))))
+                 (t
+                  (incf i)))))
+    total))
+
+(defun %pic-count-bit-slots (segment)
+  "Count bit-field positions in SEGMENT: each @code{1} counts 1; @code{1(n)} counts N.
+Ignores @code{.}, @code{V}, sign @code{S}, and other COBOL picture punctuation."
+  (let ((i 0)
+        (n (length segment))
+        (total 0))
+    (loop while (< i n)
+          do (let ((c (char-upcase (char segment i))))
+               (cond
+                 ((char= c #\1)
+                  (if (and (< (1+ i) n) (char= (char segment (1+ i)) #\())
+                      (let ((close (position #\) segment :start (+ i 2))))
+                        (unless close
+                          (return-from %pic-count-bit-slots total))
+                        (incf total (parse-integer (subseq segment (+ i 2) close)))
+                        (setf i (1+ close)))
                       (progn
                         (incf i)
                         (incf total 1))))
@@ -250,6 +273,42 @@ Non-negative integer."
       (if radix
           (%pic-count-9-x-slots (subseq s (1+ radix)))
           0))))
+
+(defun pic-fractional-bits (pic-str)
+  "Return count of bit-field positions right of the first @code{V} in PIC-STR.
+Counts @code{1} and @code{1(n)} patterns after the radix marker.
+When no @code{V} appears, return 0.
+
+@table @asis
+@item PIC-STR
+Copybook @code{PIC} clause or parser picture string (with or without @code{PIC} keyword).
+@end table
+
+@subsection Outputs
+Non-negative integer."
+  (unless (stringp pic-str)
+    (return-from pic-fractional-bits 0))
+  (let ((s (string-upcase (%pic-strip-leading-picture-keyword pic-str))))
+    (let ((radix (position #\V s)))
+      (if radix
+          (%pic-count-bit-slots (subseq s (1+ radix)))
+          0))))
+
+(defun pic-width-in-bytes (pic-str)
+  "Return storage width in bytes for PIC-STR, combining @code{9}/@code{X}-slot (2 per byte)
+and @code{1}-slot (8 per byte) counts. Formula: @code{ceil(9-slots/2) + ceil(1-slots/8)}.
+
+@table @asis
+@item PIC-STR
+Copybook @code{PIC} clause or parser picture string (with or without @code{PIC} keyword).
+@end table
+
+@subsection Outputs
+Positive integer."
+  (let ((s (%pic-strip-leading-picture-keyword
+            (or (and (stringp pic-str) pic-str) ""))))
+    (max 1 (+ (ceiling (%pic-count-9-x-slots s) 2)
+              (ceiling (%pic-count-bit-slots s) 8)))))
 
 (defun fixed-pic-decimal-aligned-sum-integer (from-int from-frac-digits to-int to-frac-digits result-frac-digits)
   "Return integer sum aligned to RESULT-FRAC-DIGITS implied decimal places.
@@ -293,35 +352,30 @@ Integer difference before any modulo by the result field width."
     (- (* from-int (expt 10 (- dr df)))
        (* sub-int (expt 10 (- dr ds))))))
 
-(defun pic-digits-to-width (pic-rest)
-  "From PIC clause rest, return byte width (1–8) for packed storage in RAM.
+(defun pic-digits-to-width (pic-rest &key usage)
+  "From PIC clause rest, return byte width for packed storage in RAM.
+Combines @code{9}/@code{X}-slot (2 per byte) and @code{1}-slot (8 per byte) counts.
+Pass @code{:USAGE :DECIMAL} for sign-nybble adjustment in Step B.
+
 Examples: 1 byte = S9/99 USAGE DECIMAL or BINARY, S99 USAGE BINARY;
 2 bytes = 9999/9(4)/S9(4); up to 8 bytes = 9(8)/S9(8) USAGE BINARY or DECIMAL.
-Formula: max(1, ceiling(digits/2)). For BCD, S9 = 1 byte (sign nybble + 1 digit).
 Single-digit @code{PIC 9} and two-digit @code{PIC 99} both allocate one byte in
 generated copybooks; runtime nybble packing (where used) is documented in Phantasia
 class design notes."
+  (declare (ignore usage))
   (or
-   ;; Dotted or V implied decimal first: @code{(\\d+)} would otherwise match only digits
-   ;; before @code{.} (e.g. @code{PIC 999999.999999} → 3 bytes instead of 6).
-   (when (and (stringp pic-rest)
-              (let ((s (%pic-strip-leading-picture-keyword pic-rest)))
-                (or (find #\. s) (find #\V s))))
-     (max 1 (ceiling (%pic-count-9-x-slots (%pic-strip-leading-picture-keyword pic-rest)) 2)))
-   (cl-ppcre:register-groups-bind (digits n)
-       ("(?i)(?:PIC|PICTURE)\\s+(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
-     (let ((d (or (when digits (length digits)) (when n (parse-integer n)))))
-       (when d (max 1 (ceiling d 2)))))
    ;; PIC(99) / PICTURE(9) parenthesized digit count (AssetIDs.cpy style)
    (cl-ppcre:register-groups-bind (n)
        ("(?i)(?:PIC|PICTURE)\\s*\\(\\s*(\\d+)\\s*\\)" pic-rest)
      (let ((d (parse-integer n)))
        (max 1 (ceiling d 2))))
-   ;; S9, S99, S9(n) — signed; for BCD, S9 = 1 byte (1 digit + sign nybble)
-   (cl-ppcre:register-groups-bind (sdigits sn)
-       ("(?i)(?:PIC|PICTURE)\\s+S(?:(\\d+)|9\\s*\\(\\s*(\\d+)\\s*\\))" pic-rest)
-     (let ((d (or (when sdigits (length sdigits)) (when sn (parse-integer sn)))))
-       (when d (max 1 (ceiling d 2)))))))
+   ;; Universal: count 9/x and 1/1(n) slots from stripped PIC string
+   (let ((s (and (stringp pic-rest) (%pic-strip-leading-picture-keyword pic-rest))))
+     (when (and s (plusp (length s)))
+       (let ((n9 (%pic-count-9-x-slots s))
+             (n1 (%pic-count-bit-slots s)))
+         (when (plusp (+ n9 n1))
+           (max 1 (+ (ceiling n9 2) (ceiling n1 8)))))))))
 
 (defun normalize-relation-condition (condition)
   "If CONDITION is (lhs op rhs) with op in the middle, return (op lhs rhs).
