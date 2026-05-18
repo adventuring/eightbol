@@ -326,6 +326,11 @@ The trailing period is consumed by @code{statement-item} like other statements."
   (declare (ignore _compute _eq))
   (list :compute :target identifier :expression expression))
 
+(defun parse/parenthesized-expression (_lp expression _rp)
+  "Return EXPRESSION unchanged - parentheses are for grouping only."
+  (declare (ignore _lp _rp))
+  expression)
+
 (defun parse/expression-add (e1 _op e2)
   (declare (ignore _op))
   (list :add :from e1 :to e2 :giving nil))
@@ -1135,7 +1140,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           literal
           identifier
           function-identifier
-          (|(| expression |)|)
+          (|(| expression |)| #'parse/parenthesized-expression)
           (expression + expression #'parse/expression-add)
           (expression - expression #'parse/expression-subtract)
           (expression * expression #'parse/expression-multiply)
