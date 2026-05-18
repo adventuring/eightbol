@@ -50,10 +50,10 @@
 ;;; Method compilation
 
 (defun compile-cp1610-method (method class-id)
-  (let* ((method-id (getf (rest method) :method-id))
+  (let* ((*method-id* (getf (rest method) :method-id))
          (dispatch-label (format nil "Method~a~a"
                                  (cp1610-symbol class-id)
-                                 (cp1610-symbol (format nil "~a" method-id))))
+                                 (cp1610-symbol (format nil "~a" *method-id*))))
          (custom-entry (nth-value 0 (split-method-leading-assembly-entry
                                      (getf (rest method) :statements))))
          (block-label (if custom-entry
@@ -63,7 +63,7 @@
                                    (getf (rest method) :statements)))))
     (format *output-stream* "~&~%~a PROC" block-label)
     (dolist (stmt (ensure-list statements))
-      (compile-cp1610-statement *output-stream* stmt class-id method-id))
+      (compile-cp1610-statement *output-stream* stmt class-id *method-id*))
     (format *output-stream* "~&~10tJR      R5")
     (format *output-stream* "~&~10tENDP")
     (when custom-entry
@@ -123,7 +123,25 @@
                    (princ-to-string text)))))
     (:copy
      (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
-            (getf (rest stmt) :name)))))
+            (getf (rest stmt) :name)))
+    (:divide
+     (error 'backend-error
+            :message "DIVIDE not implemented for cp1610"
+            :cpu :cp1610
+            :detail stmt))
+    (:multiply
+     (error 'backend-error
+            :message "MULTIPLY not implemented for cp1610"
+            :cpu :cp1610
+            :detail stmt))
+    (:invoke-super
+     (unless (gethash *class-id* *parent-classes*)
+       (load-classes))
+     (if-let (parent-class (gethash *class-id* *parent-classes*))
+       (format out "~&~10tJSR     R5, Method~a~a"
+               (cp1610-symbol parent-class)
+               (cp1610-symbol (format nil "~a" *method-id*)))
+       (error "Can't figure out parent class of ~a" *class-id*)))))
 
 ;;; Expression / value emission
 
@@ -235,25 +253,16 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
            (format out "~&~10tMVII    #~a, R4" (slot-symbol slot "Self"))
            (format out "~&~10tADD     Self, R4")
            (format out "~&~10tMVO@    R0, R4"))))
-      ((and (listp to-dest) (eq (first to-dest) :subscript))
-       (format out "~&~10tMOVR    R0, R1")
-       (compile-cp1610-load out (third to-dest) class-id 1)
-       (when (= (or to-w 1) 2)
-         (format out "~&~10tSLL     R0, 1"))
-       (format out "~&~10tMVII    #~a, R4"
-               (bare-data-assembly-symbol (second to-dest) class-id))
-       (format out "~&~10tADDR    R0, R4")
-       (format out "~&~10tMOVR    R1, R0")
-       (format out "~&~10tMVO@    R0, R4"))
-      ((and (listp to-dest) (eq (first to-dest) :subscript))
-       (format out "~&~10tMOVR    R0, R1")
-       (compile-cp1610-load out (third to-dest) class-id 1)
-       (when (= (or to-w 1) 2)
-         (format out "~&~10tSLL     R0, 1"))
-       (format out "~&~10tMVII    #~a, R4" (bare-data-assembly-symbol (second to-dest) class-id))
-       (format out "~&~10tADDR    R0, R4")
-       (format out "~&~10tMOVR    R1, R0")
-       (format out "~&~10tMVO@    R0, R4"))
+       ((and (listp to-dest) (eq (first to-dest) :subscript))
+        (format out "~&~10tMOVR    R0, R1")
+        (compile-cp1610-load out (third to-dest) class-id 1)
+        (when (= (or to-w 1) 2)
+          (format out "~&~10tSLL     R0, 1"))
+        (format out "~&~10tMVII    #~a, R4"
+                (bare-data-assembly-symbol (second to-dest) class-id))
+        (format out "~&~10tADDR    R0, R4")
+        (format out "~&~10tMOVR    R1, R0")
+        (format out "~&~10tMVO@    R0, R4"))
       (t (format out "~&~10t;; Unsupported store to ~s" to-dest)))))
 
 ;;; INVOKE
