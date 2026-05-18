@@ -55,10 +55,11 @@
         (*const-table* const-table)
         (*pic-size-table* pic-size-table)
         (*pic-width-table* pic-width-table)
-        (*class-id* class-id))
+        (*class-id* class-id)
+        (*method-id* (getf (rest method) :method-id)))
     (declare (special *slot-table* *type-table* *const-table* *pic-size-table*
-                      *pic-width-table* *class-id*))
-    (let* ((method-id (getf (rest method) :method-id))
+                      *pic-width-table* *class-id* *method-id*))
+    (let* ((method-id *method-id*)
            (dispatch-label (format nil "Method~a~a"
                                    (z80-symbol class-id)
                                    (z80-symbol (format nil "~a" method-id))))
@@ -155,7 +156,25 @@
                 (format nil "~{~a~%~10t;; ~}" (mapcar (lambda (s) (if (stringp s) s (princ-to-string s))) text))
                 (princ-to-string text)))))
   (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
- (getf (rest stmt) :name)))))
+ (getf (rest stmt) :name)))
+  (:divide
+  (error 'backend-error
+         :message "DIVIDE not implemented for Z80"
+         :cpu :z80
+         :detail stmt))
+  (:multiply
+  (error 'backend-error
+         :message "MULTIPLY not implemented for Z80"
+         :cpu :z80
+         :detail stmt))
+  (:invoke-super
+  (unless (gethash *class-id* *parent-classes*)
+    (load-classes))
+  (if-let (parent-class (gethash *class-id* *parent-classes*))
+    (format out "~&~10tcall Method~a~a"
+            (z80-symbol parent-class)
+            (z80-symbol (format nil "~a" *method-id*)))
+    (error "Can't figure out parent class of ~a" *class-id*)))))
 
 ;;; Expression / value emission
 
