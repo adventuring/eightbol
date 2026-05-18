@@ -13,49 +13,52 @@ recently consumed by the YACC lexer thunk. Set by STREAM-CODE.")
 
 ;;; source-error is defined in conditions.lisp
 
-(defun safe-getf (plist key)
+(defun safe-getf (plist key &optional default)
   "Return (getf plist key) when PLIST is a plausible plist; otherwise nil. 
 
 Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{:paragraph}."
-  (when (and plist (listp plist) (evenp (length plist)))
-    (handler-case (getf plist key)
-      (type-error () nil))))
+  (or (when (and plist (listp plist) (evenp (length plist)))
+        (handler-case (getf plist key default)
+          (type-error () default)))
+      default))
 
 ;;; Token list — every terminal used anywhere in the grammar must
 ;;; appear here so the lexer produces the right token type.
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (defun token-list ()
-    '(|(| |)| |:| |,| + - * / × ÷ |.| /= < <= = > >= ≠ ≤ ≥
-      add address after all alphabet alphabetic also and any are as assembly
-      argument ascii atascii at author
-      bank before binary bit-and bit-not bit-or bit-xor blank break by
-      call cancel characters class class-id comment compute
-      configuration constant continue converting count
-      data date date-compiled date-written debug decimal
-      delimited delimiter depending display divide division down
-      else end end-evaluate end-if end-method end-perform end-search
-      entry environment equal evaluate exit external
-      false fault filler for format from function
-      giving go goback greater
-      high hi-values high-values
-      id identification if imperative in indent inherits installation
-      inspect instance into invoke is
-      just justified
-      leading length less library linkage log low low-values lo-values
-      method method-id minifont
-      move multiply native negative next not null nulls numeric
-      object object-computer occurs of offset on or other outdent
-      packed-decimal perform petscii pic picture pointer positive process
-      procedure procedure-pointer program
-      redefines reference remainder renames replacing returning right run
-      search section security self sentence sentences service set
-      shift-left shift-right sign signed size subtract
-      source-computer special-names stop string super symbol
-      tallying test than the then through thru times title to trailing true
-      unicode unsigned until up usage using
-      value values varying
-      when with working-storage
-      zero zeroes)))
+    (mapcar
+     (compose #'intern #'string) 
+     '(|(| |)| |:| |,| + - * / × ÷ |.| /= < <= = > >= ≠ ≤ ≥
+       add address after all alphabet alphabetic also and any are as assembly
+       argument ascii atascii at author
+       bank before binary bit-and bit-not bit-or bit-xor blank break by
+       call cancel characters class class-id comment compute
+       configuration constant continue converting count
+       data date date-compiled date-written debug decimal
+       delimited delimiter depending display divide division down
+       else end end-evaluate end-if end-method end-perform end-search
+       entry environment equal evaluate exit external
+       false fault filler for format from function
+       giving go goback greater
+       high hi-values high-values
+       id identification if imperative in indent inherits installation
+       inspect instance into invoke is
+       just justified
+       leading length less library linkage log low low-values lo-values
+       method method-id minifont
+       move multiply native negative next not null nulls numeric
+       object object-computer occurs of offset on or other outdent
+       packed-decimal perform petscii pic picture pointer positive process
+       procedure procedure-pointer program
+       redefines reference remainder renames replacing returning right run
+       search section security self sentence sentences service set
+       shift-left shift-right sign signed size subtract
+       source-computer special-names stop string super symbol
+       tallying test than the then through thru times title to trailing true
+       unicode unsigned until up usage using
+       value values varying
+       when with working-storage
+       zero zeroes))))
 
 ;;; Parser action functions
 
@@ -647,20 +650,45 @@ OUTPUT: perform AST plist."
   (declare (ignore _when _other))
   (list :when-other (if (listp statements) statements (list statements))))
 
+(defun parse/eval-subject-true (v)
+  "Action for eval-subject -> true — return keyword :true."
+  (declare (ignore v))
+  :true)
+
+(defun parse/eval-subject-false (v)
+  "Action for eval-subject -> false — return keyword :false."
+  (declare (ignore v))
+  :false)
+
+(defun recursive-if-else (when-clauses)
+  (cond
+    ((null when-clauses) nil)
+    ((eq (first (first when-clauses)) :when-other)
+     (second (first when-clauses)))
+    ((= 1 (length when-clauses))
+     (list :if (second (first when-clauses))
+           :then (third (first when-clauses))
+           :else nil))
+    (t (list :if (second (first when-clauses))
+             :then (third (first when-clauses))
+             :else (recursive-if-else (rest when-clauses))))))
+
 (defun parse/evaluate (_evaluate subject when-clauses _end-evaluate)
   "Return (:evaluate  :subject SUBJECT  :when-clauses …).
  
 YACC passes four values (EVALUATE token, subject, clauses, end)."
   (declare (ignore _evaluate _end-evaluate))
-  (let ((wc when-clauses))
-    (list :evaluate :subject subject
-                    :when-clauses (cond
-                                    ((null wc) nil)
-                                    ;; One clause: (:when …) or (:when-other …) — wrap as list of clauses.
-                                    ((and (listp wc) (symbolp (first wc))
-                                          (member (first wc) '(:when :when-other)))
-                                     (list wc))
-                                    (t (ensure-list wc))))))
+  (if (eql :true subject)
+      (recursive-if-else when-clauses)
+      (list :evaluate
+            :subject subject
+            :when-clauses (cond
+                            ((null when-clauses) nil)
+                            ;; One clause: (:when …) or (:when-other …) — wrap as list of clauses.
+                            ((and (listp when-clauses) (symbolp (first when-clauses))
+                                  (member (first when-clauses) '(:when :when-other)))
+                             (list when-clauses))
+                            (t (ensure-list when-clauses))))))
 
 ;;; SET — UP BY, DOWN BY, TO ADDRESS OF, TO SELF (TO expression and TO NULL implemented above)
 (defun parse/set-up-by (_set identifier _up _by expression)
@@ -697,7 +725,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
 
 ;;; YACC grammar definition
 (eval `(yacc:define-parser *eightbol-parser*
-           (:start-symbol eightbol-program)
+         (:start-symbol eightbol-program)
          (:terminals (,@(token-list) number string symbol bareword picture-sequence))
          (:precedence ((:left * / × ÷) (:left + -)))
          (:muffle-conflicts :some)
@@ -1264,7 +1292,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                 (lambda (_call call-target _in _bank bank-id)
                   (declare (ignore _call _in _bank))
                   (list :call :target call-target :bank bank-id :library nil
-                        :returning nil :using nil)))
+                              :returning nil :using nil)))
           ;; CALL Target. — local jsr
           (call call-target #'parse/call))
          
@@ -1291,13 +1319,11 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          (evaluate-statement
           (evaluate eval-subject when-clauses end-evaluate #'parse/evaluate))
 
-         (end-evaluate
-          (|END-EVALUATE| (constantly nil))
-          ())
-
          (eval-subject
-          expression true false
-          (eval-subject also eval-subject))
+           (expression)
+           (true #'parse/eval-subject-true)
+           (false #'parse/eval-subject-false)
+           (eval-subject also eval-subject))
 
          (when-clauses
           (when-clauses when-clause (lambda (cs c) (append cs (list c)) ))
@@ -1308,12 +1334,15 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (when other imperative-statements #'parse/when-other-clause))
 
          (evaluate-phrases
-          any condition true false
-          expression
-          (not expression)
-          (expression through expression)
-          (expression thru expression)
-          (evaluate-phrases also evaluate-phrases))
+           (any)
+           (condition)
+           (true)
+           (false)
+           (expression)
+           (not expression)
+           (expression through expression)
+           (expression thru expression)
+           (evaluate-phrases also evaluate-phrases))
 
          ;; imperative-statements allows each statement to have an optional trailing period.
          ;; Uses the same list-building pattern as statement-sequence to produce a flat list.

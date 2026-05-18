@@ -2,6 +2,7 @@
 ;;; Copyright © 2026 Interworldly Adventuring, LLC
 (common-lisp:defpackage :eightbol
   (:use :cl :cl-change-case :yacc :alexandria :serapeum/bundle)
+  (:shadow #:true)
   (:shadowing-import-from :serapeum #:partition #:comment #:occurs)
   (:import-from :split-sequence :split-sequence)
   (:export :main :compile-eightbol-class

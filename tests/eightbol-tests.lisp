@@ -1123,12 +1123,37 @@ AST is a :method plist (not full :program)."
   (let* ((ast (eightbol::parse-eightbol-string
                (minimal-class-with-stmt "EVALUATE HP WHEN 0 GOBACK. END-EVALUATE.")))
          (think (find "Think" (eightbol::ast-methods ast)
-                     :key #'eightbol::ast-method-name :test #'string=))
+                      :key #'eightbol::ast-method-name :test #'string=))
          (stmts (eightbol::ast-method-statements think))
          (eval-stmt (find :evaluate stmts :key #'first)))
     (is (not (null eval-stmt)))
     (is (equal "HP" (getf (rest eval-stmt) :subject)))
     (is (not (null (getf (rest eval-stmt) :when-clauses))))))
+
+(test parser/evaluate-true-parses
+  "EVALUATE TRUE parses to nested :if nodes, not :evaluate."
+  (let* ((ast (eightbol::parse-eightbol-string
+               (minimal-class-with-stmt
+                "EVALUATE TRUE WHEN HP = 0 GOBACK. WHEN OTHER GOBACK. END-EVALUATE.")))
+         (think (find "Think" (eightbol::ast-methods ast)
+                      :key #'eightbol::ast-method-name :test #'string=))
+         (stmts (eightbol::ast-method-statements think)))
+    (is (null (find :evaluate stmts :key #'first))
+        "EVALUATE TRUE must not produce :evaluate")
+    (is (not (null (find :if stmts :key #'first)))
+        "EVALUATE TRUE must produce :if")))
+
+(test parser/evaluate-true-when-other-alone
+  "EVALUATE TRUE WHEN OTHER stmts parses as bare statements, no :if."
+  (let* ((stmts (parse-procedure-stmts
+                 "000110             EVALUATE TRUE
+000120                 WHEN OTHER
+000130                     MOVE 1 TO HP
+000140             END-EVALUATE.")))
+    (is (null (find :evaluate stmts :key #'first)))
+    (is (null (find :if stmts :key #'first)))
+    (is (find :move stmts :key #'first)
+        "WHEN OTHER alone should produce bare :move")))
 
 (test parser/set-null-parses
   "SET … TO NULL parses to :set with :value :null."
@@ -2026,6 +2051,45 @@ AST is a :method plist (not full :program)."
                     t)
                 (error (e) (declare (ignore e)) nil))
                "~s backend should compile EVALUATE/INSPECT without error" cpu))))
+
+(defparameter *minimal-evaluate-true-cob*
+  "000010 IDENTIFICATION DIVISION.
+000020 CLASS-ID. EvalTrue-Test.
+000030 ENVIRONMENT DIVISION.
+000040 OBJECT.
+000050     DATA DIVISION.
+000060         WORKING-STORAGE SECTION.
+000070         05 X PIC 99 USAGE BINARY.
+000080     PROCEDURE DIVISION.
+000090         IDENTIFICATION DIVISION.
+000100         METHOD-ID. \"Test\".
+000110         PROCEDURE DIVISION.
+000120             EVALUATE TRUE
+000130                 WHEN X = 0
+000140                     MOVE 1 TO X
+000150                 WHEN X = 1
+000160                     MOVE 2 TO X
+000170                 WHEN OTHER
+000180                     MOVE 3 TO X
+000190             END-EVALUATE.
+000200             GOBACK.
+000210         END METHOD \"Test\".
+000220 END OBJECT.
+000230 END CLASS EvalTrue-Test.
+"
+  "Minimal class with EVALUATE TRUE for backend coverage.")
+
+(test backend/all-cpus-compile-evaluate-true
+  "All supported CPUs compile EVALUATE TRUE without error."
+  (let ((ast (eightbol::parse-eightbol-string *minimal-evaluate-true-cob*)))
+    (dolist (cpu +supported-cpus+)
+      (is-true (handler-case
+                  (progn
+                    (with-output-to-string (s)
+                      (eightbol::compile-to-assembly-with-ast-passes ast cpu s))
+                    t)
+                (error (e) (declare (ignore e)) nil))
+               "~s backend should compile EVALUATE TRUE without error" cpu))))
 
 ;;; Minimal class with COMPUTE shift and bit ops for backend coverage.
 (defparameter *minimal-compute-shift-bit-cob*
