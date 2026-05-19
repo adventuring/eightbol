@@ -98,3 +98,99 @@
 (test binary-v/1-8v1-8-fractional-bits
   "1(8)V1(8) USAGE BINARY → 8 fractional bits after V."
   (is (= 8 (eightbol::pic-fractional-bits "1(8)V1(8)"))))
+
+;;;;
+;;;; MOVE with sign extension / zero fill / truncation
+;;;;
+;;;; When source is narrower than destination and both USAGE BINARY:
+;;;;   signed source → sign extend
+;;;;   unsigned source → zero fill
+;;;; When source is wider than destination: truncate (low bytes kept)
+;;;;
+
+(defun cp1610-move-asm (from to &key (class-id "T") pic ws)
+  "Compile MOVE from TO via compile-method-ast-with-tables for cp1610."
+  (compile-method-ast-with-tables
+   `(:method :method-id "M" :statements ((:move :from ,from :to ,to)))
+   class-id :cp1610
+   :pic-width-table (or pic (make-hash-table :test 'equalp))
+   :working-storage (or ws (make-hash-table :test 'equalp))))
+
+(defun z80-move-asm (from to &key (class-id "T") pic ws)
+  "Compile MOVE from TO via compile-method-ast-with-tables for Z80."
+  (compile-method-ast-with-tables
+   `(:method :method-id "M" :statements ((:move :from ,from :to ,to)))
+   class-id :z80
+   :pic-width-table (or pic (make-hash-table :test 'equalp))
+   :working-storage (or ws (make-hash-table :test 'equalp))))
+
+(test move/cp1610-sign-extend-1-to-2-bytes
+  "cp1610: MOVE signed 8-bit BINARY to 16-bit BINARY sign-extends via SLL/SARC."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :binary :signed t :pic "s9"))
+    (setf (gethash "B" ws) (list :usage :binary :signed t :pic "s9999"))
+    (let ((asm (cp1610-move-asm "A" "B" :pic pic :ws ws)))
+      (is (search "SLL     R0, 8" asm))
+      (is (search "SARC    R0, 8" asm)))))
+
+(test move/cp1610-zero-fill-1-to-2-bytes
+  "cp1610: MOVE unsigned 8-bit BINARY to 16-bit BINARY zero-fills via ANDI."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "9999"))
+    (let ((asm (cp1610-move-asm "A" "B" :pic pic :ws ws)))
+      (is (search "ANDI    #$FF, R0" asm)))))
+
+(test move/z80-sign-extend-1-to-2-bytes
+  "Z80: MOVE signed 8-bit BINARY to 16-bit BINARY sign-extends via sbc a,a."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :binary :signed t :pic "s9"))
+    (setf (gethash "B" ws) (list :usage :binary :signed t :pic "s9999"))
+    (let ((asm (z80-move-asm "A" "B" :pic pic :ws ws)))
+      (is (search "sbc a, a" asm))
+      (is (search "ld h, a" asm)))))
+
+(test move/z80-zero-fill-1-to-2-bytes
+  "Z80: MOVE unsigned 8-bit BINARY to 16-bit BINARY zero-fills via ld h,0."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "9999"))
+    (let ((asm (z80-move-asm "A" "B" :pic pic :ws ws)))
+      (is (search "ld h, 0" asm)))))
+
+(test move/cp1610-same-width-no-extension
+  "cp1610: MOVE same-width BINARY has no SLL/SARC extension instructions."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
+    (let ((asm (cp1610-move-asm "A" "B" :pic pic :ws ws)))
+      (is (null (search "SLL" asm)))
+      (is (null (search "SARC" asm)))
+      (is (null (search "ANDI" asm))))))
+
+(test move/z80-same-width-no-extension
+  "Z80: MOVE same-width BINARY has no sign-extension instructions."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
+    (let ((asm (z80-move-asm "A" "B" :pic pic :ws ws)))
+      (is (null (search "sbc a, a" asm)))
+      (is (null (search "ld h, 0" asm))))))

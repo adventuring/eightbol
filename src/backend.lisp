@@ -720,6 +720,17 @@ Slot name string (e.g. @code{\"Max-HP\"}), or NIL if not a slot-OF form."
   "Return pointer width for OBJECT REFERENCE; matches @code{+object-reference-storage-width+}."
   +object-reference-storage-width+)
 
+(defun operand-binary-p (expression)
+  "True when EXPRESSION is USAGE BINARY (or default, which is BINARY).
+Returns NIL for DECIMAL, object refs, pointers, and non-variables."
+  (cond
+    ((numberp expression) t)
+    ((eql :null expression) nil)
+    ((eql :zero expression) t)
+    (t (let ((token (slot-token expression)))
+         (when-let (var (gethash token *working-storage*))
+           (not (eql :decimal (getf var :usage nil))))))))
+
 (defun operand-signed-p (expression)
   (cond
     ((numberp expression)
@@ -950,7 +961,9 @@ Statement plist whose @code{car} is @code{:add}.
     ((and (listp expression) (member (first expression) '(:low :high))) 1)
     ((and (listp expression) (member (first expression) '(:address-of))) 2)
     ((and (listp expression)
+          (stringp (first expression))
           (string= "(" (first expression))
+          (stringp (lastcar expression))
           (string= ")" (lastcar expression)))
      (if (= 3 (length expression))
          (second expression)
@@ -1016,7 +1029,9 @@ Integer byte count at least 1."
                ((member (first e)
                         '(:shift-left :shift-right :bit-and :bit-or :bit-xor))
                 (max (rec (second e)) (rec (third e))))
-               ((and (string= "(" (first e))
+               ((and (stringp (first e))
+                     (string= "(" (first e))
+                     (stringp (lastcar e))
                      (string= ")" (lastcar e)))
                 (loop for el in (subseq e 1 (1- (length e)))
                       maximize (rec el)))
@@ -1051,7 +1066,9 @@ Integer byte count at least 1."
                           :shift-left :shift-right :bit-and :bit-or :bit-xor)
                         :test #'eq)
                 (or (rec (second e)) (rec (third e))))
-               ((and (string= "(" (first e))
+               ((and (stringp (first e))
+                     (string= "(" (first e))
+                     (stringp (lastcar e))
                      (string= ")" (lastcar e)))
                 (some (lambda (el) (rec el)) (subseq e 1 (1- (length e)))))
                ((eq (first e) :bit-not)

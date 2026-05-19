@@ -242,8 +242,22 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
 (defun compile-cp1610-move (out stmt class-id)
   (let* ((from (getf (rest stmt) :from))
         (to-dest (getf (rest stmt) :to))
-        (to-w (operand-width to-dest)))
+        (to-w (operand-width to-dest))
+        (from-w (expression-operand-width from)))
     (compile-cp1610-load out from class-id)
+    ;; Width adjustment: sign-extend or zero-fill when moving to wider BINARY target
+    (when (and from-w to-w (> to-w from-w)
+               (numberp from-w) (numberp to-w))
+      (cond
+        ((and (not (operand-bcd-p from)) (operand-signed-p from))
+         ;; BINARY signed: sign-extend
+         (let ((bits-to-shift (* (- to-w from-w) 8)))
+           (format out "~&~10tSLL     R0, ~d" bits-to-shift)
+           (format out "~&~10tSARC    R0, ~d" bits-to-shift)))
+        ((not (operand-bcd-p from))
+         ;; BINARY unsigned: zero-fill high bytes
+         (when (and (= from-w 1) (>= to-w 2))
+           (format out "~&~10tANDI    #$FF, R0")))))
     (cond
       ((stringp to-dest)
        (format out "~&~10tMVO     R0, ~a" (cp1610-symbol to-dest)))

@@ -285,13 +285,27 @@
  (to (getf (rest stmt) :to))
  (from-w (expression-operand-width from pic-width-table))
  (to-w (operand-width to pic-width-table)))
- (backend-unsupported-operand-width :z80 :move (max from-w to-w) 2)
- (compile-z80-load out from class-id slot-table const-table pic-width-table)
- (cond
- ((stringp to)
- (if (= (or to-w 1) 2)
- (format out "~&~10tld (~a), hl" (bare-data-assembly-symbol to class-id))
- (format out "~&~10tld (~a), a" (bare-data-assembly-symbol to class-id))))
+  (backend-unsupported-operand-width :z80 :move (max from-w to-w) 2)
+  (compile-z80-load out from class-id slot-table const-table pic-width-table)
+  ;; Width adjustment: when target is wider than source, sign-extend or zero-fill
+  (when (and from-w to-w (> to-w from-w) (numberp from-w) (numberp to-w)
+             (= from-w 1) (>= to-w 2))
+    (cond
+      ((operand-signed-p from)
+       ;; Sign extend A to HL
+       (format out "~&~10tld l, a")
+       (format out "~&~10tadd a, a")
+       (format out "~&~10tsbc a, a")
+       (format out "~&~10tld h, a"))
+      (t
+       ;; Zero fill A to HL
+       (format out "~&~10tld l, a")
+       (format out "~&~10tld h, 0"))))
+  (cond
+  ((stringp to)
+  (if (= (or to-w 1) 2)
+  (format out "~&~10tld (~a), hl" (bare-data-assembly-symbol to class-id))
+  (format out "~&~10tld (~a), a" (bare-data-assembly-symbol to class-id))))
  ((and (listp to) (eq (first to) :of))
  (let ((slot (second to)) (obj (third to)))
  (when (member obj '(:self "Self" self) :test #'equal)
