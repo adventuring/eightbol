@@ -312,7 +312,7 @@
     ((and from-bcd (not to-bcd))
      ;; DECIMAL source → BINARY destination: convert packed BCD to binary
      (let ((w (or from-w 1)))
-       (unless (<= w 1)
+       (unless (<= w 2)
          (error 'backend-error :message
                 (format nil "BCD-to-binary MOVE width ~d not yet implemented for Z80" w)
                 :cpu :z80 :detail stmt))
@@ -336,7 +336,7 @@
     ((and (not from-bcd) to-bcd)
      ;; BINARY source → DECIMAL destination: convert binary to packed BCD
      (let ((w (or to-w 1)))
-       (unless (<= w 1)
+       (unless (<= w 2)
          (error 'backend-error :message
                 (format nil "Binary-to-BCD MOVE width ~d not yet implemented for Z80" w)
                 :cpu :z80 :detail stmt))
