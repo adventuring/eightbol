@@ -534,6 +534,19 @@
          (bcd-p (when result (usage-bcd-p (expr-to-width-name result))))
          (sz (m68k-size-suffix w)))
     (assert-pic-decimal-add-compiled :m68k stmt)
+    (when (and bcd-p (> (or w 1) 2))
+      (dotimes (i w)
+        (format out "~&~10tmove.b  ~a+~d, %%d0" (m68k-symbol from) i)
+        (format out "~&~10tmove.b  ~a+~d, %%d1" (m68k-symbol to) i)
+        (if (= i 0)
+            (progn
+              (format out "~&~10tmoveq   #0, %%d2")
+              (format out "~&~10tmove    %%d2, %%ccr"))
+            (format out "~&~10tmove    %%ccr, %%d2"))
+        (format out "~&~10tabcd    %%d1, %%d0")
+        (format out "~&~10tmove.b  %%d0, ~a+~d" (m68k-symbol result) i))
+      (return-from compile-m68k-add))
+    (backend-unsupported-operand-width :m68k :add w 2)
     (compile-m68k-load out to class-id slot-table const-table pic-width-table)
     (format out "~&~10tmove~a  %d0, %d1" sz)
     (compile-m68k-load out from class-id slot-table const-table pic-width-table)
@@ -546,6 +559,7 @@
     (when result
       (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol (format nil "~a" result))))))
 
+
 (defun compile-m68k-subtract (out stmt class-id slot-table const-table pic-width-table)
   (multiple-value-bind (minuend subtrahend)
       (subtract-statement-minuend-and-subtrahend stmt)
@@ -555,6 +569,19 @@
            (bcd-p (when dest (usage-bcd-p (expr-to-width-name dest))))
            (sz (m68k-size-suffix w)))
       (assert-pic-decimal-subtract-compiled :m68k stmt)
+      (when (and bcd-p (> (or w 1) 2))
+        (dotimes (i w)
+          (format out "~&~10tmove.b  ~a+~d, %%d1" (m68k-symbol minuend) i)
+          (format out "~&~10tmove.b  ~a+~d, %%d0" (m68k-symbol subtrahend) i)
+          (if (= i 0)
+              (progn
+                (format out "~&~10tmoveq   #0, %%d2")
+                (format out "~&~10tmove    %%d2, %%ccr"))
+              (format out "~&~10tmove    %%ccr, %%d2"))
+          (format out "~&~10tsbcd    %%d0, %%d1")
+          (format out "~&~10tmove.b  %%d1, ~a+~d" (m68k-symbol dest) i))
+        (return-from compile-m68k-subtract))
+      (backend-unsupported-operand-width :m68k :subtract w 2)
       (compile-m68k-load out minuend class-id slot-table const-table pic-width-table)
       (format out "~&~10tmove~a  %d0, %d1" sz)
       (compile-m68k-load out subtrahend class-id slot-table const-table pic-width-table)
@@ -567,7 +594,9 @@
           (progn
             (format out "~&~10tsub~a   %d0, %d1" sz)
             (format out "~&~10tmove~a  %d1, %d0" sz)))
-      (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol (format nil "~a" dest))))))
+      (let ((dest (or giving minuend)))
+        (format out "~&~10tmove~a  %d0, ~a" sz (m68k-symbol (format nil "~a" dest)))))))
+
 
 (defun compile-m68k-compute (out stmt class-id slot-table const-table pic-width-table)
   (let* ((target (getf (rest stmt) :target))
