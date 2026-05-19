@@ -785,6 +785,16 @@ uses @code{constant-p} on EXPR only."
          (w (operand-width (or result to) pic-width-table))
          (bcd-p (when result (usage-bcd-p (expr-to-width-name result)))))
     (assert-pic-decimal-add-compiled :f8 stmt)
+    (when (and bcd-p (> (or w 1) 2))
+      (dotimes (i w)
+        (compile-f8-load out from class-id slot-table const-table pic-width-table 1)
+        (format out "~&~10tLR      8, A")
+        (compile-f8-load out to class-id slot-table const-table pic-width-table 1)
+        (format out "~&~10tAS      8")
+        (format out "~&~10tASD     8")
+        (%f8-store-dest out class-id slot-table const-table result pic-width-table nil))
+      (return-from compile-f8-add))
+    (backend-unsupported-operand-width :f8 :add w 2)
     (if (= (or w 1) 2)
         (progn
           (compile-f8-load out to class-id slot-table const-table pic-width-table 2)
@@ -800,12 +810,11 @@ uses @code{constant-p} on EXPR only."
           (compile-f8-load out to class-id slot-table const-table pic-width-table 1)
           (format out "~&~10tLR      8, A")
           (compile-f8-load out from class-id slot-table const-table pic-width-table 1)
-          (if bcd-p
-              (format out "~&~10tASD     8")
-              (format out "~&~10tAS      8"))
-          (let ((dest (or giving (and (stringp to) to))))
-            (when dest
-              (%f8-store-dest out class-id slot-table const-table dest pic-width-table nil)))))))
+          (format out "~&~10tAS      8")
+          (when bcd-p (format out "~&~10tASD     8"))
+          (when result
+            (%f8-store-dest out class-id slot-table const-table result pic-width-table nil))))))
+
 
 (defun compile-f8-subtract (out stmt class-id slot-table const-table pic-width-table)
   (multiple-value-bind (minuend subtrahend)
