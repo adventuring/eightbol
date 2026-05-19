@@ -136,4 +136,4 @@
       (let ((p (search "or a" asm))
             (q (search "sbc hl, de" asm)))
         (is (and p q))
-        (is (< p q)))))
+        (is (< p q))))))

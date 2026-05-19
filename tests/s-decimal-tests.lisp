@@ -1,10 +1,11 @@
 ;;; tests/s-decimal-tests.lisp — S nybble width for DECIMAL usage (Step B)
 (in-package :eightbol/test)
 
-(defvar *s-decimal-suite*
-  (fiveam:def-suite :s-decimal
-    :description "S sign nybble: DECIMAL usage adds 1 nybble for S, BINARY does not"
-    :in :eightbol))
+(fiveam:def-suite :s-decimal
+  :description "S sign nybble: DECIMAL usage adds 1 nybble for S, BINARY does not"
+  :in :eightbol)
+
+(defvar *s-decimal-suite*)
 
 (fiveam:in-suite :s-decimal)
 

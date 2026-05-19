@@ -655,35 +655,30 @@ OUTPUT: perform AST plist."
   (declare (ignore _when _other))
   (list :when-other (if (listp statements) statements (list statements))))
 
-(defun parse/eval-subject-true (v)
-  "Action for eval-subject -> true — return keyword :true."
-  (declare (ignore v))
-  :true)
-
-(defun parse/eval-subject-false (v)
-  "Action for eval-subject -> false — return keyword :false."
-  (declare (ignore v))
-  :false)
-
 (defun recursive-if-else (when-clauses)
   (cond
     ((null when-clauses) nil)
     ((eq (first (first when-clauses)) :when-other)
      (second (first when-clauses)))
     ((= 1 (length when-clauses))
-     (list :if (second (first when-clauses))
-           :then (third (first when-clauses))
-           :else nil))
-    (t (list :if (second (first when-clauses))
-             :then (third (first when-clauses))
-             :else (recursive-if-else (rest when-clauses))))))
+     (destructuring-bind (_when condition result) (first when-clauses)
+       (declare (ignore _when))
+       (list :if :condition condition
+             :then result
+             :else nil)))
+    (t
+     (destructuring-bind (_when condition result) (first when-clauses)
+       (declare (ignore _when))
+       (list :if :condition condition
+             :then result
+             :else (recursive-if-else (rest when-clauses)))))))
 
 (defun parse/evaluate (_evaluate subject when-clauses _end-evaluate)
   "Return (:evaluate  :subject SUBJECT  :when-clauses …).
  
 YACC passes four values (EVALUATE token, subject, clauses, end)."
   (declare (ignore _evaluate _end-evaluate))
-  (if (eql :true subject)
+  (if (eql subject :true)
       (recursive-if-else when-clauses)
       (list :evaluate
             :subject subject
@@ -1274,34 +1269,33 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
 
          (call-statement
           ;; CALL SERVICE Target. — service dispatch, bank resolved at link time
-          (call service call-target #'parse/call-service)
+          (call service identifier #'parse/call-service)
           ;; CALL Target IN LIBRARY. — near jsr (LastBank is always resident)
-          (call call-target in library
-                (lambda (_call call-target _in _lib)
+          (call identifier in library
+                (lambda (_call identifier _in _lib)
                   (declare (ignore _call _in _lib))
-                  (list :call :target call-target :bank nil :library t :returning nil :using nil)))
-          (call call-target in library returning identifier
-                (lambda (_call call-target _in _lib _returning return)
+                  (list :call :target identifier :bank nil :library t :returning nil :using nil)))
+          (call identifier in library returning identifier
+                (lambda (_call identifier _in _lib _returning return)
                   (declare (ignore _call _in _lib _returning))
-                  (list :call :target call-target :bank nil :library t :returning return :using nil)))
-          (call call-target in library using expression
-                (lambda (_call call-target _in _lib _using using)
+                  (list :call :target identifier :bank nil :library t :returning return :using nil)))
+          (call identifier in library using expression
+                (lambda (_call identifier _in _lib _using using)
                   (declare (ignore _call _in _lib _using))
-                  (list :call :target call-target :bank nil :library t :returning nil :using using)))
-          (call call-target in library using expression returning identifier
-                (lambda (_call call-target _in _lib _using using _returning return)
+                  (list :call :target identifier :bank nil :library t :returning nil :using using)))
+          (call identifier in library using expression returning identifier
+                (lambda (_call identifier _in _lib _using using _returning return)
                   (declare (ignore _call _in _lib _using _returning))
-                  (list :call :target call-target :bank nil :library t :returning return :using using)))
+                  (list :call :target identifier :bank nil :library t :returning return :using using)))
           ;; CALL Target IN BANK bank-id. — far dispatch with explicit bank symbol
-          (call call-target in bank identifier
-                (lambda (_call call-target _in _bank bank-id)
+          (call identifier in bank identifier
+                (lambda (_call identifier _in _bank bank-id)
                   (declare (ignore _call _in _bank))
-                  (list :call :target call-target :bank bank-id :library nil
+                  (list :call :target identifier :bank bank-id :library nil
                               :returning nil :using nil)))
           ;; CALL Target. — local jsr
-          (call call-target #'parse/call))
+          (call identifier #'parse/call))
          
-         (call-target identifier literal symbol)
          (cancel-statement (cancel identifier) (cancel literal))
          
          (compute-statement
@@ -1323,12 +1317,18 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          
          (evaluate-statement
           (evaluate eval-subject when-clauses end-evaluate #'parse/evaluate))
-
+         
+         ;; eval-subject — the EVALUATE subject is a single expression.  Without
+         ;; explicit actions, cl-yacc's default reducer wraps each rule's match
+         ;; in a list (#'list), so (EVALUATE State OF Self ...) would yield
+         ;; subject = ((:OF "State" "Self")) and break backends that expect a
+         ;; bare expression.  Use #'identity so the backend receives the raw
+         ;; expression / keyword.
          (eval-subject
-           (expression)
-           (true #'parse/eval-subject-true)
-           (false #'parse/eval-subject-false)
-           (eval-subject also eval-subject))
+          (expression #'identity)
+          (true (constantly :true))
+          (false (constantly :false))
+          (eval-subject also eval-subject #'identity))
 
          (when-clauses
           (when-clauses when-clause (lambda (cs c) (append cs (list c)) ))
@@ -1338,16 +1338,19 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (when evaluate-phrases imperative-statements #'parse/when-clause)
           (when other imperative-statements #'parse/when-other-clause))
 
+         ;; evaluate-phrases — same reasoning as eval-subject: each single-token
+         ;; alternative gets #'identity so phrases is a bare expression /
+         ;; keyword, not ((expr)).  Backends test (eq phrases 'any) etc.
          (evaluate-phrases
-           (any)
-           (condition)
-           (true)
-           (false)
-           (expression)
-           (not expression)
-           (expression through expression)
-           (expression thru expression)
-           (evaluate-phrases also evaluate-phrases))
+          (any #'identity)
+          (condition #'identity)
+          (true #'identity)
+          (false #'identity)
+          (expression #'identity)
+          (not expression)
+          (expression through expression)
+          (expression thru expression)
+          (evaluate-phrases also evaluate-phrases))
 
          ;; imperative-statements allows each statement to have an optional trailing period.
          ;; Uses the same list-building pattern as statement-sequence to produce a flat list.

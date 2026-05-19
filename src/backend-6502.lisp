@@ -523,7 +523,9 @@ use emit-6502-load-expression / load-byte-n for ~s" expression)
             :detail expression))
     
     ((and (listp expression)
+          (stringp (first expression))
           (string= "(" (first expression))
+          (stringp (lastcar expression))
           (string= ")" (lastcar expression)))
      (if (= 3 (length expression))
          (emit-6502-value (second expression))
@@ -543,7 +545,16 @@ use emit-6502-load-expression / load-byte-n for ~s" expression)
 
 (defun expression-constant-p (expression)
   "True if EXPRESSION is a numeric literal, named constant, or constant expression.
-Constant expressions are arithmetic/bit ops whose operands are all constant."
+Constant expressions are arithmetic/bit ops whose operands are all constant.
+
+@table @asis
+@item EXPRESSION
+Any AST fragment.  Robust to atypical shapes: a 1-element list (e.g. parser
+wrap @code{((:OF \"State\" \"Self\"))}) is treated as its sole element; lists
+whose head is a list, or whose head is not one of the recognised expression
+keywords, are non-constant rather than triggering an @code{ecase} failure
+or a @code{string=} type error on the head.
+@end table"
   (cond
     ((numberp expression) t)
     ((stringp expression)
@@ -551,13 +562,20 @@ Constant expressions are arithmetic/bit ops whose operands are all constant."
            (getf var :value))
          (constant-p expression)))
     ((and (listp expression) (eq (first expression) :literal)) t)
+    ;; Defensive: 1-element list — unwrap (cl-yacc wraps eval-subject &c.).
+    ((and (listp expression) (= 1 (length expression)))
+     (expression-constant-p (first expression)))
     ((and (listp expression)
+          (stringp (first expression))
           (string= "(" (first expression))
+          (stringp (lastcar expression))
           (string= ")" (lastcar expression)))
      (every #'expression-constant-p (subseq expression 1 (1- (length expression)))))
     ((not (listp expression))
      nil)
     ((null (first expression)) nil)
+    ;; Defensive: when head is a list or non-keyword, the expression is not constant.
+    ((not (keywordp (first expression))) nil)
     (t (ecase (first expression)
          ((:on :of :subscript) nil)
          (:address-of
@@ -602,8 +620,13 @@ Constant expressions are arithmetic/bit ops whose operands are all constant."
 Folds constant expressions (add/subtract/multiply/divide/bit/shift) at compile time."
   (cond
     ((numberp expression) expression)
+    ;; Defensive: 1-element list — unwrap (parser wraps eval-subject &c.).
+    ((and (listp expression) (= 1 (length expression)))
+     (expression-constant-value (first expression)))
     ((and (listp expression)
+          (stringp (first expression))
           (string= "(" (first expression))
+          (stringp (lastcar expression))
           (string= ")" (lastcar expression)))
      (if (= 3 (length expression))
          (expression-constant-value (second expression))
@@ -709,6 +732,13 @@ treat as bare NAME (immediate lda #), not an instance slot."
       ((equalp expression *6502-accumulator-expression*)
        (return))
       
+      ;; Defensive: unwrap a 1-element list (cl-yacc wraps EVALUATE eval-subject
+      ;; and WHEN evaluate-phrases as ((:OF ...)) or ("HP")).  Mirrors the
+      ;; corresponding unwrap in EMIT-6502-VALUE.
+      ((and (listp expression) (= 1 (length expression)))
+       (emit-6502-load-expression out (first expression) class-id)
+       (return-from emit-6502-load-expression))
+      
       ((and (expression-constant-p expression) (= 1 (expression-operand-width expression)))
        (with-accumulator-value (expression)
          (format out "~%~10Tlda # ~a" (expression-constant-value expression)))
@@ -736,12 +766,14 @@ treat as bare NAME (immediate lda #), not an instance slot."
          (format out "~%~10Tclc")
          (emit-6502-alu-with-memory-rhs out "adc" (getf (rest expression) :from) class-id)))
       
-      ;; Arithmetic: a - b
+      ;; Arithmetic: a - b — AST is (:SUBTRACT :FROM minuend :SUBTRAHEND subtrahend [:GIVING …]).
       ((and (listp expression) (eq (first expression) :subtract))
        (with-accumulator-value (expression)
          (emit-6502-load-expression out (getf (rest expression) :from) class-id)
          (format out "~%~10Tsec")
-         (emit-6502-alu-with-memory-rhs out "sbc" (getf (rest expression) :to) class-id)))
+         (emit-6502-alu-with-memory-rhs out "sbc"
+                                        (getf (rest expression) :subtrahend)
+                                        class-id)))
       
       ;; Arithmetic: a * k (k must be power of 2)
       ((and (listp expression) (eq (first expression) :multiply))
@@ -857,7 +889,9 @@ treat as bare NAME (immediate lda #), not an instance slot."
          (format out "~%~10Tlda ~a" (second expression))))
       
       ((and (listp expression)
+            (stringp (first expression))
             (string= "(" (first expression))
+            (stringp (lastcar expression))
             (string= ")" (lastcar expression)))
        (mapcar (lambda (expr)
                  (emit-6502-load-expression out expr class-id))
@@ -984,7 +1018,9 @@ Named     77/78     constants     with      byte     width     1     use
                  (to-identifier expression) n)))
       
       ((and (listp expression)
+            (stringp (first expression))
             (string= "(" (first expression))
+            (stringp (lastcar expression))
             (string= ")" (lastcar expression))
             (= 3 (length expression)))
        (emit-6502-load-byte-n out (second expression) class-id n w))
@@ -995,7 +1031,7 @@ Named     77/78     constants     with      byte     width     1     use
                       (find (symbol-name (first expression))
                             '("OF" "ON" "ADDRESS-OF" "ADD" "SUBTRACT"
                               "LOW" "HIGH" "BIT-OR" "BIT-XOR" "BIT-NOT" "BIT-AND"
-                              "MULTIPLY" "DIVIDE")
+                              "MULTIPLY" "DIVIDE" "SHIFT-LEFT" "SHIFT-RIGHT")
                             :test #'string=))))
         (ecase (first expression)
          
@@ -1026,7 +1062,7 @@ Named     77/78     constants     with      byte     width     1     use
          
          (:subtract
           (when (zerop n) (format out "~&~10Tsec"))
-          (rithmetic "sbc" (getf (rest expression) :from) (getf (rest expression) :to)))
+          (rithmetic "sbc" (getf (rest expression) :from) (getf (rest expression) :subtrahend)))
          
          (:low
           (assert (zerop n))
@@ -1044,6 +1080,13 @@ Named     77/78     constants     with      byte     width     1     use
           (:multiply
            (emit-6502-load-expression out expression nil))
           (:divide
+           (emit-6502-load-expression out expression nil))
+          ;; :shift-left / :shift-right — delegate to emit-6502-load-expression,
+          ;; which loads V into A then ASL/LSR by the constant count.
+          ;; Valid only for single-byte loads (n=0, w=1).
+          (:shift-left
+           (emit-6502-load-expression out expression nil))
+          (:shift-right
            (emit-6502-load-expression out expression nil))
           (:bit-and
            (rithmetic "and" (second expression) (third expression) :swap-allowed-p t))))
@@ -1105,7 +1148,7 @@ the slot offset from an immediately preceding emit-6502-load-byte-n to the same 
 Used for STZ when MOVE ZERO to a direct-memory destination on 65c02+."
   (declare (ignore class-id))
   (cond
-    ((>= n w) nil)
+    ((>= n w) (error "Attempted to access byte ~:d of a ~:d byte~:p long object" n w))
     ((slot-of-expression dest) nil)
     ((stringp dest) (format nil "~a~[~:;~:* + ~d~]") dest n)
     (t (format nil "~a~[~:;~:* + ~d~]" (emit-6502-value dest) n))))
@@ -1612,11 +1655,7 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
 (defun %service-call-dispatch-symbol (item-sym)
   "Map CALL SERVICE routine stem to assembly dispatch label (ServiceFoo for LUT / .FarJSR).
 When ITEM-SYM already has a Service prefix (case-insensitive), return it unchanged."
-  (let ((s (if (stringp item-sym) item-sym (format nil "~a" item-sym))))
-    (if (and (>= (length s) 7)
-             (string-equal (subseq s 0 7) "Service"))
-        s
-        (concatenate 'string "Service" s))))
+  (format nil "Service~a" item-sym))
 
 (defun compile-6502-call (out statement)
   (let* ((target (safe-getf (rest statement) :target))

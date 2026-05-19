@@ -223,11 +223,11 @@ statements, not the method wrapper boilerplate."
       (is (find "STUK" strings :key #'second :test #'string=)
           "w\"STUK\" should produce string token for assembler minifont encoding"))))
 
-(test lexer/prefixed-string-z-signals-error
-  "Prefixed string literal z'...' signals unimplemented error."
-  (signals error
-    (with-input-from-string (s "000010 MOVE z\"hello\" TO Foo.")
-      (eightbol::lexer s))))
+(test lexer/prefixed-string-z-produces-zero-terminated
+  "Prefixed string literal z\"...\" tokenizes as :zero-terminated format."
+  (let ((tokens (with-input-from-string (s "000010 MOVE z\"hello\" TO Foo.")
+                   (eightbol::lexer s))))
+    (is (find "hello" tokens :test #'equalp :key (lambda (tok) (and (listp tok) (second tok)))))))
 
 (test lexer/parse-number-hex-with-comma
   "parse-eightbol-number handles x'9999,9999' hex dword format (comma ignored)."
@@ -1142,6 +1142,25 @@ AST is a :method plist (not full :program)."
         "EVALUATE TRUE must not produce :evaluate")
     (is (not (null (find :if stmts :key #'first)))
         "EVALUATE TRUE must produce :if")))
+
+(test parser/evaluate-true-if-node-format
+  "EVALUATE TRUE :if nodes use :condition keyword (not positional)."
+  (let* ((ast (eightbol::parse-eightbol-string
+               (minimal-class-with-stmt
+                "EVALUATE TRUE WHEN HP = 0 GOBACK. WHEN HP = 1 GOBACK. WHEN OTHER GOBACK. END-EVALUATE.")))
+         (think (find "Think" (eightbol::ast-methods ast)
+                      :key #'eightbol::ast-method-name :test #'string=))
+         (if-node (find :if (eightbol::ast-method-statements think) :key #'first)))
+    (is (not (null if-node)))
+    (is (not (null (getf (rest if-node) :condition)))
+        ":if node must have :condition keyword")
+    (is (not (null (getf (rest if-node) :then)))
+        ":if node must have :then keyword")
+    ;; Recursive case: inner :if must also carry :condition keyword
+    (let ((else-branch (getf (rest if-node) :else)))
+      (when (and (listp else-branch) (eq (first else-branch) :if))
+        (is (not (null (getf (rest else-branch) :condition)))
+            "nested :if must have :condition keyword")))))
 
 (test parser/evaluate-true-when-other-alone
   "EVALUATE TRUE WHEN OTHER stmts parses as bare statements, no :if."

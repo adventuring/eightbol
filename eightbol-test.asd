@@ -8,9 +8,11 @@
   :depends-on (:eightbol :fiveam :skyline-tool)
   :defsystem-depends-on (:asdf :fiveam)
   :components ((:module "tests"
-                :components ((:file "test-package")
+                :components (                            (:file "test-package")
                             (:file "eightbol-tests"
                              :depends-on ("test-package"))
+                             (:file "repro-bugs"
+                              :depends-on ("eightbol-tests"))
                              (:file "pic-1-bit-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "s-decimal-tests"

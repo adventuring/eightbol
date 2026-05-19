@@ -1,10 +1,11 @@
 ;;; tests/pic-1-bit-tests.lisp — PIC `1` bit-width tests (Step A)
 (in-package :eightbol/test)
 
-(defvar *pic-suite*
-  (fiveam:def-suite :pic-1-bit
-    :description "PIC `1` bit-width: %pic-count-bit-slots, pic-fractional-bits, pic-width-in-bytes, pic-digits-to-width"
-    :in :eightbol))
+(fiveam:def-suite :pic-1-bit
+  :description "PIC `1` bit-width: %pic-count-bit-slots, pic-fractional-bits, pic-width-in-bytes, pic-digits-to-width"
+  :in :eightbol)
+
+(defvar *pic-suite*)
 
 (fiveam:in-suite :pic-1-bit)
 
