@@ -597,7 +597,8 @@
          (result (or giving (and (stringp to-op) to-op)))
          (w (max (operand-width (or result to-op) pic-width-table)
                  (expression-operand-width from pic-width-table)
-                 (operand-width to-op pic-width-table))))
+                 (operand-width to-op pic-width-table)))
+         (bcd-p (when result (usage-bcd-p result))))
     (assert-pic-decimal-add-compiled :sm83 stmt)
     (backend-unsupported-operand-width :sm83 :add w 2)
     (if (= (or w 1) 2)
@@ -615,6 +616,7 @@
           (format out "~&~8tld      b, a")
           (compile-sm83-load out from class-id slot-table const-table pic-width-table)
           (format out "~&~8tadd     b")
+          (when bcd-p (format out "~&~8tdaa"))
           (let ((dest (or giving (and (stringp to-op) to-op))))
             (when dest
               (format out "~&~8tld      [~a], a" (bare-data-assembly-symbol dest class-id))))))))
