@@ -340,12 +340,16 @@ Compiling class string (e.g. \"Character\").
 
 (defun slot-of-expression (expression)
   "Return (:of slot obj) form for EXPRESSION, or NIL."
-  (when (and (listp expression) (eq :of (first expression)))
+  (when (and (listp expression)
+             (symbolp (first expression))
+             (string-equal (symbol-name (first expression)) "OF"))
     expression))
 
 (defun slot-on-expression (expression)
   "Return (:on slot obj) form for EXPRESSION, or NIL."
-  (when (and (listp expression) (eq :on (first expression)))
+  (when (and (listp expression)
+             (symbolp (first expression))
+             (string-equal (symbol-name (first expression)) "ON"))
     expression))
 
 (defun 6502-object-pointer-label (obj-expression class-id)
@@ -985,8 +989,15 @@ Named     77/78     constants     with      byte     width     1     use
             (= 3 (length expression)))
        (emit-6502-load-byte-n out (second expression) class-id n w))
       
-      ((and (listp expression) (keywordp (first expression)))
-       (ecase (first expression)
+       ((and (listp expression) 
+             (or (keywordp (first expression))
+                 (and (symbolp (first expression))
+                      (find (symbol-name (first expression))
+                            '("OF" "ON" "ADDRESS-OF" "ADD" "SUBTRACT"
+                              "LOW" "HIGH" "BIT-OR" "BIT-XOR" "BIT-NOT" "BIT-AND"
+                              "MULTIPLY" "DIVIDE")
+                            :test #'string=))))
+        (ecase (first expression)
          
          (:of
           (format out "~%~10Tldy # ~a~[~:;~:* + ~d~]" (apply #'slot-symbol (rest expression)) n)
