@@ -428,33 +428,61 @@
                 :pic-width-table pic :working-storage ws)))
       (is (search "sub" asm)))))
 
-(test add/cp1610-mismatched-v-decimal-signals-error
-  "cp1610: ADD DECIMAL with mismatched V scales signals backend-error."
-  (signals eightbol::backend-error
-    (let ((pic (make-hash-table :test 'equalp))
-          (ws (make-hash-table :test 'equalp)))
-      (setf (gethash "A" pic) 1)
-      (setf (gethash "B" pic) 2)
-      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "9v9"))
-      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
-      (compile-method-ast-with-tables
-       '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
-       "T" :cp1610
-       :pic-width-table pic :working-storage ws))))
+(test add/cp1610-mismatched-v-decimal-scales
+  "cp1610: ADD DECIMAL with mismatched V scales compiles and shifts the narrower operand."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "9v9"))
+    (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                "T" :cp1610
+                :pic-width-table pic :working-storage ws)))
+      (is (plusp (length asm))))))
 
-(test add/z80-mismatched-v-decimal-signals-error
-  "Z80: ADD DECIMAL with mismatched V scales signals backend-error."
-  (signals eightbol::backend-error
-    (let ((pic (make-hash-table :test 'equalp))
-          (ws (make-hash-table :test 'equalp)))
-      (setf (gethash "A" pic) 1)
-      (setf (gethash "B" pic) 2)
-      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "9v9"))
-      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
-      (compile-method-ast-with-tables
-       '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
-       "T" :z80
-       :pic-width-table pic :working-storage ws))))
+(test add/z80-mismatched-v-decimal-scales
+  "Z80: ADD DECIMAL with mismatched V scales compiles and shifts the narrower operand."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "9v9"))
+    (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                "T" :z80
+                :pic-width-table pic :working-storage ws)))
+      (is (plusp (length asm))))))
+
+(test add/cp1610-mismatched-v-decimal-signed-scales
+  "cp1610: ADD signed DECIMAL with mismatched V scales compiles."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :decimal :signed t :pic "s9v9"))
+    (setf (gethash "B" ws) (list :usage :decimal :signed t :pic "s99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                "T" :cp1610
+                :pic-width-table pic :working-storage ws)))
+      (is (plusp (length asm))))))
+
+(test add/z80-mismatched-v-decimal-signed-scales
+  "Z80: ADD signed DECIMAL with mismatched V scales compiles."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :decimal :signed t :pic "s9v9"))
+    (setf (gethash "B" ws) (list :usage :decimal :signed t :pic "s99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                "T" :z80
+                :pic-width-table pic :working-storage ws)))
+      (is (plusp (length asm))))))
 
 (test add/cp1610-mismatched-v-binary-scales-by-nybble
   "cp1610: ADD BINARY with mismatched V scales compiles and shifts the narrower operand."

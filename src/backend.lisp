@@ -885,17 +885,23 @@ Generalized Boolean."
   "True when CPU shares the 6502-family backend that implements widen-only PIC decimal ADD/SUBTRACT."
   (member cpu '(:6502 :rp2a03 :65c02 :65c816 :huc6280 :cp1610 :z80) :test #'eq))
 
+(defun %operand-scaling-allowed-p (cpu expression)
+  "True when EXPRESSION can be V-scale adjusted on CPU (BINARY on 6502; any on cp1610/Z80)."
+  (if (member cpu '(:cp1610 :z80) :test #'eq)
+      t
+      (not (operand-bcd-p expression))))
+
 (defun pic-decimal-add-scales-uncompiled-on-this-cpu-p (cpu giving from to-op)
   "True when ADD has mismatched implied-decimal scales and CPU cannot emit correct widen-only code.
 
 6502-family with USAGE BINARY and @code{pic-decimal-binary-add-scaling-supported-p} is compiled;
-other CPUs signal @code{backend-error}. USAGE DECIMAL misaligned is rejected on 6502 as well."
+cp1610/Z80 allow both BINARY and DECIMAL. Other CPUs signal @code{backend-error}."
   (let ((result (or giving to-op)))
     (and (add-picture-decimal-scales-mismatch-p giving result from to-op)
          (not (and (%cpu-has-6502-pic-decimal-scaling-p cpu)
-                   (not (operand-bcd-p from))
-                   (not (operand-bcd-p to-op))
-                   (not (operand-bcd-p result))
+                   (%operand-scaling-allowed-p cpu from)
+                   (%operand-scaling-allowed-p cpu to-op)
+                   (%operand-scaling-allowed-p cpu result)
                    (pic-decimal-binary-add-scaling-supported-p giving from to-op))))))
 
 (defun pic-decimal-subtract-scales-uncompiled-on-this-cpu-p (cpu giving minuend subtrahend)
@@ -903,9 +909,9 @@ other CPUs signal @code{backend-error}. USAGE DECIMAL misaligned is rejected on 
   (let ((result (or giving minuend)))
     (and (subtract-picture-decimal-scales-mismatch-p giving result subtrahend minuend)
          (not (and (%cpu-has-6502-pic-decimal-scaling-p cpu)
-                   (not (operand-bcd-p minuend))
-                   (not (operand-bcd-p subtrahend))
-                   (not (operand-bcd-p result))
+                   (%operand-scaling-allowed-p cpu minuend)
+                   (%operand-scaling-allowed-p cpu subtrahend)
+                   (%operand-scaling-allowed-p cpu result)
                    (pic-decimal-binary-subtract-scaling-supported-p giving minuend subtrahend))))))
 
 (defun assert-pic-decimal-add-compiled (cpu stmt)
