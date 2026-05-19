@@ -289,3 +289,123 @@
   "cp1610: BINARY SHIFT-RIGHT emits SARC."
   (let ((asm (cp1610-shift-asm :shift-right 1)))
     (is (search "SARC" asm))))
+
+;;;;
+;;;; ADD / SUBTRACT with matched V scales
+;;;;
+
+(test add/cp1610-binary-add
+  "cp1610: ADD binary values with matched V scales compiles."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                "T" :cp1610
+                :pic-width-table pic :working-storage ws)))
+      (is (search "ADDR" asm)))))
+
+(test add/z80-binary-add
+  "Z80: ADD binary values with matched V scales compiles."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                "T" :z80
+                :pic-width-table pic :working-storage ws)))
+      (is (search "add" asm)))))
+
+(test add/cp1610-bcd-add
+  "cp1610: ADD USAGE DECIMAL values compiles (no BCD-specific opcodes)."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                "T" :cp1610
+                :pic-width-table pic :working-storage ws)))
+      (is (search "ADDR" asm)))))
+
+(test add/z80-bcd-add
+  "Z80: ADD USAGE DECIMAL values emits DAA for BCD correction."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                "T" :z80
+                :pic-width-table pic :working-storage ws)))
+      (is (search "daa" asm)))))
+
+(test subtract/cp1610-binary-subtract
+  "cp1610: SUBTRACT binary values with matched V scales compiles."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "C" pic) 1)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "C" ws) (list :usage :binary :signed nil :pic "99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:subtract :from "A" :from-target "B" :giving "C")))
+                "T" :cp1610
+                :pic-width-table pic :working-storage ws)))
+      (is (search "SUBR" asm)))))
+
+(test subtract/z80-binary-subtract
+  "Z80: SUBTRACT binary values with matched V scales compiles."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "C" pic) 1)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "C" ws) (list :usage :binary :signed nil :pic "99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:subtract :from "A" :from-target "B" :giving "C")))
+                "T" :z80
+                :pic-width-table pic :working-storage ws)))
+      (is (search "sub" asm)))))
+
+(test add/cp1610-mismatched-v-decimal-signals-error
+  "cp1610: ADD with mismatched V fractional scales signals backend-error."
+  (signals eightbol::backend-error
+    (let ((pic (make-hash-table :test 'equalp))
+          (ws (make-hash-table :test 'equalp)))
+      (setf (gethash "A" pic) 1)
+      (setf (gethash "B" pic) 2)
+      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "9v9"))
+      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
+      (compile-method-ast-with-tables
+       '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+       "T" :cp1610
+       :pic-width-table pic :working-storage ws))))
+
+(test add/z80-mismatched-v-decimal-signals-error
+  "Z80: ADD with mismatched V fractional scales signals backend-error."
+  (signals eightbol::backend-error
+    (let ((pic (make-hash-table :test 'equalp))
+          (ws (make-hash-table :test 'equalp)))
+      (setf (gethash "A" pic) 1)
+      (setf (gethash "B" pic) 2)
+      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "9v9"))
+      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
+      (compile-method-ast-with-tables
+       '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+       "T" :z80
+       :pic-width-table pic :working-storage ws)))))
