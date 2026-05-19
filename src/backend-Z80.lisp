@@ -174,7 +174,26 @@
     (format out "~&~10tcall Method~a~a"
             (z80-symbol parent-class)
             (z80-symbol (format nil "~a" *method-id*)))
-    (error "Can't figure out parent class of ~a" *class-id*)))))
+    (error "Can't figure out parent class of ~a" *class-id*)))
+  (:shift-left
+  (let* ((target (getf (rest stmt) :target))
+         (count (getf (rest stmt) :count 1)))
+    (compile-z80-load out target class-id slot-table const-table pic-width-table)
+    (dotimes (_ count)
+      (format out "~&~10tadd a, a"))
+    (when (stringp target)
+      (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))
+  (:shift-right
+  (let* ((target (getf (rest stmt) :target))
+         (count (getf (rest stmt) :count 1))
+         (signed (operand-signed-p target)))
+    (compile-z80-load out target class-id slot-table const-table pic-width-table)
+    (dotimes (_ count)
+      (if signed
+          (format out "~&~10tsra a")
+          (format out "~&~10tsrl a")))
+    (when (stringp target)
+      (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))))
 
 ;;; Expression / value emission
 

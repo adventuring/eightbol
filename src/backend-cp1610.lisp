@@ -141,7 +141,21 @@
        (format out "~&~10tJSR     R5, Method~a~a"
                (cp1610-symbol parent-class)
                (cp1610-symbol (format nil "~a" *method-id*)))
-       (error "Can't figure out parent class of ~a" *class-id*)))))
+       (error "Can't figure out parent class of ~a" *class-id*)))
+    (:shift-left
+     (let* ((target (getf (rest stmt) :target))
+            (count (getf (rest stmt) :count 1)))
+       (compile-cp1610-load out target class-id)
+       (format out "~&~10tSLL     R0, ~d" count)
+       (when (stringp target)
+         (format out "~&~10tMVO     R0, ~a" (cp1610-symbol target)))))
+    (:shift-right
+     (let* ((target (getf (rest stmt) :target))
+            (count (getf (rest stmt) :count 1)))
+       (compile-cp1610-load out target class-id)
+       (format out "~&~10tSARC    R0, ~d" count)
+       (when (stringp target)
+         (format out "~&~10tMVO     R0, ~a" (cp1610-symbol target)))))))
 
 ;;; Expression / value emission
 

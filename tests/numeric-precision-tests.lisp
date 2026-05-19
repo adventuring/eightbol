@@ -273,22 +273,46 @@
 ;;;; SHIFT operations (BINARY and DECIMAL)
 ;;;;
 
-(defun cp1610-shift-asm (op expr &key (class-id "T") pic ws)
-  (compile-method-ast-with-tables
-   `(:method :method-id "M" :statements ((:compute :target "X" :expression (,op "X" ,expr))))
-   class-id :cp1610
-   :pic-width-table (or pic (make-hash-table :test 'equalp))
-   :working-storage (or ws (make-hash-table :test 'equalp))))
-
 (test shift/cp1610-binary-shift-left
-  "cp1610: BINARY SHIFT-LEFT emits SLL."
-  (let ((asm (cp1610-shift-asm :shift-left 1)))
-    (is (search "SLL" asm))))
+  "cp1610: SHIFT-LEFT emits SLL."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M" :statements ((:shift-left :target "X" :count 2)))
+              "T" :cp1610)))
+    (is (search "SLL     R0, 2" asm))))
 
 (test shift/cp1610-binary-shift-right
-  "cp1610: BINARY SHIFT-RIGHT emits SARC."
-  (let ((asm (cp1610-shift-asm :shift-right 1)))
-    (is (search "SARC" asm))))
+  "cp1610: SHIFT-RIGHT emits SARC."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M" :statements ((:shift-right :target "X" :count 1)))
+              "T" :cp1610)))
+    (is (search "SARC    R0, 1" asm))))
+
+(test shift/z80-binary-shift-left
+  "Z80: SHIFT-LEFT emits add a,a."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M" :statements ((:shift-left :target "X" :count 1)))
+              "T" :z80)))
+    (is (search "add a, a" asm))))
+
+(test shift/z80-binary-shift-right-unsigned
+  "Z80: SHIFT-RIGHT unsigned emits srl."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "X" ws) (list :usage :binary :signed nil :pic "99"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:shift-right :target "X" :count 1)))
+                "T" :z80 :pic-width-table pic :working-storage ws)))
+      (is (search "srl" asm)))))
+
+(test shift/z80-binary-shift-right-signed
+  "Z80: SHIFT-RIGHT signed emits sra."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "X" ws) (list :usage :binary :signed t :pic "s9"))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M" :statements ((:shift-right :target "X" :count 1)))
+                "T" :z80 :pic-width-table pic :working-storage ws)))
+      (is (search "sra" asm)))))
 
 ;;;;
 ;;;; ADD / SUBTRACT with matched V scales
