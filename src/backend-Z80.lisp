@@ -158,15 +158,48 @@
   (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
  (getf (rest stmt) :name)))
   (:divide
-  (error 'backend-error
-         :message "DIVIDE not implemented for Z80"
-         :cpu :z80
-         :detail stmt))
+  (let* ((divisor (getf (rest stmt) :divisor))
+         (into (getf (rest stmt) :into))
+         (by (getf (rest stmt) :by))
+         (source (or by into))
+         (dest (or (getf (rest stmt) :giving) into))
+         (signed (operand-signed-p (or source dest))))
+    (if (and (expression-constant-p divisor)
+             (power-of-two-p (expression-constant-value divisor)))
+      (let ((shift (log2 (expression-constant-value divisor)))
+            (target (or source dest)))
+        (unless (zerop shift)
+          (compile-z80-load out target class-id slot-table const-table pic-width-table 1)
+          (dotimes (_ shift)
+            (if signed
+              (format out "~&~10tsra a")
+              (format out "~&~10tsrl a")))
+          (when (stringp target)
+            (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))
+      (error 'source-error
+             :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
+             :detail (format nil "DIVIDE by ~s" divisor)))))
+
   (:multiply
-  (error 'backend-error
-         :message "MULTIPLY not implemented for Z80"
-         :cpu :z80
-         :detail stmt))
+  (let* ((multiplier (getf (rest stmt) :multiplier))
+         (by (getf (rest stmt) :by))
+         (giving (getf (rest stmt) :giving))
+         (source (or giving by))
+         (dest (or giving by)))
+    (if (and (expression-constant-p multiplier)
+             (power-of-two-p (expression-constant-value multiplier)))
+      (let ((shift (log2 (expression-constant-value multiplier)))
+            (target (or source dest)))
+        (unless (zerop shift)
+          (compile-z80-load out target class-id slot-table const-table pic-width-table 1)
+          (dotimes (_ shift)
+            (format out "~&~10tadd a, a"))
+          (when (stringp target)
+            (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))
+      (error 'source-error
+             :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
+             :detail (format nil "MULTIPLY by ~s" multiplier)))))
+
   (:invoke-super
   (unless (gethash *class-id* *parent-classes*)
     (load-classes))

@@ -125,15 +125,41 @@
      (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
             (getf (rest stmt) :name)))
     (:divide
-     (error 'backend-error
-            :message "DIVIDE not implemented for cp1610"
-            :cpu :cp1610
-            :detail stmt))
+     (let* ((divisor (getf (rest stmt) :divisor))
+            (into (getf (rest stmt) :into))
+            (by (getf (rest stmt) :by))
+            (source (or by into))
+            (dest (or (getf (rest stmt) :giving) into)))
+       (if (and (expression-constant-p divisor)
+                (power-of-two-p (expression-constant-value divisor)))
+           (let ((shift (log2 (expression-constant-value divisor))))
+             (unless (zerop shift)
+               (compile-cp1610-load out (or source dest) class-id)
+               (format out "~&~10tSARC    R0, ~d" shift)
+               (when (stringp dest)
+                 (format out "~&~10tMVO     R0, ~a" (cp1610-symbol dest)))))
+           (error 'source-error
+                  :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
+                  :detail (format nil "DIVIDE by ~s" divisor)))))
+
     (:multiply
-     (error 'backend-error
-            :message "MULTIPLY not implemented for cp1610"
-            :cpu :cp1610
-            :detail stmt))
+     (let* ((multiplier (getf (rest stmt) :multiplier))
+            (by (getf (rest stmt) :by))
+            (giving (getf (rest stmt) :giving))
+            (source (or giving by))
+            (dest (or giving by)))
+       (if (and (expression-constant-p multiplier)
+                (power-of-two-p (expression-constant-value multiplier)))
+           (let ((shift (log2 (expression-constant-value multiplier))))
+             (unless (zerop shift)
+               (compile-cp1610-load out (or source dest) class-id)
+               (format out "~&~10tSLL     R0, ~d" shift)
+               (when (stringp dest)
+                 (format out "~&~10tMVO     R0, ~a" (cp1610-symbol dest)))))
+           (error 'source-error
+                  :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
+                  :detail (format nil "MULTIPLY by ~s" multiplier)))))
+
     (:invoke-super
      (unless (gethash *class-id* *parent-classes*)
        (load-classes))
