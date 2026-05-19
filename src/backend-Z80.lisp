@@ -281,26 +281,85 @@
 ;;; MOVE
 
  (defun compile-z80-move (out stmt class-id slot-table const-table pic-width-table)
- (let* ((from (getf (rest stmt) :from))
- (to (getf (rest stmt) :to))
- (from-w (expression-operand-width from pic-width-table))
- (to-w (operand-width to pic-width-table)))
+  (let* ((from (getf (rest stmt) :from))
+  (to (getf (rest stmt) :to))
+  (from-w (expression-operand-width from pic-width-table))
+  (to-w (operand-width to pic-width-table))
+  (from-bcd (operand-bcd-p from))
+  (to-bcd (operand-bcd-p to)))
   (backend-unsupported-operand-width :z80 :move (max from-w to-w) 2)
-  (compile-z80-load out from class-id slot-table const-table pic-width-table)
-  ;; Width adjustment: when target is wider than source, sign-extend or zero-fill
-  (when (and from-w to-w (> to-w from-w) (numberp from-w) (numberp to-w)
-             (= from-w 1) (>= to-w 2))
-    (cond
-      ((operand-signed-p from)
-       ;; Sign extend A to HL
-       (format out "~&~10tld l, a")
+  ;; DECIMAL ↔ BINARY conversion
+  (cond
+    ((and from-bcd (not to-bcd))
+     ;; DECIMAL source → BINARY destination: convert packed BCD to binary
+     (let ((w (or from-w 1)))
+       (unless (<= w 1)
+         (error 'backend-error :message
+                (format nil "BCD-to-binary MOVE width ~d not yet implemented for Z80" w)
+                :cpu :z80 :detail stmt))
+       ;; high digit * 10 + low digit
+       (format out "~&~10tld a, (~a)" (bare-data-assembly-symbol from class-id))
+       (format out "~&~10tld b, a")
+       (format out "~&~10trrca")
+       (format out "~&~10trrca")
+       (format out "~&~10trrca")
+       (format out "~&~10trrca")
+       (format out "~&~10tand $0F")
+       (format out "~&~10tld c, a")
        (format out "~&~10tadd a, a")
-       (format out "~&~10tsbc a, a")
-       (format out "~&~10tld h, a"))
-      (t
-       ;; Zero fill A to HL
-       (format out "~&~10tld l, a")
-       (format out "~&~10tld h, 0"))))
+       (format out "~&~10tadd a, a")
+       (format out "~&~10tadd a, c")
+       (format out "~&~10tadd a, a")
+       (format out "~&~10tld c, a")
+       (format out "~&~10tld a, b")
+       (format out "~&~10tand $0F")
+       (format out "~&~10tadd a, c")))
+    ((and (not from-bcd) to-bcd)
+     ;; BINARY source → DECIMAL destination: convert binary to packed BCD
+     (let ((w (or to-w 1)))
+       (unless (<= w 1)
+         (error 'backend-error :message
+                (format nil "Binary-to-BCD MOVE width ~d not yet implemented for Z80" w)
+                :cpu :z80 :detail stmt))
+       (compile-z80-load out from class-id slot-table const-table pic-width-table 1)
+       (format out "~&~10tld c, a")
+       (format out "~&~10tld b, 0")
+       (format out "~&~10tld hl, 0")
+       (format out "~&~10tld d, 10")
+       (let ((loop (z80-label "bcd"))
+             (done (z80-label "bcdd")))
+         (format out "~&~a:" loop)
+         (format out "~&~10tsbc hl, de")
+         (format out "~&~10tjr c, ~a" done)
+         (format out "~&~10tinc b")
+         (format out "~&~10tjr ~a" loop)
+         (format out "~&~a:" done)
+         (format out "~&~10tadd hl, de")
+         (format out "~&~10tld a, b")
+         (format out "~&~10tand $0F")
+         (format out "~&~10trlca")
+         (format out "~&~10trlca")
+         (format out "~&~10trlca")
+         (format out "~&~10trlca")
+         (format out "~&~10tld b, a")
+         (format out "~&~10tld a, l")
+         (format out "~&~10tor b"))))
+    (t
+     (compile-z80-load out from class-id slot-table const-table pic-width-table)
+     ;; Width adjustment: when target is wider than source, sign-extend or zero-fill
+     (when (and from-w to-w (> to-w from-w) (numberp from-w) (numberp to-w)
+                (= from-w 1) (>= to-w 2))
+       (cond
+         ((operand-signed-p from)
+          ;; Sign extend A to HL
+          (format out "~&~10tld l, a")
+          (format out "~&~10tadd a, a")
+          (format out "~&~10tsbc a, a")
+          (format out "~&~10tld h, a"))
+         (t
+          ;; Zero fill A to HL
+          (format out "~&~10tld l, a")
+          (format out "~&~10tld h, 0"))))))
   (cond
   ((stringp to)
   (if (= (or to-w 1) 2)

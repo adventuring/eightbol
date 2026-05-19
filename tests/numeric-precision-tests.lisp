@@ -194,3 +194,77 @@
     (let ((asm (z80-move-asm "A" "B" :pic pic :ws ws)))
       (is (null (search "sbc a, a" asm)))
       (is (null (search "ld h, 0" asm))))))
+
+;;;;
+;;;; DECIMAL ↔ BINARY MOVE conversion
+;;;;
+
+(test move/cp1610-decimal-to-binary
+  "cp1610: MOVE USAGE DECIMAL to BINARY emits BCD-to-binary conversion."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
+    (let ((asm (cp1610-move-asm "A" "B" :pic pic :ws ws)))
+      (is (plusp (length asm)))
+      (is (search "SARC    R0, 4" asm)))))
+
+(test move/z80-decimal-to-binary
+  "Z80: MOVE USAGE DECIMAL to BINARY emits BCD-to-binary conversion."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
+    (let ((asm (z80-move-asm "A" "B" :pic pic :ws ws)))
+      (is (plusp (length asm)))
+      (is (search "rrca" asm)))))
+
+(test move/cp1610-binary-to-decimal
+  "cp1610: MOVE USAGE BINARY to DECIMAL emits binary-to-BCD conversion."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
+    (let ((asm (cp1610-move-asm "A" "B" :pic pic :ws ws)))
+      (is (plusp (length asm)))
+      (is (search "SUBR    R1, R2" asm)))))
+
+(test move/z80-binary-to-decimal
+  "Z80: MOVE USAGE BINARY to DECIMAL emits binary-to-BCD conversion."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 1)
+    (setf (gethash "B" pic) 1)
+    (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
+    (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
+    (let ((asm (z80-move-asm "A" "B" :pic pic :ws ws)))
+      (is (plusp (length asm)))
+      (is (search "sbc" asm)))))
+
+(test move/cp1610-bcd-error-for-wide
+  "cp1610: MOVE BCD wider than 1 byte signals backend-error."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 2)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :decimal :signed t :pic "s9999"))
+    (setf (gethash "B" ws) (list :usage :binary :signed t :pic "s9999"))
+    (signals eightbol::backend-error
+      (cp1610-move-asm "A" "B" :pic pic :ws ws))))
+
+(test move/z80-bcd-error-for-wide
+  "Z80: MOVE BCD wider than 1 byte signals backend-error."
+  (let ((pic (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "A" pic) 2)
+    (setf (gethash "B" pic) 2)
+    (setf (gethash "A" ws) (list :usage :decimal :signed t :pic "s9999"))
+    (setf (gethash "B" ws) (list :usage :binary :signed t :pic "s9999"))
+    (signals eightbol::backend-error
+      (z80-move-asm "A" "B" :pic pic :ws ws))))

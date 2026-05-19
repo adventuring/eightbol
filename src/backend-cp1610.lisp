@@ -243,21 +243,65 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
   (let* ((from (getf (rest stmt) :from))
         (to-dest (getf (rest stmt) :to))
         (to-w (operand-width to-dest))
-        (from-w (expression-operand-width from)))
-    (compile-cp1610-load out from class-id)
-    ;; Width adjustment: sign-extend or zero-fill when moving to wider BINARY target
-    (when (and from-w to-w (> to-w from-w)
-               (numberp from-w) (numberp to-w))
-      (cond
-        ((and (not (operand-bcd-p from)) (operand-signed-p from))
-         ;; BINARY signed: sign-extend
-         (let ((bits-to-shift (* (- to-w from-w) 8)))
-           (format out "~&~10tSLL     R0, ~d" bits-to-shift)
-           (format out "~&~10tSARC    R0, ~d" bits-to-shift)))
-        ((not (operand-bcd-p from))
-         ;; BINARY unsigned: zero-fill high bytes
-         (when (and (= from-w 1) (>= to-w 2))
-           (format out "~&~10tANDI    #$FF, R0")))))
+        (from-w (expression-operand-width from))
+        (from-bcd (operand-bcd-p from))
+        (to-bcd (operand-bcd-p to-dest)))
+    ;; DECIMAL ↔ BINARY conversion
+    (cond
+      ((and from-bcd (not to-bcd))
+       ;; DECIMAL source → BINARY destination: convert packed BCD to binary
+       (let ((w (or from-w 1)))
+         (unless (<= w 1)
+           (error 'backend-error :message
+                  (format nil "BCD-to-binary MOVE width ~d not yet implemented for cp1610" w)
+                  :cpu :cp1610 :detail stmt))
+         (compile-cp1610-load out from class-id)
+         ;; R0 = packed BCD (e.g. 0x12 = 12 decimal)
+         (format out "~&~10tMOVR    R0, R1")
+         (format out "~&~10tANDI    #$F0, R0")
+         (format out "~&~10tSARC    R0, 4")
+         (format out "~&~10tMOVR    R0, R2")
+         (format out "~&~10tSLL     R0, 3")
+         (format out "~&~10tSLL     R2, 1")
+         (format out "~&~10tADDR    R2, R0")
+         (format out "~&~10tANDI    #$0F, R1")
+         (format out "~&~10tADDR    R1, R0")))
+      ((and (not from-bcd) to-bcd)
+       ;; BINARY source → DECIMAL destination: convert binary to packed BCD
+       (let ((w (or to-w 1)))
+         (unless (<= w 1)
+           (error 'backend-error :message
+                  (format nil "Binary-to-BCD MOVE width ~d not yet implemented for cp1610" w)
+                  :cpu :cp1610 :detail stmt))
+         (compile-cp1610-load out from class-id)
+         ;; R0 = binary value (0-99); convert to packed BCD by repeated subtraction
+         (let ((loop (cp1610-label "bcd"))
+               (done (cp1610-label "bcdd")))
+           (format out "~&~10tMVII    #10, R1")
+           (format out "~&~10tMOVR    R0, R2")
+           (format out "~&~10tCLRR    R0")
+           (format out "~&~a:" loop)
+           (format out "~&~10tSUBR    R1, R2")
+           (format out "~&~10tBLT     ~a" done)
+           (format out "~&~10tINCR    R0")
+           (format out "~&~10tB       ~a" loop)
+           (format out "~&~a:" done)
+           (format out "~&~10tADDR    R1, R2")
+           (format out "~&~10tSLL     R0, 4")
+           (format out "~&~10tADDR    R2, R0"))))
+      (t
+       (compile-cp1610-load out from class-id)
+       ;; Width adjustment: sign-extend or zero-fill when moving to wider BINARY target
+       (when (and from-w to-w (> to-w from-w)
+                  (numberp from-w) (numberp to-w))
+         (cond
+           ((and (not from-bcd) (operand-signed-p from))
+            (let ((bits-to-shift (* (- to-w from-w) 8)))
+              (format out "~&~10tSLL     R0, ~d" bits-to-shift)
+              (format out "~&~10tSARC    R0, ~d" bits-to-shift)))
+           ((not from-bcd)
+            (when (and (= from-w 1) (>= to-w 2))
+              (format out "~&~10tANDI    #$FF, R0")))))))
     (cond
       ((stringp to-dest)
        (format out "~&~10tMVO     R0, ~a" (cp1610-symbol to-dest)))
