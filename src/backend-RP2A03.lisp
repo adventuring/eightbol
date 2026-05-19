@@ -262,29 +262,13 @@ Uses only 6502 instructions (BRA is 65c02-only); RP2A03-compatible."
          (w (max (operand-width result)
                  (expression-operand-width from)
                  (operand-width to))))
-    (when (> w 1)
-      (error "EIGHTBOL: RP2A03 multi-byte BCD ADD not yet implemented (width ~d)" w))
-    (emit-6502-load-expr out from class-id)
-    (format out "~&~10tclc")
-    (if (expr-is-constant-p to)
-        (format out "~&~10tadc #~a" (emit-6502-value to))
-        (cond
-          ((slot-of-self-p to)
-           (let ((n (slot-of-expr to)))
-             (format out "~&~10tldy #~a" (slot-symbol (second n) class-id))
-             (format out "~&~10tadc (Self), y")))
-          (t
-           (format out "~&~10tadc ~a" (emit-6502-value to)))))
-    (emit-rp2a03-bcd-add-correction out)
-    (if giving
-        (format out "~&~10tsta ~a" (emit-6502-value giving))
-        (cond
-          ((slot-of-self-p to)
-           (let ((n (slot-of-expr to)))
-             (format out "~&~10tldy #~a" (slot-symbol (second n) class-id))
-             (format out "~&~10tsta (Self),y")))
-          (t
-           (format out "~&~10tsta ~a" (emit-6502-value to)))))))
+    ;; Process from LSB (byte 0) to MSB (byte w-1)
+    (dotimes (i w)
+      (emit-6502-load-byte-n out from class-id i w)
+      (when (= i 0) (format out "~&~10tclc"))
+      (%emit-6502-alu-byte-n-of-expression out "adc" to class-id i w)
+      (emit-rp2a03-bcd-add-correction out)
+      (emit-6502-store-byte-n out result class-id i w))))
 
 ;;; SUBTRACT — use software BCD when target is BCD
 
@@ -301,25 +285,9 @@ Uses only 6502 instructions (BRA is 65c02-only); RP2A03-compatible."
            (w (max (operand-width result)
                    (expression-operand-width subtrahend)
                    (operand-width minuend))))
-      (when (> w 1)
-        (error "EIGHTBOL: RP2A03 multi-byte BCD SUBTRACT not yet implemented (width ~d)" w))
-      (cond
-        ((slot-of-self-p minuend)
-         (let ((n (slot-of-expr minuend)))
-           (format out "~&~10tldy #~a" (slot-symbol (second n) class-id))
-           (format out "~&~10tlda (Self),y")
-           (format out "~&~10tsec")
-           (if (expr-is-constant-p subtrahend)
-               (format out "~&~10tsbc #~a" (emit-6502-value subtrahend))
-               (format out "~&~10tsbc ~a" (emit-6502-value subtrahend)))
-           (emit-rp2a03-bcd-sub-correction out)
-           (format out "~&~10tsta (Self),y")))
-        (t
-         (emit-6502-load-expr out minuend class-id)
-         (format out "~&~10tsec")
-         (if (expr-is-constant-p subtrahend)
-             (format out "~&~10tsbc #~a" (emit-6502-value subtrahend))
-             (format out "~&~10tsbc ~a" (emit-6502-value subtrahend)))
-         (emit-rp2a03-bcd-sub-correction out)
-         (format out "~&~10tsta ~a"
-                 (emit-6502-value (or giving minuend))))))))
+      (dotimes (i w)
+        (emit-6502-load-byte-n out minuend class-id i w)
+        (when (= i 0) (format out "~&~10tsec"))
+        (%emit-6502-alu-byte-n-of-expression out "sbc" subtrahend class-id i w)
+        (emit-rp2a03-bcd-sub-correction out)
+        (emit-6502-store-byte-n out result class-id i w)))))
