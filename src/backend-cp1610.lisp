@@ -727,8 +727,27 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
          (result (or giving (and (stringp to-op) to-op)
                      (and (listp to-op) (eq (first to-op) :subscript) to-op))))
     (assert-pic-decimal-add-compiled :cp1610 stmt)
-    (compile-cp1610-load out from class-id 1 #|fixme size|# :r0)
-    (compile-cp1610-load out to-op class-id 1 :r1)
+    ;; V-scale alignment: shift narrower operand left by 4 bits per digit difference
+    (let ((df (%operand-pic-fractional-decimal-digits from))
+          (dt (%operand-pic-fractional-decimal-digits to-op))
+          (scale-done nil))
+      (when (and (> dt df) (not (operand-bcd-p from)))
+        (compile-cp1610-load out from class-id 1 :r0)
+        (format out "~&~10tSLL     R0, ~d" (* 4 (- dt df)))
+        (setf scale-done :from))
+      (when (and (> df dt) (not (operand-bcd-p to-op)))
+        (compile-cp1610-load out to-op class-id 1 :r1)
+        (format out "~&~10tSLL     R1, ~d" (* 4 (- df dt)))
+        (setf scale-done :to))
+      (case scale-done
+        (:from
+         (format out "~&~10tMOVR    R0, R1")
+         (compile-cp1610-load out to-op class-id 1 :r0))
+        (:to
+         (compile-cp1610-load out from class-id 1 :r0))
+        (t
+         (compile-cp1610-load out from class-id 1 :r0)
+         (compile-cp1610-load out to-op class-id 1 :r1))))
     (format out "~&~10tADDR    R1, R0")
     (when result
       (cond
@@ -753,9 +772,24 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
     (let* ((giving (getf (rest stmt) :giving))
            (dest (or giving minuend)))
     (assert-pic-decimal-subtract-compiled :cp1610 stmt)
-    (compile-cp1610-load out minuend class-id)
-    (format out "~&~10tMOVR    R0, R1")
-    (compile-cp1610-load out subtrahend class-id)
+    ;; V-scale alignment: shift narrower operand left by 4 bits per digit
+    (let* ((dm (%operand-pic-fractional-decimal-digits minuend))
+           (ds (%operand-pic-fractional-decimal-digits subtrahend))
+           (did-scale (or (and (> ds dm) (not (operand-bcd-p minuend)))
+                          (and (> dm ds) (not (operand-bcd-p subtrahend))))))
+      (when (and (> ds dm) (not (operand-bcd-p minuend)))
+        (compile-cp1610-load out minuend class-id 1 :r0)
+        (format out "~&~10tSLL     R0, ~d" (* 4 (- ds dm)))
+        (format out "~&~10tMOVR    R0, R1")
+        (compile-cp1610-load out subtrahend class-id))
+      (when (and (> dm ds) (not (operand-bcd-p subtrahend)))
+        (compile-cp1610-load out minuend class-id 1 :r1)
+        (compile-cp1610-load out subtrahend class-id)
+        (format out "~&~10tSLL     R0, ~d" (* 4 (- dm ds))))
+      (unless did-scale
+        (compile-cp1610-load out minuend class-id)
+        (format out "~&~10tMOVR    R0, R1")
+        (compile-cp1610-load out subtrahend class-id)))
     (format out "~&~10tSUBR    R0, R1")
     (format out "~&~10tMOVR    R1, R0")
     (cond

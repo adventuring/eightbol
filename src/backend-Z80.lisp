@@ -761,15 +761,39 @@
         (progn
           ;; 16-bit: use DE for temp (ex de,hl) instead of stack
           (compile-z80-load out to class-id slot-table const-table pic-width-table 2)
+          ;; Scale 'to' if needed
+          (let ((df (%operand-pic-fractional-decimal-digits from))
+                (dt (%operand-pic-fractional-decimal-digits to)))
+            (when (and (> df dt) (not (operand-bcd-p to)))
+              (dotimes (_ (* 4 (- df dt)))
+                (format out "~&~10tadd hl, hl"))))
           (format out "~&~10tex de, hl")
           (compile-z80-load out from class-id slot-table const-table pic-width-table 2)
+          ;; Scale 'from' if needed
+          (let ((df (%operand-pic-fractional-decimal-digits from))
+                (dt (%operand-pic-fractional-decimal-digits to)))
+            (when (and (> dt df) (not (operand-bcd-p from)))
+              (dotimes (_ (* 4 (- dt df)))
+                (format out "~&~10tadd hl, hl"))))
           (format out "~&~10tadd hl, de")
           (when result
             (format out "~&~10tld (~a), hl" (z80-symbol (format nil "~a" result)))))
         (progn
           (compile-z80-load out to class-id slot-table const-table pic-width-table)
+          ;; Scale 'to' if needed
+          (let ((df (%operand-pic-fractional-decimal-digits from))
+                (dt (%operand-pic-fractional-decimal-digits to)))
+            (when (and (> df dt) (not (operand-bcd-p to)))
+              (dotimes (_ (* 4 (- df dt)))
+                (format out "~&~10tadd a, a"))))
           (format out "~&~10tld b, a")
           (compile-z80-load out from class-id slot-table const-table pic-width-table)
+          ;; Scale 'from' if needed
+          (let ((df (%operand-pic-fractional-decimal-digits from))
+                (dt (%operand-pic-fractional-decimal-digits to)))
+            (when (and (> dt df) (not (operand-bcd-p from)))
+              (dotimes (_ (* 4 (- dt df)))
+                (format out "~&~10tadd a, a"))))
           (format out "~&~10tadd a, b")
           (when bcd-p (format out "~&~10tdaa"))
           (let ((dest (or giving (and (stringp to) to))))

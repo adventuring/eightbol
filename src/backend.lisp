@@ -840,29 +840,20 @@ Supports parser output (@code{:subtrahend} and @code{:from}) and legacy tests th
         (values ft f))))
 
 (defun pic-decimal-binary-add-scaling-supported-p (giving from to-op)
-  "True when misaligned implied-decimal ADD can use widen-only binary scaling (multiply by @code{10^n}).
+  "True when misaligned implied-decimal ADD can use widen-only binary scaling.
 
-@code{n} is bounded by 12 per operand path. Narrowing (divide by @code{10^n}) is not supported.
-
-@table @asis
-@item GIVING
-When non-NIL, result scale @code{dr} must be @code{>=} each operand scale (@code{dr-df},
-@code{dr-dt} in @code{0..12}). When NIL, target scale @code{dt} must be @code{>=} addend
-scale @code{df} with @code{dt-df} in @code{0..12}.
-@item FROM, TO-OP
-ADD addend and target (from @code{*working-storage*} @code{:pic} strings).
-@end table
-
-@subsection Outputs
-Generalized Boolean."
-  (let ((dr (%operand-pic-fractional-decimal-digits (if giving (or giving to-op) to-op)))
+With GIVING, result must be >= each operand. Otherwise, the operand with fewer
+fractional digits is widened (shifted left by 4 bits per digit) to match the other.
+@code{n} (digit difference) is bounded by 12."
+  (let ((dr (when giving (%operand-pic-fractional-decimal-digits (or giving to-op))))
         (df (%operand-pic-fractional-decimal-digits from))
         (dt (%operand-pic-fractional-decimal-digits to-op)))
     (if giving
-        (and (>= dr df) (>= dr dt)
+        (and dr (>= dr df) (>= dr dt)
              (<= (- dr df) 12)
              (<= (- dr dt) 12))
-        (and (>= dt df) (<= (- dt df) 12)))))
+        ;; Either operand can be scaled up to match the other
+        (<= (abs (- df dt)) 12))))
 
 (defun pic-decimal-binary-subtract-scaling-supported-p (giving minuend subtrahend)
   "True when misaligned implied-decimal SUBTRACT can use widen-only binary scaling.
@@ -892,7 +883,7 @@ Generalized Boolean."
 
 (defun %cpu-has-6502-pic-decimal-scaling-p (cpu)
   "True when CPU shares the 6502-family backend that implements widen-only PIC decimal ADD/SUBTRACT."
-  (member cpu '(:6502 :rp2a03 :65c02 :65c816 :huc6280) :test #'eq))
+  (member cpu '(:6502 :rp2a03 :65c02 :65c816 :huc6280 :cp1610 :z80) :test #'eq))
 
 (defun pic-decimal-add-scales-uncompiled-on-this-cpu-p (cpu giving from to-op)
   "True when ADD has mismatched implied-decimal scales and CPU cannot emit correct widen-only code.
