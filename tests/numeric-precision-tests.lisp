@@ -268,3 +268,24 @@
     (setf (gethash "B" ws) (list :usage :binary :signed t :pic "s9999"))
     (signals eightbol::backend-error
       (z80-move-asm "A" "B" :pic pic :ws ws))))
+
+;;;;
+;;;; SHIFT operations (BINARY and DECIMAL)
+;;;;
+
+(defun cp1610-shift-asm (op expr &key (class-id "T") pic ws)
+  (compile-method-ast-with-tables
+   `(:method :method-id "M" :statements ((:compute :target "X" :expression (,op "X" ,expr))))
+   class-id :cp1610
+   :pic-width-table (or pic (make-hash-table :test 'equalp))
+   :working-storage (or ws (make-hash-table :test 'equalp))))
+
+(test shift/cp1610-binary-shift-left
+  "cp1610: BINARY SHIFT-LEFT emits SLL."
+  (let ((asm (cp1610-shift-asm :shift-left 1)))
+    (is (search "SLL" asm))))
+
+(test shift/cp1610-binary-shift-right
+  "cp1610: BINARY SHIFT-RIGHT emits SARC."
+  (let ((asm (cp1610-shift-asm :shift-right 1)))
+    (is (search "SARC" asm))))
