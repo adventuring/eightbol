@@ -48,7 +48,7 @@
                                      :then ((:move :from 1 :to "X")))
                             "T")))
       (is (plusp (length asm)))
-      (is (search "Method" asm))))))
+      (is (search "Method" asm)))))
 
 (test parity/perform-both-cpus
   (let ((slots (make-table)))

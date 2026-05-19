@@ -105,7 +105,7 @@
                               :slots slots :consts consts)))
         (is (search "MVII    #78, R0" asm))
         (is (search "MVO     R0, NextSong" asm))
-        (is (null (search "CharacterNextSong" asm)))))))
+        (is (null (search "CharacterNextSong" asm))))))
 
 (test cp1610/move-slot-of-self
   "MOVE slot OF Self loads via Self-relative address."
@@ -378,4 +378,4 @@
         (eightbol::*method-id* "Think")
         (eightbol::*class-id* "Character"))
     (let ((asm (cp1610-asm '(:invoke-super))))
-      (is (search "JSR     R5, MethodActorThink" asm)))))
+      is (search "JSR     R5, MethodActorThink" asm)))))

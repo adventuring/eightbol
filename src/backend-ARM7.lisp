@@ -211,7 +211,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
        (format out  "~&~8tmovs    r0, #~d" (constant-value expr)))
       ((stringp expr)
        (format out  "~&~8tldr     r2, =~a" (arm7-symbol expr))
-       (format out  "~&~8t~a     r0, [r2]" op)
+       (format out  "~&~8t~a     r0, [r2]" op))
       ((and (listp expr) (eq (first expr) :of))
        (let ((slot (second expr)) (obj (third expr)))
          (when (member obj '(:self "Self" self) :test #'equal)
@@ -595,7 +595,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
         (format out  "~&~8tsubge   r0, r0, #$60"))
       (let ((dest (or giving minuend)))
         (format out  "~&~8tldr     r2, =~a" (arm7-symbol (format nil "~a" dest)))
-        (format out  "~&~8t~a     r0, [r2]" op))))))
+        (format out  "~&~8t~a     r0, [r2]" op)))))
 
 
 (defun compile-arm7-compute (out stmt class-id slot-table const-table pic-width-table)

@@ -511,7 +511,7 @@ Rvalue expression; NIL signals backend-error (avoids emitting a NIL label).
             :cpu *cpu*
             :detail expression))
     
-    ((and (listp expression) (member (first expression) '(:subscript :on :of)))
+    ((and (listp expression) (member (first expression) '(:subscript :on :of subscript on of) :test (lambda (a b) (string-equal a b))))
      (error 'backend-error
             :message (format nil "emit-6502-value: complex access is not a plain address
 use emit-6502-load-expression / load-byte-n for ~s" expression)
@@ -553,6 +553,7 @@ Constant expressions are arithmetic/bit ops whose operands are all constant."
      (every #'expression-constant-p (subseq expression 1 (1- (length expression)))))
     ((not (listp expression))
      nil)
+    ((null (first expression)) nil)
     (t (ecase (first expression)
          ((:on :of :subscript) nil)
          (:address-of
@@ -1027,10 +1028,14 @@ Named     77/78     constants     with      byte     width     1     use
           (rithmetic "ora" (second expression) (third expression) :swap-allowed-p t))
          (:bit-xor
           (rithmetic "eor" (second expression) (third expression) :swap-allowed-p t))
-         (:bit-not
-          (rithmetic "eor" (second expression) #xff :swap-allowed-p t))
-         (:bit-and
-          (rithmetic "and" (second expression) (third expression) :swap-allowed-p t))))
+          (:bit-not
+           (rithmetic "eor" (second expression) #xff :swap-allowed-p t))
+          (:multiply
+           (emit-6502-load-expression out expression nil))
+          (:divide
+           (emit-6502-load-expression out expression nil))
+          (:bit-and
+           (rithmetic "and" (second expression) (third expression) :swap-allowed-p t))))
       (t
        (with-accumulator-value (expression)
          (format out "~%~10Tlda ~a~[~:;~:* + ~d~]"
