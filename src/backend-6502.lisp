@@ -2164,8 +2164,6 @@ target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed)
        (setf *6502-accumulator-expression* :trash/+1))
       ;; Multi-byte ADD (w >= 2): result = from + to, carry propagates
       ((>= w 2)
-       (when (and bcd-p (> w 2))
-         (error "EIGHTBOL: BCD ADD with width ~d not yet implemented" w))
        (if (> w 2)
            (progn
              (when bcd-p (format out "~%~10Tsed"))
@@ -2298,8 +2296,6 @@ target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed)
          (setf *6502-accumulator-expression* :trash/1-))
         ;; Multi-byte SUBTRACT (w >= 2): result = minuend - subtrahend
         ((>= w 2)
-         (when (and bcd-p (> w 2))
-           (error "EIGHTBOL: BCD SUBTRACT with width ~d not yet implemented" w))
          (if (> w 2)
              (progn
                (when bcd-p (format out "~%~10Tsed"))
