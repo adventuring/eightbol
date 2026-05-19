@@ -17,7 +17,7 @@ under the terms of the MIT License, which can be found at
 @titlepage
 @title EIGHTBOL Compiler Manual
 @subtitle An EIGHTBOL for 8-bit and 16-bit Microprocessors
-@subtitle Edition 0.6, for EIGHTBOL version 0.6
+@subtitle Edition 0.8, for EIGHTBOL version 0.8
 @author Bruce-Robert Pocock
 
 @page

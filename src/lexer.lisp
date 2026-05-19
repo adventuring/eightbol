@@ -276,7 +276,7 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
 
 (defvar *copybook-dependencies* nil
   "When bound to a list, expand-copy-tokens pushes each resolved copybook path
-(truename) onto it. Used by compile-eightbol-class to emit Makefile .d files.")
+(truename) onto it. Used by compile-eightbol to emit Makefile .d files.")
 
 (defvar *source-file-pathname* nil
   "Current input file being processed")

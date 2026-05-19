@@ -163,10 +163,10 @@
   (compile-6502-string-blt *output-stream* (rp2a03-stmt :string-blt ast-node-data) *class-id*))
 
 (def-rp2a03-statement :goto
-  (compile-6502-goto *output-stream* (rp2a03-stmt :goto ast-node-data) *class-id* *method-id*))
+  (compile-6502-goto (rp2a03-stmt :goto ast-node-data)))
 
 (def-rp2a03-statement :paragraph
-  (compile-6502-paragraph *output-stream* (rp2a03-stmt :paragraph ast-node-data) *class-id* *method-id*))
+  (compile-6502-paragraph (rp2a03-stmt :paragraph ast-node-data)))
 
 (def-rp2a03-statement :evaluate
   (compile-6502-evaluate *output-stream* (rp2a03-stmt :evaluate ast-node-data) :rp2a03))

@@ -113,7 +113,7 @@ Generates copybooks from tests/fixtures/Classes.Defs before compiling."
         (let ((copybook-paths (compile-regression-copybook-paths tmp)))
           (dolist (cob cob-files)
             (let* ((class-id (pathname-name cob))
-                   (ast (compile-eightbol-class (list cob)
+                   (ast (compile-eightbol (list cob)
                                                 :cpus (list *compile-regression-cpu*)
                                                 :copybook-paths copybook-paths
                                                 :root-directory tmp))
@@ -156,7 +156,7 @@ Generates copybooks from tests/fixtures/Classes.Defs before compiling."
         (ensure-directories-exist tmp)
         (compile-regression-generate-copybooks tmp)
         (let ((copybook-paths (compile-regression-copybook-paths tmp)))
-          (compile-eightbol-class (list cob)
+          (compile-eightbol (list cob)
                                   :cpus cpus
                                   :copybook-paths copybook-paths
                                   :root-directory tmp)
@@ -188,7 +188,7 @@ Generates copybooks from tests/fixtures/Classes.Defs before compiling."
         (ensure-directories-exist tmp)
         (compile-regression-generate-copybooks tmp)
         (let ((copybook-paths (compile-regression-copybook-paths tmp)))
-          (compile-eightbol-class (list cob)
+          (compile-eightbol (list cob)
                                   :cpus cpus
                                   :copybook-paths copybook-paths
                                   :root-directory tmp)

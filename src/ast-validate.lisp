@@ -1,7 +1,7 @@
 ;; src/ast-validate.lisp — structural validation after parse / optimize-ast
 ;;
 ;; 1. OBJECT REFERENCE classes in :data must appear in DEFINED-CLASS-IDS when
-;;    caller enables class validation (compile-eightbol-class :defined-class-ids).
+;;    caller enables class validation (compile-eightbol :defined-class-ids).
 ;; 2. Each non-blank method must end in a statement that completes the routine:
 ;;    GOBACK, EXIT*, STOP RUN, unconditional GO TO, tail INVOKE/CALL, or IF with
 ;;    ELSE where every branch’s statement list completes.

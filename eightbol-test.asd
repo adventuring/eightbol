@@ -8,9 +8,9 @@
   :depends-on (:eightbol :fiveam :skyline-tool)
   :defsystem-depends-on (:asdf :fiveam)
   :components ((:module "tests"
-                :components (                            (:file "test-package")
-                            (:file "eightbol-tests"
-                             :depends-on ("test-package"))
+                :components ((:file "test-package")
+                             (:file "eightbol-tests"
+                              :depends-on ("test-package"))
                              (:file "repro-bugs"
                               :depends-on ("eightbol-tests"))
                              (:file "pic-1-bit-tests"
@@ -19,38 +19,48 @@
                               :depends-on ("eightbol-tests"))
                              (:file "backend-matrix-tests"
                               :depends-on ("eightbol-tests"))
-                            (:file "backend-operand-kinds-tests"
-                             :depends-on ("eightbol-tests"))
-                            (:file "ast-optimize-tests"
-                             :depends-on ("eightbol-tests"))
-                            (:file "copybook-generation-tests"
-                             :depends-on ("eightbol-tests"))
-                            (:file "compile-regression-tests"
-                             :depends-on ("eightbol-tests"))
-                            (:file "phantasia-classes-compile-tests"
-                             :depends-on ("eightbol-tests"))
-                            (:file "phantasia-method-port-tests"
-                             :depends-on ("phantasia-classes-compile-tests"))
-                               (:file "backend-cp1610-tests"
-                                :depends-on ("eightbol-tests"))
-                               (:file "backend-z80-tests"
-                                :depends-on ("eightbol-tests"))
-                               (:file "backend-output-tests"
+                             (:file "backend-operand-kinds-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "ast-optimize-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "copybook-generation-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "compile-regression-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "backend-cp1610-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "backend-z80-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "backend-output-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "parser-structure-tests"
                               :depends-on ("eightbol-tests"))
-                            (:file "service-bank-lut-tests"
-                             :depends-on ("eightbol-tests"))
-                            (:file "statement-parity-tests"
-                             :depends-on ("eightbol-tests"))
+                             (:file "service-bank-lut-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "statement-parity-tests"
+                              :depends-on ("eightbol-tests"))
                              (:file "basic-parity-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "numeric-precision-tests"
                               :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
-                            (dolist (suite '(:eightbol :pic-1-bit :s-decimal :backend-matrix :backend-operand-kinds :backend-6502-classification :ast-optimize :copybook-generation :compile-regression
-                                            :phantasia-classes-compile :phantasia-method-port :backend-cp1610 :backend-z80 :backend-output
-                                            :parser-structure :service-bank-lut
-                                            :eightbol-cp1610-6502-parity :dartmouth-basic-parity
-                                            :numeric-precision))
-                           (funcall (intern "RUN!" :fiveam) suite))))
+                         (dolist (suite '(
+                                          :ast-optimize
+                                          :backend-6502-classification
+                                          :backend-cp1610
+                                          :backend-matrix
+                                          :backend-operand-kinds
+                                          :backend-output
+                                          :backend-z80
+                                          :compile-regression
+                                          :copybook-generation
+                                          :dartmouth-basic-parity
+                                          :eightbol
+                                          :eightbol-cp1610-6502-parity
+                                          :numeric-precision
+                                          :parser-structure
+                                          :pic-1-bit
+                                          :s-decimal
+                                          :service-bank-lut
+                                          )
+                                        (funcall (intern "RUN!" :fiveam) suite)))))

@@ -26,39 +26,39 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
 ;;; appear here so the lexer produces the right token type.
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (defun token-list ()
-    (mapcar
-     (compose #'intern #'string) 
-     '(|(| |)| |:| |,| + - * / × ÷ |.| /= < <= = > >= ≠ ≤ ≥
-       add address after all alphabet alphabetic also and any are as assembly
-       argument ascii atascii at author
-       bank before binary bit-and bit-not bit-or bit-xor blank break by
-       call cancel characters class class-id comment compute
-       configuration constant continue converting count
-       data date date-compiled date-written debug decimal
-       delimited delimiter depending display divide division down
-       else end end-evaluate end-if end-method end-perform end-search
-       entry environment equal evaluate exit external
-       false fault filler for format from function
-       giving go goback greater
-       high hi-values high-values
-       id identification if imperative in indent inherits installation
-       inspect instance into invoke is
-       just justified
-       leading length less library linkage log low low-values lo-values
-       method method-id minifont
-       move multiply native negative next not null nulls numeric
-       object object-computer occurs of offset on or other outdent
-       packed-decimal perform petscii pic picture pointer positive process
-       procedure procedure-pointer program
-       redefines reference remainder renames replacing returning right run
-       search section security self sentence sentences service set
-       shift-left shift-right sign signed size subtract
-       source-computer special-names stop string super symbol
-       tallying test than the then through thru times title to trailing true
-       unicode unsigned until up usage using
-       value values varying
-       when with working-storage
-       zero zeroes))))
+     (mapcar
+      (compose #'intern #'string) 
+      '(|(| |)| |:| |,| + - * / × ÷ |.| /= < <= = > >= ≠ ≤ ≥ |[| |]|
+        add address after all alphabet alphabetic also and any are as assembly
+        argument ascii atascii at author
+        bank before binary bit-and bit-not bit-or bit-xor blank break by
+        call cancel characters class class-id comment compute
+        configuration constant continue converting count
+        data date date-compiled date-written debug decimal
+        delimited delimiter depending display divide division down
+        else end end-evaluate end-if end-method end-perform end-search
+        entry environment equal evaluate exit external
+        false fault filler for format from function
+        giving go goback greater
+        high hi-values high-values
+        id identification if imperative in indent inherits installation
+        inspect instance into invoke is
+        just justified
+        leading length less library linkage log low low-values lo-values
+        method method-id minifont
+        move multiply native negative next not null nulls numeric
+        object object-computer occurs of offset on or other outdent
+         packed-decimal perform petscii pic picture pointer positive process
+        procedure procedure-pointer program program-id
+        redefines reference remainder renames replacing returning right run
+        search section security self sentence sentences service set
+        shift-left shift-right sign signed size subtract
+        source-computer special-names stop string super symbol
+        tallying test than the then through thru times title to trailing true
+        unicode unsigned until up usage using
+        value values varying
+        when with working-storage
+        zero zeroes))))
 
 ;;; Parser action functions
 
@@ -220,6 +220,39 @@ The trailing period is consumed by @code{statement-item} like other statements."
   "Top-level program rule: ignore trailing comments, return the program plist."
   (declare (ignore _comments))
   struct)
+
+(defun parse/end-program (_end _program name _dot)
+  (declare (ignore _end _program _dot))
+  (list :end-program name))
+
+(defun parse/program-id (_id _div _stop1
+                         _pid _stop2 program-id _stop3
+                         body)
+  "Action for PROGRAM-ID DIVISION: return (:program-id <name> :clauses <list>).
+The identification division clauses (AUTHOR, INSTALLATION, etc.) are stored
+under :clauses so the plist structure remains valid."
+  (declare (ignore _id _div _pid _stop1 _stop2 _stop3))
+  (list :program-id program-id :clauses (ensure-list body)))
+
+(defun parse/program-file (c1* id-div c2* env c3* dd c4* proc c5* _end-prog c6*)
+  "Action for a complete PROGRAM-ID routine.
+Extract statements from PROCEDURE DIVISION and build a :program AST node."
+  (declare (ignore _end-prog))
+  (let ((program-name (safe-getf (ensure-list id-div) :program-id))
+        (statements (when (and (listp proc) (eq (first proc) :proc-statements))
+                      (rest proc))))
+    (list :program
+          :comments (list :before-id c1*
+                          :before-env c2*
+                          :before-dd c3*
+                          :before-proc c4*
+                          :after-proc c5*
+                          :trailer c6*)
+          :program-id program-name
+          :identification id-div
+          :environment env
+          :data dd
+          :statements statements)))
 
 (defun parse/class-id (_id _div _stop1
                        _cid _stop2 class-id _stop3
@@ -454,6 +487,10 @@ The trailing period is consumed by @code{statement-item} like other statements."
 (defun parse/call (_call target)
   (declare (ignore _call))
   (list :call :target target :bank nil))
+
+(defun parse/call-returning (_call target _returning variable)
+  (declare (ignore _call _returning))
+  (list :call :target target :bank nil :returning variable))
 
 (defun parse/call-service (_call _service target)
   "CALL SERVICE target. — service-dispatch call; bank must be specified at link time."
@@ -747,12 +784,13 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           eightbol-routine)
 
          (eightbol-routine
-          (comments* identification-division
+          (comments* program-identification-division
                      comments* environment-division
-                     comment* data-division
+                     comments* data-division
                      comments* procedure-division
+                     comments* end-program-clause
                      comments*
-                     (lambda () (error "Top-level routine support not implemented"))))
+                     #'parse/program-file))
          
          (eightbol-class-data-definition
           (comments* class-id |.| symbol |.|
@@ -785,10 +823,8 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          (comments* ()
                     eightbol-comment
                     (comments* eightbol-comment (lambda (cs c) (append cs c) )))
-         (eightbol-comment
-          (eightbol-comment bareword (lambda (c b) (append c b)))
-          (eightbol-comment symbol (lambda (c s) (append c s)))
-          (comment (lambda (c) (list :comment c))))
+          (eightbol-comment
+           (comment (lambda (c) (list :comment c))))
          
          ;; id / identification interchangeable
          (id* (id (constantly 'identification)) (identification #'identity))
@@ -858,6 +894,18 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           ()
           (environment division |.|)
           (environment division |.| configuration-section))
+
+         (program-identification-division
+          (id* division |.|
+               program-id |.| symbol |.|
+               identification-division-clauses
+               #'parse/program-id))
+         
+         (end-program-clause
+          (end program end-program-name |.| #'parse/end-program)
+          ())
+         
+         (end-program-name symbol)
 
          (configuration-section
           (configuration section |.|
@@ -1073,6 +1121,10 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                      identification-division-clauses))
 
          ;; PROCEDURE DIVISION inside a method
+         (procedure-division
+          (procedure division |.| statement-sequence
+                     #'parse/procedure-statements))
+
          (procedure-statements
           (procedure division |.| statement-sequence
                      #'parse/procedure-statements))
@@ -1123,7 +1175,10 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                      (lambda (slot _1 subscript _2 _of _the class object)
                        (declare (ignore _1 _2 _of _the))
                        (list :of (list :subscript slot subscript) object class)))
-          (data-name |(| subscript |)| #'parse/identifier-subscript))
+          (data-name |(| subscript |)| #'parse/identifier-subscript)
+          (|[| expression |]| (lambda (_lb expr _rb)
+                                (declare (ignore _lb _rb))
+                                (list :deref expr))))
 
          (subscript identifier integer)
          
@@ -1294,7 +1349,8 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
                   (list :call :target identifier :bank bank-id :library nil
                               :returning nil :using nil)))
           ;; CALL Target. — local jsr
-          (call identifier #'parse/call))
+          (call identifier #'parse/call)
+          (call identifier returning identifier #'parse/call-returning))
          
          (cancel-statement (cancel identifier) (cancel literal))
          
@@ -1454,41 +1510,41 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (string string-operand delimited by string-delimiter into string-operand #'parse/string-blt-or-unsupported)
           (string string-operand delimited by string-delimiter into string-operand
                   length expression #'parse/string-blt-length-or-unsupported))
-
+         
          (subtract-statement
           (subtract expression from expression giving identifier #'parse/subtract-giving)
           (subtract expression from identifier #'parse/subtract-from))
-
+         
          (unstring-statement
           (unstring identifier delimited by expression
                     into identifier #'parse/unstring-unsupported))))
 
 ;;; Lexer → token stream adapter
-(defun stream-code (lexer-tokens)
-  "Return a YACC lexer thunk that pops tokens from LEXER-TOKENS list.
+      (defun stream-code (lexer-tokens)
+        "Return a YACC lexer thunk that pops tokens from LEXER-TOKENS list.
 The lexval passed to parser action functions is (second token), i.e. the raw
 parsed value (string, number, etc.) — NOT the full token plist.
 As a side effect, each consumed token's source location is stored in
 *CURRENT-TOKEN-LOCATION* for use in error reporting and assembly comments."
-  (let ((*current-token-location*
-          (or *current-token-location*
-              (list :source-file "?"))))
-    (lambda ()
-      (loop
-         (unless lexer-tokens (return (values nil nil)))
-         (let ((token (pop lexer-tokens)))
-           (when token
-             (when-let (source (getf token :source-file))
-               (setf (getf *current-token-location* :source-file) source))
-             (when-let (line (getf token :source-line))
-               (setf (getf *current-token-location* :source-line) line))
-             (when-let (seq (getf token :source-sequence))
-               (setf (getf *current-token-location* :source-sequence) seq))
-             (when-let (text (getf token :source-line-text))
-               (setf (getf *current-token-location* :source-line-text) text)))
+        (let ((*current-token-location*
+                (or *current-token-location*
+                    (list :source-file "?"))))
+          (lambda ()
+            (loop
+               (unless lexer-tokens (return (values nil nil)))
+               (let ((token (pop lexer-tokens)))
+                 (when token
+                   (when-let (source (getf token :source-file))
+                     (setf (getf *current-token-location* :source-file) source))
+                   (when-let (line (getf token :source-line))
+                     (setf (getf *current-token-location* :source-line) line))
+                   (when-let (seq (getf token :source-sequence))
+                     (setf (getf *current-token-location* :source-sequence) seq))
+                   (when-let (text (getf token :source-line-text))
+                     (setf (getf *current-token-location* :source-line-text) text)))
            (return (values (first token) (second token))))))))
 
-(defun %copybook-path-candidates (dir copybook library)
+      (defun %copybook-path-candidates (dir copybook library)
   "Return ordered pathnames to probe for COPYBOOK under DIR (library path first)."
   (let ((dir (uiop:ensure-directory-pathname dir)))
     (if library
@@ -1605,3 +1661,4 @@ sequence number."
                                 (yacc:yacc-parse-error-terminal c)
                                 (yacc:yacc-parse-error-value c)
                                 (yacc:yacc-parse-error-expected-terminals c)))))))
+

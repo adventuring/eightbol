@@ -1,57 +1,13 @@
-;; src/eightbol-compile.lisp — top-level EIGHTBOL compilation pipeline
+;;; src/eightbol-compile.lisp — top-level EIGHTBOL compilation pipeline
+;;;; Copyright © 2026 Interworldly Adventuring, LLC
 ;;
-;; compile-eightbol-class orchestrates:
+;; compile-eightbol orchestrates:
 ;;   1. Lex (with COPY expansion) → YACC parse → AST plist
 ;;   2. Write AST sexp to  Object/Classes/{ClassName}.eightbol
 ;;   3. For each target CPU: write assembly to
 ;;      Source/Generated/Classes/{cpu}/{ClassName}Class.s
 ;;      where {cpu} uses case-preserving names (6502, 65c02, HuC6280, cp1610, RP2A03, Z80, 65c816, m68k, i286, etc.)
 (in-package :eightbol)
-
-;;; Case-preserving display labels for UI (help text, error messages).
-;;; Input matching is case-insensitive (string-equal); display preserves
-;;; intended case.
-;;;
-;;; After changing +cpu-display-names+ or +supported-cpus+, rebuild
-;;; bin/skyline-tool (make bin/skyline-tool) so the buildapp image matches;
-;;; otherwise alexandria:define-constant may signal when sources are
-;;; recompiled against an older embedded value.
-(define-constant +cpu-display-names+
-    '((:6502 . "6502")
-      (:65c02 . "65c02")
-      (:65c816 . "65c816")
-      (:cp1610 . "cp1610")
-      (:huc6280 . "HuC6280")
-      (:rp2a03 . "RP2A03")
-      (:z80 . "Z80")
-      (:sm83 . "SM83")
-      (:m6800 . "m6800")
-      (:m68k . "m68k")
-      (:i286 . "i286")
-      (:arm7 . "ARM7")
-      (:f8 . "F8"))
-  :test 'equalp
-  :documentation
-  "Alist of CPU keyword to case-preserving directory / UI label string.")
-
-;;; All supported CPU keywords, in canonical order (see +cpu-display-names+).
-(define-constant +supported-cpus+
-    (mapcar #'first +cpu-display-names+)
-  :test 'equal
-  :documentation
-  "List of supported CPU keywords in canonical order; derived from +cpu-display-names+.")
-
-(defvar *cpu* nil
-  "Current target CPU keyword; bound during compile-to-assembly.")
-
-(defun cpu-display-name (&optional (cpu *cpu*))
-  "Return the case-preserving UI label for CPU."
-  (rest (assoc cpu +cpu-display-names+)))
-
-(defun cpu-directory-name (&optional (cpu *cpu*))
-  "Return the canonical output directory component for a CPU keyword.
-Uses display names: cp1610, 65c02, RP2A03, m68k, i286, Z80, etc."
-  (cpu-display-name cpu))
 
 (defun parse-cli-cpu-arg (display-string)
   "Parse CLI @code{-m} DISPLAY-STRING to CPU keyword or @code{:all}.
@@ -76,13 +32,13 @@ Argument after @code{-m} (e.g. @code{\"6502\"}, @code{\"all\"}).
   "Return the default list of copybook search paths relative to ROOT-DIRECTORY.
 Path: Source/Generated/Classes/{cpu-display-name}. CPU defaults to @code{*cpu*}, or
 @code{:6502} when @code{*cpu*} is unbound (so paths never contain a NIL directory
-component when @code{compile-eightbol-class} runs outside @code{compile-to-assembly}).
+component when @code{compile-eightbol} runs outside @code{compile-to-assembly}).
 
 @table @asis
 @item ROOT-DIRECTORY
 Project root; merged with the relative @code{Source/Generated/Classes/…} path.
 @item CPU
-Optional target ISA keyword (e.g. @code{:6502}); passed by @code{compile-eightbol-class}
+Optional target ISA keyword (e.g. @code{:6502}); passed by @code{compile-eightbol}
 as @code{(first cpus)} so the copybook directory matches the first backend target.
 @end table
 
@@ -123,7 +79,7 @@ as for @code{default-copybook-paths}.
 @end table
 
 @subsection Outputs
-Ordered list of directory pathnames suitable for @code{compile-eightbol-class}
+Ordered list of directory pathnames suitable for @code{compile-eightbol}
 @code{:copybook-paths}."
   (let ((root (uiop:ensure-directory-pathname root-directory))
         (ordered '()))
@@ -133,8 +89,6 @@ Ordered list of directory pathnames suitable for @code{compile-eightbol-class}
                  (when (probe-file d)
                    (unless (member d ordered :test #'equalp)
                      (setf ordered (append ordered (list d)))))))))
-      (dolist (port '("7800" "Lynx" "Intv" "5200" "VCS800"))
-        (add (make-pathname :directory (list :relative "Source" "Generated" port "Classes"))))
       (let ((gen (merge-pathnames #p"Source/Generated/" root)))
         (when (probe-file gen)
           (dolist (mach (uiop:directory* (merge-pathnames #p"*/" gen)))
@@ -180,12 +134,12 @@ rebuilding the compiler triggers recompilation of all .s outputs."
                 (mapcar #'namestring targets)
                 (mapcar #'namestring deps))))))
 
-(defun compile-eightbol-class (input-files
-			 &key (cpus '(:6502))
-			      copybook-paths
-			      (root-directory (truename #p"."))
-			      output-file
-			      ast-output-file)
+(defun compile-eightbol (input-files
+		     &key (cpus '(:6502))
+			copybook-paths
+			(root-directory (truename #p"."))
+			output-file
+			ast-output-file)
   "Compile INPUT-FILES (.cob pathnames): one file or a list.
 
 Skyline-Tool invokes this via APPLY with a single path string; normalize that
@@ -201,120 +155,153 @@ to a one-element list so DOLIST does not iterate characters.
    3. Write {root}/Source/Generated/Classes/{ClassName}.d for Makefile includes
 
 Returns the AST plist."
-  (setf input-files
-        (cond
-          ((null input-files)
-           (error "EIGHTBOL: INPUT-FILES is empty"))
-          ((and (consp input-files)
-                (every (lambda (x) (or (pathnamep x) (stringp x))) input-files))
-           (mapcar (lambda (x) (if (pathnamep x) x (pathname x))) input-files))
-          ((or (pathnamep input-files) (stringp input-files))
-           (list (if (pathnamep input-files) input-files (pathname input-files))))
-          (t
-           (error "EIGHTBOL: INPUT-FILES must be a pathname designator or a proper ~
-list of pathname designators, got ~s"
-                  input-files))))
+  (restart-case
+      (setf input-files
+            (cond
+              ((null input-files)
+               (error "EIGHTBOL: INPUT-FILES is empty"))
+              ((and (consp input-files)
+                    (every (lambda (x) (or (pathnamep x) (stringp x))) input-files))
+               (mapcar (lambda (x) (if (pathnamep x) x (pathname x))) input-files))
+              ((or (pathnamep input-files) (stringp input-files))
+               (list (if (pathnamep input-files) input-files (pathname input-files))))
+              (t
+               (error "EIGHTBOL: INPUT-FILES must be a pathname designator or a proper ~
+  list of pathname designators, got ~s"
+                      input-files))))
+    (retry-compile ()
+      :report "Retry the entire compilation process from the beginning."
+      (compile-eightbol input-files
+                        :cpus cpus
+                        :copybook-paths copybook-paths
+                        :root-directory root-directory
+                        :output-file output-file
+                        :ast-output-file ast-output-file)))
   (let ((*eightbol-root-directory* root-directory)
         (*copybook-paths* (or copybook-paths
                               (default-copybook-paths root-directory (first cpus))))
         (*copybook-dependencies* ())
         (optimum))
-    (dolist (input-file input-files)
-      (let ((ast (with-open-file (stream input-file :direction :input)
-                   (let* ((*source-file-pathname* (enough-namestring input-file))
-                          (*current-token-location* (list :source-file *source-file-pathname*
-                                                          :source-line nil
-                                                          :source-sequence nil)))
-                     (parse-eightbol stream)))))
-        (unless (and (listp ast)
-                     (every #'listp ast)
-                     (every (lambda (section)
-                              (eq (first section) :program))
-                            ast))
-          (error "EIGHTBOL: parse of ~{~a~^, ~} did not yield a Program node~%~s"
-                 input-files ast))
-        (appendf optimum (remove-if #'null (mapcar #'optimize-ast ast)))))
-    (let ((class-id (ast-class-id optimum)))
-      ;;  Phase 2: write AST 
-      (let ((ast-path (if ast-output-file
-			  (merge-pathnames (pathname ast-output-file) root-directory)
-			  (merge-pathnames
-			   (make-pathname
-			    :directory '(:relative "Object" "Classes")
-			    :name class-id :type "eightbol")
-			   root-directory))))
-        (ensure-directories-exist ast-path)
-        (with-open-file (out ast-path
-                             :direction :output
-                             :if-exists :supersede
-                             :if-does-not-exist :create)
-          (write-ast optimum out))
-        (format t "~2&EIGHTBOL: wrote AST to ~a" (enough-namestring ast-path)))
-      ;;  Phase 3: backends 
-      ;; Step CPU from (REST CPU-LIST): (FIRST CPU-LIST) would repeat the first
-      ;; CPU and skip the last (e.g. F8 never emitted in ALL-BACKENDS-ONE-FIXTURE).
-      (dolist (cpu cpus)
-        (handler-case
-            (let ((asm-path (if (and (eql cpu (first cpus)) output-file)
-                                (pathname output-file)
-                                (merge-pathnames
-                                 (make-pathname
-                                  :directory (list :relative "Source" "Generated" "Classes"
-                                                   (cpu-directory-name cpu))
-                                  :name (concatenate 'string (pascal-case class-id) "Class") :type "s")
-                                 root-directory))))
-              (ensure-directories-exist asm-path)
-              (with-open-file (out asm-path
+    (restart-case
+        (progn
+          (dolist (input-file input-files)
+            (let ((ast (with-open-file (stream input-file :direction :input)
+                         (let* ((*source-file-pathname* (enough-namestring input-file))
+                                (*current-token-location* (list :source-file *source-file-pathname*
+                                                                :source-line nil
+                                                                :source-sequence nil)))
+                           (parse-eightbol stream)))))
+              (unless (and (listp ast)
+                           (every #'listp ast)
+                           (every (lambda (section)
+                                    (eq (first section) :program))
+                                  ast))
+                (error "EIGHTBOL: parse of ~{~a~^, ~} did not yield a Program node~%~s"
+                       input-files ast))
+              (appendf optimum (remove-if #'null (mapcar #'optimize-ast ast)))))
+          (let ((*class-id* (ast-class-id optimum))
+                (*program-id* (safe-getf (rest optimum) :program-id)))
+            ;;  Phase 2: write AST 
+            (let ((ast-path (or ast-output-file
+                                (make-pathname
+                                 :directory (if *class-id*
+                                                '(:relative "Object" "Classes")
+                                                '(:relative "Object" "Eightbol"))
+                                 :name (or *class-id* *program-id*) :type "eightbol"))))
+              (ensure-directories-exist ast-path)
+              (with-open-file (out ast-path
                                    :direction :output
                                    :if-exists :supersede
                                    :if-does-not-exist :create)
-                (dolist (module optimum)
-                  (compile-to-assembly module cpu out)))
-              (format t "~2&EIGHTBOL: wrote ~a assembly to ~a"
-                      (cpu-display-name cpu) (enough-namestring asm-path)))
-          (error (e)
-            (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
-                    class-id (cpu-display-name cpu) e)
-            (error e))))
-      ;; ;;  Phase 4: dependency file for Make 
-      ;; (write-copybook-deps (or primary-input-file (first input-files))
-      ;;                      class-id cpus root-directory output-file
-      ;;                      *copybook-dependencies*)
-      optimum)))
+                (write-ast optimum out))
+              (format t "~2&EIGHTBOL: wrote AST to ~a" (enough-namestring ast-path)))
+            ;;  Phase 3: backends 
+            ;; Step CPU from (REST CPU-LIST): (FIRST CPU-LIST) would repeat the first
+            ;; CPU and skip the last (e.g. F8 never emitted in ALL-BACKENDS-ONE-FIXTURE).
+            (dolist (cpu cpus)
+              (handler-case
+                  (let ((asm-path (if (and (eql cpu (first cpus)) output-file)
+                                      (pathname output-file)
+                                      (merge-pathnames
+                                       (make-pathname
+                                        :directory (list :relative "Source" "Generated" "Classes"
+                                                         (cpu-directory-name cpu))
+                                        :name
+                                        (if *class-id*
+                                            (concatenate 'string (pascal-case *class-id*) "Class")
+                                            (pascal-case *program-id*))
+                                        :type "s")
+                                       root-directory))))
+                    (ensure-directories-exist asm-path)
+                    (with-open-file (out asm-path
+                                         :direction :output
+                                         :if-exists :supersede
+                                         :if-does-not-exist :create)
+                      (dolist (module optimum)
+                        (compile-to-assembly module cpu out)))
+                    (format t "~2&EIGHTBOL: wrote ~a assembly to ~a"
+                            (cpu-display-name cpu) (enough-namestring asm-path)))
+                (error (e)
+                  (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
+                          (or *class-id* *program-id* "?") (cpu-display-name cpu) e)
+                  (error e))))
+            ;; ;;  Phase 4: dependency file for Make 
+            ;; (write-copybook-deps (or primary-input-file (first input-files))
+            ;;                      class-id cpus root-directory output-file
+            ;;                      *copybook-dependencies*)
+            optimum))
+      (retry-compile ()
+        :report "Retry the entire compilation process from the beginning."
+        (compile-eightbol input-files
+                          :cpus cpus
+                          :copybook-paths copybook-paths
+                          :root-directory root-directory
+                          :output-file output-file
+                          :ast-output-file ast-output-file)))))
 
 (defun compile-to-assembly-with-ast-passes (ast cpu output-stream
                                             &key (validate-termination t))
   "Run optimize-ast (routine AST optimizations), optional VALIDATE-EIGHTBOL-PROGRAM, then compile.
-Use when AST comes from parse only (e.g. unit tests). `compile-eightbol-class`
+Use when AST comes from parse only (e.g. unit tests). `compile-eightbol`
 already calls optimize-ast before `compile-to-assembly`.
 
 When VALIDATE-TERMINATION is NIL, skip @code{validate-method-terminations} (e.g. synthetic ASTs
 with non-terminating tails for tail-call layout tests)."
-  (let ((opt (optimize-ast ast)))
-    (validate-eightbol-program opt :validate-termination validate-termination)
-    (compile-to-assembly opt cpu output-stream)))
+  (dolist (module (remove-if #'null
+                             (mapcar #'optimize-ast
+                                     (if (and (listp ast)
+                                              (listp (first ast))
+                                              (eq (first (first ast)) :program))
+                                         ast
+                                         (list ast)))))
+    (validate-eightbol-program module :validate-termination validate-termination)
+    (compile-to-assembly module cpu output-stream))
+  (format output-stream "~%"))
 
 (defun parse-eightbol-string-for-codegen (string &optional (pathname "<String>"))
   "Parse STRING and apply optimize-ast so the result matches codegen input."
   (optimize-ast (parse-eightbol-string string pathname)))
 
-(defun compile-eightbol-class-from-ast
-    (ast
-     &key (cpus +supported-cpus+)
-          output-file)
+(defun compile-eightbol-from-ast (ast &key (cpus +supported-cpus+))
   "Re-compile from a previously-parsed (or loaded) AST plist.
 Writes only assembly output (no AST write). Applies optimize-ast so the same
-routine AST passes run as in `compile-eightbol-class`."
+routine AST passes run as in `compile-eightbol`."
   (unless (and (listp ast) (eq (first ast) :program))
     (error "EIGHTBOL: not a :program AST node"))
   (setf ast (optimize-ast ast))
   (let ((class-id (ast-class-id ast)))
     (dolist (cpu cpus)
       (handler-case
-          (let ((asm-path (make-pathname
-                           :directory (list :relative "Source" "Generated" "Classes"
-                                            (cpu-directory-name cpu))
-                           :name (concatenate 'string class-id "Class") :type "s")))
+          (let ((asm-path (if class-id
+                              (make-pathname
+                               :directory (list :relative "Source" "Generated" "Classes"
+                                                (cpu-directory-name cpu))
+                               :name (concatenate 'string class-id "Class") :type "s")
+                              
+                              (make-pathname
+                               :directory (list :relative "Source" "Generated" "MapsRC"
+                                                (cpu-directory-name cpu))
+                               :name (ast-program-id ast) :type "s"))))
             (ensure-directories-exist asm-path)
             (with-open-file (out asm-path
                                  :direction :output
@@ -340,7 +327,7 @@ routine AST passes run as in `compile-eightbol-class`."
     (if (member method-id (list "Destroy" "Class-P") :test #'string-equal)
         (return-from method-class "Basic-Object")
         (when (equal "Basic-Object" class-id)
-	(error "~s is not a method of Basic-Object" method-id)))
+          (return-from method-class "Basic-Object")))
     (unless (gethash class-id *parent-classes*)
       (load-classes))
     (let ((consider-class class-id)
@@ -354,11 +341,7 @@ routine AST passes run as in `compile-eightbol-class`."
          (when (or (null consider-class) (equal consider-class "BasicObject"))
            (if most-general-class
                (return-from method-class most-general-class)
-               (error "~s is not a method of class ~s, nor its parent classes up to ~s
-
-Seen: ~{~s~^, ~}"
-	            method-id class-id consider-class
-                      (sort (mapcar #'header-case (flatten seen)) #'string<))))))))
+                (return-from method-class class-id)))))))
 
 (defun slot-class (object slot-id
                    &optional (class-id
@@ -379,12 +362,19 @@ Seen: ~{~s~^, ~}"
                      (and origin (string-equal origin (header-case consider-class))))))
          (return-from slot-class (header-case consider-class)))
        (setf consider-class (gethash consider-class *parent-classes*))
-       (when (or (null consider-class)
-                 (equal consider-class "Basic-Object"))
-         (if (string-equal class-id (oops-class-of object))
-	   (error "~s is not a slot of class ~s, nor its parent classes up to ~s"
-		slot-id class-id consider-class)
-             (slot-class object slot-id (oops-class-of object)))))))
+        (when (or (null consider-class)
+                  (equal consider-class "Basic-Object"))
+          (if (string-equal class-id (oops-class-of object))
+              ;; When the hierarchy walk fails, check if the slot exists
+              ;; in ANY class via *slot-table* origin — the slot may be
+              ;; defined in a derived class that the walk never reaches.
+              (if-let ((origin (when *slot-table*
+                                (gethash (cobol-slot-table-name-key slot-id)
+                                         *slot-table*))))
+                  (return-from slot-class (header-case origin))
+                  (error "~s is not a slot of class ~s, nor its parent classes up to ~s"
+                         slot-id class-id consider-class))
+              (slot-class object slot-id (oops-class-of object)))))))
 
 (defun load-classes ()
   (when (plusp (hash-table-count *parent-classes*))

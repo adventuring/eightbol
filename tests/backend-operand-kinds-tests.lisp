@@ -58,8 +58,7 @@
         ((:z80) (eightbol::compile-z80-method s method class-id slot-table type-table const-table
                                               pic-size-table pic-width-table))
         ((:cp1610) (eightbol::compile-cp1610-method method class-id))
-        ((:sm83) (eightbol::compile-sm83-method s method class-id slot-table type-table const-table
-                                                pic-size-table pic-width-table))
+        ((:sm83) (eightbol::compile-sm83-method method))
         ((:m68k) (eightbol::compile-m68k-method s method class-id slot-table type-table const-table
                                                 pic-size-table pic-width-table))
         ((:i286) (eightbol::compile-i286-method s method class-id slot-table type-table const-table

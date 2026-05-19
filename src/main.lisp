@@ -155,7 +155,7 @@ when available."
              (error 'input-file-not-found :path input-file))
            (format t "~&Compiling ~a to ~a" input-file
                    (or output-file "standard output"))
-           (compile-eightbol-class (list input-file)
+           (compile-eightbol (list input-file)
                                    :cpus cpus
                                    :copybook-paths (when copybook-paths copybook-paths)
                                    :output-file (when output-file (pathname output-file))

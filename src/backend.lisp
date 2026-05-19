@@ -1,6 +1,53 @@
 ;; src/backend.lisp — generic code-generation interface
 (in-package :eightbol)
 
+;;; Register expression caching (generic interface)
+(defstruct register-cache
+  "Generic register cache for any CPU. Each backend may bind *register-cache* to an instance."
+  expressions ;; alist of (register . expression-ast) pairs
+  available-registers ;; list of register names (e.g., (:a :x :y) for 6502)
+  usage-list    ;; list of registers in most-recently-used order (front = most recent)
+  )
+
+(defvar *register-cache* nil
+  "Current register cache instance; bound per-method emission.")
+
+(defun make-register-cache-for-registers (registers)
+  "Create a register cache for the named REGISTERS (e.g. '(:a :x :y))."
+  (make-register-cache
+   :expressions '()
+   :available-registers registers
+   :usage-list registers))
+
+(defun register-cached-value (reg)
+  "Return the cached AST for REG, or NIL if not cached or unknown."
+  (cdr (assoc reg (register-cache-expressions *register-cache*))))
+
+(defun (setf register-cached-value) (value reg)
+  "Cache VALUE for REG in the current *register-cache*."
+  (let ((entry (assoc reg (register-cache-expressions *register-cache*))))
+    (if entry
+        (setf (cdr entry) value)
+        (push (cons reg value) (register-cache-expressions *register-cache*)))))
+
+(defmacro with-register-cache ((registers) &body body)
+  "Bind *REGISTER-CACHE* to a fresh cache for REGISTERS (list of register names)."
+  `(let ((*register-cache* (make-register-cache
+                            :expressions '()
+                            :available-registers ,registers
+                            :usage-list ,registers)))
+     ,@body))
+
+(defun allocate-register-for-expression (expression &optional avoid-registers)
+  "Return a register name that already holds EXPRESSION, or one we may allocate.
+If AVOID-REGISTERS is provided, prefer other registers over those in the list."
+  (declare (ignore avoid-registers))
+  (let ((cached (register-cached-value expression)))
+    (if cached
+        cached
+        ;; TODO: implement LRU or next-free allocation
+        (first (register-cache-available-registers *register-cache*)))))
+
 ;;; Public generic function
 
 (defgeneric compile-to-assembly (ast cpu output-stream)
@@ -53,12 +100,12 @@ Unqualified suffix string, or NIL."
         (subseq name (length pref))))))
 
 (defvar *eightbol-root-directory* nil
-  "Root directory of the project; bound during compile-eightbol-class.
+  "Root directory of the project; bound during compile-eightbol.
 Used by backends to locate generated copybook files.")
 
 ;;; Dynamic bindings for copybook tables (bound during compilation)
-(defvar *output-stream* nil "Assembly output stream; bound during compile-to-assembly.")
 (defvar *class-id* nil)
+(defvar *program-id* nil)
 
 (define-constant +object-reference-storage-width+ 2
   :test 'eql
@@ -128,9 +175,9 @@ When ROOT-DIRECTORY is non-NIL (unit tests), paths are merged from it instead of
         (with-open-file (stream enums-path :direction :input)
           (loop for line = (read-line stream nil nil) while line do
             (cl-ppcre:register-groups-bind (sym hex)
-                ("^\\s*\\b(Bank[-A-Za-z0-9_]+)\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
-              (when (and sym hex)
-                (push (cons (parse-integer hex :radix 16) sym) bank-num->symbol))))))
+                                           ("^\\s*\\b(Bank[-A-Za-z0-9_]+)\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
+                                           (when (and sym hex)
+                                             (push (cons (parse-integer hex :radix 16) sym) bank-num->symbol))))))
       ;; Scan bank .s files for BANK = $NN and .Dispatch ServiceXxx, Label
       (when (and (probe-file banks-dir) bank-num->symbol)
         (setf bank-num->symbol (nreverse bank-num->symbol))
@@ -148,15 +195,15 @@ When ROOT-DIRECTORY is non-NIL (unit tests), paths are merged from it instead of
                           (with-open-file (stream path :direction :input)
                             (loop for line = (read-line stream nil nil) while line do
                               (cl-ppcre:register-groups-bind (hex)
-                                  ("^\\s*BANK\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
-                                (when hex
-                                  (setf bank-num-from-file (parse-integer hex :radix 16))))
+                                                             ("^\\s*BANK\\s*=\\s*\\$([0-9a-fA-F]+)\\b" line)
+                                                             (when hex
+                                                               (setf bank-num-from-file (parse-integer hex :radix 16))))
                               (cl-ppcre:register-groups-bind (service)
-                                  ("^\\s*\\.Dispatch\\s+(Service[-A-Za-z0-9_]+)\\s*," line)
-                                (let* ((bank-num (or bank-num-from-file n))
-                                       (bank-sym (cdr (assoc bank-num bank-num->symbol-alist))))
-                                  (when (and service bank-sym)
-                                    (setf (gethash service *service-bank-lut*) bank-sym))))))))))));
+                                                             ("^\\s*\\.Dispatch\\s+(Service[-A-Za-z0-9_]+)\\s*," line)
+                                                             (let* ((bank-num (or bank-num-from-file n))
+                                                                    (bank-sym (cdr (assoc bank-num bank-num->symbol-alist))))
+                                                               (when (and service bank-sym)
+                                                                 (setf (gethash service *service-bank-lut*) bank-sym))))))))))));
       (when (and (zerop (hash-table-count *service-bank-lut*))
                  (probe-file banks-dir))
         (error "EIGHTBOL: empty service:bank LUT for machine"))
@@ -197,9 +244,9 @@ Boolean."
              (not (cl-ppcre:scan "(?i)(?:PIC|PICTURE)\\s+S?X" pic-rest))
              (not (cl-ppcre:scan "(?i)(?:PIC|PICTURE)\\s+S?9\\s*\\(" pic-rest)))
     (cl-ppcre:register-groups-bind (sign run)
-        ("(?i)(?:PIC|PICTURE)\\s+(S?)(9+)" pic-rest)
-      (declare (ignore sign))
-      (and run (= (length run) 1)))))
+                                   ("(?i)(?:PIC|PICTURE)\\s+(S?)(9+)" pic-rest)
+                                   (declare (ignore sign))
+                                   (and run (= (length run) 1)))))
 
 (defun %pic-strip-leading-picture-keyword (pic-str)
   "Strip leading @code{PIC}/@code{PICTURE} keyword from PIC-STR when present; trim spaces."
@@ -223,9 +270,9 @@ Ignores @code{.}, @code{V}, sign @code{S}, and other COBOL picture punctuation."
                           (return-from %pic-count-9-x-slots total))
                         (incf total (parse-integer (subseq segment (+ i 2) close)))
                         (setf i (1+ close)))
-                (progn
-                         (incf i)
-                         (incf total 1))))
+                      (progn
+                        (incf i)
+                        (incf total 1))))
                  (t
                   (incf i)))))
     total))
@@ -294,6 +341,7 @@ Non-negative integer."
           (%pic-count-bit-slots (subseq s (1+ radix)))
           0))))
 
+;; FIXME: Update pic-width calculation for PIC with commas
 (defun pic-width-in-bytes (pic-str)
   "Return storage width in bytes for PIC-STR, combining @code{9}/@code{X}-slot (2 per byte)
 and @code{1}-slot (8 per byte) counts. Formula: @code{ceil(9-slots/2) + ceil(1-slots/8)}.
@@ -371,9 +419,9 @@ class design notes."
   (or
    ;; PIC(99) / PICTURE(9) parenthesized digit count (AssetIDs.cpy style)
    (cl-ppcre:register-groups-bind (n)
-       ("(?i)(?:PIC|PICTURE)\\s*\\(\\s*(\\d+)\\s*\\)" pic-rest)
-     (let ((d (parse-integer n)))
-       (max 1 (ceiling d 2))))
+                                  ("(?i)(?:PIC|PICTURE)\\s*\\(\\s*(\\d+)\\s*\\)" pic-rest)
+                                  (let ((d (parse-integer n)))
+                                    (max 1 (ceiling d 2))))
    ;; Universal: count 9/x and 1/1(n) slots from stripped PIC string
    (let ((s (and (stringp pic-rest) (%pic-strip-leading-picture-keyword pic-rest))))
      (when (and s (plusp (length s)))
@@ -465,13 +513,13 @@ Class name string (e.g. @code{\"Course\"}), or @code{*CLASS-ID*} for Self."
              (when *type-table*
                (or (gethash name *type-table*)
                    (gethash (cobol-slot-table-name-key name) *type-table*)))
-              (when (or (string-equal name "Current-Course")
-                         (string-equal name "CurrentCourse"))
-                "Course")
-              (when (or (string-equal name "Current-Actor")
-                         (string-equal name "CurrentActor"))
-                "Actor")
-              (error "Unable to find reference class for ~a: ~s" symbol var)))))))
+             (when (or (string-equal name "Current-Course")
+                       (string-equal name "CurrentCourse"))
+               "Course")
+             (when (or (string-equal name "Current-Actor")
+                       (string-equal name "CurrentActor"))
+               "Actor")
+             (error "Unable to find reference class for ~a: ~s" symbol var)))))))
 
 (defun slot-table-origin-lookup (name symbol)
   "Resolve copybook origin for NAME using canonical key, raw NAME, then class-qualified strip.
@@ -662,7 +710,7 @@ Looks up @code{*CONST-TABLE*} by trimmed name, canonical slot key, and by stripp
                                         (cobol-strip-class-copybook-prefix trimmed))))))
     (dolist (key candidates)
       (when-let (val (gethash key *const-table*))
-        (return-from %const-table-resolve (values val key))))
+                (return-from %const-table-resolve (values val key))))
     (values nil nil)))
 
 (defun constant-value (name)
@@ -729,7 +777,7 @@ Returns NIL for DECIMAL, object refs, pointers, and non-variables."
     ((eql :zero expression) t)
     (t (let ((token (slot-token expression)))
          (when-let (var (gethash token *working-storage*))
-           (not (eql :decimal (getf var :usage nil))))))))
+                   (not (eql :decimal (getf var :usage nil))))))))
 
 (defun operand-signed-p (expression)
   (cond
@@ -741,39 +789,41 @@ Returns NIL for DECIMAL, object refs, pointers, and non-variables."
     ((eql :zero expression) nil)
     (t (let ((token (slot-token expression)))
          (when-let (var (gethash token *working-storage*))
-           (getf var :signed nil))))))
+                   (getf var :signed nil))))))
+
+(defun usage-bcd-p (expression) (operand-bcd-p expression))
 
 (defun operand-bcd-p (expression)
   (cond
     ((numberp expression) nil)
     ((eql :zero expression) nil)
     (t (let ((token (slot-token expression)))
-         (when-let (var (gethash token *working-storage*))
-           (eql :decimal (getf var :usage nil)))))))
-
-(defun usage-bcd-p (expression) (operand-bcd-p expression))
+         (when-let (var (gethash token eightbol::*working-storage*))
+                   (eql :decimal (getf var :usage nil)))))))
 
 (defun pic-length-bytes (pic)
   (ceiling (if (find #\( pic)
                (cl-ppcre:register-groups-bind (count) ("[9X]\\(([0-9]+)\\)" pic)
-                 (parse-integer count))
+                                              (parse-integer count))
                (count-if (lambda (ch) (find ch "9X")) pic))
            2))
 
 (defun slot-token (expression)
-  (cond ((and (listp expression) (eql :of (first expression)))
-         (list :of (second expression)
-               (if (< 3 (length expression))
-                   (fourth expression)
-                   (slot-class (third expression) (second expression)))))
-        ((and (listp expression) (eql :on (first expression)))
-         (list :of (second expression)
-               (if (> 3 (length expression))
-                   (fourth expression)
-                   (slot-class (third expression) (second expression)))))
-        ((and (listp expression) (eql :subscript (first expression)))
-         (slot-token (second expression)))
-        (t expression)))
+  (flet ((slot-op-p (expr op)
+           (and (listp expr)
+                (symbolp (first expr))
+                (string-equal (symbol-name (first expr)) op))))
+    (cond ((slot-op-p expression "OF")
+           (list :of (second expression)
+                 (if (< 3 (length expression))
+                     (fourth expression)
+                     (slot-class (third expression) (second expression)))))
+          ((slot-op-p expression "ON")
+           (list :of (second expression)
+                 (slot-class (third expression) (second expression))))
+          ((slot-op-p expression :subscript)
+           (slot-token (second expression)))
+          (t expression))))
 
 (defun %operand-pic-fractional-decimal-digits (expression)
   "Fractional decimal digit count from EXPRESSION's @code{:pic} in @code{*working-storage*}, or 0.
@@ -782,8 +832,8 @@ Literals and unresolved names yield 0."
   (handler-case
       (pic-fractional-decimal-digits
        (or (when-let (tok (slot-token expression))
-             (when-let (var (gethash tok *working-storage*))
-               (getf var :pic)))
+                     (when-let (var (gethash tok *working-storage*))
+                               (getf var :pic)))
            ""))
     (error () 0)))
 
@@ -845,7 +895,7 @@ Supports parser output (@code{:subtrahend} and @code{:from}) and legacy tests th
 With GIVING, result must be >= each operand. Otherwise, the operand with fewer
 fractional digits is widened (shifted left by 4 bits per digit) to match the other.
 @code{n} (digit difference) is bounded by 12."
-  (let ((dr (when giving (%operand-pic-fractional-decimal-digits (or giving to-op))))
+  (let ((dr (when giving (%operand-pic-fractional-decimal-digits to-op)))
         (df (%operand-pic-fractional-decimal-digits from))
         (dt (%operand-pic-fractional-decimal-digits to-op)))
     (if giving
@@ -971,28 +1021,28 @@ Statement plist whose @code{car} is @code{:add}.
            maximize (operand-width el pic-width-table)))
     (t (let ((token (slot-token expression)))
          (if-let (var (gethash token *working-storage*))
-           (let ((usage (getf var :usage)))
-             (ecase usage
-               (:binary (pic-length-bytes (getf var :pic)))
-               (:decimal (pic-length-bytes (getf var :pic)))
-               (:pointer 2)
-               (:procedure-pointer 2)
-               (:object 2)
-               (:object-ref 2)
-               ((nil) 1)))
-           (cond
-             ((and (stringp expression) (constant-p expression))
-              (or (gethash (cobol-slot-table-name-key expression) pic-width-table)
-                  (gethash expression pic-width-table)
-                  1))
-             ((and (stringp expression)
-                   (or (gethash (cobol-slot-table-name-key expression) pic-width-table)
-                       (gethash expression pic-width-table)))
-              (or (gethash (cobol-slot-table-name-key expression) pic-width-table)
-                  (gethash expression pic-width-table)))
-             ((and *type-table* (gethash token *type-table*))
-              +object-reference-storage-width+)
-             (t 1)))))))
+                 (let ((usage (getf var :usage)))
+                   (ecase usage
+                     (:binary (pic-length-bytes (getf var :pic)))
+                     (:decimal (pic-length-bytes (getf var :pic)))
+                     (:pointer 2)
+                     (:procedure-pointer 2)
+                     (:object 2)
+                     (:object-ref 2)
+                     ((nil) 1)))
+                 (cond
+                   ((and (stringp expression) (constant-p expression))
+                    (or (gethash (cobol-slot-table-name-key expression) pic-width-table)
+                        (gethash expression pic-width-table)
+                        1))
+                   ((and (stringp expression)
+                         (or (gethash (cobol-slot-table-name-key expression) pic-width-table)
+                             (gethash expression pic-width-table)))
+                    (or (gethash (cobol-slot-table-name-key expression) pic-width-table)
+                        (gethash expression pic-width-table)))
+                   ((and *type-table* (gethash token *type-table*))
+                    +object-reference-storage-width+)
+                   (t 1)))))))
 
 (defun expression-operand-width (expression &optional (pic-width-table *pic-width-table*))
   "Return max byte width (1–8) for EXPRESSION and its leaves.
@@ -1187,11 +1237,11 @@ Signals an error (no successful return)."
       (when (and (listp item) (eq (first item) 'comment))
         (let ((text (if (stringp (second item)) (second item) "")))
           (cl-ppcre:register-groups-bind (c)
-	    ("Inherited from (\\S+):" text)
-	  (setf current-origin c))
+	                               ("Inherited from (\\S+):" text)
+	                               (setf current-origin c))
           (cl-ppcre:register-groups-bind (c)
-	    ("Own slots \\((\\S+)\\)" text)
-	  (setf current-origin c))))
+	                               ("Own slots \\((\\S+)\\)" text)
+	                               (setf current-origin c))))
       (when (and (listp item) (numberp (first item))
                  (stringp (second item)))
         (setf (gethash (cobol-slot-table-name-key (second item)) table) current-origin)))

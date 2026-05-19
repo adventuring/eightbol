@@ -135,16 +135,20 @@
        (if (and (expression-constant-p divisor)
                 (power-of-two-p (expression-constant-value divisor)))
            (let ((shift (log2 (expression-constant-value divisor))))
+             (when (or (operand-bcd-p source) (operand-bcd-p dest))
+               (error 'source-error
+                      :message "DIVIDE: cannot use with USAGE DECIMAL operands"
+                      :detail (list :divisor divisor :source source :dest dest)))
              (unless (zerop shift)
                (compile-i286-load out (or source dest) class-id slot-table const-table pic-width-table)
                (dotimes (_ shift)
                  (if signed (format out "~&~8tsar     ~a, 1" reg) (format out "~&~8tshr     ~a, 1" reg)))
                (when (stringp dest)
-                 (format out "~&~8tmov     ~a, ~a" (i286-symbol dest) reg))))
+      (format out "~&~8tmov     ~a, ~a" (i286-symbol dest) reg))))
            (error 'source-error
                   :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
                   :detail (format nil "DIVIDE by ~s" divisor)))))
-    (:multiply
+     (:multiply
      (let* ((multiplier (getf (rest stmt) :multiplier))
             (by (getf (rest stmt) :by))
             (giving (getf (rest stmt) :giving))
@@ -155,15 +159,19 @@
        (if (and (expression-constant-p multiplier)
                 (power-of-two-p (expression-constant-value multiplier)))
            (let ((shift (log2 (expression-constant-value multiplier))))
+             (when (or (operand-bcd-p source) (operand-bcd-p dest))
+               (error 'source-error
+                      :message "MULTIPLY: cannot use with USAGE DECIMAL operands"
+                      :detail (list :multiplier multiplier :source source :dest dest)))
              (unless (zerop shift)
                (compile-i286-load out (or source dest) class-id slot-table const-table pic-width-table)
                (dotimes (_ shift)
                  (format out "~&~8tshl     ~a, 1" reg))
-               (when (stringp dest)
-                 (format out "~&~8tmov     ~a, ~a" (i286-symbol dest) reg))))
-           (error 'source-error
-                  :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
-                  :detail (format nil "MULTIPLY by ~s" multiplier)))))
+                (when (stringp dest)
+                  (format out "~&~8tmov     ~a, ~a" (i286-symbol dest) reg))))
+            (error 'source-error
+                   :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
+                   :detail (format nil "MULTIPLY by ~s" multiplier)))))
     (:comment
      (format out "~&~8t; ~a"
              (let ((text (second stmt)))

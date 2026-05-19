@@ -70,9 +70,14 @@
 (defun ast-class-id (program-node)
   (safe-getf (rest (lastcar (remove-if #'null program-node))) :class-id))
 
+(defun ast-program-id (program-node)
+  (safe-getf (rest (lastcar (remove-if #'null program-node))) :program-id))
+
 (defun ast-methods (program-node)
-  (loop for node in program-node
-        append (safe-getf (rest node) :methods)))
+  (if (and (listp program-node) (eq (first program-node) :program))
+      (safe-getf (rest program-node) :methods)
+      (loop for node in program-node
+            append (safe-getf (rest node) :methods))))
 
 (defun ast-data (program-node)
   (safe-getf (rest program-node) :data))
@@ -124,4 +129,49 @@ Used by termination validation: @code{:assembly-entry} is not executable code."
 (defun read-ast (input-stream)
   "Read and return an AST S-expression from INPUT-STREAM."
   (read input-stream))
+
+;;; Case-preserving display labels for UI (help text, error messages).
+;;; Input matching is case-insensitive (string-equal); display preserves
+;;; intended case.
+;;;
+;;; After changing +cpu-display-names+ or +supported-cpus+, rebuild
+;;; bin/skyline-tool (make bin/skyline-tool) so the buildapp image matches;
+;;; otherwise alexandria:define-constant may signal when sources are
+;;; recompiled against an older embedded value.
+(define-constant +cpu-display-names+
+    '((:6502 . "6502")
+      (:65c02 . "65c02")
+      (:65c816 . "65c816")
+      (:cp1610 . "cp1610")
+      (:huc6280 . "HuC6280")
+      (:rp2a03 . "RP2A03")
+      (:z80 . "Z80")
+      (:sm83 . "SM83")
+      (:m6800 . "m6800")
+      (:m68k . "m68k")
+      (:i286 . "i286")
+      (:arm7 . "ARM7")
+      (:f8 . "F8"))
+  :test 'equalp
+  :documentation
+  "Alist of CPU keyword to case-preserving directory / UI label string.")
+
+;;; All supported CPU keywords, in canonical order (see +cpu-display-names+).
+(define-constant +supported-cpus+
+    (mapcar #'first +cpu-display-names+)
+  :test 'equal
+  :documentation
+  "List of supported CPU keywords in canonical order; derived from +cpu-display-names+.")
+
+(defvar *cpu* nil
+  "Current target CPU keyword; bound during compile-to-assembly.")
+
+(defun cpu-display-name (&optional (cpu *cpu*))
+  "Return the case-preserving UI label for CPU."
+  (rest (assoc cpu +cpu-display-names+)))
+
+(defun cpu-directory-name (&optional (cpu *cpu*))
+  "Return the canonical output directory component for a CPU keyword.
+Uses display names: cp1610, 65c02, RP2A03, m68k, i286, Z80, etc."
+  (cpu-display-name cpu))
 

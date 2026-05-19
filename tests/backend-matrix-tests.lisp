@@ -137,3 +137,78 @@
             (q (search "sbc hl, de" asm)))
         (is (and p q))
         (is (< p q))))))
+
+(test matrix/z80-goto
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp)))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:goto :target "LABEL")))
+                "Character" :z80
+                :slot-table slots :const-table consts)))
+    (is (plusp (length asm)))))
+
+(test matrix/cp1610-goto
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp)))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:goto :target "LABEL")))
+                "Character" :cp1610
+                :slot-table slots :const-table consts)))
+    (is (plusp (length asm)))))
+
+(test matrix/z80-set
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "VAR" ws) '(:pic 9 :usage :binary))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:set :target "VAR" :value 5)))
+                "Character" :z80
+                :slot-table slots :const-table consts
+                :working-storage ws)))
+    (is (plusp (length asm)))))
+
+(test matrix/cp1610-set
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp))
+        (ws (make-hash-table :test 'equalp)))
+    (setf (gethash "VAR" ws) '(:pic 9 :usage :binary))
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "M"
+                  :statements ((:set :target "VAR" :value 5)))
+                "Character" :cp1610
+                :slot-table slots :const-table consts
+                :working-storage ws)))
+    (is (plusp (length asm)))))
+
+(test matrix/z80-perform
+  "PERFORM procedure emits call for Z80."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M"
+                :statements ((:perform :procedure "Foo")))
+              "Character" :z80)))
+    (is (search "call" asm))))
+
+(test matrix/cp1610-perform
+  "PERFORM procedure emits JSR R5 for CP1610."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M"
+                :statements ((:perform :procedure "Foo")))
+              "Character" :cp1610)))
+    (is (search "JSR" asm))))
+
+(test matrix/other-cpus-smoke-perform
+  "SM83, m68k, i286, ARM7, F8 compile PERFORM with tables and emit method label."
+  (let ((slots (make-hash-table :test 'equalp))
+        (consts (make-hash-table :test 'equalp)))
+    (dolist (cpu '(:sm83 :m68k :i286 :arm7 :f8))
+      (let ((asm (compile-method-ast-with-tables
+                  '(:method :method-id "Run"
+                    :statements ((:perform :procedure "Foo")))
+                  "Character" cpu
+                  :slot-table slots :const-table consts)))
+        (is (search "Method" asm) "CPU ~s should emit method label" cpu)
+        (is (plusp (length asm)) "CPU ~s should emit non-empty assembly" cpu)))))

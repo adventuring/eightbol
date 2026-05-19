@@ -394,6 +394,38 @@ Integer, simplified list, or EXPRESSION unchanged for non-arithmetic leaves."
     
     (case (first expression)
       
+      (:multiply-expr
+       (let ((a (fold-literal-expression (second expression)))
+             (b (fold-literal-expression (third expression))))
+         (cond ((and (integerp a) (integerp b)) (* a b))
+               ((or (= a 0) (= b 0)) 0)
+               ((= a 1) b)
+               ((= b 1) a)
+               (t (list :multiply-expr a b)))))
+      
+      (:divide-expr
+       (let ((a (fold-literal-expression (second expression)))
+             (b (fold-literal-expression (third expression))))
+         (cond ((and (integerp a) (integerp b)) (/ a b))
+               ((= b 1) a)
+               (t (list :divide-expr a b)))))
+      
+      (:add-expr
+       (let ((a (fold-literal-expression (second expression)))
+             (b (fold-literal-expression (third expression))))
+         (cond ((and (integerp a) (integerp b)) (+ a b))
+               ((and (numberp b) (minusp b))
+                (list :subtract-expr a (- b)))
+               (t (list :add-expr a b)))))
+      
+      (:subtract-expr
+       (let ((a (fold-literal-expression (second expression)))
+             (b (fold-literal-expression (third expression))))
+         (cond ((and (integerp a) (integerp b)) (- a b))
+               ((and (numberp b) (minusp b))
+                (list :add-expr a (- b)))
+               (t (list :subtract-expr a b)))))
+      
       (:add
        (let ((a (fold-literal-expression (getf (rest expression) :from)))
              (b (fold-literal-expression (getf (rest expression) :to))))
@@ -745,19 +777,33 @@ A top-level @code{GOBACK} must not drop following paragraphs — they are @code{
   "Apply routine AST optimizations (power-of-two div/mul → shift, literal fold with
 algebraic simplification, unreachable elimination, dead-store elimination, tail-call
 annotation, then a second unreachable pass so redundant @code{GOBACK} after tail
-@code{INVOKE}/@code{CALL} is dropped). Returns a new AST (structure is copied)."
+@code{INVOKE}/@code{CALL} is dropped). Returns a new AST (structure is copied).
+
+When AST is a list of program nodes (parser output: @code{((:program ...) ...)}),
+map across each node. When a single @code{(:program ...)} plist, optimize directly."
+  (when (and (listp ast)
+             (listp (first ast))
+             (every (lambda (section)
+                      (and (listp section) (eq (first section) :program)))
+                    ast))
+    (return-from optimize-ast
+      (remove-if #'null (mapcar #'optimize-ast ast))))
   (unless (and (listp ast) (eq (first ast) :program))
     (return-from optimize-ast ast))
   (let ((methods (safe-getf (rest ast) :methods))
         (class-id (safe-getf (rest ast) :class-id))
+        (program-id (safe-getf (rest ast) :program-id))
+        (statements (safe-getf (rest ast) :statements))
         (data (safe-getf (rest ast) :data))
         (identification (safe-getf (rest ast) :identification))
         (environment (safe-getf (rest ast) :environment)))
     (list :program
           :class-id class-id
+          :program-id program-id
           :identification identification
           :environment environment
           :data data
+          :statements statements
           :methods
           (mapcar (lambda (m)
                     (if (and (listp m) (eq (first m) :method))

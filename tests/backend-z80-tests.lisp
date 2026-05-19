@@ -66,3 +66,15 @@
         (eightbol::*class-id* "Character"))
     (let ((asm (z80-asm '(:invoke-super))))
       (is (search "call MethodActorThink" asm)))))
+
+(test z80/set-address-of
+  "SET dest TO ADDRESS OF var emits ld hl, #symbol."
+  (let ((pic (make-hash-table :test 'equalp))
+        (slot-table (make-hash-table :test 'equalp)))
+    (setf (gethash "X" pic) 2)
+    (setf (gethash "Y" pic) 2)
+    (setf (gethash "X" slot-table) "Character")
+    (let ((asm (z80-asm '(:set :target "Y" :address-of "X") :slot-table slot-table :pic pic)))
+      (is (search "ld hl, #CharacterX" asm))
+      (is (search "ld (#CharacterY)" asm))
+      (is (search "ld (#CharacterY+1)" asm)))))

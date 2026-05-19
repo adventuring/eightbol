@@ -356,38 +356,40 @@ Make rules export PLATFORM when invoking bin/skyline-tool."
     (is (string= "7800" (skyline-tool::machine-directory-name))
         "machine-directory-name uses *machine* when no arg")))
 
-;;;; make-globals-copybook game-name (TDD: regression fix for NIL-Globals.cpy)
+;;;; write-globals-copybook game-name (TDD: regression fix for NIL-Globals.cpy)
 
-(test make-globals-copybook/game-name-override
-  "When :game-name is passed, output filename uses it (not *game*).
-Regression: nil game name produced NIL-Globals.cpy."
+(test write-globals-copybook/game-name-override
+  "When *game-title* is bound, output filename uses it.
+Regression: nil game title produced NIL-Globals.cpy."
   (with-temporary-directory (:prefix "globals-game-name-")
     (let* ((root (uiop:pathname-directory-pathname (uiop:getcwd)))
            (skyline-tool::*machine* 7800)
-           (skyline-tool::*game* nil))
-      (let ((result (skyline-tool::make-globals-copybook
-                     :game-name "Phantasia"
+           (skyline-tool::*game* "Phantasia")
+           (skyline-tool::*game-title* "Phantasia"))
+      (let ((result (skyline-tool::write-globals-copybook
                      :root-dir root)))
         (is (equal (pathname-name result) "Phantasia-Globals")
             "Output pathname should be Phantasia-Globals.cpy, not NIL-Globals.cpy")
         (is (probe-file result) "Result file should exist")))))
 
-(test make-globals-copybook/game-name-from-json
-  "When *game* is bound (from JSON :*game key) and :game-name not passed, uses it."
+(test write-globals-copybook/game-title-from-json
+  "When *game-title* is bound (from JSON :game key), uses it."
   (with-temporary-directory (:prefix "globals-from-json-")
     (let* ((root (uiop:pathname-directory-pathname (uiop:getcwd)))
            (skyline-tool::*machine* 7800)
-           (skyline-tool::*game* "Phantasia"))
-      (let ((result (skyline-tool::make-globals-copybook
+           (skyline-tool::*game* "Phantasia")
+           (skyline-tool::*game-title* "Phantasia"))
+      (let ((result (skyline-tool::write-globals-copybook
                      :root-dir root)))
         (is (equal (pathname-name result) "Phantasia-Globals")
             "Output pathname should be Phantasia-Globals.cpy")
         (is (probe-file result) "Result file should exist")))))
 
-(test make-globals-copybook/game-name-nil-signals-error
-  "When game name is nil (missing :*game key in JSON), signals error (not NIL-Globals.cpy)."
+(test write-globals-copybook/game-title-nil-signals-error
+  "When game title is nil (missing game key in JSON), signals error (not NIL-Globals.cpy)."
   (let ((skyline-tool::*machine* 7800)
-        (skyline-tool::*game* nil))
+        (skyline-tool::*game* nil)
+        (skyline-tool::*game-title* nil))
     (signals error
-      (skyline-tool::make-globals-copybook
+      (skyline-tool::write-globals-copybook
        :root-dir (asdf:system-source-directory :eightbol)))))

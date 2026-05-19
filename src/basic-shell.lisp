@@ -131,9 +131,9 @@ literal @code{Classes} segment used in the flat per-CPU layout)."
                                   copybook-paths
                                   (root-directory (truename "."))
                                   (game-name *basic-default-game-name*))
-  "Transpile @code{.bas} at BAS-PATH to temporary COBOL and run @code{compile-eightbol-class}.
+  "Transpile @code{.bas} at BAS-PATH to temporary COBOL and run @code{compile-eightbol}.
 CPUS, OUTPUT-FILE, AST-OUTPUT-FILE, COPYBOOK-PATHS, and ROOT-DIRECTORY follow
-@code{compile-eightbol-class}. GAME-NAME selects the Globals COPY stem.
+@code{compile-eightbol}. GAME-NAME selects the Globals COPY stem.
 When COPYBOOK-PATHS is @code{NIL}, @code{project-copybook-paths} is used so
 @code{COPY} matches Phantasia @file{.cob} sources (@code{Source/Generated/…/Classes/},
 @code{Source/Classes}, per-CPU fallback).
@@ -144,7 +144,7 @@ Pathname designator to UTF-8 BASIC source.
 @end table
 
 @subsection Outputs
-Return value of @code{compile-eightbol-class}."
+Return value of @code{compile-eightbol}."
   (let* ((path (uiop:parse-native-namestring (namestring bas-path)))
          (text (read-basic-file-text path))
          (class-id (class-id-from-bas-pathname path))
@@ -156,7 +156,7 @@ Return value of @code{compile-eightbol-class}."
                               :if-does-not-exist :create
                               :external-format :utf-8)
         (write-string cobol out))
-      (compile-eightbol-class (list tmp-cob)
+      (compile-eightbol (list tmp-cob)
                               :cpus cpus
                               :copybook-paths paths
                               :root-directory root-directory
@@ -337,7 +337,7 @@ the workspace."
                        (write-string (transpile-basic-to-cobol-string (getf workspace :class-id)
                                                                       (getf workspace :text))
                                      out))
-                     (compile-eightbol-class (list tmp)
+                     (compile-eightbol (list tmp)
                                              :cpus +supported-cpus+
                                              :root-directory root
                                              :copybook-paths paths)))

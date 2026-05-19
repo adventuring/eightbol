@@ -63,7 +63,7 @@ Source/Classes/{ClassName}.cob   or   Source/Classes/{ClassName}.bas
 * **SUBTRACT** — SUBTRACT x FROM y; SUBTRACT x FROM y GIVING z
 * **COMPUTE** — COMPUTE x = expression
 * **IF/THEN/ELSE** — conditional execution
-* **PERFORM** — PERFORM procedure-name; PERFORM UNTIL/THRU
+* **PERFORM** — PERFORM procedure-name; PERFORM UNTIL/THRU; PERFORM BY-NAME procedure-name; PERFORM INLINE {code}
 * **INVOKE** — INVOKE object method-name (6502 family: `INVOKE Self` expands to the Phantasia `.CallMethod` macro, same as `INVOKE` on a typed object reference; see `doc/EIGHTBOL.texi` §6502 ABI)
 * **STRING** — STRING source DELIMITED BY SIZE INTO dest (block transfer only); supports reference modification `name(start:length)`
 * **SET** — SET identifier TO expression (only)

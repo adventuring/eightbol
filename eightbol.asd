@@ -4,7 +4,8 @@
 (asdf:defsystem :eightbol
   :description "EIGHTBOL compiler for 8-bit systems"
   :author "Bruce-Robert Pocock"
-  :version "0.7"
+  :version "0.8"
+  :description "EIGHTBOL compiler for 8-bit and 16-bit systems (6502, Z80, ARM, etc.)"
   :maintainer "Bruce-Robert Pocock"
   :mailto "brpocock+skyline@star-hope.org"
   :licence "MIT"
@@ -33,45 +34,46 @@
                  (:file "parser" :depends-on ("package" "conditions" "lexer" "ast"))
                  (:file "backend" :depends-on ("package" "conditions" "ast"))
                  (:file "copybook-load" :depends-on ("package" "conditions" "backend"))
-                 (:file "backend-6502"
-                  :depends-on ("package" "ast" "backend"))
-                 (:file "backend-RP2A03"
-                  :depends-on ("package" "ast" "backend" "copybook-load" "backend-6502"))
-                 (:file "backend-65c02"
-                  :depends-on ("package" "ast" "backend" "backend-6502"))
-                 (:file "backend-65c816"
-                  :depends-on ("package" "ast" "backend" "backend-6502"))
-                 (:file "backend-HuC6280"
-                  :depends-on ("package" "ast" "backend" "backend-6502"))
-                 (:file "backend-cp1610"
-                  :depends-on ("package" "ast" "backend"))
-                 (:file "backend-Z80"
-                  :depends-on ("package" "ast" "backend" "copybook-load"))
-                 (:file "backend-m68k"
-                  :depends-on ("package" "ast" "backend" "copybook-load"))
-                 (:file "backend-SM83"
-                  :depends-on ("package" "ast" "backend" "copybook-load"))
-                 (:file "backend-m6800"
-                  :depends-on ("package" "ast" "backend" "copybook-load"))
-                 (:file "backend-ARM7"
-                  :depends-on ("package" "ast" "backend" "copybook-load"))
-                 (:file "backend-i286"
-                  :depends-on ("package" "ast" "backend" "copybook-load"))
-                 (:file "backend-F8"
-                  :depends-on ("package" "ast" "backend" "copybook-load"))
-                 (:file "basic-transpile" :depends-on ("package"))
+                 (:module "backend-6502"
+                  :components ((:file "backend-6502")))
+                 (:module "backend-rp2a03"
+                  :components ((:file "backend-rp2a03")))
+                 (:module "backend-65c02"
+                  :components ((:file "backend-65c02")))
+                 (:module "backend-65c816"
+                  :components ((:file "backend-65c816")))
+                 (:module "backend-huc6280"
+                  :components ((:file "backend-huc6280")))
+                 (:module "backend-cp1610"
+                  :components ((:file "backend-cp1610")))
+                 (:module "backend-z80"
+                  :components ((:file "backend-z80")))
+                 (:module "backend-m68k"
+                  :components ((:file "backend-m68k")))
+                 (:module "backend-sm83"
+                  :components ((:file "backend-sm83")))
+                 (:module "backend-m6800"
+                  :components ((:file "backend-m6800")))
+                 (:module "backend-arm7"
+                  :components ((:file "backend-arm7")))
+                 (:module "backend-i286"
+                  :components ((:file "backend-i286")))
+                 (:module "backend-f8"
+                  :components ((:file "backend-f8")))
+                 (:file "basic-transpile")
                  (:file "eightbol-compile"
                   :depends-on ("package" "parser" "ast" "ast-optimize" "ast-validate"
-                                         "backend" "copybook-load" "backend-6502" "backend-RP2A03"
+                                         "backend" "copybook-load"
+                                         "backend-6502" "backend-rp2a03"
                                          "backend-65c02" "backend-65c816"
-                                         "backend-HuC6280"
-                                         "backend-cp1610" "backend-Z80"
-                                         "backend-m68k" "backend-SM83" "backend-m6800"
-                                         "backend-ARM7"
+                                         "backend-huc6280"
+                                         "backend-cp1610" "backend-z80"
+                                         "backend-m68k" "backend-sm83" "backend-m6800"
+                                         "backend-arm7"
                                          "backend-i286"
-                                         "backend-F8"))
+                                         "backend-f8"))
                  (:file "basic-shell"
                   :depends-on ("package" "basic-transpile" "eightbol-compile"))
                  (:file "main"
                   :depends-on ("package" "eightbol-compile" "basic-shell")))))
-  :in-order-to ((test-op (test-op "eightbol-test"))))
+  :in-order-to ((test-op :eightbol-test)))

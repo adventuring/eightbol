@@ -1,7 +1,15 @@
 ;;; tests/repro-bugs.lisp --- regression tests for compiler bugs surfaced
 ;;; by Phantasia .cob compilations.  Each test isolates a minimal AST
 ;;; pattern (as emitted into Object/Classes/*.eightbol) that previously
-;;; crashed the 6502 backend.
+;;; crashed the 6502 backend (or the parser).
+
+;;; Bug E: Paragraph label after comment line causes parser failure.
+;;; The eightbol-comment grammar rule had bareword/symbol alternatives that
+;;; created a shift/reduce conflict, preventing the parser from recognizing
+;;; a paragraph label immediately following a COBOL comment (* in col 7).
+;;; Relevant: Source/Classes/Intercardinal-Course.cob's
+;;;   * falls through to Overshoot-Detected.
+;;;   Overshoot-Detected.
 ;;;
 ;;; Bug A: backend-6502 :subtract branch read the rhs from :to instead
 ;;; of :subtrahend, passing NIL to emit-6502-alu-with-memory-rhs and
@@ -227,6 +235,97 @@ crashed with @code{:SHIFT-LEFT fell through ECASE expression}."
                 (error (e) (declare (ignore e)) :other-error))))
         (is (not (eq :case-failure etype))
             "~s in emit-6502-load-byte-n must not signal ECASE failure" op)))))
+
+;;; Bug E: Paragraph label after comment line
+
+(test repro/paragraph-after-comment-parses
+  "A paragraph label (name.) following a COBOL comment (\\* in column 7)
+must not crash the parser.  Regression: Intercardinal-Course.cob's
+@code{* falls through to Overshoot-Detected. / Overshoot-Detected.}
+triggered a shift/reduce conflict in the eightbol-comment rule."
+  (let* ((src "000010 IDENTIFICATION DIVISION.
+000020 CLASS-ID. Character.
+000030 ENVIRONMENT DIVISION.
+000040 OBJECT.
+000050     DATA DIVISION.
+000060         WORKING-STORAGE SECTION.
+000070         05 HP PIC 9999 USAGE BINARY.
+000080     PROCEDURE DIVISION.
+000090         IDENTIFICATION DIVISION.
+000100         METHOD-ID. \"Think\".
+000110         PROCEDURE DIVISION.
+000120             PERFORM Overshoot-Detected.
+000130             GOBACK.
+000140* falls through to Overshoot-Detected.
+000150 Overshoot-Detected.
+000160             GOBACK.
+000170         END METHOD \"Think\".
+000180         IDENTIFICATION DIVISION.
+000190         METHOD-ID. \"Kill\".
+000200         PROCEDURE DIVISION.
+000210             GOBACK.
+000220         END METHOD \"Kill\".
+000230 END OBJECT.
+000240 END CLASS Character.")
+         (ast (handler-case
+                  (eightbol::parse-eightbol-string src)
+                (error (e) (declare (ignore e)) :parse-error)))
+         (think (find "Think" (eightbol::ast-methods ast)
+                      :key #'eightbol::ast-method-name :test #'string=))
+         (perf (find :perform (eightbol::ast-method-statements think)
+                     :key #'first)))
+    (is (not (eq :parse-error ast))
+        "Parser must not crash on a paragraph label after a comment")
+    (is (string= "Overshoot-Detected"
+                 (format nil "~a" (getf (rest perf) :procedure)))
+        "PERFORM target must be Overshoot-Detected")))
+
+(test repro/paragraph-after-comment-in-method-body-parses
+  "A paragraph label following a comment inside a method body (not just at
+the end) must parse correctly.  This catches the actual Intercardinal-Course
+pattern where @code{*} comments appear mid-method before paragraphs."
+  (let* ((src "000010 IDENTIFICATION DIVISION.
+000020 CLASS-ID. Character.
+000030 ENVIRONMENT DIVISION.
+000040 OBJECT.
+000050     DATA DIVISION.
+000060         WORKING-STORAGE SECTION.
+000070         05 HP PIC 9999 USAGE BINARY.
+000080     PROCEDURE DIVISION.
+000090         IDENTIFICATION DIVISION.
+000100         METHOD-ID. \"Think\".
+000110         PROCEDURE DIVISION.
+000120*  comment before first paragraph
+000130 Overshoot-Detected.
+000140             GOBACK.
+000150*  comment before second paragraph
+000160 Done.
+000170             GOBACK.
+000180         END METHOD \"Think\".
+000190         IDENTIFICATION DIVISION.
+000200         METHOD-ID. \"Kill\".
+000210         PROCEDURE DIVISION.
+000220             GOBACK.
+000230         END METHOD \"Kill\".
+000240 END OBJECT.
+000250 END CLASS Character.")
+         (ast (handler-case
+                  (eightbol::parse-eightbol-string src)
+                (error (e) (declare (ignore e)) :parse-error)))
+         (think (find "Think" (eightbol::ast-methods ast)
+                      :key #'eightbol::ast-method-name :test #'string=))
+         (stmts (eightbol::ast-method-statements think))
+         (paragraphs (remove-if-not (lambda (s) (eq :paragraph (first s))) stmts)))
+    (is (not (eq :parse-error ast))
+        "Parser must not crash with comment before first paragraph")
+    (is (= 2 (length paragraphs))
+        "There should be 2 paragraph labels (Overshoot-Detected, Done)")
+    (is (string= "Overshoot-Detected"
+                 (format nil "~a" (second (first paragraphs))))
+        "First paragraph label must be Overshoot-Detected")
+    (is (string= "Done"
+                 (format nil "~a" (second (second paragraphs))))
+        "Second paragraph label must be Done")))
 
 (test repro/boat-draw-frame-complex-expression-compiles
   "The Width BIT-OR / BIT-XOR / SUBTRACT expression from Boat.Draw-Frame
