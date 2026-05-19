@@ -74,9 +74,10 @@
         (*const-table* const-table)
         (*pic-size-table* pic-size-table)
         (*pic-width-table* pic-width-table)
-        (*class-id* class-id))
+        (*class-id* class-id)
+        (*method-id* (getf (rest method) :method-id)))
     (declare (special *slot-table* *type-table* *const-table* *pic-size-table*
-                      *pic-width-table* *class-id*))
+                      *pic-width-table* *class-id* *method-id*))
     (let* ((method-id (getf (rest method) :method-id))
            (dispatch-label (format nil "Method~a~a"
                                    (f8-symbol class-id)
@@ -153,6 +154,64 @@
      (compile-f8-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect
      (compile-f8-inspect out stmt class-id slot-table const-table pic-size-table pic-width-table))
+    (:divide
+     (let* ((divisor (getf (rest stmt) :divisor))
+            (into (getf (rest stmt) :into))
+            (by (getf (rest stmt) :by))
+            (source (or by into))
+            (dest (or (getf (rest stmt) :giving) into)))
+       (if (and (expression-constant-p divisor)
+                (power-of-two-p (expression-constant-value divisor)))
+           (let ((shift (log2 (expression-constant-value divisor))))
+             (unless (zerop shift)
+               (compile-f8-load out (or source dest) class-id slot-table const-table pic-width-table 1)
+               (dotimes (_ shift) (format out "~&~10tSR      1"))
+               (%f8-store-dest out class-id slot-table const-table dest pic-width-table)))
+           (error 'source-error
+                  :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
+                  :detail (format nil "DIVIDE by ~s" divisor)))))
+    (:multiply
+     (let* ((multiplier (getf (rest stmt) :multiplier))
+            (by (getf (rest stmt) :by))
+            (giving (getf (rest stmt) :giving))
+            (source (or giving by))
+            (dest (or giving by)))
+       (if (and (expression-constant-p multiplier)
+                (power-of-two-p (expression-constant-value multiplier)))
+           (let ((shift (log2 (expression-constant-value multiplier))))
+             (unless (zerop shift)
+               (compile-f8-load out (or source dest) class-id slot-table const-table pic-width-table 1)
+               (dotimes (_ shift) (format out "~&~10tSL      1"))
+               (%f8-store-dest out class-id slot-table const-table dest pic-width-table)))
+           (error 'source-error
+                  :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
+                  :detail (format nil "MULTIPLY by ~s" multiplier)))))
+    (:comment
+     (format out "~&~10t;; ~a"
+             (let ((text (second stmt)))
+               (if (listp text)
+                   (format nil "~{~a~%~10t;; ~}" (mapcar (lambda (s) (if (stringp s) s (princ-to-string s))) text))
+                   (princ-to-string text)))))
+    (:invoke-super
+     (unless (gethash *class-id* *parent-classes*)
+       (load-classes))
+     (if-let (parent-class (gethash *class-id* *parent-classes*))
+       (format out "~&~10tPI      Method~a~a"
+               (f8-symbol parent-class)
+               (f8-symbol (format nil "~a" *method-id*)))
+       (error "Can't figure out parent class of ~a" *class-id*)))
+    (:shift-left
+     (let* ((target (getf (rest stmt) :target))
+            (count (getf (rest stmt) :count 1)))
+       (compile-f8-load out target class-id slot-table const-table pic-width-table 1)
+       (dotimes (_ count) (format out "~&~10tSL      1"))
+       (%f8-store-dest out class-id slot-table const-table target pic-width-table)))
+    (:shift-right
+     (let* ((target (getf (rest stmt) :target))
+            (count (getf (rest stmt) :count 1)))
+       (compile-f8-load out target class-id slot-table const-table pic-width-table 1)
+       (dotimes (_ count) (format out "~&~10tSR      1"))
+       (%f8-store-dest out class-id slot-table const-table target pic-width-table)))
     (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
                   (getf (rest stmt) :name)))))
 

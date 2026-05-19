@@ -46,9 +46,10 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
         (*const-table* const-table)
         (*pic-size-table* pic-size-table)
         (*pic-width-table* pic-width-table)
-        (*class-id* class-id))
+        (*class-id* class-id)
+        (*method-id* (getf (rest method) :method-id)))
     (declare (special *slot-table* *type-table* *const-table* *pic-size-table*
-                      *pic-width-table* *class-id*))
+                      *pic-width-table* *class-id* *method-id*))
     (let* ((method-id (getf (rest method) :method-id))
            (dispatch-label (format nil "Method~a~a"
                                    (arm7-symbol class-id)
@@ -118,6 +119,78 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
      (compile-arm7-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect
      (compile-arm7-inspect out stmt class-id slot-table const-table pic-size-table pic-width-table))
+    (:divide
+     (let* ((divisor (getf (rest stmt) :divisor))
+            (into (getf (rest stmt) :into))
+            (by (getf (rest stmt) :by))
+            (source (or by into))
+            (dest (or (getf (rest stmt) :giving) into))
+            (signed (operand-signed-p (or source dest)))
+            (w (operand-width (or source dest) pic-width-table))
+            (sz (if (= (or w 1) 2) "" ".b")))
+       (if (and (expression-constant-p divisor)
+                (power-of-two-p (expression-constant-value divisor)))
+           (let ((shift (log2 (expression-constant-value divisor))))
+             (unless (zerop shift)
+               (compile-arm7-load out (or source dest) class-id slot-table const-table pic-width-table)
+               (if signed
+                   (format out "~&~8tmov     r0, r0, asr #~d" shift)
+                   (format out "~&~8tmov     r0, r0, lsr #~d" shift))
+               (when (stringp dest)
+                 (format out "~&~8tstr~a    r0, ~a" sz (arm7-symbol dest)))))
+           (error 'source-error
+                  :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
+                  :detail (format nil "DIVIDE by ~s" divisor)))))
+    (:multiply
+     (let* ((multiplier (getf (rest stmt) :multiplier))
+            (by (getf (rest stmt) :by))
+            (giving (getf (rest stmt) :giving))
+            (source (or giving by))
+            (dest (or giving by))
+            (w (operand-width (or source dest) pic-width-table))
+            (sz (if (= (or w 1) 2) "" ".b")))
+       (if (and (expression-constant-p multiplier)
+                (power-of-two-p (expression-constant-value multiplier)))
+           (let ((shift (log2 (expression-constant-value multiplier))))
+             (unless (zerop shift)
+               (compile-arm7-load out (or source dest) class-id slot-table const-table pic-width-table)
+               (format out "~&~8tmov     r0, r0, lsl #~d" shift)
+               (when (stringp dest)
+                 (format out "~&~8tstr~a    r0, ~a" sz (arm7-symbol dest)))))
+           (error 'source-error
+                  :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
+                  :detail (format nil "MULTIPLY by ~s" multiplier)))))
+    (:comment
+     (format out "~&~8t@ ~a"
+             (let ((text (second stmt)))
+               (if (listp text)
+                   (format nil "~{~a~%~8t@ ~}" (mapcar (lambda (s) (if (stringp s) s (princ-to-string s))) text))
+                   (princ-to-string text)))))
+    (:invoke-super
+     (unless (gethash *class-id* *parent-classes*)
+       (load-classes))
+     (if-let (parent-class (gethash *class-id* *parent-classes*))
+       (format out "~&~8tbl      Method~a~a"
+               (arm7-symbol parent-class)
+               (arm7-symbol (format nil "~a" *method-id*)))
+       (error "Can't figure out parent class of ~a" *class-id*)))
+    (:shift-left
+     (let* ((target (getf (rest stmt) :target))
+            (count (getf (rest stmt) :count 1)))
+       (compile-arm7-load out target class-id slot-table const-table pic-width-table)
+       (format out "~&~8tmov     r0, r0, lsl #~d" count)
+       (when (stringp target)
+         (format out "~&~8tstr     r0, ~a" (arm7-symbol target)))))
+    (:shift-right
+     (let* ((target (getf (rest stmt) :target))
+            (count (getf (rest stmt) :count 1))
+            (signed (operand-signed-p target)))
+       (compile-arm7-load out target class-id slot-table const-table pic-width-table)
+       (if signed
+           (format out "~&~8tmov     r0, r0, asr #~d" count)
+           (format out "~&~8tmov     r0, r0, lsr #~d" count))
+       (when (stringp target)
+         (format out "~&~8tstr     r0, ~a" (arm7-symbol target)))))
     (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
                   (getf (rest stmt) :name)))))
 
