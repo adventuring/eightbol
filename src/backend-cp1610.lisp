@@ -720,12 +720,60 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
 
 ;;; ADD / SUBTRACT / COMPUTE / SET
 
+(defun %cp1610-bcd-correct (out w)
+  "Emit software BCD correction for the low byte of R0 after ADDR.
+W is the byte width (1 or 2). For w=2, corrects both bytes with carry."
+  (let ((l1 (cp1610-label "bc"))
+        (l2 (cp1610-label "bc2"))
+        (l3 (cp1610-label "bc3"))
+        (l4 (cp1610-label "bc4")))
+    ;; Correct low byte
+    (format out "~&~10tMOVR    R0, R2")
+    (format out "~&~10tANDI    #$FF, R2")
+    (format out "~&~10tMOVR    R2, R3")
+    (format out "~&~10tANDI    #$0F, R3")
+    (format out "~&~10tCMPI    #10, R3")
+    (format out "~&~10tBLT     ~a" l1)
+    (format out "~&~10tADDI    #6, R2")
+    (format out "~&~a:" l1)
+    (format out "~&~10tMOVR    R2, R3")
+    (format out "~&~10tANDI    #$F0, R3")
+    (format out "~&~10tCMPI    #$A0, R3")
+    (format out "~&~10tBLT     ~a" l2)
+    (format out "~&~10tADDI    #$60, R2")
+    (format out "~&~a:" l2)
+    (format out "~&~10tANDI    #$FF00, R0")
+    (format out "~&~10tADDR    R2, R0")
+    (when (= w 2)
+      ;; Correct high byte with possible carry from low correction
+      (format out "~&~10tMOVR    R0, R2")
+      (format out "~&~10tSARC    R0, 8")
+      (format out "~&~10tANDI    #$FF, R2")
+      (format out "~&~10tANDI    #$FF, R0")
+      (format out "~&~10tMOVR    R0, R3")
+      (format out "~&~10tANDI    #$0F, R3")
+      (format out "~&~10tCMPI    #10, R3")
+      (format out "~&~10tBLT     ~a" l3)
+      (format out "~&~10tADDI    #6, R0")
+      (format out "~&~a:" l3)
+      (format out "~&~10tMOVR    R0, R3")
+      (format out "~&~10tANDI    #$F0, R3")
+      (format out "~&~10tCMPI    #$A0, R3")
+      (format out "~&~10tBLT     ~a" l4)
+      (format out "~&~10tADDI    #$60, R0")
+      (format out "~&~a:" l4)
+      (format out "~&~10tANDI    #$FF, R0")
+      (format out "~&~10tSLL     R0, 8")
+      (format out "~&~10tADDR    R2, R0"))))
+
 (defun compile-cp1610-add (out stmt class-id)
   (let* ((from (getf (rest stmt) :from))
          (to-op (getf (rest stmt) :to))
          (giving (getf (rest stmt) :giving))
          (result (or giving (and (stringp to-op) to-op)
-                     (and (listp to-op) (eq (first to-op) :subscript) to-op))))
+                     (and (listp to-op) (eq (first to-op) :subscript) to-op)))
+         (bcd-p (or (operand-bcd-p from) (operand-bcd-p to-op)))
+         (w (max (operand-width result) (expression-operand-width from) (operand-width to-op))))
     (assert-pic-decimal-add-compiled :cp1610 stmt)
     ;; V-scale alignment: shift narrower operand left by 4 bits per digit difference
     (let ((df (%operand-pic-fractional-decimal-digits from))
@@ -749,6 +797,8 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
          (compile-cp1610-load out from class-id 1 :r0)
          (compile-cp1610-load out to-op class-id 1 :r1))))
     (format out "~&~10tADDR    R1, R0")
+    (when bcd-p
+      (%cp1610-bcd-correct out w))
     (when result
       (cond
         ((stringp result)
@@ -770,7 +820,9 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
   (multiple-value-bind (minuend subtrahend)
       (subtract-statement-minuend-and-subtrahend stmt)
     (let* ((giving (getf (rest stmt) :giving))
-           (dest (or giving minuend)))
+           (dest (or giving minuend))
+           (bcd-p (or (operand-bcd-p minuend) (operand-bcd-p subtrahend)))
+           (w (max (operand-width dest) (expression-operand-width subtrahend) (operand-width minuend))))
     (assert-pic-decimal-subtract-compiled :cp1610 stmt)
     ;; V-scale alignment: shift narrower operand left by 4 bits per digit
     (let* ((dm (%operand-pic-fractional-decimal-digits minuend))
@@ -792,6 +844,8 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
         (compile-cp1610-load out subtrahend class-id)))
     (format out "~&~10tSUBR    R0, R1")
     (format out "~&~10tMOVR    R1, R0")
+    (when bcd-p
+      (%cp1610-bcd-correct out w))
     (cond
       ((stringp dest)
        (format out "~&~10tMVO     R0, ~a" (cp1610-symbol (format nil "~a" dest))))
