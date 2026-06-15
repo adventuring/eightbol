@@ -212,6 +212,9 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
    )
 ;; End of test cases
 
+;; Subscripted access test cases (same as regular but for array elements)
+(defvar *subscript-test-cases* *test-cases*)
+
 ;; Generate tests for each backend and each test case
 (dolist (backend *all-backends*)
   (dolist (tc *test-cases*)
