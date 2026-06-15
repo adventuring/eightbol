@@ -17,6 +17,7 @@
 (defmacro def-sm83-statement (statement-type &body body)
   `(defmethod compile-statement ((cpu (eql :sm83)) (statement-type (eql ,statement-type)) ast-node-data)
      (let ((statement (cons statement-type ast-node-data)))
+       (declare (ignorable statement))
        ,@body)))
 
 (defmethod compile-statement :around ((cpu (eql :sm83)) statement-type ast-node-data)
@@ -203,6 +204,7 @@
              (power-of-two-p (expression-constant-value multiplier)))
         (let ((shift (log2 (expression-constant-value multiplier)))
               (target (or source dest)))
+          (declare (ignore target))
           (when (or (operand-bcd-p source) (operand-bcd-p dest))
             (error 'source-error
                    :message "MULTIPLY: cannot use with USAGE DECIMAL operands"
@@ -447,9 +449,11 @@
 (defun compile-sm83-condition (condition branch-label)
   (cond
     ((and (listp condition) (member (first condition) '(= equal < less > greater) :test #'eq))
-     (let ((lhs (second condition)) (rhs (third condition)) (op (first condition))
-           (width (max (or (operand-width lhs) 1)
-                       (or (operand-width rhs) 1))))
+     (let* ((lhs (second condition))
+            (rhs (third condition))
+            (op (first condition))
+            (width (max (or (operand-width lhs) 1)
+                        (or (operand-width rhs) 1))))
        (if (= width 2)
            (progn
              (compile-sm83-load lhs 2)
@@ -481,8 +485,8 @@
                ((< less)  (format *output-stream* "~&~8tjr      nc, ~a" branch-label))
                ((> greater) (format *output-stream* "~&~8tjr      c, ~a" branch-label)))))))
     ((and (listp condition) (eq (first condition) :is-zero))
-     (let ((ex (second condition))
-           (width (operand-width ex)))
+     (let* ((ex (second condition))
+            (width (operand-width ex)))
        (compile-sm83-load ex)
        (if (= (or width 1) 2)
            (progn
@@ -491,8 +495,8 @@
            (format *output-stream* "~&~8tor      a"))
        (format *output-stream* "~&~8tjr      nz, ~a" branch-label)))
     ((and (listp condition) (eq (first condition) :is-not-zero))
-     (let ((ex (second condition))
-           (width (operand-width ex)))
+     (let* ((ex (second condition))
+            (width (operand-width ex)))
        (compile-sm83-load ex)
        (if (= (or width 1) 2)
            (progn
@@ -591,7 +595,7 @@
                 (dolist (s (ensure-list statements))
                   (compile-statement :sm83 (first s) (rest s)))
                 (format *output-stream* "~&~8tjr      ~a" label-end)
-                (format *output-stream* "~&~a:" label-next))))))
+                (format *output-stream* "~&~a:" label-next))))))))
     (format *output-stream* "~&~a:" label-end)))
 
 (defun compile-sm83-inspect (statement)
@@ -619,7 +623,7 @@
              (format *output-stream* "~&~a:" label-skip)
              (format *output-stream* "~&~8tinc     hl")
              (format *output-stream* "~&~8tjr      ~a" label)
-             (format *output-stream* "~&~a:" label-done)))
+             (format *output-stream* "~&~a:" label-done))))
         (conv-from
          (format *output-stream* "~&~8t; INSPECT ~a CONVERTING" target)
          (format *output-stream* "~&~8tld      hl, ~a" target-symbol)
