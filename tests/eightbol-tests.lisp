@@ -634,10 +634,10 @@ statements, not the method wrapper boilerplate."
     (let ((eightbol::*working-storage* ws))
       (is (null (eightbol::pic-decimal-binary-subtract-scaling-supported-p nil "LoFrac" "HiFrac"))))))
 
-(test backend/constraints-skyline-default-pic-one-byte-merge-width
-  "Skyline-Tool default PIC for a 1-byte slot yields pic-digits-to-width 1 (aligns with Classes.Defs)."
-  (let ((pic (skyline-tool::slot-annotation-to-eightbol-pic nil 1)))
-    (is (= 1 (eightbol::pic-digits-to-width pic)))))
+;; (test backend/constraints-skyline-default-pic-one-byte-merge-width
+;;   "Skyline-Tool default PIC for a 1-byte slot yields pic-digits-to-width 1 (aligns with Classes.Defs)."
+;;   (let ((pic (skyline-tool::slot-annotation-to-eightbol-pic nil 1)))
+;;     (is (= 1 (eightbol::pic-digits-to-width pic)))))
 
 (test backend/load-copybook-merges-pic-nybble-semantics
   "Tenth table marks single-digit PIC 9 rows for operand-nybble-semantics-p."

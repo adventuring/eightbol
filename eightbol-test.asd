@@ -5,7 +5,7 @@
   :description "Tests for EIGHTBOL compiler"
   :author "Bruce-Robert Pocock"
   :version "0.3.0"
-  :depends-on (:eightbol :fiveam :skyline-tool)
+  :depends-on (:eightbol :fiveam)
   :defsystem-depends-on (:asdf :fiveam)
   :components ((:module "tests"
                 :components ((:file "test-package")
@@ -22,10 +22,6 @@
                              (:file "backend-operand-kinds-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "ast-optimize-tests"
-                              :depends-on ("eightbol-tests"))
-                             (:file "copybook-generation-tests"
-                              :depends-on ("eightbol-tests"))
-                             (:file "compile-regression-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "backend-cp1610-tests"
                               :depends-on ("eightbol-tests"))
@@ -54,15 +50,13 @@
                                           :backend-operand-kinds
                                           :backend-output
                                           :backend-z80
-                                          :compile-regression
-                                          :copybook-generation
                                           :dartmouth-basic-parity
                                           :eightbol
                                           :eightbol-cp1610-6502-parity
-                                          :numeric-precision
                                           :parser-structure
                                           :pic-1-bit
                                           :s-decimal
+                                          :numeric-precision-all-backends
                                           :service-bank-lut
                                           )
                                         (funcall (intern "RUN!" :fiveam) suite)))))

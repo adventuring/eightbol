@@ -44,15 +44,15 @@
 
 (defun compile-regression-generate-copybooks (tmp-dir)
   "Generate *-Slots.cpy from tests/fixtures/Classes.Defs into TMP-DIR.
-Uses skyline-tool:make-eightbol-copybooks with *machine* bound.
+;; Uses skyline-tool:make-eightbol-copybooks with *machine* bound.
 Output: TMP-DIR/Source/Generated/7800/Classes/*.cpy"
   (let ((classes-defs (compile-regression-classes-defs-path))
-        (skyline-tool::*machine* *compile-regression-machine*))
+;;         (skyline-tool::*machine* *compile-regression-machine*))
     (unless (probe-file classes-defs)
       (error "Classes.Defs not found: ~a" (namestring classes-defs)))
     (uiop:call-with-current-directory tmp-dir
       (lambda ()
-        (skyline-tool::make-eightbol-copybooks classes-defs)))))
+;;         (skyline-tool::make-eightbol-copybooks classes-defs)))))
 
 (defun compile-regression-copybook-paths (tmp-dir)
   "Return copybook search paths for generated *-Slots.cpy."

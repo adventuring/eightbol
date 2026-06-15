@@ -212,3 +212,4 @@
                   :slot-table slots :const-table consts)))
         (is (search "Method" asm) "CPU ~s should emit method label" cpu)
         (is (plusp (length asm)) "CPU ~s should emit non-empty assembly" cpu)))))
+))))

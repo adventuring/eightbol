@@ -1667,3 +1667,4 @@ MOVE keeps Think non-trivial; @code{EXIT METHOD} terminates before the template 
                      (eightbol::compile-to-assembly-with-ast-passes ast :6502 s))))
           (is (search "Done" asm))
           (is (or (search "jmp" asm) (search "bra " asm) (search "JMP" asm))))))))
+)))))))

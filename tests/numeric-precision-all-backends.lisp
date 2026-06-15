@@ -38,7 +38,7 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                     (incf i) ; skip )
                     (* total repeat))))
                (t (incf i))))) ; skip any other characters
-    total))
+  total)
 
 (defun pic-width (pic usage)
   "Return width in bytes for PICTURE string under USAGE."
@@ -215,7 +215,7 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
 ;; Subscripted access test cases (same as regular but for array elements)
 (defvar *subscript-test-cases* *test-cases*)
 
-;; Generate tests for each backend and each test case
+;; Generate tests for each backend and each test case (regular, non-subscripted)
 (dolist (backend *all-backends*)
   (dolist (tc *test-cases*)
     (destructuring-bind (op usage signed pic-a pic-b &optional (count 1) &optional pic-c) tc
@@ -259,13 +259,13 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                                              ((eq op :move) "M")
                                              ((eq op :add) "A")
                                              ((eq op :subtract) "S")
-                                             (t "?")))))
+                                             (t "?"))))))
           (fiveam:def-test test-name
             (let ((asm (compile-method-ast-with-tables
                          `(:method :method-id "TEST" :statements ,statements)
                          "T" backend
                          :pic-width-table pic-tbl
-                         :working-storage ws-tbl)))
+                         :working-storage ws-tbl))))
               (is (stringp asm) "Assembly output should be a string")
               (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A"
                   backend usage signed op (cond
@@ -274,4 +274,64 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                                             ((eq op :move) "move")
                                             ((eq op :add) "add")
                                             ((eq op :subtract) "subtract")
-                                            (t "unknown")))))))))))
+                                            (t "unknown"))))))))))
+
+;; Generate tests for subscripted access
+(dolist (backend *all-backends*)
+  (dolist (tc *subscript-test-cases*)
+    (destructuring-bind (op usage signed array-pic index-pic &optional (count 1) &optional unused-pic-c) tc
+      (let* ((array-width (pic-width array-pic usage))
+             (index-width (pic-width index-pic :binary)) ; index is always binary
+             (pic-tbl (make-hash-table :test 'equalp))
+             (ws-tbl (make-hash-table :test 'equalp))
+             (array-var "ARR")
+             (index-var "IDX")
+             (statements
+               (cond
+                 ((eq op :add)
+                  `((:add :from (:subscript ,array-var ,index-var) :to (:subscript ,array-var ,index-var))))
+                 ((eq op :subtract)
+                  `((:subtract :from (:subscript ,array-var ,index-var)
+                               :from-target (:subscript ,array-var ,index-var)
+                               :giving (:subscript ,array-var ,index-var))))
+                 ((eq op :shift-left)
+                  `((:shift-left :target (:subscript ,array-var ,index-var) :count ,count)))
+                 ((eq op :shift-right)
+                  `((:shift-right :target (:subscript ,array-var ,index-var) :count ,count)))
+                 ((eq op :move)
+                  `((:move :from (:subscript ,array-var ,index-var) :to (:subscript ,array-var ,index-var))))
+                 (t (error "Unknown operation ~S" op)))))
+        ;; Set up picture width table
+        (setf (gethash array-var pic-tbl) array-width)
+        (setf (gethash index-var pic-tbl) index-width)
+        ;; Set up working-storage
+        (setf (gethash array-var ws-tbl) (list :usage usage :signed signed :pic array-pic :occurs 10))
+        (setf (gethash index-var ws-tbl) (list :usage :binary :signed nil :pic index-pic))
+        ;; Generate a unique test name
+        (let* ((test-name (intern (format nil "~A-~A-~A-~A-~A-SUB"
+                                          backend
+                                          (if usage :binary :decimal)
+                                          (if signed :signed :unsigned)
+                                          (string-downcase (symbol-name op))
+                                          (cond
+                                            ((eq op :shift-left) "L")
+                                            ((eq op :shift-right) "R")
+                                            ((eq op :move) "M")
+                                            ((eq op :add) "A")
+                                            ((eq op :subtract) "S")
+                                            (t "?"))))))
+          (fiveam:def-test test-name
+              (let ((asm (compile-method-ast-with-tables
+                          `(:method :method-id "TEST" :statements ,statements)
+                          "T" backend
+                          :pic-width-table pic-tbl
+                          :working-storage ws-tbl)))
+                (is (stringp asm) "Assembly output should be a string")
+                (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A (subscripted)"
+                    backend usage signed op (cond
+                                              ((eq op :shift-left) "shift-left")
+                                              ((eq op :shift-right) "shift-right")
+                                              ((eq op :move) "move")
+                                              ((eq op :add) "add")
+                                              ((eq op :subtract) "subtract")
+                                              (t "unknown"))))))))))
