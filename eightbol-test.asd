@@ -42,6 +42,8 @@
                              (:file "basic-parity-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "numeric-precision-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "numeric-precision-all-backends.lisp"
                               :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
                          (dolist (suite '(
