@@ -147,9 +147,9 @@
   (compile-sm83-goto statement))
 
 (def-sm83-statement :paragraph
-  (let ((name (first ast-node-data)))
-    (when name
-      (format *output-stream* "~&~a:" (sm83-symbol (format nil "~a" name))))))
+   (let ((name (first ast-node-data)))
+     (when name
+       (format *output-stream* "~&~a:" (sm83-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
 
 (def-sm83-statement :evaluate
   (compile-sm83-evaluate statement))

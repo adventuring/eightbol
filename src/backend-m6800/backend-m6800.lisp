@@ -194,9 +194,9 @@
     (format *output-stream* "~&~8tJMP     ~a" (m6800-symbol target))))
 
 (def-m6800-statement :paragraph
-  (let ((name (first ast-node-data)))
-    (when name
-      (format *output-stream* "~&~a:" (m6800-symbol (format nil "~a" name))))))
+   (let ((name (first ast-node-data)))
+     (when name
+       (format *output-stream* "~&~a:" (m6800-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
 
 (def-m6800-statement :add
   (let* ((to (getf statement :to))

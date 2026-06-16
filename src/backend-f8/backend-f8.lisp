@@ -211,8 +211,8 @@
     (compile-f8-goto stmt)))
 
 (def-f8-statement :paragraph
-  (let ((name (first ast-node-data)))
-    (when name (format *output-stream* "~&~a:" (f8-symbol (format nil "~a" name))))))
+   (let ((name (first ast-node-data)))
+     (when name (format *output-stream* "~&~a:" (f8-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
 
 (def-f8-statement :evaluate
   (let ((stmt (cons :evaluate ast-node-data)))

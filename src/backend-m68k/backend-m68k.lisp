@@ -144,8 +144,8 @@
     (compile-m68k-goto statement)))
 
 (def-m68k-statement :paragraph
-  (let ((name (first ast-node-data)))
-    (when name (format *output-stream* "~&~a:" (m68k-symbol (format nil "~a" name))))))
+   (let ((name (first ast-node-data)))
+     (when name (format *output-stream* "~&~a:" (m68k-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
 
 (def-m68k-statement :evaluate
   (let ((statement (cons :evaluate ast-node-data)))

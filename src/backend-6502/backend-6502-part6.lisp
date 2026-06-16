@@ -360,7 +360,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
       ((or times until)
        (error "PERFORM TIMES or UNTIL require VARYING and procedure paragraph name."))
 
-      (t (error "PERFORM requires procedure paragraph name.")))))
+        (t (error "PERFORM requires procedure paragraph name.")))))))
 
 ;;; compile-statement methods — one per (cpu, ast-node-type)
 ;;; Brief methods delegating to compile-6502-* helpers.

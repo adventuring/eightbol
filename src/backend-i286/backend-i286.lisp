@@ -118,9 +118,9 @@
     (:string-blt (compile-i286-string-blt out stmt class-id slot-table const-table))
     (:goto
      (compile-i286-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
-    (:paragraph
-     (let ((name (or (getf (rest stmt) :paragraph) (second stmt))))
-       (when name (format out "~&~a:" (i286-symbol (format nil "~a" name))))))
+     (:paragraph
+      (let ((name (or (getf (rest stmt) :paragraph) (second stmt))))
+        (when name (format out "~&~a:" (i286-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
     (:evaluate (compile-i286-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect (compile-i286-inspect out stmt class-id slot-table const-table pic-size-table pic-width-table))
     (:divide

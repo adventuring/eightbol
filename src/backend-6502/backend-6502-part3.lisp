@@ -476,14 +476,11 @@ constant expression, or nil."
 
 ;;; GOTO and paragraph
 
-(defun para-label (name class-id method-id)
+(defun para-label (name &rest _)
   "Return assembly label for paragraph NAME within method.
-   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol.
-   The label is scoped to the class and method to ensure uniqueness."
-  (format nil "Method~a~a~a"
-          (to-identifier class-id)
-          (to-identifier method-id)
-          (to-identifier name)))
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
+   (declare (ignore _))
+   (to-identifier name))
 
 (defun compile-6502-paragraph (statement)
   (let ((name (if (eq (first statement) :paragraph)
