@@ -16,8 +16,7 @@
 (defun paragraph-label (name)
   "Return assembly label for paragraph NAME.
    COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
-  (declare (ignore _))
-  (to-identifier name)))
+  (to-identifier name))
 
 (defmacro def-arm7-statement (statement-type &body body)
   "Define compile-statement method for ARM7 backend. Uses *output-stream*."
@@ -54,7 +53,8 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
         (format *output-stream*  "~&~8t.syntax unified~2%")
         (dolist (method (ensure-list methods))
           (when (and (listp method) (eq (first method) :method))
-            (compile-arm7-method method)))))))
+            (compile-arm7-method *output-stream* method class-id slot-table type-table const-table
+                                 pic-size-table pic-width-table)))))))
 
 (defun compile-arm7-method (out method class-id slot-table type-table const-table pic-size-table pic-width-table)
   "Emit one @code{:method} body: @code{.thumb_func} label, statements, fallback @code{bx lr}."
@@ -87,9 +87,10 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
                            '(:goback :exit-method :exit-program :exit :stop-run)))
         (format out "~&~8tbx      lr")))))
 
-(defun compile-arm7-goto (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
+(defun compile-arm7-goto (out stmt class-id slot-table type-table
+                          const-table pic-size-table pic-width-table)
   "Emit ARM7 GOTO: unconditional @code{b}, or @code{cmp}/@code{beq} chain when @code{:depending-on} is set."
-  (declare (ignore pic-size-table))
+  (declare (ignore pic-size-table type-table))
   (let ((target (getf (rest stmt) :target))
         (targets (getf (rest stmt) :targets))
         (dep (getf (rest stmt) :depending-on)))
@@ -287,10 +288,10 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
       (t (format out  "~&~8t@ Unsupported load ~s" expr)))))
 
 (defun compile-arm7-move (out stmt class-id slot-table const-table pic-width-table)
-  (let ((from (getf (rest stmt) :from))
-        (to-dest (getf (rest stmt) :to))
-        (to-w (operand-width to-dest pic-width-table))
-        (op   (arm7-store-op to-w)))
+  (let* ((from (getf (rest stmt) :from))
+         (to-dest (getf (rest stmt) :to))
+         (to-w (operand-width to-dest pic-width-table))
+         (op   (arm7-store-op to-w)))
     (compile-arm7-load out from class-id slot-table const-table pic-width-table)
     (cond
       ((stringp to-dest)
@@ -313,6 +314,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
       (t (format out  "~&~8t@ Unsupported store to ~s" to-dest)))))
 
 (defun compile-arm7-invoke (out stmt class-id type-table pic-width-table)
+  (declare (ignore type-table))
   (let* ((object (getf (rest stmt) :object))
          (method (getf (rest stmt) :method))
          (returning (getf (rest stmt) :returning))
@@ -335,6 +337,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
   (let ((target (getf (rest stmt) :target))
         (service (getf (rest stmt) :service))
         (library (getf (rest stmt) :library)))
+    (declare (ignore library))
     (format out  "~&~8tbl      ~a" (arm7-symbol (format nil "~a" (or service target))))))
 
 (defvar *arm7-label* 0)
@@ -530,13 +533,13 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
              (format out  "~&~8tbne     ~a" lbl))))))))
 
 (defun compile-arm7-add (out stmt class-id slot-table const-table pic-width-table)
-  (let ((from (getf (rest stmt) :from))
-        (to-op (getf (rest stmt) :to))
-        (giving (getf (rest stmt) :giving))
-        (result (or giving (and (stringp to-op) to-op) (and (listp to-op) (eq (first to-op) :subscript) to-op)))
-        (w (operand-width (or result to-op) pic-width-table))
-        (bcd-p (when result (usage-bcd-p result)))
-        (op (arm7-store-op w)))
+  (let* ((from (getf (rest stmt) :from))
+         (to-op (getf (rest stmt) :to))
+         (giving (getf (rest stmt) :giving))
+         (result (or giving (and (stringp to-op) to-op) (and (listp to-op) (eq (first to-op) :subscript) to-op)))
+         (w (operand-width (or result to-op) pic-width-table))
+         (bcd-p (when result (usage-bcd-p result)))
+         (op (arm7-store-op w)))
     (assert-pic-decimal-add-compiled :arm7 stmt)
     (when (and bcd-p (> (or w 1) 2))
       (dotimes (i w)
@@ -624,10 +627,10 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
 
 
 (defun compile-arm7-compute (out stmt class-id slot-table const-table pic-width-table)
-  (let ((target (getf (rest stmt) :target))
-        (expr (getf (rest stmt) :expression))
-        (w (operand-width target pic-width-table))
-        (op (arm7-store-op w)))
+  (let* ((target (getf (rest stmt) :target))
+         (expr (getf (rest stmt) :expression))
+         (w (operand-width target pic-width-table))
+         (op (arm7-store-op w)))
     (compile-arm7-load out expr class-id slot-table const-table pic-width-table)
     (cond
       ((stringp target)
@@ -643,20 +646,22 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
       (t (format out  "~&~8t@ Unsupported compute target ~s" target)))))
 
 (defun compile-arm7-set (out stmt class-id slot-table const-table pic-width-table)
-  (let ((target (getf (rest stmt) :target))
-        (value (getf (rest stmt) :value))
-        (up-by (getf (rest stmt) :up-by))
-        (down-by (getf (rest stmt) :down-by))
-        (by-expr (getf (rest stmt) :by))
-        (address-of (getf (rest stmt) :address-of))
-        (to-self (getf (rest stmt) :to-self))
-        (w (operand-width (or target to-self up-by down-by) pic-width-table))
-        (op (arm7-store-op w)))
+  (let* ((target (getf (rest stmt) :target))
+         (value (getf (rest stmt) :value))
+         (up-by (getf (rest stmt) :up-by))
+         (down-by (getf (rest stmt) :down-by))
+         (by-expr (getf (rest stmt) :by))
+         (address-of (getf (rest stmt) :address-of))
+         (to-self (getf (rest stmt) :to-self))
+         (w (operand-width (or target to-self up-by down-by) pic-width-table))
+         (op (arm7-store-op w)))
     (cond
       (up-by
-       (compile-arm7-add out (list :add :from by-expr :to up-by :giving nil) class-id slot-table const-table pic-width-table))
+       (compile-arm7-add out (list :add :from by-expr :to up-by :giving nil)
+                         class-id slot-table const-table pic-width-table))
       (down-by
-       (compile-arm7-subtract out (list :subtract :from by-expr :from-target down-by :giving nil) class-id slot-table const-table pic-width-table))
+       (compile-arm7-subtract out (list :subtract :from by-expr :from-target down-by :giving nil)
+                              class-id slot-table const-table pic-width-table))
       ((and address-of target)
        (let ((src address-of) (dest target))
          (cond
@@ -664,7 +669,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
             (format out "~&~8tldr     r2, =Self")
             (format out "~&~8tldr     r2, [r2]")
             (format out "~&~8tadds    r0, r2, #~a"
-                    (slot-symbol (second (slot-of-expr src)) class-id)))
+                    (slot-symbol (second (slot-of-expression src)) class-id)))
            ((stringp src)
             (format out "~&~8tldr     r0, =~a" (arm7-symbol src)))
            (t (format out "~&~8t@ Unsupported SET ADDRESS OF source ~s" src)))
@@ -694,7 +699,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
               (format out "~&~8tldr     r2, [r2]")
               (format out "~&~8t~a     r0, [r2, #~a]"
                       op (slot-symbol slot class-id)))))
-         (t (format out "~&~8t@ Unsupported SET TO SELF destination ~s" to-self)))))
+         (t (format out "~&~8t@ Unsupported SET TO SELF destination ~s" to-self))))
       (t
        (compile-arm7-load out value class-id slot-table const-table pic-width-table)
        (cond
@@ -715,7 +720,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
             (format out "~&~8tlsls    r0, r0, #1"))
           (format out "~&~8tldr     r2, =~a" (arm7-symbol (format nil "~a" (second target))))
           (format out "~&~8t~a     r1, [r2, r0]" op))
-         (t (format out "~&~8t@ Unsupported set ~s" target))))))
+         (t (format out "~&~8t@ Unsupported set ~s" target)))))))
 
 (defun compile-arm7-perform (out stmt class-id slot-table type-table const-table pic-width-table)
   (let ((proc (getf (rest stmt) :procedure))
