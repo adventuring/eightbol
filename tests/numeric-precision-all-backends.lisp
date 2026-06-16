@@ -46,7 +46,7 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
     ((eq usage :display)
      (pic-display-width pic))
     (t
-     (eightbol::pic-digits-to-width pic usage)))
+     (eightbol::pic-digits-to-width pic usage))))
 
 ;; Test cases: each entry is a list of (operation usage signed pic-a pic-b &optional count &optional pic-c)
 ;; For MOVE, operation is :move, with :from and :to (pic-a, pic-b).
@@ -218,7 +218,7 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
 ;; Generate tests for each backend and each test case (regular, non-subscripted)
 (dolist (backend *all-backends*)
   (dolist (tc *test-cases*)
-    (destructuring-bind (op usage signed pic-a pic-b &optional (count 1) &optional pic-c) tc
+    (destructuring-bind (op usage signed pic-a pic-b &optional (count 1) pic-c) tc
       (let* ((width-a (pic-width pic-a usage))
              (width-b (pic-width pic-b usage))
              (width-c (if pic-c (pic-width pic-c usage) width-b)) ; default C same as B
@@ -265,7 +265,7 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                          `(:method :method-id "TEST" :statements ,statements)
                          "T" backend
                          :pic-width-table pic-tbl
-                         :working-storage ws-tbl)))
+                         :working-storage ws-tbl))
               (is (stringp asm) "Assembly output should be a string")
               (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A"
                   backend usage signed op (cond
@@ -274,12 +274,12 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                                             ((eq op :move) "move")
                                             ((eq op :add) "add")
                                             ((eq op :subtract) "subtract")
-                                            (t "unknown"))))))))))
+                                            (t "unknown")))))))))))
 
 ;; Generate tests for subscripted access
 (dolist (backend *all-backends*)
   (dolist (tc *subscript-test-cases*)
-    (destructuring-bind (op usage signed array-pic index-pic &optional (count 1) &optional unused-pic-c) tc
+    (destructuring-bind (op usage signed array-pic index-pic &optional (count 1) unused-pic-c) tc
       (let* ((array-width (pic-width array-pic usage))
              (index-width (pic-width index-pic :binary)) ; index is always binary
              (pic-tbl (make-hash-table :test 'equalp))
@@ -321,17 +321,17 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                                             ((eq op :subtract) "S")
                                             (t "?"))))))
           (fiveam:def-test test-name
-              (let ((asm (compile-method-ast-with-tables
-                          `(:method :method-id "TEST" :statements ,statements)
-                          "T" backend
-                          :pic-width-table pic-tbl
-                          :working-storage ws-tbl)))
-                (is (stringp asm) "Assembly output should be a string")
-                (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A (subscripted)"
-                    backend usage signed op (cond
-                                              ((eq op :shift-left) "shift-left")
-                                              ((eq op :shift-right) "shift-right")
-                                              ((eq op :move) "move")
-                                              ((eq op :add) "add")
-                                              ((eq op :subtract) "subtract")
-                                              (t "unknown"))))))))))
+            (let ((asm (compile-method-ast-with-tables
+                         `(:method :method-id "TEST" :statements ,statements)
+                         "T" backend
+                         :pic-width-table pic-tbl
+                         :working-storage ws-tbl))
+              (is (stringp asm) "Assembly output should be a string")
+              (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A (subscripted)"
+                  backend usage signed op (cond
+                                            ((eq op :shift-left) "shift-left")
+                                            ((eq op :shift-right) "shift-right")
+                                            ((eq op :move) "move")
+                                            ((eq op :add) "add")
+                                            ((eq op :subtract) "subtract")
+                                            (t "unknown")))))))))))

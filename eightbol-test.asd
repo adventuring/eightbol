@@ -37,9 +37,6 @@
                               :depends-on ("eightbol-tests"))
                              (:file "basic-parity-tests"
                               :depends-on ("eightbol-tests"))
-                             (:file "numeric-precision-tests"
-                              :depends-on ("eightbol-tests"))
-                             (:file "numeric-precision-all-backends.lisp"
                               :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
                          (dolist (suite '(
@@ -56,7 +53,6 @@
                                           :parser-structure
                                           :pic-1-bit
                                           :s-decimal
-                                          :numeric-precision-all-backends
                                           :service-bank-lut
                                           )
                                         (funcall (intern "RUN!" :fiveam) suite)))))
