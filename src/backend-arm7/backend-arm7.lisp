@@ -15,18 +15,9 @@
 
 (defun paragraph-label (name)
   "Return assembly label for paragraph NAME.
-   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol.
-   A single hyphen surrounded by spaces is converted to an underscore."
-  (let* ((trimmed (string-trim " " (string name)))
-         (if (zerop (length trimmed))
-             ""
-             (let* ((tokens (cl-ppcre:split " +"))
-                    (processed (mapcar (lambda (token)
-                                         (if (string= token "-")
-                                             "_"
-                                             (pascal-case token)))
-                                       tokens)))
-               (apply #'concatenate 'string processed)))))
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
+  (declare (ignore _))
+  (to-identifier name)))
 
 (defmacro def-arm7-statement (statement-type &body body)
   "Define compile-statement method for ARM7 backend. Uses *output-stream*."
@@ -140,7 +131,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
      (compile-arm7-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
      (:paragraph
       (let ((name (or (getf (rest stmt) :paragraph) (second stmt))))
-        (when name (format out  "~&~a:" (arm7-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
+        (when name (format out  "~&~a:" (paragraph-label (format nil "~a" name))))))
     (:evaluate
      (compile-arm7-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect

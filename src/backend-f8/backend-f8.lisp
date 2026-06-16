@@ -21,6 +21,12 @@
   (format *output-stream* "~&~10tLR 11, A")
   (format *output-stream* "~&~10tLR H, DC0"))
 
+(defun paragraph-label (name)
+  "Return assembly label for paragraph NAME.
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
+  (declare (ignore _))
+  (f8-symbol (format nil "~a" name)))
+
 (defun %f8-dc0-add-slot-offset (slot-name)
   "Add slot byte offset (symbol) to DC0 via LI + ADC."
   (format *output-stream* "~&~10tLI ~a" (slot-symbol slot-name *class-id*))
@@ -212,7 +218,7 @@
 
 (def-f8-statement :paragraph
    (let ((name (first ast-node-data)))
-     (when name (format *output-stream* "~&~a:" (f8-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
+     (when name (format *output-stream* "~&~a:" (paragraph-label (format nil "~a" name))))))
 
 (def-f8-statement :evaluate
   (let ((stmt (cons :evaluate ast-node-data)))

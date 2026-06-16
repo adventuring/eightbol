@@ -17,6 +17,12 @@
   "Convert EIGHTBOL identifier to i286 assembly symbol (PascalCase). COBOL stabby-case supported."
   (pascal-case (format nil "~a" name)))
 
+(defun paragraph-label (name)
+  "Return assembly label for paragraph NAME.
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
+  (declare (ignore _))
+  (i286-symbol (format nil "~a" name)))
+
 ;;; ---------------------------------------------------------------
 ;;; Top-level entry point
 ;;; ---------------------------------------------------------------
@@ -120,7 +126,7 @@
      (compile-i286-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
      (:paragraph
       (let ((name (or (getf (rest stmt) :paragraph) (second stmt))))
-        (when name (format out "~&~a:" (i286-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
+        (when name (format out "~&~a:" (i286-symbol (format nil "~a" name))))))
     (:evaluate (compile-i286-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect (compile-i286-inspect out stmt class-id slot-table const-table pic-size-table pic-width-table))
     (:divide
