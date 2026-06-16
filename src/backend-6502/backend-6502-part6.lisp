@@ -237,25 +237,25 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
 
 ;;; DIVIDE statement — divisor must be constant power-of-two; emit LSR.
 (defun compile-6502-divide (out statement class-id)
-   (let* ((divisor (safe-getf (rest statement) :divisor))
-          (into-id (safe-getf (rest statement) :into))
-          (giving (safe-getf (rest statement) :giving))
-          (by-dividend (safe-getf (rest statement) :by))
-          (source (if by-dividend by-dividend into-id))
-          (dest (or giving into-id)))
-     (unless (and (expression-constant-p divisor)
-                  (power-of-two-p (expression-constant-value divisor)))
-       (error 'backend-error
-              :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
-              :cpu :6502 :detail statement))
-     (when (or (operand-bcd-p source) (operand-bcd-p dest))
-       (error 'backend-error
-              :message "DIVIDE: cannot use with USAGE DECIMAL operands"
-              :cpu :6502 :detail statement))
-     (let ((shift (log2 (expression-constant-value divisor)))
-           (w (operand-width dest)))
-       (when (zerop shift)
-         (return-from compile-6502-divide))
+  (let* ((divisor (safe-getf (rest statement) :divisor))
+         (into-id (safe-getf (rest statement) :into))
+         (giving (safe-getf (rest statement) :giving))
+         (by-dividend (safe-getf (rest statement) :by))
+         (source (if by-dividend by-dividend into-id))
+         (dest (or giving into-id)))
+    (unless (and (expression-constant-p divisor)
+                 (power-of-two-p (expression-constant-value divisor)))
+      (error 'backend-error
+             :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
+             :cpu :6502 :detail statement))
+    (when (or (operand-bcd-p source) (operand-bcd-p dest))
+      (error 'backend-error
+             :message "DIVIDE: cannot use with USAGE DECIMAL operands"
+             :cpu :6502 :detail statement))
+    (let ((shift (log2 (expression-constant-value divisor)))
+          (w (operand-width dest)))
+      (when (zerop shift)
+        (return-from compile-6502-divide))
       (if (= w 1)
 	(progn
 	  (emit-6502-load-expression out source class-id)
@@ -273,24 +273,24 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
 
 ;;; MULTIPLY statement — multiplier must be constant power-of-two; emit ASL.
 (defun compile-6502-multiply (out statement class-id)
-   (let* ((multiplier (safe-getf (rest statement) :multiplier))
-          (by-id (safe-getf (rest statement) :by))
-          (giving (safe-getf (rest statement) :giving))
-          (source (or giving by-id))
-          (dest (or giving by-id)))
-     (unless (and (expression-constant-p multiplier)
-                  (power-of-two-p (expression-constant-value multiplier)))
-       (error 'backend-error
-              :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
-              :cpu :6502 :detail statement))
-     (when (or (operand-bcd-p source) (operand-bcd-p dest))
-       (error 'backend-error
-              :message "MULTIPLY: cannot use with USAGE DECIMAL operands"
-              :cpu :6502 :detail statement))
-     (let ((shift (log2 (expression-constant-value multiplier)))
-           (w (operand-width dest)))
-       (when (zerop shift)
-         (return-from compile-6502-multiply))
+  (let* ((multiplier (safe-getf (rest statement) :multiplier))
+         (by-id (safe-getf (rest statement) :by))
+         (giving (safe-getf (rest statement) :giving))
+         (source (or giving by-id))
+         (dest (or giving by-id)))
+    (unless (and (expression-constant-p multiplier)
+                 (power-of-two-p (expression-constant-value multiplier)))
+      (error 'backend-error
+             :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
+             :cpu :6502 :detail statement))
+    (when (or (operand-bcd-p source) (operand-bcd-p dest))
+      (error 'backend-error
+             :message "MULTIPLY: cannot use with USAGE DECIMAL operands"
+             :cpu :6502 :detail statement))
+    (let ((shift (log2 (expression-constant-value multiplier)))
+          (w (operand-width dest)))
+      (when (zerop shift)
+        (return-from compile-6502-multiply))
       (if (= w 1)
 	(progn
 	  (emit-6502-load-expression out source class-id)
@@ -314,54 +314,54 @@ target matches paragraph."
   (destructuring-bind (&key procedure varying from by until times
                        &allow-other-keys)
       (rest statement)
-     (cond
-       ((and varying procedure times)
-        (let ((label-loop (new-6502-label "PerfLoop"))
-              (label-end (new-6502-label "PerfEnd")))
-          (format out "~%~10Tlda # ~d" (or from 0))
-          (format out "~%~10Tsta ~a" (to-identifier varying))
-          (format out "~%~a:" label-loop)
-          (setf *6502-accumulator-expression* :trash/perf-loop
-                *6502-x-index-expression* :trash/perf-loop)
-          (format out "~%~10Tjsr ~a~%" (para-label procedure))
-          (setf *6502-accumulator-expression* :trash
-                *6502-x-index-expression* :trash)
-          (format out "~%~10Tlda ~a" (to-identifier varying))
-          (format out "~%~10Tclc")
-          (format out "~%~10Tadc # ~d" (or by 1))
-          (format out "~%~10Tsta ~a" (to-identifier varying))
-          (format out "~%~10Tcmp # ~d" (* by times))
-          (format out "~%~10Tbne ~a~%" label-loop)
-          (format out "~%~a:" label-end)
-          (setf *6502-accumulator-expression* :trash
-                *6502-x-index-expression* :trash)))
-       ((and varying procedure until)
-        (let ((label-loop (new-6502-label "PerfLoop"))
-              (label-end (new-6502-label "PerfEnd")))
-          (format out "~%~10Tlda # ~d" (or from 0))
-          (format out "~%~10Tsta ~a" (to-identifier varying))
-          (format out "~%~a:" label-loop)
-          (setf *6502-accumulator-expression* :trash/perf-loop
-                *6502-x-index-expression* :trash/perf-loop)
-          (format out "~%~10Tjsr ~a~%" (para-label procedure))
-          (setf *6502-accumulator-expression* :trash
-                *6502-x-index-expression* :trash)
-          (format out "~%~10Tlda ~a" (to-identifier varying))
-          (format out "~%~10Tclc")
-          (format out "~%~10Tadc # ~d" (or by 1))
-          (format out "~%~10Tsta ~a" (to-identifier varying))
-          (emit-6502-condition out until class-id label-end)
-          (format out "~%~10T~a ~a~%" (6502-branch-always-mnemonic) label-loop)
-          (format out "~%~a:" label-end)
-          (setf *6502-accumulator-expression* :trash
-                *6502-x-index-expression* :trash)))
-       (procedure
-        (format out "~%~10Tjsr ~a~%" (para-label procedure))
-        (setf *6502-accumulator-expression* :trash
-              *6502-x-index-expression* :trash))
-       ((or times until)
-        (error "PERFORM TIMES or UNTIL require VARYING and procedure paragraph name."))
-       (t (error "PERFORM requires procedure paragraph name."))))
+    (cond
+      ((and varying procedure times)
+       (let ((label-loop (new-6502-label "PerfLoop"))
+             (label-end (new-6502-label "PerfEnd")))
+         (format out "~%~10Tlda # ~d" (or from 0))
+         (format out "~%~10Tsta ~a" (to-identifier varying))
+         (format out "~%~a:" label-loop)
+         (setf *6502-accumulator-expression* :trash/perf-loop
+               *6502-x-index-expression* :trash/perf-loop)
+         (format out "~%~10Tjsr ~a~%" (para-label procedure))
+         (setf *6502-accumulator-expression* :trash
+               *6502-x-index-expression* :trash)
+         (format out "~%~10Tlda ~a" (to-identifier varying))
+         (format out "~%~10Tclc")
+         (format out "~%~10Tadc # ~d" (or by 1))
+         (format out "~%~10Tsta ~a" (to-identifier varying))
+         (format out "~%~10Tcmp # ~d" (* by times))
+         (format out "~%~10Tbne ~a~%" label-loop)
+         (format out "~%~a:" label-end)
+         (setf *6502-accumulator-expression* :trash
+               *6502-x-index-expression* :trash)))
+      ((and varying procedure until)
+       (let ((label-loop (new-6502-label "PerfLoop"))
+             (label-end (new-6502-label "PerfEnd")))
+         (format out "~%~10Tlda # ~d" (or from 0))
+         (format out "~%~10Tsta ~a" (to-identifier varying))
+         (format out "~%~a:" label-loop)
+         (setf *6502-accumulator-expression* :trash/perf-loop
+               *6502-x-index-expression* :trash/perf-loop)
+         (format out "~%~10Tjsr ~a~%" (para-label procedure))
+         (setf *6502-accumulator-expression* :trash
+               *6502-x-index-expression* :trash)
+         (format out "~%~10Tlda ~a" (to-identifier varying))
+         (format out "~%~10Tclc")
+         (format out "~%~10Tadc # ~d" (or by 1))
+         (format out "~%~10Tsta ~a" (to-identifier varying))
+         (emit-6502-condition out until class-id label-end)
+         (format out "~%~10T~a ~a~%" (6502-branch-always-mnemonic) label-loop)
+         (format out "~%~a:" label-end)
+         (setf *6502-accumulator-expression* :trash
+               *6502-x-index-expression* :trash)))
+      (procedure
+       (format out "~%~10Tjsr ~a~%" (para-label procedure))
+       (setf *6502-accumulator-expression* :trash
+             *6502-x-index-expression* :trash))
+      ((or times until)
+       (error "PERFORM TIMES or UNTIL require VARYING and procedure paragraph name."))
+      (t (error "PERFORM requires procedure paragraph name.")))))
 
 ;;; compile-statement methods — one per (cpu, ast-node-type)
 ;;; Brief methods delegating to compile-6502-* helpers.
@@ -488,4 +488,5 @@ target matches paragraph."
 (define-6502-statement :service-bank (ast-node-data)
   (declare (ignore ast-node-data))
   (error ":service-bank is copybook metadata, not a procedure statement (corrupt AST)"))
+
 
