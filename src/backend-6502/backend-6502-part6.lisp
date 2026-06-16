@@ -462,7 +462,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
   (compile-6502-goto (statement :goto ast-node-data)))
 
 (define-6502-statement :paragraph (ast-node-data)
-  (compile-6502-paragraph (statement :paragraph ast-node-data)))
+  (compile-6502-paragraph (cons :paragraph ast-node-data)))
 
 (define-6502-statement :evaluate (ast-node-data)
   (compile-6502-evaluate *standard-output* (statement :evaluate ast-node-data) cpu))

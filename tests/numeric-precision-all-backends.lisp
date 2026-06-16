@@ -222,8 +222,8 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
       (let* ((width-a (pic-width pic-a usage))
              (width-b (pic-width pic-b usage))
              (width-c (if pic-c (pic-width pic-c usage) width-b)) ; default C same as B
-             (pic-tbl (make-hash-table :test 'equalp))
-             (ws-tbl (make-hash-table :test 'equalp))
+             (pic-table (make-hash-table :test 'equalp))
+             (working-storage-table (make-hash-table :test 'equalp))
              (statements
                (cond
                  ((eq op :add)
@@ -238,43 +238,43 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                   `((:move :from "A" :to "B")))
                  (t (error "Unknown operation ~S" op)))))
         ;; Set up picture width table
-        (setf (gethash "A" pic-tbl) width-a)
-        (setf (gethash "B" pic-tbl) width-b)
+        (setf (gethash "A" pic-table) width-a)
+        (setf (gethash "B" pic-table) width-b)
         (when (eq op :subtract)
-          (setf (gethash "C" pic-tbl) width-c))
+          (setf (gethash "C" pic-table) width-c))
         ;; Set up working-storage
-        (setf (gethash "A" ws-tbl) (list :usage usage :signed signed :pic pic-a))
-        (setf (gethash "B" ws-tbl) (list :usage usage :signed signed :pic pic-b))
+        (setf (gethash "A" working-storage-table) (list :usage usage :signed signed :pic pic-a))
+        (setf (gethash "B" working-storage-table) (list :usage usage :signed signed :pic pic-b))
         (when (eq op :subtract)
-          (setf (gethash "C" ws-tbl) (list :usage usage :signed signed :pic (if pic-c pic-c pic-b))))
+          (setf (gethash "C" working-storage-table) (list :usage usage :signed signed :pic (if pic-c pic-c pic-b))))
         ;; Generate a unique test name
         (let* ((test-name (intern (format nil "~A-~A-~A-~A-~A"
-                                           backend
-                                           (if usage :binary :decimal)
-                                           (if signed :signed :unsigned)
-                                           (string-downcase (symbol-name op))
-                                           (cond
-                                             ((eq op :shift-left) "L")
-                                             ((eq op :shift-right) "R")
-                                             ((eq op :move) "M")
-                                             ((eq op :add) "A")
-                                             ((eq op :subtract) "S")
-                                             (t "?"))))))
+                                          backend
+                                          (if usage :binary :decimal)
+                                          (if signed :signed :unsigned)
+                                          (string-downcase (symbol-name op))
+                                          (cond
+                                            ((eq op :shift-left) "L")
+                                            ((eq op :shift-right) "R")
+                                            ((eq op :move) "M")
+                                            ((eq op :add) "A")
+                                            ((eq op :subtract) "S")
+                                            (t "?"))))))
           (fiveam:def-test test-name
-            (let ((asm (compile-method-ast-with-tables
-                         `(:method :method-id "TEST" :statements ,statements)
-                         "T" backend
-                         :pic-width-table pic-tbl
-                         :working-storage ws-tbl))
-              (is (stringp asm) "Assembly output should be a string")
-              (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A"
-                  backend usage signed op (cond
-                                            ((eq op :shift-left) "shift-left")
-                                            ((eq op :shift-right) "shift-right")
-                                            ((eq op :move) "move")
-                                            ((eq op :add) "add")
-                                            ((eq op :subtract) "subtract")
-                                            (t "unknown")))))))))))
+              (let ((asm (compile-method-ast-with-tables
+                          `(:method :method-id "TEST" :statements ,statements)
+                          "T" backend
+                          :pic-width-table pic-table
+                          :working-storage working-storage-table))
+                    (is (stringp asm) "Assembly output should be a string")
+                    (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A"
+                        backend usage signed op (cond
+                                                  ((eq op :shift-left) "shift-left")
+                                                  ((eq op :shift-right) "shift-right")
+                                                  ((eq op :move) "move")
+                                                  ((eq op :add) "add")
+                                                  ((eq op :subtract) "subtract")
+                                                  (t "unknown")))))))))))
 
 ;; Generate tests for subscripted access
 (dolist (backend *all-backends*)
@@ -282,8 +282,8 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
     (destructuring-bind (op usage signed array-pic index-pic &optional (count 1) unused-pic-c) tc
       (let* ((array-width (pic-width array-pic usage))
              (index-width (pic-width index-pic :binary)) ; index is always binary
-             (pic-tbl (make-hash-table :test 'equalp))
-             (ws-tbl (make-hash-table :test 'equalp))
+             (pic-table (make-hash-table :test 'equalp))
+             (working-storage-table (make-hash-table :test 'equalp))
              (array-var "ARR")
              (index-var "IDX")
              (statements
@@ -302,11 +302,11 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                   `((:move :from (:subscript ,array-var ,index-var) :to (:subscript ,array-var ,index-var))))
                  (t (error "Unknown operation ~S" op)))))
         ;; Set up picture width table
-        (setf (gethash array-var pic-tbl) array-width)
-        (setf (gethash index-var pic-tbl) index-width)
+        (setf (gethash array-var pic-table) array-width)
+        (setf (gethash index-var pic-table) index-width)
         ;; Set up working-storage
-        (setf (gethash array-var ws-tbl) (list :usage usage :signed signed :pic array-pic :occurs 10))
-        (setf (gethash index-var ws-tbl) (list :usage :binary :signed nil :pic index-pic))
+        (setf (gethash array-var working-storage-table) (list :usage usage :signed signed :pic array-pic :occurs 10))
+        (setf (gethash index-var working-storage-table) (list :usage :binary :signed nil :pic index-pic))
         ;; Generate a unique test name
         (let* ((test-name (intern (format nil "~A-~A-~A-~A-~A-SUB"
                                           backend
@@ -321,17 +321,17 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                                             ((eq op :subtract) "S")
                                             (t "?"))))))
           (fiveam:def-test test-name
-            (let ((asm (compile-method-ast-with-tables
-                         `(:method :method-id "TEST" :statements ,statements)
-                         "T" backend
-                         :pic-width-table pic-tbl
-                         :working-storage ws-tbl))
-              (is (stringp asm) "Assembly output should be a string")
-              (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A (subscripted)"
-                  backend usage signed op (cond
-                                            ((eq op :shift-left) "shift-left")
-                                            ((eq op :shift-right) "shift-right")
-                                            ((eq op :move) "move")
-                                            ((eq op :add) "add")
-                                            ((eq op :subtract) "subtract")
-                                            (t "unknown")))))))))))
+              (let ((asm (compile-method-ast-with-tables
+                          `(:method :method-id "TEST" :statements ,statements)
+                          "T" backend
+                          :pic-width-table pic-table
+                          :working-storage working-storage-table))
+                    (is (stringp asm) "Assembly output should be a string")
+                    (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A (subscripted)"
+                        backend usage signed op (cond
+                                                  ((eq op :shift-left) "shift-left")
+                                                  ((eq op :shift-right) "shift-right")
+                                                  ((eq op :move) "move")
+                                                  ((eq op :add) "add")
+                                                  ((eq op :subtract) "subtract")
+                                                  (t "unknown")))))))))))

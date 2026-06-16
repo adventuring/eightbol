@@ -140,11 +140,11 @@
      (compile-z80-string-blt out stmt class-id slot-table const-table))
     (:goto
      (compile-z80-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
-    (:paragraph
-     (let ((name (if (eq (first stmt) :paragraph)
-                     (second stmt)
-                     (or (getf (rest stmt) :paragraph) (second stmt)))))
-       (when name (format out "~&~a:" (z80-symbol (format nil "~a" name))))))
+     (:paragraph
+      (let ((name (if (eq (first stmt) :paragraph)
+                      (second stmt)
+                      (or (getf (rest stmt) :paragraph) (second stmt)))))
+        (when name (format out "~&~a:" (z80-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
     (:evaluate
      (compile-z80-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect
