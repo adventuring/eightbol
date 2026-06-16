@@ -36,23 +36,6 @@
                              (:file "statement-parity-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "basic-parity-tests"
-                              :depends-on ("eightbol-tests"))
                               :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
-                         (dolist (suite '(
-                                          :ast-optimize
-                                          :backend-6502-classification
-                                          :backend-cp1610
-                                          :backend-matrix
-                                          :backend-operand-kinds
-                                          :backend-output
-                                          :backend-z80
-                                          :dartmouth-basic-parity
-                                          :eightbol
-                                          :eightbol-cp1610-6502-parity
-                                          :parser-structure
-                                          :pic-1-bit
-                                          :s-decimal
-                                          :service-bank-lut
-                                          )
-                                        (funcall (intern "RUN!" :fiveam) suite)))))
+                         (funcall (intern "RUN!" :fiveam) :eightbol)))
