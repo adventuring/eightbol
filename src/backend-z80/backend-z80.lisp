@@ -18,18 +18,8 @@
 
 (defun paragraph-label (name)
   "Return assembly label for paragraph NAME.
-   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol.
-   A single hyphen surrounded by spaces is converted to an underscore."
-  (let* ((trimmed (string-trim " " (string name)))
-         (if (zerop (length trimmed))
-             ""
-             (let* ((tokens (cl-ppcre:split " +"))
-                    (processed (mapcar (lambda (token)
-                                         (if (string= token "-")
-                                             "_"
-                                             (pascal-case token)))
-                                       tokens)))
-               (apply #'concatenate 'string processed)))))
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
+  (to-identifier name))
 
 ;;; Top-level entry point
 
@@ -80,49 +70,51 @@
                                    (z80-symbol (format nil "~a" method-id))))
            (custom-entry (nth-value 0 (split-method-leading-assembly-entry
                                        (getf (rest method) :statements))))
-           (stmts (nth-value 1 (split-method-leading-assembly-entry
+           (statements (nth-value 1 (split-method-leading-assembly-entry
                                 (getf (rest method) :statements))))
-           (last-stmt (car (last stmts))))
+           (last-statement (car (last statements))))
       (when custom-entry
         (format out "~&~a:" (z80-symbol custom-entry)))
       (format out "~&~a:" dispatch-label)
-      (dolist (stmt stmts)
-        (compile-z80-statement out stmt class-id slot-table type-table const-table
+      (dolist (statement statements)
+        (compile-z80-statement out statement class-id slot-table type-table const-table
                                pic-size-table pic-width-table))
-      (unless (and last-stmt (listp last-stmt)
-                   (member (first last-stmt)
+      (unless (and last-statement (listp last-statement)
+                   (member (first last-statement)
                            '(:goback :exit-method :exit-program :exit :stop-run)))
         (format out "~&~10tret")))))
 
 ;;; GOTO / paragraph labels (simple jp or DEPENDING ON chain)
 
-(defun compile-z80-goto (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
+(defun compile-z80-goto (out statement class-id slot-table type-table
+                         const-table pic-size-table pic-width-table)
   "Emit Z80 GOTO: unconditional @code{jp}, or compare chain when @code{:depending-on} is set."
-  (let ((target (getf (rest stmt) :target))
-        (targets (getf (rest stmt) :targets))
-        (dep (getf (rest stmt) :depending-on)))
-    (if dep
-        (let ((tgt-list (or targets (when target (list target)))))
-          (when tgt-list
-            (compile-z80-load out dep class-id slot-table const-table pic-width-table 1)
+  (declare (ignore type-table pic-size-table))
+  (let ((target (getf (rest statement) :target))
+        (targets (getf (rest statement) :targets))
+        (depending-on (getf (rest statement) :depending-on)))
+    (if depending-on
+        (let ((target-list (or targets (when target (list target)))))
+          (when target-list
+            (compile-z80-load out depending-on class-id slot-table const-table pic-width-table 1)
             (format out "~&~10tld b, a")
-            (let ((n (length tgt-list)))
+            (let ((n (length target-list)))
               (loop for i from 1 below n
                     do (format out "~&~10tld a, b")
                        (format out "~&~10tcp ~d" i)
                        (format out "~&~10tjp z, ~a"
-                               (z80-symbol (format nil "~a" (nth (1- i) tgt-list)))))
+                               (z80-symbol (format nil "~a" (nth (1- i) target-list)))))
               (format out "~&~10tjp ~a"
-                      (z80-symbol (format nil "~a" (nth (1- n) tgt-list)))))))
+                      (z80-symbol (format nil "~a" (nth (1- n) target-list)))))))
         (format out "~&~10tjp ~a"
                 (z80-symbol (format nil "~a" (or target (first targets))))))))
 
 ;;; Statement dispatch
 
-(defun compile-z80-statement (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
-  (unless (and (listp stmt) (first stmt)) (return-from compile-z80-statement))
-  (emit-statement-source-comment out stmt)
-  (ecase (first stmt)
+(defun compile-z80-statement (out statement class-id slot-table type-table const-table pic-size-table pic-width-table)
+  (unless (and (listp statement) (first statement)) (return-from compile-z80-statement))
+  (emit-statement-source-comment out statement)
+  (ecase (first statement)
     (:goback
      (format out "~&~10tret"))
     (:exit-method (format out "~&~10tret"))
@@ -130,54 +122,54 @@
     (:stop-run (format out "~&~10tret"))
     (:exit (format out "~&~10tret"))
     (:move
-     (compile-z80-move out stmt class-id slot-table const-table pic-width-table))
+     (compile-z80-move out statement class-id slot-table const-table pic-width-table))
     (:invoke
-     (compile-z80-invoke out stmt class-id type-table pic-width-table))
+     (compile-z80-invoke out statement class-id type-table pic-width-table))
     (:call
-     (compile-z80-call out stmt))
+     (compile-z80-call out statement))
     (:if
-     (compile-z80-if out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
+     (compile-z80-if out statement class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:add
-     (compile-z80-add out stmt class-id slot-table const-table pic-width-table))
+     (compile-z80-add out statement class-id slot-table const-table pic-width-table))
     (:subtract
-     (compile-z80-subtract out stmt class-id slot-table const-table pic-width-table))
+     (compile-z80-subtract out statement class-id slot-table const-table pic-width-table))
     (:compute
-     (compile-z80-compute out stmt class-id slot-table const-table pic-width-table))
+     (compile-z80-compute out statement class-id slot-table const-table pic-width-table))
     (:set
-     (compile-z80-set out stmt class-id slot-table const-table pic-width-table))
+     (compile-z80-set out statement class-id slot-table const-table pic-width-table))
     (:log-fault
-     (format out "~&~10t;; LOG FAULT ~s" (getf (rest stmt) :code)))
+     (format out "~&~10t;; LOG FAULT ~s" (getf (rest statement) :code)))
     (:debug-break
-     (format out "~&~10t;; DEBUG BREAK ~s" (getf (rest stmt) :code)))
+     (format out "~&~10t;; DEBUG BREAK ~s" (getf (rest statement) :code)))
     (:perform
-     (compile-z80-perform out stmt class-id slot-table type-table const-table pic-width-table))
+     (compile-z80-perform out statement class-id slot-table type-table const-table pic-width-table))
     (:string-blt
-     (compile-z80-string-blt out stmt class-id slot-table const-table))
+     (compile-z80-string-blt out statement class-id slot-table const-table))
     (:goto
-     (compile-z80-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
+     (compile-z80-goto out statement class-id slot-table type-table const-table pic-size-table pic-width-table))
       (:paragraph
-       (let ((name (if (eq (first stmt) :paragraph)
-                       (second stmt)
-                       (or (getf (rest stmt) :paragraph) (second stmt)))))
+       (let ((name (if (eq (first statement) :paragraph)
+                       (second statement)
+                       (or (getf (rest statement) :paragraph) (second statement)))))
          (when name (format out "~&~a:" (paragraph-label (format nil "~a" name))))))
     (:evaluate
-     (compile-z80-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
+     (compile-z80-evaluate out statement class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect
-     (compile-z80-inspect out stmt class-id slot-table const-table pic-size-table pic-width-table))
+     (compile-z80-inspect out statement class-id slot-table const-table pic-size-table pic-width-table))
     (:comment
      (format out "~%~10t;; ~a"
-             (let ((text (second stmt)))
+             (let ((text (second statement)))
                (if (listp text)
                    (format nil "~{~a~%~10t;; ~}" (mapcar (lambda (s) (if (stringp s) s (princ-to-string s))) text))
                    (princ-to-string text)))))
     (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
-                  (getf (rest stmt) :name)))
+                  (getf (rest statement) :name)))
     (:divide
-     (let* ((divisor (getf (rest stmt) :divisor))
-            (into (getf (rest stmt) :into))
-            (by (getf (rest stmt) :by))
+     (let* ((divisor (getf (rest statement) :divisor))
+            (into (getf (rest statement) :into))
+            (by (getf (rest statement) :by))
             (source (or by into))
-            (dest (or (getf (rest stmt) :giving) into))
+            (dest (or (getf (rest statement) :giving) into))
             (signed (operand-signed-p (or source dest))))
        (if (and (expression-constant-p divisor)
                 (power-of-two-p (expression-constant-value divisor)))
@@ -199,9 +191,9 @@
                   :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
                   :detail (format nil "DIVIDE by ~s" divisor)))))
     (:multiply
-     (let* ((multiplier (getf (rest stmt) :multiplier))
-            (by (getf (rest stmt) :by))
-            (giving (getf (rest stmt) :giving))
+     (let* ((multiplier (getf (rest statement) :multiplier))
+            (by (getf (rest statement) :by))
+            (giving (getf (rest statement) :giving))
             (source (or giving by))
             (dest (or giving by)))
        (if (and (expression-constant-p multiplier)
@@ -231,16 +223,16 @@
                (z80-symbol (format nil "~a" *method-id*)))
        (error "Can't figure out parent class of ~a" *class-id*)))
     (:shift-left
-     (let* ((target (getf (rest stmt) :target))
-            (count (getf (rest stmt) :count 1)))
+     (let* ((target (getf (rest statement) :target))
+            (count (getf (rest statement) :count 1)))
        (compile-z80-load out target class-id slot-table const-table pic-width-table)
        (dotimes (_ count)
          (format out "~&~10tadd a, a"))
        (when (stringp target)
          (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))
     (:shift-right
-     (let* ((target (getf (rest stmt) :target))
-            (count (getf (rest stmt) :count 1))
+     (let* ((target (getf (rest statement) :target))
+            (count (getf (rest statement) :count 1))
             (signed (operand-signed-p target)))
        (compile-z80-load out target class-id slot-table const-table pic-width-table)
        (dotimes (_ count)
@@ -354,9 +346,9 @@
 
 ;;; MOVE
 
-(defun compile-z80-move (out stmt class-id slot-table const-table pic-width-table)
-  (let* ((from (getf (rest stmt) :from))
-         (to (getf (rest stmt) :to))
+(defun compile-z80-move (out statement class-id slot-table const-table pic-width-table)
+  (let* ((from (getf (rest statement) :from))
+         (to (getf (rest statement) :to))
          (from-w (expression-operand-width from pic-width-table))
          (to-w (operand-width to pic-width-table))
          (from-bcd (operand-bcd-p from))
@@ -370,7 +362,7 @@
          (unless (<= w 2)
            (error 'backend-error :message
                   (format nil "BCD-to-binary MOVE width ~d not yet implemented for Z80" w)
-                  :cpu :z80 :detail stmt))
+                  :cpu :z80 :detail statement))
          ;; high digit * 10 + low digit
          (format out "~&~10tld a, (~a)" (bare-data-assembly-symbol from class-id))
          (format out "~&~10tld b, a")
@@ -394,7 +386,7 @@
          (unless (<= w 2)
            (error 'backend-error :message
                   (format nil "Binary-to-BCD MOVE width ~d not yet implemented for Z80" w)
-                  :cpu :z80 :detail stmt))
+                  :cpu :z80 :detail statement))
          (compile-z80-load out from class-id slot-table const-table pic-width-table 1)
          (format out "~&~10tld c, a")
          (format out "~&~10tld b, 0")
@@ -484,11 +476,11 @@
 
 ;;; INVOKE
 
-(defun compile-z80-invoke (out stmt class-id type-table pic-width-table)
+(defun compile-z80-invoke (out statement class-id type-table pic-width-table)
   (declare (ignore type-table))
-  (let ((object (getf (rest stmt) :object))
-        (method (getf (rest stmt) :method))
-        (returning (getf (rest stmt) :returning)))
+  (let ((object (getf (rest statement) :object))
+        (method (getf (rest statement) :method))
+        (returning (getf (rest statement) :returning)))
     (let ((method-sym (z80-symbol (format nil "~a" method))))
       (cond
         ((member object '(:self "Self" self) :test #'equal)
@@ -505,10 +497,10 @@
 
 ;;; CALL
 
-(defun compile-z80-call (out stmt)
-  (let ((target (getf (rest stmt) :target))
-        (service (getf (rest stmt) :service))
-        (library (getf (rest stmt) :library)))
+(defun compile-z80-call (out statement)
+  (let ((target (getf (rest statement) :target))
+        (service (getf (rest statement) :service))
+        (library (getf (rest statement) :library)))
     (declare (ignore library))
     (let ((name (z80-symbol (format nil "~a" (or service target)))))
       (format out "~&~10tcall ~a" name))))
@@ -520,20 +512,20 @@
 (defun z80-label (prefix)
   (format nil "_~a~d" prefix (incf *z80-label*)))
 
-(defun compile-z80-if (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
-  (let ((condition (getf (rest stmt) :condition))
-        (then-stmts (getf (rest stmt) :then))
-        (else-stmts (getf (rest stmt) :else))
+(defun compile-z80-if (out statement class-id slot-table type-table const-table pic-size-table pic-width-table)
+  (let ((condition (getf (rest statement) :condition))
+        (then-statements (getf (rest statement) :then))
+        (else-statements (getf (rest statement) :else))
         (lbl-else (z80-label "else"))
         (lbl-end (z80-label "end")))
     (compile-z80-condition out condition class-id slot-table type-table const-table pic-width-table lbl-else)
-    (dolist (s (ensure-list then-stmts))
+    (dolist (s (ensure-list then-statements))
       (compile-z80-statement out s class-id slot-table type-table const-table pic-size-table pic-width-table))
-    (when (and else-stmts (not (null else-stmts)))
+    (when (and else-statements (not (null else-statements)))
       (format out "~&~10tjp ~a" lbl-end))
     (format out "~&~a:" lbl-else)
-    (when (and else-stmts (not (null else-stmts)))
-      (dolist (s (ensure-list else-stmts))
+    (when (and else-statements (not (null else-statements)))
+      (dolist (s (ensure-list else-statements))
         (compile-z80-statement out s class-id slot-table type-table const-table pic-size-table pic-width-table))
       (format out "~&~a:" lbl-end))))
 
@@ -575,20 +567,20 @@
                 (format out "~&~10tjp z, ~a" branch-label)
                 (format out "~&~10tjp nc, ~a" branch-label)))))))
     ((and (listp condition) (eq (first condition) :is-zero))
-     (let ((ex (second condition))
-           (w (operand-width ex pic-width-table)))
-       (compile-z80-load out ex class-id slot-table const-table pic-width-table)
-       (if (= (or w 1) 2)
+     (let* ((expression (second condition))
+            (width (operand-width expression pic-width-table)))
+       (compile-z80-load out expression class-id slot-table const-table pic-width-table)
+       (if (= (or width 1) 2)
            (progn
              (format out "~&~10tld a, h")
              (format out "~&~10tor l"))
            (format out "~&~10tor a"))
        (format out "~&~10tjp nz, ~a" branch-label)))
     ((and (listp condition) (eq (first condition) :is-not-zero))
-     (let ((ex (second condition))
-           (w (operand-width ex pic-width-table)))
-       (compile-z80-load out ex class-id slot-table const-table pic-width-table)
-       (if (= (or w 1) 2)
+     (let* ((expression (second condition))
+            (width (operand-width expression pic-width-table)))
+       (compile-z80-load out expression class-id slot-table const-table pic-width-table)
+       (if (= (or width 1) 2)
            (progn
              (format out "~&~10tld a, h")
              (format out "~&~10tor l"))
@@ -623,9 +615,9 @@
 
 ;;; EVALUATE statement
 
-(defun compile-z80-evaluate (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
-  (let ((subject (getf (rest stmt) :subject))
-        (clauses (getf (rest stmt) :when-clauses))
+(defun compile-z80-evaluate (out statement class-id slot-table type-table const-table pic-size-table pic-width-table)
+  (let ((subject (getf (rest statement) :subject))
+        (clauses (getf (rest statement) :when-clauses))
         (lbl-end (z80-label "eval")))
     (dolist (clause (ensure-list clauses))
       (cond
@@ -634,11 +626,11 @@
            (compile-z80-statement out s class-id slot-table type-table const-table pic-size-table pic-width-table)))
         ((eq (first clause) :when)
          (let ((phrases (second clause))
-               (stmts (third clause))
+               (statements (third clause))
                (lbl-next (z80-label "when")))
            (cond
              ((eq phrases 'eightbol::any)
-              (dolist (s (ensure-list stmts))
+              (dolist (s (ensure-list statements))
                 (compile-z80-statement out s class-id slot-table type-table const-table pic-size-table pic-width-table))
               (format out "~&~10tjp ~a" lbl-end))
              ((or (eq phrases 'eightbol::true) (equal phrases "TRUE"))
@@ -648,7 +640,7 @@
                          (format out "~&~10tor l"))
                   (format out "~&~10tor a"))
               (format out "~&~10tjp z, ~a" lbl-next)
-              (dolist (s (ensure-list stmts))
+              (dolist (s (ensure-list statements))
                 (compile-z80-statement out s class-id slot-table type-table const-table pic-size-table pic-width-table))
               (format out "~&~10tjp ~a" lbl-end)
               (format out "~&~a:" lbl-next))
@@ -660,7 +652,7 @@
                          (format out "~&~10tor l"))
                   (format out "~&~10tor a"))
               (format out "~&~10tjp nz, ~a" lbl-next)
-              (dolist (s (ensure-list stmts))
+              (dolist (s (ensure-list statements))
                 (compile-z80-statement out s class-id slot-table type-table const-table pic-size-table pic-width-table))
               (format out "~&~10tjp ~a" lbl-end)
               (format out "~&~a:" lbl-next))
@@ -670,7 +662,7 @@
               (compile-z80-load out (second phrases) class-id slot-table const-table pic-width-table)
               (format out "~&~10tcp b")
               (format out "~&~10tjp z, ~a" lbl-next)
-              (dolist (s (ensure-list stmts))
+              (dolist (s (ensure-list statements))
                 (compile-z80-statement out s class-id slot-table type-table const-table pic-size-table pic-width-table))
               (format out "~&~10tjp ~a" lbl-end)
               (format out "~&~a:" lbl-next))
@@ -686,7 +678,7 @@
                 (format out "~&~10tld a, b")
                 (format out "~&~10tcp c")
                 (format out "~&~10tjp nc, ~a" lbl-next)
-                (dolist (s (ensure-list stmts))
+                (dolist (s (ensure-list statements))
                   (compile-z80-statement out s class-id slot-table type-table const-table pic-size-table pic-width-table))
                 (format out "~&~10tjp ~a" lbl-end)
                 (format out "~&~a:" lbl-next)))
@@ -697,7 +689,7 @@
                 (compile-z80-load out phrase-expr class-id slot-table const-table pic-width-table)
                 (format out "~&~10tcp b")
                 (format out "~&~10tjp nz, ~a" lbl-next))
-              (dolist (s (ensure-list stmts))
+              (dolist (s (ensure-list statements))
                 (compile-z80-statement out s class-id slot-table type-table const-table pic-size-table pic-width-table))
               (format out "~&~10tjp ~a" lbl-end)
               (format out "~&~a:" lbl-next)))))))
@@ -705,12 +697,14 @@
 
 ;;; INSPECT statement
 
-(defun compile-z80-inspect (out stmt class-id slot-table const-table pic-size-table pic-width-table)
-  (let ((target (getf (rest stmt) :target))
-        (tally (getf (rest stmt) :tallying))
-        (conv-from (getf (rest stmt) :converting))
-        (conv-to (getf (rest stmt) :to))
-        (repl-by (getf (rest stmt) :by)))
+(defun compile-z80-inspect (out statement class-id slot-table const-table
+                            pic-size-table pic-width-table)
+  (declare (ignore pic-size-table))
+  (let ((target (getf (rest statement) :target))
+        (tally (getf (rest statement) :tallying))
+        (conv-from (getf (rest statement) :converting))
+        (conv-to (getf (rest statement) :to))
+        (repl-by (getf (rest statement) :by)))
     (let ((tgt-sym (z80-symbol (format nil "~a" target))))
       (cond
         (tally
@@ -768,16 +762,16 @@
 
 ;;; ADD / SUBTRACT / COMPUTE / SET
 
-(defun compile-z80-add (out stmt class-id slot-table const-table pic-width-table)
-  (let* ((from (getf (rest stmt) :from))
-         (to (getf (rest stmt) :to))
-         (giving (getf (rest stmt) :giving))
+(defun compile-z80-add (out statement class-id slot-table const-table pic-width-table)
+  (let* ((from (getf (rest statement) :from))
+         (to (getf (rest statement) :to))
+         (giving (getf (rest statement) :giving))
          (result (or giving (and (stringp to) to)))
          (w (max (operand-width (or result to) pic-width-table)
                  (expression-operand-width from pic-width-table)
                  (operand-width to pic-width-table)))
          (bcd-p (when result (usage-bcd-p result))))
-    (assert-pic-decimal-add-compiled :z80 stmt)
+    (assert-pic-decimal-add-compiled :z80 statement)
     (if (and bcd-p (> (or w 1) 2))
         (progn
           (format out "~&~10tand a")
@@ -792,7 +786,7 @@
           (backend-unsupported-operand-width :z80 :add w 2)
           (if (= (or w 1) 2)
               (progn
-                ;; 16-bit: use DE for temp (ex de,hl) instead of stack
+                ;; 16-bit: use DE for temp (expression de,hl) instead of stack
                 (compile-z80-load out to class-id slot-table const-table pic-width-table 2)
                 ;; Scale 'to' if needed
                 (let ((df (%operand-pic-fractional-decimal-digits from))
@@ -833,16 +827,16 @@
                   (when dest
                     (format out "~&~10tld (~a), a" (z80-symbol (format nil "~a" dest)))))))))))
 
-(defun compile-z80-subtract (out stmt class-id slot-table const-table pic-width-table)
+(defun compile-z80-subtract (out statement class-id slot-table const-table pic-width-table)
   (multiple-value-bind (minuend subtrahend)
-      (subtract-statement-minuend-and-subtrahend stmt)
-    (let* ((giving (getf (rest stmt) :giving))
+      (subtract-statement-minuend-and-subtrahend statement)
+    (let* ((giving (getf (rest statement) :giving))
            (dest (or giving minuend))
            (w (max (operand-width dest pic-width-table)
                    (expression-operand-width subtrahend pic-width-table)
                    (operand-width minuend pic-width-table)))
            (bcd-p (when dest (usage-bcd-p dest))))
-      (assert-pic-decimal-subtract-compiled :z80 stmt)
+      (assert-pic-decimal-subtract-compiled :z80 statement)
       (if (and bcd-p (> (or w 1) 2))
           (progn
             (format out "~&~10tscf")
@@ -869,7 +863,7 @@
             (backend-unsupported-operand-width :z80 :subtract w 2)
             (if (= (or w 1) 2)
                 (progn
-                  ;; 16-bit: use DE for temp; HL=minuend, DE=subtrahend, then ex de,hl for sbc
+                  ;; 16-bit: use DE for temp; HL=minuend, DE=subtrahend, then expression de,hl for sbc
                   (compile-z80-load out minuend class-id slot-table const-table pic-width-table 2)
                   (format out "~&~10tex de, hl")
                   (compile-z80-load out subtrahend class-id slot-table const-table pic-width-table 2)
@@ -901,9 +895,9 @@
                       (format out "~&~10tld a, b")))
                   (format out "~&~10tld (~a), a" (z80-symbol (format nil "~a" dest))))))))))
 
-(defun compile-z80-compute (out stmt class-id slot-table const-table pic-width-table)
-  (let* ((target (getf (rest stmt) :target))
-         (expr (getf (rest stmt) :expression))
+(defun compile-z80-compute (out statement class-id slot-table const-table pic-width-table)
+  (let* ((target (getf (rest statement) :target))
+         (expr (getf (rest statement) :expression))
          (w (max (operand-width target pic-width-table)
                  (expression-operand-width expr pic-width-table))))
     (backend-unsupported-operand-width :z80 :compute w 2)
@@ -912,14 +906,14 @@
         (format out "~&~10tld (~a), hl" (bare-data-assembly-symbol target class-id))
         (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))
 
-(defun compile-z80-set (out stmt class-id slot-table const-table pic-width-table)
-  (let* ((target (getf (rest stmt) :target))
-         (value (getf (rest stmt) :value))
-         (up-by (getf (rest stmt) :up-by))
-         (down-by (getf (rest stmt) :down-by))
-         (by-expr (getf (rest stmt) :by))
-         (address-of (getf (rest stmt) :address-of))
-         (to-self (getf (rest stmt) :to-self))
+(defun compile-z80-set (out statement class-id slot-table const-table pic-width-table)
+  (let* ((target (getf (rest statement) :target))
+         (value (getf (rest statement) :value))
+         (up-by (getf (rest statement) :up-by))
+         (down-by (getf (rest statement) :down-by))
+         (by-expr (getf (rest statement) :by))
+         (address-of (getf (rest statement) :address-of))
+         (to-self (getf (rest statement) :to-self))
          (w (operand-width (or target to-self up-by down-by) pic-width-table)))
     (cond
       (up-by
@@ -995,10 +989,10 @@
 
 ;;; PERFORM
 
-(defun compile-z80-perform (out stmt class-id slot-table type-table const-table pic-width-table)
-  (let ((proc (getf (rest stmt) :procedure))
-        (times (getf (rest stmt) :times))
-        (until (getf (rest stmt) :until)))
+(defun compile-z80-perform (out statement class-id slot-table type-table const-table pic-width-table)
+  (let ((proc (getf (rest statement) :procedure))
+        (times (getf (rest statement) :times))
+        (until (getf (rest statement) :until)))
     (cond
       (times
        (let ((lbl (z80-label "perf"))
@@ -1039,11 +1033,11 @@
 
 ;;; STRING BLT
 
-(defun %z80-string-operand-length-expr (source stmt)
-  "Return length expression for STRING BLT from STMT or SOURCE :refmod.
+(defun %z80-string-operand-length-expr (source statement)
+  "Return length expression for STRING BLT from STATEMENT or SOURCE :refmod.
 
 @table @asis
-@item STMT
+@item STATEMENT
 Full @code{:string-blt} AST plist (e.g. from @code{parse-eightbol-string}).
 @item SOURCE
 @code{:source} field; may be a string/symbol or @code{(:refmod ...)} with plist in @code{cdr}.
@@ -1052,7 +1046,7 @@ Full @code{:string-blt} AST plist (e.g. from @code{parse-eightbol-string}).
 @noindent
 Matches @code{string-operand-length-expr} in the 6502 backend: @code{LENGTH} clause,
 else @code{:length} from reference modification on SOURCE."
-  (or (safe-getf (rest stmt) :length)
+  (or (safe-getf (rest statement) :length)
       (when (and (listp source) (eq (first source) :refmod))
         (safe-getf (rest source) :length))))
 
@@ -1069,11 +1063,12 @@ else @code{:length} from reference modification on SOURCE."
     (t
      (z80-symbol (format nil "~a" operand)))))
 
-(defun compile-z80-string-blt (out stmt class-id slot-table const-table)
+(defun compile-z80-string-blt (out statement class-id slot-table const-table)
   "Emit Z80 block copy loop. Uses HL=src, DE=dest, BC=count."
-  (let* ((source (safe-getf (rest stmt) :source))
-         (dest (safe-getf (rest stmt) :dest))
-         (len-expr (%z80-string-operand-length-expr source stmt))
+  (declare (ignore class-id slot-table))
+  (let* ((source (safe-getf (rest statement) :source))
+         (dest (safe-getf (rest statement) :dest))
+         (len-expr (%z80-string-operand-length-expr source statement))
          (len (cond ((integerp len-expr) len-expr)
                     ((and len-expr (z80-expr-is-constant-p len-expr const-table))
                      (z80-value len-expr const-table))
