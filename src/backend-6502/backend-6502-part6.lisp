@@ -97,14 +97,14 @@
 	     (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
 	     (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))
 	 (format out "~%~10Tsta (~a), y" pointer)))
-        (giving
-         (emit-6502-load-expression out minuend class-id)
-         (when bcd-p (format out "~%~10Tsed"))
-         (format out "~%~10Tsec")
-         (if (expression-constant-p subtrahend)
-	   (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
-	   (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))
-         (format out "~%~10Tsta (~a), y" pointer))
+        #+ () (giving
+               (emit-6502-load-expression out minuend class-id)
+               (when bcd-p (format out "~%~10Tsed"))
+               (format out "~%~10Tsec")
+               (if (expression-constant-p subtrahend)
+	         (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
+	         (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))
+               (format out "~%~10Tsta (~a), y" pointer))
         (giving
          (emit-6502-load-expression out minuend class-id)
          (when bcd-p (format out "~%~10Tsed"))
@@ -145,8 +145,8 @@
            ((and (slot-of-expression minuend) (not (slot-of-self-p minuend)))
 	  (emit-6502-store-byte-n out minuend class-id 0 1))
            (t
-	  (format out "~%~10Tsta ~a" (emit-6502-value minuend)))))
-        (when bcd-p (format out "~%~10Tcld"))))))
+	  (format out "~%~10Tsta ~a" (emit-6502-value minuend))))
+         (when bcd-p (format out "~%~10Tcld")))))))
 
 (defun compile-6502-compute (out statement class-id)
   "COMPUTE target = expression. Supports arbitrary width 1–8 bytes.
@@ -309,58 +309,58 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
 ;;; PERFORM statement
 
 (defun compile-6502-perform (out statement class-id)
-  "Emit PERFORM: jsr to paragraph label (same method). Uses para-label so target matches paragraph."
-  (destructuring-bind
-      (&key procedure varying from by until times &allow-other-keys)
+  "Emit PERFORM: jsr  to paragraph label (same method).  Uses para-label so
+target matches paragraph."
+  (destructuring-bind (&key procedure varying from by until times
+                       &allow-other-keys)
       (rest statement)
     (cond
-
-       ((and varying procedure times)
-        (let ((label-loop (new-6502-label "PerfLoop"))
-            (label-end (new-6502-label "PerfEnd")))
-           (format out "~%~10Tlda # ~d" (or from 0))
-           (format out "~%~10Tsta ~a" (to-identifier varying))
-           (format out "~%~a:" label-loop)
-           (setf *6502-accumulator-expression* :trash/perf-loop
-              *6502-x-index-expression* :trash/perf-loop)
-           (format out "~%~10Tjsr ~a~%" (para-label procedure))
-           (setf *6502-accumulator-expression* :trash
-              *6502-x-index-expression* :trash)
-           (format out "~%~10Tlda ~a" (to-identifier varying))
-           (format out "~%~10Tclc")
-           (format out "~%~10Tadc # ~d" (or by 1))
-           (format out "~%~10Tsta ~a" (to-identifier varying))
-           (format out "~%~10Tcmp # ~d" (* by times))
-           (format out "~%~10Tbne ~a~%" label-loop)
-          (format out "~%~a:" label-end)
-          (setf *6502-accumulator-expression* :trash
-             *6502-x-index-expression* :trash))
-
-       ((and varying procedure until)
-         (let ((label-loop (new-6502-label "PerfLoop"))
-            (label-end (new-6502-label "PerfEnd")))
-           (format out "~%~10Tlda # ~d" (or from 0))
-           (format out "~%~10Tsta ~a" (to-identifier varying))
-           (format out "~%~a:" label-loop)
-           (setf *6502-accumulator-expression* :trash/perf-loop
-              *6502-x-index-expression* :trash/perf-loop)
-           (format out "~%~10Tjsr ~a~%" (para-label procedure))
-           (setf *6502-accumulator-expression* :trash
-              *6502-x-index-expression* :trash)
-           (format out "~%~10Tlda ~a" (to-identifier varying))
-           (format out "~%~10Tclc")
-           (format out "~%~10Tadc # ~d" (or by 1))
-           (format out "~%~10Tsta ~a" (to-identifier varying))
-           (emit-6502-condition out until class-id label-end)
-          (format out "~%~10T~a ~a~%" (6502-branch-always-mnemonic) label-loop)
-          (format out "~%~a:" label-end)
-          (setf *6502-accumulator-expression* :trash
-             *6502-x-index-expression* :trash))
-
+      
+      ((and varying procedure times)
+       (let ((label-loop (new-6502-label "PerfLoop"))
+             (label-end (new-6502-label "PerfEnd")))
+         (format out "~%~10Tlda # ~d" (or from 0))
+         (format out "~%~10Tsta ~a" (to-identifier varying))
+         (format out "~%~a:" label-loop)
+         (setf *6502-accumulator-expression* :trash/perf-loop
+               *6502-x-index-expression* :trash/perf-loop)
+         (format out "~%~10Tjsr ~a~%" (para-label procedure))
+         (setf *6502-accumulator-expression* :trash
+               *6502-x-index-expression* :trash)
+         (format out "~%~10Tlda ~a" (to-identifier varying))
+         (format out "~%~10Tclc")
+         (format out "~%~10Tadc # ~d" (or by 1))
+         (format out "~%~10Tsta ~a" (to-identifier varying))
+         (format out "~%~10Tcmp # ~d" (* by times))
+         (format out "~%~10Tbne ~a~%" label-loop)
+         (format out "~%~a:" label-end)
+         (setf *6502-accumulator-expression* :trash
+               *6502-x-index-expression* :trash)))
+      ((and varying procedure until)
+       (let ((label-loop (new-6502-label "PerfLoop"))
+             (label-end (new-6502-label "PerfEnd")))
+         (format out "~%~10Tlda # ~d" (or from 0))
+         (format out "~%~10Tsta ~a" (to-identifier varying))
+         (format out "~%~a:" label-loop)
+         (setf *6502-accumulator-expression* :trash/perf-loop
+               *6502-x-index-expression* :trash/perf-loop)
+         (format out "~%~10Tjsr ~a~%" (para-label procedure))
+         (setf *6502-accumulator-expression* :trash
+               *6502-x-index-expression* :trash)
+         (format out "~%~10Tlda ~a" (to-identifier varying))
+         (format out "~%~10Tclc")
+         (format out "~%~10Tadc # ~d" (or by 1))
+         (format out "~%~10Tsta ~a" (to-identifier varying))
+         (emit-6502-condition out until class-id label-end)
+         (format out "~%~10T~a ~a~%" (6502-branch-always-mnemonic) label-loop)
+         (format out "~%~a:" label-end)
+         (setf *6502-accumulator-expression* :trash
+               *6502-x-index-expression* :trash)))
+      
       ((or times until)
        (error "PERFORM TIMES or UNTIL require VARYING and procedure paragraph name."))
-
-        (t (error "PERFORM requires procedure paragraph name.")))))))
+      
+      (t (error "PERFORM requires procedure paragraph name.")))))
 
 ;;; compile-statement methods — one per (cpu, ast-node-type)
 ;;; Brief methods delegating to compile-6502-* helpers.
