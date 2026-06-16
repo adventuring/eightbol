@@ -31,8 +31,8 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                ((char= (char pic i) #\()
                 (incf i)
                 (let ((start i))
-                  (while (and (< i (length pic)) (digit-char-p (char pic i)))
-                    (incf i))
+                  (loop while (and (< i (length pic)) (digit-char-p (char pic i)))
+                        do (incf i))
                   (let ((repeat (parse-integer (subseq pic start i))))
                     (when (< i (length pic)) (assert (char= (char pic i) #\))))
                     (incf i) ; skip )
@@ -265,7 +265,7 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                          `(:method :method-id "TEST" :statements ,statements)
                          "T" backend
                          :pic-width-table pic-tbl
-                         :working-storage ws-tbl))))
+                         :working-storage ws-tbl)))
               (is (stringp asm) "Assembly output should be a string")
               (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A"
                   backend usage signed op (cond
