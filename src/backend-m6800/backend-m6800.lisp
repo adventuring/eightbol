@@ -11,6 +11,12 @@
   "Convert EIGHTBOL identifier to m6800 assembly symbol (PascalCase)."
   (pascal-case (format nil "~a" name)))
 
+(defun paragraph-label (name)
+  "Return assembly label for paragraph NAME.
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
+  (declare (ignore _))
+  (m6800-symbol (format nil "~a" name)))
+
 ;;; def-m6800-statement macro — compiles through the generic compile-statement
 
 (defmacro def-m6800-statement (statement-type &body body)
@@ -196,7 +202,7 @@
 (def-m6800-statement :paragraph
    (let ((name (first ast-node-data)))
      (when name
-       (format *output-stream* "~&~a:" (m6800-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
+       (format *output-stream* "~&~a:" (paragraph-label (format nil "~a" name))))))
 
 (def-m6800-statement :add
   (let* ((to (getf statement :to))

@@ -18,6 +18,12 @@
   "Convert EIGHTBOL identifier to m68k assembly symbol (PascalCase)."
   (pascal-case (format nil "~a" name)))
 
+(defun paragraph-label (name)
+  "Return assembly label for paragraph NAME.
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
+  (declare (ignore _))
+  (m68k-symbol (format nil "~a" name)))
+
 (defmacro def-m68k-statement (statement-type &body body)
   `(defmethod compile-statement ((cpu (eql :m68k)) (statement-type (eql ,statement-type)) ast-node-data)
      ,@body))
@@ -145,7 +151,7 @@
 
 (def-m68k-statement :paragraph
    (let ((name (first ast-node-data)))
-     (when name (format *output-stream* "~&~a:" (m68k-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
+     (when name (format *output-stream* "~&~a:" (paragraph-label (format nil "~a" name))))))
 
 (def-m68k-statement :evaluate
   (let ((statement (cons :evaluate ast-node-data)))

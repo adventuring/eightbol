@@ -14,6 +14,12 @@
   "Convert EIGHTBOL identifier to SM83 assembly symbol (PascalCase). COBOL stabby-case supported."
   (pascal-case (format nil "~a" name)))
 
+(defun paragraph-label (name)
+  "Return assembly label for paragraph NAME.
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
+  (declare (ignore _))
+  (sm83-symbol (format nil "~a" name)))
+
 (defmacro def-sm83-statement (statement-type &body body)
   `(defmethod compile-statement ((cpu (eql :sm83)) (statement-type (eql ,statement-type)) ast-node-data)
      (let ((statement (cons statement-type ast-node-data)))
