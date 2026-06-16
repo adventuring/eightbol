@@ -23,7 +23,7 @@
   (let* ((trimmed (string-trim " " (string name)))
          (if (zerop (length trimmed))
              ""
-             (let* ((tokens (cl-ppre:split " +"))
+             (let* ((tokens (cl-ppcre:split " +"))
                     (processed (mapcar (lambda (token)
                                          (if (string= token "-")
                                              "_"
