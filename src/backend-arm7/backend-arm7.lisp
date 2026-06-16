@@ -13,6 +13,21 @@
   "Convert EIGHTBOL identifier to ARM assembly symbol (PascalCase). COBOL stabby-case supported."
   (pascal-case (format nil "~a" name)))
 
+(defun paragraph-label (name)
+  "Return assembly label for paragraph NAME.
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol.
+   A single hyphen surrounded by spaces is converted to an underscore."
+  (let* ((trimmed (string-trim " " (string name)))
+         (if (zerop (length trimmed))
+             ""
+             (let* ((tokens (cl-ppcre:split " +"))
+                    (processed (mapcar (lambda (token)
+                                         (if (string= token "-")
+                                             "_"
+                                             (pascal-case token)))
+                                       tokens)))
+               (apply #'concatenate 'string processed)))))
+
 (defmacro def-arm7-statement (statement-type &body body)
   "Define compile-statement method for ARM7 backend. Uses *output-stream*."
   `(defmethod compile-statement ((cpu (eql :arm7)) (statement-type (eql ,statement-type)) ast-node-data)

@@ -484,11 +484,11 @@ constant expression, or nil."
 
 (defun compile-6502-paragraph (statement)
   (let ((name (if (eq (first statement) :paragraph)
-	        (second statement)
-	        (or (safe-getf (rest statement) :paragraph) (second statement)))))
+                  (second statement)
+                  (or (safe-getf (rest statement) :paragraph) (second statement)))))
     (when name
-      (format *output-stream* "~%~a:" (para-label (format nil "~a" name) *class-id* (or *method-id* "")))
+      (format *output-stream* "~%~a:" (para-label (format nil "~a" name)))
       (setf *6502-accumulator-expression* :trash/paragraph-top
-	  *6502-x-index-expression* :trash/paragraph-top))))
+        *6502-x-index-expression* :trash/paragraph-top))))
 
 

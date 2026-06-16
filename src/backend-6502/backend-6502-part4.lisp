@@ -12,7 +12,7 @@
         ;; Simple GOTO
         (format *output-stream* "~%~10T~a ~a~%"
                 (6502-branch-always-mnemonic)
-                (para-label (format nil "~a" (or target (first targets))) *class-id* (or *method-id* ""))))))
+                (para-label (format nil "~a" (or target (first targets))))))))
 
 (defun emit-6502-goto-tristree (out targets low high class-id method-id)
   "Emit trinary search: cmp #mid; beq target_mid; blt left; bge right.
@@ -21,7 +21,7 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
   (let* ((mid (floor (+ low high) 2))
          (target-name (nth (1- mid) targets)))
     (when (null target-name) (return-from emit-6502-goto-tristree))
-    (let ((label (para-label (format nil "~a" target-name) class-id (or method-id ""))))
+    (let ((label (para-label (format nil "~a" target-name))))
       (if (= low high)
 	;; Leaf: single target
 	(progn

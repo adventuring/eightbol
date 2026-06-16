@@ -16,6 +16,21 @@
   "Convert EIGHTBOL identifier to Z80 assembly symbol (PascalCase). COBOL stabby-case supported."
   (pascal-case (format nil "~a" name)))
 
+(defun paragraph-label (name)
+  "Return assembly label for paragraph NAME.
+   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol.
+   A single hyphen surrounded by spaces is converted to an underscore."
+  (let* ((trimmed (string-trim " " (string name)))
+         (if (zerop (length trimmed))
+             ""
+             (let* ((tokens (cl-ppre:split " +"))
+                    (processed (mapcar (lambda (token)
+                                         (if (string= token "-")
+                                             "_"
+                                             (pascal-case token)))
+                                       tokens)))
+               (apply #'concatenate 'string processed)))))
+
 ;;; Top-level entry point
 
 (defmethod compile-to-assembly (ast (cpu (eql :z80)) output-stream)
@@ -140,11 +155,11 @@
      (compile-z80-string-blt out stmt class-id slot-table const-table))
     (:goto
      (compile-z80-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
-     (:paragraph
-      (let ((name (if (eq (first stmt) :paragraph)
-                      (second stmt)
-                      (or (getf (rest stmt) :paragraph) (second stmt)))))
-        (when name (format out "~&~a:" (z80-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))
+      (:paragraph
+       (let ((name (if (eq (first stmt) :paragraph)
+                       (second stmt)
+                       (or (getf (rest stmt) :paragraph) (second stmt)))))
+         (when name (format out "~&~a:" (paragraph-label (format nil "~a" name))))))
     (:evaluate
      (compile-z80-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect
