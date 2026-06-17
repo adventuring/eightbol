@@ -545,7 +545,7 @@
      (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -559,7 +559,7 @@
      (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -573,7 +573,7 @@
      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -587,7 +587,7 @@
      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -605,7 +605,7 @@
      (setf (gethash "A" ws) (list :usage :binary :signed t :pic "99"))  ; signed
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99")) ; unsigned
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -619,7 +619,7 @@
      (setf (gethash "A" ws) (list :usage :binary :signed t :pic "99"))  ; signed
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99")) ; unsigned
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -679,8 +679,7 @@
      (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "9(8)"))
      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "9(16)"))
      (let ((asm (cp1610-move-asm "A" "B" :pic pic :ws ws)))
-       (is (plusp (length asm)))))
-)))
+        (is (plusp (length asm))))))
 
 ;;;;
 ;;;; Subtraction tests
@@ -709,7 +708,7 @@
      (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -723,7 +722,7 @@
      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -737,7 +736,7 @@
      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -755,7 +754,7 @@
      (setf (gethash "A" ws) (list :usage :binary :signed t :pic "99"))  ; signed
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99")) ; unsigned
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -769,7 +768,7 @@
      (setf (gethash "A" ws) (list :usage :binary :signed t :pic "99"))  ; signed
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99")) ; unsigned
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B)))
+                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -814,37 +813,36 @@
 
 (test multiply/error-non-power-of-two
    "MULTIPLY by non-power-of-two signals error"
-   (signs eightbol:backend-error
+   (signs eightbol::backend-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:multiply :from "A" :by 3)))
        "T" :cp1610
        :pic-width-table (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9"))) 
-       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9"))))))))
+       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9")))))))
 
 (test multiply/error-decimal-operands
    "MULTIPLY with USAGE DECIMAL operands signals error"
-   (signs eightbol:backend-error
+   (signs eightbol::backend-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:multiply :from "A" :by 2)))
        "T" :cp1610
        :pic-width-table (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9"))) 
-       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :decimal :signed nil :pic "9"))))))))
+       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :decimal :signed nil :pic "9")))))))
 
 (test divide/error-non-power-of-two
    "DIVIDE by non-power-of-two signals error"
-   (signs eightbol:backend-error
+   (signs eightbol::backend-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:divide :from "A" :into 3)))
        "T" :cp1610
        :pic-width-table (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9"))) 
-       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9"))))))))
+       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9")))))))
 
 (test divide/error-decimal-operands
    "DIVIDE with USAGE DECIMAL operands signals error"
-   (signs eightbol:backend-error
+   (signs eightbol::backend-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:divide :from "A" :into 2)))
        "T" :cp1610
        :pic-width-table (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9"))) 
-       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :decimal :signed nil :pic "9"))))))))
-)))
+       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :decimal :signed nil :pic "9")))))))

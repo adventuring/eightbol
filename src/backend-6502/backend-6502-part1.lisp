@@ -272,7 +272,8 @@ When the AST has :program-id but no :class-id, emits a standalone subroutine
 instead of a class with methods."
   (let ((*6502-family-cpu* cpu)
         (cpu-label (cpu-display-name cpu))
-        (*standard-output* output-stream))
+        (*standard-output* output-stream)
+        (*output-stream* output-stream))
     (unless (and (listp ast) (eq (first ast) :program))
       (error "EIGHTBOL/~a: expected :program AST node, got ~s" cpu-label (first ast)))
     (let ((*class-id* (safe-getf (rest ast) :class-id))

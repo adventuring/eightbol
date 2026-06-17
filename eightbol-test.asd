@@ -36,6 +36,30 @@
                              (:file "statement-parity-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "basic-parity-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "backend-6502-classification-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "backend-f8-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "expression-constant-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "numeric-precision-all-backends"
+                              :depends-on ("eightbol-tests"))
+                             (:file "numeric-precision-tests"
                               :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
-                         (funcall (intern "RUN!" :fiveam) :eightbol)))
+                          (let ((suites '(:eightbol :backend-matrix :ast-optimize
+                                          :backend-output :parser-structure
+                                          :compile-regression :copybook-generation
+                                          :service-bank-lut :backend-cp1610
+                                          :backend-z80 :backend-operand-kinds
+                                          :backend-f8 :backend-6502-classification
+                                          :expression-constant :numeric-precision
+                                          :numeric-precision-all-backends
+                                          :pic-1-bit :s-decimal
+                                          :eightbol-cp1610-6502-parity
+                                          :dartmouth-basic-parity)))
+                            (dolist (suite suites)
+                              (format t "~&;; Running suite ~s...~%" suite)
+                               (funcall (intern "RUN!" :fiveam) suite)))))
+

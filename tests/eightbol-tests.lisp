@@ -717,12 +717,14 @@ statements, not the method wrapper boilerplate."
                                              (pic-frac-bits-table (make-hash-table :test 'equalp))
                                              (pic-nybble-semantics-table (make-hash-table :test 'equalp))
                                              (service-bank-table (make-hash-table :test 'equalp))
-                                             (working-storage eightbol::*working-storage*))
+                                             (working-storage eightbol::*working-storage*)
+                                             (optimize nil))
   "Compile a :method AST with explicit copybook tables; return assembly string.
 CPU is a supported backend keyword: 6502 family (:6502 :rp2a03 :65c02 :65c816 :huc6280),
 :z80 :cp1610 :sm83 :m6800 :m68k :i286 :arm7 :f8."
   (with-output-to-string (s)
     (let ((eightbol::*output-stream* s)
+          (eightbol::*standard-output* s)
           (eightbol::*cpu* cpu)
           (eightbol::*class-id* class-id)
           (eightbol::*slot-table* slot-table)
@@ -736,26 +738,31 @@ CPU is a supported backend keyword: 6502 family (:6502 :rp2a03 :65c02 :65c816 :h
           (eightbol::*pic-frac-bits-table* pic-frac-bits-table)
           (eightbol::*pic-nybble-semantics-table* pic-nybble-semantics-table)
           (eightbol::*working-storage* working-storage))
-      (ecase cpu
-        ((:6502) (eightbol::compile-6502-method method class-id :6502))
-        ((:rp2a03) (eightbol::compile-rp2a03-method method class-id))
-        ((:65c02) (eightbol::compile-6502-method method class-id :65c02))
-        ((:65c816) (eightbol::compile-6502-method method class-id :65c816))
-        ((:huc6280) (eightbol::compile-6502-method method class-id :huc6280))
-        ((:z80) (eightbol::compile-z80-method s method class-id slot-table type-table const-table
-                                               pic-size-table pic-width-table))
-        ((:cp1610) (eightbol::compile-cp1610-method method))
-        ((:sm83) (eightbol::compile-sm83-method method))
-        ((:m6800) (eightbol::compile-m6800-method s method class-id slot-table type-table const-table
-                                                  pic-size-table pic-width-table))
-        ((:m68k) (eightbol::compile-m68k-method s method class-id slot-table type-table const-table
-                                                pic-size-table pic-width-table))
-        ((:i286) (eightbol::compile-i286-method s method class-id slot-table type-table const-table
+      ;; optional optimization pass — wrap in :program, optimize, extract method
+      (let ((effective-method method))
+        (when optimize
+          (let* ((program (eightbol::make-program-node (or class-id "Dummy")
+                                                       :methods (list method)))
+                 (opt-program (eightbol::optimize-ast program))
+                 (opt-methods (getf (rest opt-program) :methods)))
+            (setf effective-method (first (eightbol::ensure-list opt-methods)))))
+        (ecase cpu
+          ((:6502) (eightbol::compile-6502-method effective-method class-id :6502))
+          ((:rp2a03) (eightbol::compile-rp2a03-method effective-method class-id))
+          ((:65c02) (eightbol::compile-6502-method effective-method class-id :65c02))
+          ((:65c816) (eightbol::compile-6502-method effective-method class-id :65c816))
+          ((:huc6280) (eightbol::compile-6502-method effective-method class-id :huc6280))
+          ((:z80) (eightbol::compile-z80-method s effective-method class-id slot-table type-table const-table
                                                  pic-size-table pic-width-table))
-        ((:arm7) (eightbol::compile-arm7-method s method class-id slot-table type-table const-table
-                                                 pic-size-table pic-width-table))
-        ((:f8) (eightbol::compile-f8-method s method class-id slot-table type-table const-table
-                                             pic-size-table pic-width-table))))))
+          ((:cp1610) (eightbol::compile-cp1610-method effective-method))
+          ((:sm83) (eightbol::compile-sm83-method effective-method))
+          ((:m6800) (eightbol::compile-m6800-method effective-method))
+          ((:m68k) (eightbol::compile-m68k-method effective-method))
+          ((:i286) (eightbol::compile-i286-method s effective-method class-id slot-table type-table const-table
+                                                   pic-size-table pic-width-table))
+          ((:arm7) (eightbol::compile-arm7-method s effective-method class-id slot-table type-table const-table
+                                                   pic-size-table pic-width-table))
+          ((:f8) (eightbol::compile-f8-method effective-method)))))))
 
 (defun asm-from-ast (ast)
   "Compile a hand-crafted AST directly to 6502 assembly string.

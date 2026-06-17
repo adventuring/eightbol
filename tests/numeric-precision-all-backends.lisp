@@ -37,23 +37,21 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                     (when (< i (length pic)) (assert (char= (char pic i) #\))))
                     (incf i) ; skip )
                     (* total repeat))))
-               (t (incf i))))) ; skip any other characters
-  total)
-
+               (t (incf i)))))) ; skip any other characters
 (defun pic-width (pic usage)
   "Return width in bytes for PICTURE string under USAGE."
   (cond
     ((eq usage :display)
      (pic-display-width pic))
     (t
-     (eightbol::pic-digits-to-width pic usage))))
+     (eightbol::pic-digits-to-width pic :usage usage))))
 
 ;; Test cases: each entry is a list of (operation usage signed pic-a pic-b &optional count &optional pic-c)
 ;; For MOVE, operation is :move, with :from and :to (pic-a, pic-b).
 ;; For ADD: operation is :add, with :from and :to (pic-a, pic-b).
 ;; For SUBTRACT: operation is :subtract, with :from (subtrahend), :from-target (minuend), :giving (difference) (pic-a, pic-b, pic-c).
 ;; For SHIFT-LEFT/SHIFT-RIGHT: operation is :shift-left or :shift-right, with :target and :count (pic-a, count).
-(defvar *test-cases*
+(defvar *test-cases* (append
    ;; Binary, unsigned, simple byte
    '((:add :binary nil "99" "99")
      (:subtract :binary nil "99" "99" "99")
@@ -200,7 +198,7 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
      (:subtract :binary t "S9(3)V9(4)" "S9(3)V9(4)" "S9(3)V9(4)")
      (:shift-left :binary t "S9(3)V9(4)" nil 1)
      (:shift-right :binary t "S9(3)V9(4)" nil 1)
-     (:move :binary t "S9(3)V9(4)" "S9(3)V9(4)")))
+      (:move :binary t "S9(3)V9(4)" "S9(3)V9(4)"))
    
    ;; Display, unsigned (character count) - only MOVE is meaningful for DISPLAY
    '((:move :display nil "9" "9")          ; 1 character
@@ -209,7 +207,7 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
      (:move :display nil "9(8)" "9(8)")    ; 8 characters
      ;; Note: We don't test signed for DISPLAY because it's typically unsigned character data
      ;; We don't test arithmetic or shifting for DISPLAY as they are not typically supported in the same way.
-   )
+    )))
 ;; End of test cases
 
 ;; Subscripted access test cases (same as regular but for array elements)
@@ -260,21 +258,21 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                                             ((eq op :add) "A")
                                             ((eq op :subtract) "S")
                                             (t "?"))))))
-          (fiveam:def-test test-name
+          (fiveam:def-test test-name ()
               (let ((asm (compile-method-ast-with-tables
                           `(:method :method-id "TEST" :statements ,statements)
                           "T" backend
                           :pic-width-table pic-table
-                          :working-storage working-storage-table))
-                    (is (stringp asm) "Assembly output should be a string")
-                    (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A"
-                        backend usage signed op (cond
-                                                  ((eq op :shift-left) "shift-left")
-                                                  ((eq op :shift-right) "shift-right")
-                                                  ((eq op :move) "move")
-                                                  ((eq op :add) "add")
-                                                  ((eq op :subtract) "subtract")
-                                                  (t "unknown")))))))))))
+                          :working-storage working-storage-table)))
+                (is (stringp asm) "Assembly output should be a string")
+                (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A"
+                    backend usage signed op (cond
+                                              ((eq op :shift-left) "shift-left")
+                                              ((eq op :shift-right) "shift-right")
+                                              ((eq op :move) "move")
+                                              ((eq op :add) "add")
+                                              ((eq op :subtract) "subtract")
+                                               (t "unknown"))))))))))
 
 ;; Generate tests for subscripted access
 (dolist (backend *all-backends*)
@@ -320,18 +318,18 @@ Assumes PIC consists of 9's, optionally with repetition like 9(n), and possibly 
                                             ((eq op :add) "A")
                                             ((eq op :subtract) "S")
                                             (t "?"))))))
-          (fiveam:def-test test-name
+          (fiveam:def-test test-name ()
               (let ((asm (compile-method-ast-with-tables
                           `(:method :method-id "TEST" :statements ,statements)
                           "T" backend
                           :pic-width-table pic-table
-                          :working-storage working-storage-table))
-                    (is (stringp asm) "Assembly output should be a string")
-                    (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A (subscripted)"
-                        backend usage signed op (cond
-                                                  ((eq op :shift-left) "shift-left")
-                                                  ((eq op :shift-right) "shift-right")
-                                                  ((eq op :move) "move")
-                                                  ((eq op :add) "add")
-                                                  ((eq op :subtract) "subtract")
-                                                  (t "unknown")))))))))))
+                          :working-storage working-storage-table)))
+                (is (stringp asm) "Assembly output should be a string")
+                (is (> (length asm) 0) "Assembly output should be non-empty for ~A ~A ~A ~A ~A (subscripted)"
+                    backend usage signed op (cond
+                                              ((eq op :shift-left) "shift-left")
+                                              ((eq op :shift-right) "shift-right")
+                                              ((eq op :move) "move")
+                                              ((eq op :add) "add")
+                                              ((eq op :subtract) "subtract")
+                                                (t "unknown"))))))))))

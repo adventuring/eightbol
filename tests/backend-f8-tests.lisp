@@ -30,7 +30,7 @@
     (setf (gethash "X" pic) 2)
     (let ((asm (f8-asm '(:move :from 100 :to "X") :slot-table slot-table :pic pic)))
       (is (search "LI      #100" asm))
-      (is (search "ST      10+1" asm))))
+      (is (search "ST      10+1" asm)))))
 
 (test f8/perform
   "PERFORM procedure emits JSR."
@@ -183,7 +183,7 @@
 
 (test f8/go-back
   "GOBACK emits RTN."
-  (let ((asm (f8-asm '(: goback))))
+  (let ((asm (f8-asm '(:goback))))
     (is (search "RTN" asm))))
 
 (test f8/call
@@ -206,3 +206,6 @@
   "LOOP with EXIT-PERFORM emits conditional branch."
   (let ((asm (f8-asm '(:perform :procedures ((:if :condition (= "A" 0) :then ((:exit-perform))))))))
     (is (search "BNE" asm :start (search "PERFORM" asm)))))
+)
+)
+)
