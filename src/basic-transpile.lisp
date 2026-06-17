@@ -107,19 +107,27 @@ Handles assignment, control flow, and method calls."
          (declare (ignore whole))
          (format nil "MOVE ~A TO ~A" (aref parts 1) (aref parts 0))))
       
-      ;; GOTO: GOTO 100 → GO TO 100 (but GO TO is unsupported, so this should be an error)
-      ((cl-ppcre:scan "^\\s*GOTO\\s+(\\d+)\\s*$" l :case-insensitive-mode t)
-       (multiple-value-bind (whole parts)
-           (cl-ppcre:scan-to-strings "^\\s*GOTO\\s+(\\d+)\\s*$" l :case-insensitive-mode t)
-         (declare (ignore whole))
-         (format nil "GO TO ~A" (aref parts 0))))
-      
-      ;; GOSUB: GOSUB 100 → PERFORM 100
-      ((cl-ppcre:scan "^\\s*GOSUB\\s+(\\d+)\\s*$" l :case-insensitive-mode t)
-       (multiple-value-bind (whole parts)
-           (cl-ppcre:scan-to-strings "^\\s*GOSUB\\s+(\\d+)\\s*$" l :case-insensitive-mode t)
-         (declare (ignore whole))
-         (format nil "PERFORM ~A" (aref parts 0))))
+       ;; GOTO: GOTO target → GO TO target (but GO TO is unsupported, so this should be an error)
+       ((cl-ppcre:scan "^\\s*GOTO\\s+(.+)\\s*$" l :case-insensitive-mode t)
+        (multiple-value-bind (whole parts)
+            (cl-ppcre:scan-to-strings "^\\s*GOTO\\s+(.+)\\s*$" l :case-insensitive-mode t)
+          (declare (ignore whole))
+          (let* ((target (string-trim '(#\Space #\Tab) (aref parts 0)))
+                 (numeric-p (every #'digit-char-p target)))
+            (if numeric-p
+                (format nil "GO TO ~A" target)
+                (format nil "GO TO ~A" (basic-label->cobol target))))))
+       
+       ;; GOSUB: GOSUB target → PERFORM target
+       ((cl-ppcre:scan "^\\s*GOSUB\\s+(.+)\\s*$" l :case-insensitive-mode t)
+        (multiple-value-bind (whole parts)
+            (cl-ppcre:scan-to-strings "^\\s*GOSUB\\s+(.+)\\s*$" l :case-insensitive-mode t)
+          (declare (ignore whole))
+          (let* ((target (string-trim '(#\Space #\Tab) (aref parts 0)))
+                 (numeric-p (every #'digit-char-p target)))
+            (if numeric-p
+                (format nil "PERFORM ~A" target)
+                (format nil "PERFORM ~A" (basic-label->cobol target))))))
       
       ;; RETURN → GOBACK
       ((cl-ppcre:scan "^\\s*RETURN\\s*$" l :case-insensitive-mode t)
@@ -138,19 +146,33 @@ Handles assignment, control flow, and method calls."
                (format nil "IF ~A THEN ~A" condition then-branch)))))
       
       ;; FOR loop: FOR I = 1 TO 10 → PERFORM VARYING I FROM 1 UNTIL I > 10
-      ((cl-ppcre:scan "^\\s*FOR\\s+([A-Za-z0-9_]+)\\s*=\\s*(\\d+)\\s+TO\\s*(\\d+)\\s*(?:STEP\\s+(\\d+))?\\s*$" l :case-insensitive-mode t)
-       (multiple-value-bind (whole parts)
-           (cl-ppcre:scan-to-strings "^\\s*FOR\\s+([A-Za-z0-9_]+)\\s*=\\s*(\\d+)\\s+TO\\s*(\\d+)\\s*(?:STEP\\s+(\\d+))?\\s*$" l :case-insensitive-mode t)
-         (declare (ignore whole))
-         (let ((var (aref parts 0))
-               (start (aref parts 1))
-               (end (aref parts 2))
-               (step (aref parts 3)))
-           (if step
-               (format nil "PERFORM VARYING ~A FROM ~A BY ~A UNTIL ~A > ~A" var start step var end)
-               (format nil "PERFORM VARYING ~A FROM ~A UNTIL ~A > ~A" var start var end)))))
-      
-      ;; Default: pass through as-is (should be handled by caller for unsupported statements)
+       ((cl-ppcre:scan "^\\s*FOR\\s+([A-Za-z0-9_]+)\\s*=\\s*(\\d+)\\s+TO\\s*(\\d+)\\s*(?:STEP\\s+(\\d+))?\\s*$" l :case-insensitive-mode t)
+        (multiple-value-bind (whole parts)
+            (cl-ppcre:scan-to-strings "^\\s*FOR\\s+([A-Za-z0-9_]+)\\s*=\\s*(\\d+)\\s+TO\\s*(\\d+)\\s*(?:STEP\\s+(\\d+))?\\s*$" l :case-insensitive-mode t)
+          (declare (ignore whole))
+          (let ((var (aref parts 0))
+                (start (aref parts 1))
+                (end (aref parts 2))
+                (step (aref parts 3)))
+            (if step
+                (format nil "PERFORM VARYING ~A FROM ~A BY ~A UNTIL ~A > ~A" var start step var end)
+                (format nil "PERFORM VARYING ~A FROM ~A UNTIL ~A > ~A" var start var end)))))
+
+       ;; WHILE loop: WHILE condition → PERFORM WITH TEST BEFORE UNTIL NOT (condition)
+       ((cl-ppcre:scan "^\\s*WHILE\\s+(.+)\\s*$" l :case-insensitive-mode t)
+        (multiple-value-bind (whole parts)
+            (cl-ppcre:scan-to-strings "^\\s*WHILE\\s+(.+)\\s*$" l :case-insensitive-mode t)
+          (declare (ignore whole))
+          (format nil "PERFORM WITH TEST BEFORE UNTIL NOT (~A)" (aref parts 0))))
+
+       ;; UNTIL loop: UNTIL condition → PERFORM WITH TEST AFTER UNTIL condition
+       ((cl-ppcre:scan "^\\s*UNTIL\\s+(.+)\\s*$" l :case-insensitive-mode t)
+        (multiple-value-bind (whole parts)
+            (cl-ppcre:scan-to-strings "^\\s*UNTIL\\s+(.+)\\s*$" l :case-insensitive-mode t)
+          (declare (ignore whole))
+          (format nil "PERFORM WITH TEST AFTER UNTIL ~A" (aref parts 0))))
+
+       ;; Default: pass through as-is (should be handled by caller for unsupported statements)
       (t l))))
 
 (defun transpile-basic-to-cobol-string (class-id basic-text &key (game-name *basic-default-game-name*))
