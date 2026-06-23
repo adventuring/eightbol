@@ -191,26 +191,26 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
          (with-accumulator-value ((list :bit-and #xff source-id))
            (format out "~%~10Tlda # >~a" (emit-6502-value source-id)))
          (emit-6502-store-byte-n out target class-id 1 2)))
-      ((and (consp target) (eq (first target) :deref))
-       ;; SET [pointer] TO value: store value indirectly via pointer
-       (let* ((pointer-expr (second target))
-              (ptr-w 2)   ; pointer is always 2 bytes on 6502
-              (val-w (expression-operand-width value)))
-         ;; Save the pointer value (from pointer-expr) to temporary zero page $FE,$FF
-         (format out "~%~10T;; Pointer dereference store: SET [pointer] TO value")
-         (format out "~%~10T;; Load pointer low byte from ~s" pointer-expr)
-         (emit-6502-load-byte-n out pointer-expr class-id 0 ptr-w)
-         (format out "~%~10Tsta $FE")
-         (format out "~%~10T;; Load pointer high byte from ~s" pointer-expr)
-         (emit-6502-load-byte-n out pointer-expr class-id 1 ptr-w)
-         (format out "~%~10Tsta $FF")
-         ;; Store each byte of the value at offset Y from the pointer address
-         (dotimes (i (min val-w ptr-w))
-           (format out "~%~10T;; Store byte ~d of value" i)
-           (emit-6502-load-byte-n out value class-id i val-w)
-           (format out "~%~10Tldy #~d" i)
-           (format out "~%~10Tsta ($FE),y"))
-         ;; Handle if value is narrower than pointer width (which is 2)
+       ((and (consp target) (eq (first target) :deref))
+        ;; SET [pointer] TO value: store value indirectly via pointer
+        (let* ((pointer-expr (second target))
+               (ptr-w 2)   ; pointer is always 2 bytes on 6502
+               (val-w (expression-operand-width value)))
+          ;; Save the pointer value (from pointer-expr) to temporary zero page Pointer / Pointer + 1
+          (format out "~%~10T;; Pointer dereference store: SET [pointer] TO value")
+          (format out "~%~10T;; Load pointer low byte from ~s" pointer-expr)
+          (emit-6502-load-byte-n out pointer-expr class-id 0 ptr-w)
+          (format out "~%~10Tsta Pointer")
+          (format out "~%~10T;; Load pointer high byte from ~s" pointer-expr)
+          (emit-6502-load-byte-n out pointer-expr class-id 1 ptr-w)
+          (format out "~%~10Tsta Pointer + 1")
+          ;; Store each byte of the value at offset Y from the pointer address
+          (dotimes (i (min val-w ptr-w))
+            (format out "~%~10T;; Store byte ~d of value" i)
+            (emit-6502-load-byte-n out value class-id i val-w)
+            (format out "~%~10Tldy #~d" i)
+            (format out "~%~10Tsta (Pointer), y"))
+          ;; Handle if value is narrower than pointer width (which is 2)
          (when (< val-w ptr-w)
            (format out "~%~10T;; Zero higher bytes of pointer destination")
            (with-accumulator-value (0)

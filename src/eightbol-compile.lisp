@@ -200,7 +200,7 @@ Returns the AST plist."
                        input-files ast))
               (appendf optimum (remove-if #'null (mapcar #'optimize-ast ast)))))
           (let ((*class-id* (ast-class-id optimum))
-                (*program-id* (safe-getf (rest optimum) :program-id)))
+                (*program-id* (ast-program-id optimum)))
             ;;  Phase 2: write AST 
             (let ((ast-path (or ast-output-file
                                 (make-pathname

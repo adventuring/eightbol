@@ -161,6 +161,7 @@ use emit-6502-load-expression / load-byte-n for ~s" expression)
     (setf (gethash :bit-not table) #'expression-constant-p-bit-not)
     (setf (gethash :shift-left table) #'expression-constant-p-shift-left)
     (setf (gethash :shift-right table) #'expression-constant-p-shift-right)
+    (setf (gethash :deref table) (lambda (expr) (declare (ignore expr)) nil))
     table))
 
 (defun expression-constant-p (expression)

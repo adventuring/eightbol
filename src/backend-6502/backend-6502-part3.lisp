@@ -119,6 +119,19 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
   (declare (ignore class-id))
   (emit-6502-load-byte-n-rithmetic out "and" (second expression) (third expression) n w :swap-allowed-p t))
 
+(defun emit-6502-load-byte-n-deref (out expression class-id n w)
+  "Load byte N of W-byte value from address computed by inner expression.
+Emit 6502 code: compute pointer into ZP Pointer, then lda (Pointer),y."
+  (declare (ignore w))
+  (let ((pointer-expr (second expression)))
+    (format out "~%~10T;; [deref] load via pointer")
+    (emit-6502-load-byte-n out pointer-expr class-id 0 2)
+    (format out "~%~10Tsta Pointer")
+    (emit-6502-load-byte-n out pointer-expr class-id 1 2)
+    (format out "~%~10Tsta Pointer + 1")
+    (format out "~%~10Tldy # ~d" n)
+    (format out "~%~10Tlda (Pointer), y")))
+
 (defparameter *emit-6502-load-byte-n-handlers*
   (let ((table (make-hash-table)))
     (setf (gethash :of table) #'emit-6502-load-byte-n-of)
@@ -136,6 +149,7 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
     (setf (gethash :shift-left table) #'emit-6502-load-byte-n-shift-left)
     (setf (gethash :shift-right table) #'emit-6502-load-byte-n-shift-right)
     (setf (gethash :bit-and table) #'emit-6502-load-byte-n-bit-and)
+    (setf (gethash :deref table) #'emit-6502-load-byte-n-deref)
     table))
 
 (defun emit-6502-load-byte-n (out expression class-id n w)
@@ -263,6 +277,18 @@ the slot offset from an immediately preceding emit-6502-load-byte-n to the same 
      (let* ((offset (apply #'slot-symbol (rest dest)))
 	  (pointer (6502-object-pointer-label (third dest) class-id)))
        (format out "~%~10Tsta ~a + ~a ~[~:;~:* + ~d~]" pointer offset n)))
+
+    ((and (listp dest) (eql :deref (first dest)))
+     (let ((pointer-expr (second dest)))
+       (format out "~%~10T;; [deref] store byte ~d via pointer" n)
+       (format out "~%~10Tpha")
+       (emit-6502-load-byte-n out pointer-expr class-id 0 2)
+       (format out "~%~10Tsta Pointer")
+       (emit-6502-load-byte-n out pointer-expr class-id 1 2)
+       (format out "~%~10Tsta Pointer + 1")
+       (format out "~%~10Tpla")
+       (format out "~%~10Tldy # ~d" n)
+       (format out "~%~10Tsta (Pointer), y")))
 
     ((stringp dest)
      (format out "~%~10Tsta ~a~[~:;~:* + ~d~]"
