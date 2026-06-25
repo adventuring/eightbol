@@ -280,15 +280,19 @@ the slot offset from an immediately preceding emit-6502-load-byte-n to the same 
 
     ((and (listp dest) (eql :deref (first dest)))
      (let ((pointer-expr (second dest)))
-       (format out "~%~10T;; [deref] store byte ~d via pointer" n)
-       (format out "~%~10Tpha")
-       (emit-6502-load-byte-n out pointer-expr class-id 0 2)
-       (format out "~%~10Tsta Pointer")
-       (emit-6502-load-byte-n out pointer-expr class-id 1 2)
-       (format out "~%~10Tsta Pointer + 1")
-       (format out "~%~10Tpla")
-       (format out "~%~10Tldy # ~d" n)
-       (format out "~%~10Tsta (Pointer), y")))
+       (if (expression-constant-p pointer-expr)
+           (format out "~%~10Tsta ~a~[~:;~:* + ~d~]"
+                   (expression-constant-value pointer-expr) n)
+           (progn
+             (format out "~%~10T;; [deref] store byte ~d via pointer" n)
+             (format out "~%~10Tpha")
+             (emit-6502-load-byte-n out pointer-expr class-id 0 2)
+             (format out "~%~10Tsta Pointer")
+             (emit-6502-load-byte-n out pointer-expr class-id 1 2)
+             (format out "~%~10Tsta Pointer + 1")
+             (format out "~%~10Tpla")
+             (format out "~%~10Tldy # ~d" n)
+              (format out "~%~10Tsta (Pointer), y")))))
 
     ((stringp dest)
      (format out "~%~10Tsta ~a~[~:;~:* + ~d~]"

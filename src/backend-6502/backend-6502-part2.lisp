@@ -95,8 +95,14 @@ use emit-6502-load-expression / load-byte-n for ~s" expression)
   (declare (ignore expression)) nil)
 
 (defun expression-constant-p-address-of (expression)
-  (when-let (of-what (gethash (second expression) *working-storage*))
-    (not (getf of-what :value))))
+  "ADDRESS OF X is constant when X is a label (not a VALUE constant).
+When X is in *working-storage* and has no :value, it is a RAM variable — address still known at
+compile time. When X is not in *working-storage*, treat as external label — address constant.
+Only nil when X is in *working-storage* with a VALUE (a manifest constant, not a storage location)."
+  (let ((of-what (gethash (second expression) *working-storage*)))
+    (if of-what
+        (not (getf of-what :value))
+        t)))
 
 (defun expression-constant-p-add (expression)
   (and (expression-constant-p (getf (rest expression) :from))
@@ -143,6 +149,11 @@ use emit-6502-load-expression / load-byte-n for ~s" expression)
   (and (expression-constant-p (second expression))
        (expression-constant-p (third expression))))
 
+(defun expression-constant-p-deref (expression)
+  "(:deref addr) is constant when addr is constant — the target address is a
+compile-time-known assembly expression."
+  (expression-constant-p (second expression)))
+
 (defparameter *expression-constant-p-handlers*
   (let ((table (make-hash-table)))
     (setf (gethash :on table) #'expression-constant-p-on)
@@ -161,7 +172,7 @@ use emit-6502-load-expression / load-byte-n for ~s" expression)
     (setf (gethash :bit-not table) #'expression-constant-p-bit-not)
     (setf (gethash :shift-left table) #'expression-constant-p-shift-left)
     (setf (gethash :shift-right table) #'expression-constant-p-shift-right)
-    (setf (gethash :deref table) (lambda (expr) (declare (ignore expr)) nil))
+    (setf (gethash :deref table) #'expression-constant-p-deref)
     table))
 
 (defun expression-constant-p (expression)
@@ -252,6 +263,11 @@ or a @code{string=} type error on the head.
           (emit-6502-value (second expression))
           (emit-6502-value (third expression))))
 
+(defun expression-constant-value-deref (expression)
+  "Return the inner address expression as the value — the address IS the value for :deref
+when used in an absolute-store context."
+  (expression-constant-value (second expression)))
+
 (defparameter *expression-constant-value-handlers*
   (let ((table (make-hash-table)))
     (setf (gethash :literal table) #'expression-constant-value-literal)
@@ -265,6 +281,7 @@ or a @code{string=} type error on the head.
     (setf (gethash :bit-xor table) #'expression-constant-value-bit-xor)
     (setf (gethash :shift-left table) #'expression-constant-value-shift-left)
     (setf (gethash :shift-right table) #'expression-constant-value-shift-right)
+    (setf (gethash :deref table) #'expression-constant-value-deref)
     table))
 
 (defun expression-constant-value (expression)
