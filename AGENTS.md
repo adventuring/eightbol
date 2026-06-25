@@ -54,3 +54,13 @@ See `.cursor/rules/eightbol-build-plan.mdc` in the Phantasia project root for bu
 - Port behavior from `Source/Code/7800/Classes/<Name>Class.s` into `Source/Classes/<Name>.cob`, then delete the hand-written assembly once `Source/Generated/Classes/${CPUDIR}/<Name>Class.s` is produced by `bin/eightbol` and behavior is verified.
 - Regenerated `Source/Generated/${PORT}/Makefile` lists `$(EIGHTBOL_CLASS_OUTPUTS)` as an order-only prerequisite on ROM (and test) bank assembly so missing generated class files cannot slip past the build.
 - See `Source/Documentation/EIGHTBOL-ClassDesignNotes.texi` (sections “Porting `*Class.s` assembly to EIGHTBOL” and “Legacy module removal checklist”) for the full checklist and removal gates.
+
+## 6.2. Decimal Usage in PIC
+
+This feature allows:
+- Use of 'S' in PIC for decimal: Counts as one nybble
+- Usages
+  - :BINARY
+  - :DECIMAL (automatically picks up 'S' for one extra nybble)
+Examples:
+  - PIC: 99 (BINARY: 8 digits) vs PIC: S99 (BINARY: 9 digits)
