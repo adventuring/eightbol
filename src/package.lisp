@@ -1,22 +1,34 @@
-;; EIGHTBOL src/package.lisp
+;; src/package.lisp — EIGHTBOL core public API
 ;;; Copyright © 2026 Interworldly Adventuring, LLC
-(common-lisp:defpackage :eightbol
+(cl:in-package :cl-user)
+
+(defpackage #:eightbol
   (:use :cl :cl-change-case :yacc :alexandria :serapeum/bundle)
+  ;;--- Shadow settings -------------------------------------------------------
   (:shadow #:true)
   (:shadowing-import-from :serapeum #:partition #:comment #:occurs)
   (:import-from :split-sequence :split-sequence)
-  (:export :main :compile-eightbol
-           :+cpu-display-names+ :+supported-cpus+ :+object-reference-storage-width+
-           :compile-to-assembly-with-ast-passes :parse-eightbol-string-for-codegen
-           :eightbol-basic :read-class-name-designator
-           :transpile-basic-to-cobol-string :compile-basic-from-path
-           :class-id-from-bas-pathname :*basic-default-game-name*
-           :source-error :copybook-not-found :copybook-invalid-name
-   :copybook-read-error :backend-copy-not-expanded
-   :usage-error :unknown-option-error :dangling-option-error :unknown-cpu-error
-   :input-file-not-found :parse-failed-error :invalid-ast-error
-           :undefined-class-reference :routine-not-terminated
-           :validate-eightbol-program :collect-object-reference-classes-from-ast))
+  
+  ;;--- Public exported symbols -----------------------------------------------
+  (:export
+   ;; Core entry points used by external tools
+   :main
+   :compile-eightbol
+   :parse-eightbol-string-for-codegen
+   :write-ast
+   :make-path-name
+   :with-open-file*
+   :class-id-from-bas-pathname
+   :validate-eightbol-program
+   :collect-object-reference-classes-from-ast
+   
+   ;; BASIC‑specific API (exposed for external BASIC drivers)
+   :basic-lex
+   :parse-basic
+   :basic-make-parser
+   
+   ;; End‑to‑end compilation helpers (externally invoked)
+   :compile-basic-from-path)
 
-(in-package :eightbol)
-
+  (:shadowing-import-from :serapeum #:partition #:comment #:occurs)
+  (:import-from :split-sequence :split-sequence))

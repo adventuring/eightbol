@@ -1,232 +1,496 @@
-;; src/basic-parser.lisp — Bare-bones BASIC → Eightbol AST
+;; src/basic-parser.lisp — YACC grammar for Dartmouth BASIC → EIGHTBOL AST
 ;;; Copyright © 2026 Interworldly Adventuring, LLC
-(defun basic-label->cobol (label)
-  "Convert BASIC label to COBOL format: hyphenated, case-insensitive, trailing period."
-  (let* ((trim (string-trim '(#\Space #\Tab #\Newline) label))
-         (clean (cl-ppcre:regex-replace-all "[^A-Za-z0-9]+" trim "--"))
-         (lower (string-downcase clean)))
-    (format nil "~A." lower)))
+(in-package :eightbol)
 
-(defun basic-label->lisp (label)
-  "Convert BASIC label to Lisp format: hyphenated, case-insensitive, no trailing punctuation."
-  (let* ((trim (string-trim '(#\Space #\Tab #\Newline) label))
-         (clean (cl-ppcre:regex-replace-all "[^A-Za-z0-9]+" trim "--"))
-         (lower (string-downcase clean)))
-    lower))
+;;; Token list for BASIC YACC parser
+(eval-when (:compile-toplevel :execute :load-toplevel)
+  (defun basic-token-list ()
+    (mapcar (compose #'intern #'string)
+            '(|(| |)| |:| |,| + - * / = <> < <= > >=
+              let for to step next if then else goto gosub return
+              log fault stop method on class procedure end
+              while until do library
+              and or not
+              number string ident))))
 
-(defun basic-capitalize-word (word)
-  "Capitalize the first character of WORD."
-  (if (zerop (length word))
-      word
-      (concatenate 'string (string-upcase (subseq word 0 1))
-                   (string-downcase (subseq word 1)))))
+;;; Parser action functions for BASIC
 
-(defun basic-label->assembly (label)
-  "Convert BASIC label to Assembly format: PascalCase, underscore for major divisions, trailing colon."
-  (let* ((trim (string-trim '(#\Space #\Tab #\Newline) label))
-         ;; Split on commas or spaces
-         (parts (remove-if (lambda (s) (string= s "") trim))
-                (cl-ppcre:split "[, ]+" trim))
-         ;; Capitalize each part
-         (capitalized (mapcar #'basic-capitalize-word parts))
-         (joined (reduce (lambda (a b) (format nil "~A_~B" a b)) capitalized)))
-    (format nil "~A:" joined)))
+(defun basic-parse-program (statements)
+  "Top-level program node from list of statement nodes.
+STATEMENTS is a list where each element is either:
+  - (:line lineno label stmt)
+  - (:error :code line-text)
+The line number and label are used to create BASIC_Lnnnnnn labels."
+  (let* ((class-id *basic-current-class*)
+         (methods '())
+         (procedures '())
+         (main-statements '()))
+    (dolist (item statements)
+      (cond
+        ((eq (first item) :method)
+         (push item methods))
+        ((eq (first item) :procedure)
+         (push item procedures))
+        ((and (listp item) (eq (first item) :line))
+         (push (third item) main-statements))
+        ((eq (first item) :error)
+         (push item main-statements))
+        (t (push item main-statements))))
+    (make-program-node
+     class-id
+     :methods (append (nreverse methods) (nreverse procedures))
+     :data (when main-statements
+             (list (cons 'main-block main-statements))))))
 
-(defun basic-label->cobol (label)
-  "Convert BASIC label to COBOL format: hyphenated, case-insensitive, trailing period."
-  (let* ((trim (string-trim '(#\Space #\Tab #\Newline) label))
-         (parts (remove-if (lambda (s) (string= s ""))
-                           (split-sequence:split-sequence-if (lambda (c) (or (char= c #\Space) (char= c #\,))) trim)))
-         (joined (mapconcat (lambda (s) (string-downcase s)) parts "--")))
-    (format nil "~A." joined)))
+(defun basic-parse-statement-line (lineno label stmt)
+  "Parse a line with optional line number and label."
+  (list :line lineno label stmt))
 
-(defparameter *basic-keywords*
-   '(("LET" . :LET) ("FOR" . :FOR) ("TO" . :TO) ("STEP" . :STEP)
-     ("NEXT" . :NEXT) ("IF" . :IF) ("THEN" . :THEN) ("ELSE" . :ELSE)
-     ("GOTO" . :GOTO) ("GOSUB" . :GOSUB) ("RETURN" . :RETURN)
-     ("LOG" . :LOG) ("FAULT" . :FAULT) ("METHOD" . :METHOD)
-     ("WHILE" . :WHILE) ("UNTIL" . :UNTIL) ("LIBRARY" . :LIBRARY)))
+(defun basic-parse-error (line-text)
+  "Create error node for invalid syntax."
+  (make-error-node line-text))
 
-(defun basic-token-type (lexeme)
-  "Return the token type for LEXEME."
-  (cond
-    ((and (stringp lexeme) (digit-char-p (char lexeme 0)))
-     :NUMBER)
-    ((and (stringp lexeme) (char= (char lexeme 0) #\" ))
-     :STRING)
-    ((assoc lexeme *basic-keywords* :test #'string-equal))
-     (cdr it))
-    ((find (char lexeme 0) "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$")
-     :IDENT)
-    ((string= lexeme "(") :LPAREN)
-    ((string= lexeme ")") :RPAREN)
-    ((string= lexeme "*") :TIMES)
-    ((string= lexeme "+") :PLUS)
-    ((string= lexeme "-") :MINUS)
-    ((string= lexeme "/") :DIVIDE)
-    ((string= lexeme "=") :ASSIGN)
-    ((string= lexeme ",") :COMMA)
-    ((string= lexeme ".") :DOT)
-    ((string= lexeme ";") :SEMI)
-    (t :UNKNOWN)))
+(defun basic-parse-let (target expr)
+  "LET target = expr"
+  (make-move-node expr target))
 
-(defun basic-lex-stream (text)
-  "Split TEXT into token list."
-  (let ((tokens '())
-        (chars '()))
-    (labels ((flush () (when chars (push (coerce (reverse chars) 'string) tokens))))
-      (dolist (c (concatenate 'list text))
-        (cond ((find c " \t\r\n" :test #'char=) (flush) (setf chars nil))
-              ((find c "(,)=*+/-.;" :test #'char=)
-               (flush)
-               (push (string c) tokens))
-              (t (push c chars))))
-    (flush)
+(defun basic-parse-if-then (cond then-stmt)
+  "IF condition THEN statement"
+  (make-if-node cond (list then-stmt) '()))
+
+(defun basic-parse-if-then-else (cond then-stmt else-stmt)
+  "IF condition THEN statement ELSE statement"
+  (make-if-node cond (list then-stmt) (list else-stmt)))
+
+(defun basic-parse-for (var start end step)
+  "FOR var = start TO end [STEP step]"
+  (make-perform-node
+   (format nil "FOR-~A" var)
+   :varying var
+   :from start
+   :by (or step 1)
+   :until (make-conditional-gt (make-identifier var) end)))
+
+(defun basic-parse-next (var)
+  "NEXT [var] - loop variable is optional"
+  (make-goback-node))  ; Simplified; NEXT just continues the loop
+
+(defun basic-parse-while (cond stmt)
+  "WHILE condition statement"
+  (make-if-node cond (list stmt) '()))
+
+(defun basic-parse-until (cond stmt)
+  "UNTIL condition statement"
+  (make-if-node (make-conditional-not cond) (list stmt) '()))
+
+(defun basic-parse-do (stmts while-cond)
+  "DO : statements... : NEXT WHILE condition"
+  (let ((label (format nil "DO-~A" (gensym))))
+    (make-perform-node label
+      :until (make-conditional-not while-cond))))
+
+(defun basic-parse-do-until (stmts until-cond)
+  "DO : statements... : NEXT UNTIL condition"
+  (let ((label (format nil "DO-~A" (gensym))))
+    (make-perform-node label
+      :until until-cond)))
+
+(defun basic-parse-log-fault (code)
+  "LOG FAULT \"CODE\""
+  (make-log-fault-node code))
+
+(defun basic-parse-stop (code)
+  "STOP \"CODE\""
+  (make-stop-run-node code))
+
+(defun basic-parse-goto (target)
+  "GOTO target"
+  (list :goto :target target))
+
+(defun basic-parse-gosub (target)
+  "GOSUB target"
+  (list :perform :procedure target))
+
+(defun basic-parse-return ()
+  "RETURN"
+  (make-goback-node))
+
+(defun basic-parse-method (name class)
+  "METHOD \"Name\" ON \"Class\""
+  (make-method-node name))
+
+(defun basic-parse-procedure (name)
+  "PROCEDURE \"Name\""
+  (make-procedure-node name))
+
+(defun basic-parse-class (name)
+  "CLASS \"Name\""
+  (setf *basic-current-class* name)
+  (make-program-node name))
+
+(defun basic-parse-end ()
+  "END"
+  (make-goback-node))
+
+(defun basic-parse-invoke (obj method)
+  "INVOKE obj \"Method\""
+  (make-invoke-node obj method))
+
+(defun basic-parse-call (target)
+  "CALL target"
+  (make-call-node target))
+
+(defun basic-parse-move (from to)
+  "MOVE from TO to"
+  (make-move-node from to))
+
+(defun basic-parse-set (target value)
+  "SET target TO value"
+  (make-set-node target value))
+
+(defun basic-parse-expression-or (e1 e2)
+  (make-conditional-or e1 e2))
+
+(defun basic-parse-expression-and (e1 e2)
+  (make-conditional-and e1 e2))
+
+(defun basic-parse-expression-not (expr)
+  (make-conditional-not expr))
+
+(defun basic-parse-expression-rel (e1 op e2)
+  (ecase op
+    (:equal (make-conditional-eq e1 e2))
+    (:ne (make-conditional-ne e1 e2))
+    (:lt (make-conditional-lt e1 e2))
+    (:le (make-conditional-le e1 e2))
+    (:gt (make-conditional-gt e1 e2))
+    (:ge (make-conditional-ge e1 e2))))
+
+(defun basic-parse-expression-add (e1 e2)
+  (make-expression-add e1 e2))
+
+(defun basic-parse-expression-sub (e1 e2)
+  (make-expression-subtract e1 e2))
+
+(defun basic-parse-expression-mul (e1 e2)
+  (make-expression-multiply e1 e2))
+
+(defun basic-parse-expression-div (e1 e2)
+  (make-expression-divide e1 e2))
+
+(defun basic-parse-paren (expr)
+  expr)
+
+(defun basic-parse-identifier (name)
+  (make-identifier name))
+
+(defun basic-parse-number (n)
+  (make-literal-number n))
+
+(defun basic-parse-string (s)
+  (make-literal-string s))
+
+(defun basic-parse-self ()
+  (make-self))
+
+(defun basic-parse-null ()
+  (make-null))
+
+(defun basic-parse-assembly-entry (label)
+  (make-assembly-entry-node label))
+
+(defun basic-parse-copy (name)
+  (make-copy-node name))
+
+;;; YACC grammar definition for BASIC
+(eval-when (:compile-toplevel :execute :load-toplevel)
+  (eval
+   `(yacc:define-parser *basic-parser*
+      (:start-symbol basic-program)
+      (:terminals (,@(basic-token-list)
+                    number string ident))
+      (:precedence
+       (:left or)
+       (:left and)
+       (:left not)
+       (:left = <> < <= > >=)
+       (:left + -)
+       (:left * /))
+      (:muffle-conflicts :some)
+
+      ;; Program is a list of lines/statements
+      (basic-program
+       (statement-list
+        #'basic-parse-program))
+
+      (statement-list
+       (statement
+        (lambda (s) (list s)))
+       (statement-list statement
+        (lambda (list stmt) (append list (list stmt)))))
+
+      ;; Each statement can have line number and label
+      (statement
+       (lineno-opt label-opt colon stmt
+        #'basic-parse-statement-line)
+       (error-line
+        #'basic-parse-error))
+
+      (lineno-opt
+       (number (lambda (n) n))
+       (() (constantly nil)))
+
+      (label-opt
+       (string (lambda (s) s))
+       (() (constantly nil)))
+
+      (colon
+       :COLON)
+
+      (stmt
+       (let-stmt)
+       (if-stmt)
+       (for-stmt)
+       (next-stmt)
+       (while-stmt)
+       (until-stmt)
+       (do-stmt)
+       (log-fault-stmt)
+       (stop-stmt)
+       (goto-stmt)
+       (gosub-stmt)
+       (return-stmt)
+       (method-def)
+       (procedure-def)
+       (class-def)
+       (end-stmt)
+       (invoke-stmt)
+       (call-stmt)
+       (move-stmt)
+       (set-stmt)
+       (assembly-entry-stmt)
+       (copy-stmt)
+       (expression-stmt))
+
+      ;; LET target = expression
+      (let-stmt
+       (:LET ident :EQUAL expression
+        #'basic-parse-let))
+
+      ;; IF condition THEN statement [ELSE statement]
+      (if-stmt
+       (:IF condition :THEN stmt
+        #'basic-parse-if-then)
+       (:IF condition :THEN stmt :ELSE stmt
+        #'basic-parse-if-then-else))
+
+      ;; FOR var = start TO end [STEP step]
+      (for-stmt
+       (:FOR ident :EQUAL expression :TO expression step-opt
+        #'basic-parse-for))
+
+      (step-opt
+       (:STEP expression (lambda (e) e))
+       (() (constantly nil)))
+
+      ;; NEXT [var]
+      (next-stmt
+       (:NEXT ident-opt
+        #'basic-parse-next))
+
+      (ident-opt
+       (ident (lambda (i) i))
+       (() (constantly nil)))
+
+      ;; WHILE condition statement
+      (while-stmt
+       (:WHILE condition stmt
+        #'basic-parse-while))
+
+      ;; UNTIL condition statement
+      (until-stmt
+       (:UNTIL condition stmt
+        #'basic-parse-until))
+
+      ;; DO : statements... : NEXT WHILE condition
+      (do-stmt
+       (:DO colon stmt-list :NEXT :WHILE condition
+        #'basic-parse-do)
+       (:DO colon stmt-list :NEXT :UNTIL condition
+        #'basic-parse-do-until))
+
+      (stmt-list
+       (stmt
+        (lambda (s) (list s)))
+       (stmt-list colon stmt
+        (lambda (list s) (append list (list s)))))
+
+      ;; LOG FAULT "code"
+      (log-fault-stmt
+       (:LOG :FAULT string
+        #'basic-parse-log-fault))
+
+      ;; STOP "code"
+      (stop-stmt
+       (:STOP string
+        #'basic-parse-stop))
+
+      ;; GOTO target
+      (goto-stmt
+       (:GOTO ident
+        #'basic-parse-goto))
+
+      ;; GOSUB target
+      (gosub-stmt
+       (:GOSUB ident
+        #'basic-parse-gosub))
+
+      ;; RETURN
+      (return-stmt
+       (:RETURN
+        #'basic-parse-return))
+
+      ;; METHOD "Name" ON "Class"
+      (method-def
+       (:METHOD string :ON string
+        #'basic-parse-method))
+
+      ;; PROCEDURE "Name"
+      (procedure-def
+       (:PROCEDURE string
+        #'basic-parse-procedure))
+
+      ;; CLASS "Name"
+      (class-def
+       (:CLASS string
+        #'basic-parse-class))
+
+      ;; END
+      (end-stmt
+       (:END
+        #'basic-parse-end))
+
+      ;; INVOKE obj "Method"
+      (invoke-stmt
+       (:INVOKE ident string
+        #'basic-parse-invoke))
+
+      ;; CALL target
+      (call-stmt
+       (:CALL ident
+        #'basic-parse-call))
+
+      ;; MOVE from TO to
+      (move-stmt
+       (:MOVE expression :TO ident
+        #'basic-parse-move))
+
+      ;; SET target TO value
+      (set-stmt
+       (:SET ident :TO expression
+        #'basic-parse-set))
+
+      ;; ASSEMBLY ENTRY "label"
+      (assembly-entry-stmt
+       (:ASSEMBLY :ENTRY string
+        #'basic-parse-assembly-entry))
+
+      ;; COPY "name"
+      (copy-stmt
+       (:COPY string
+        #'basic-parse-copy))
+
+      ;; expression statement (standalone expression)
+      (expression-stmt
+       (expression))
+
+      ;; Conditions and expressions
+      (condition
+       (expression))  ; In BASIC, conditions are expressions
+
+      (expression
+       (or-expr))
+
+      (or-expr
+       (and-expr)
+       (or-expr :OR and-expr
+        #'basic-parse-expression-or))
+
+      (and-expr
+       (not-expr)
+       (and-expr :AND not-expr
+        #'basic-parse-expression-and))
+
+      (not-expr
+       (rel-expr)
+       (:NOT not-expr
+        #'basic-parse-expression-not))
+
+      (rel-expr
+       (add-expr)
+       (add-expr :EQUAL add-expr
+        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :equal e2)))
+       (add-expr :NE add-expr
+        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :ne e2)))
+       (add-expr :LT add-expr
+        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :lt e2)))
+       (add-expr :LE add-expr
+        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :le e2)))
+       (add-expr :GT add-expr
+        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :gt e2)))
+       (add-expr :GE add-expr
+        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :ge e2))))
+
+      (add-expr
+       (mul-expr)
+       (add-expr :PLUS mul-expr
+        #'basic-parse-expression-add)
+       (add-expr :MINUS mul-expr
+        #'basic-parse-expression-sub))
+
+      (mul-expr
+       (primary)
+       (mul-expr :TIMES primary
+        #'basic-parse-expression-mul)
+       (mul-expr :DIVIDE primary
+        #'basic-parse-expression-div))
+
+      (primary
+       :NUMBER #'basic-parse-number
+       :STRING #'basic-parse-string
+       :IDENT #'basic-parse-identifier
+       (:SELF #'basic-parse-self)
+       (:NULL #'basic-parse-null)
+       (:LPAREN expression :RPAREN #'basic-parse-paren))
+
+      ;; Error recovery: consume tokens until newline/colon
+      (error-line
+       (() (constantly ""))
+       (error-line anything (lambda (_ a) a))))))
+
+;;; Entry point functions
+(defun basic-lex (source)
+  "Lex BASIC source string into token list for YACC."
+  (let ((tokens (basic-lex-source source)))
     (mapcar (lambda (tok)
-              (let ((typ (basic-token-type tok)))
-                (list typ (unless (eq typ :NUMBER) tok))))
-            (reverse tokens))))
-
-(defparameter *basic-tokens* nil)
-(defparameter *basic-pos* 0)
-
-(defun peek-token () (nth *basic-pos* *basic-tokens*))
-(defun consume-token () (prog1 (peek-token) (incf *basic-pos*)))
+              (list (first tok) (second tok)))
+            tokens)))
 
 (defun parse-basic (source)
-  "Parse a BASIC source string into an Eightbol AST plist."
-  (setf *basic-tokens* (basic-lex-stream source) *basic-pos* 0)
-  (catch :eof
-    (loop while (peek-token)
-          collect (parse-line) into lines
-          finally (return (nreverse lines)))))
+  "Parse BASIC source string and return AST."
+  (let ((*basic-current-class* "Program")
+        (*yacc-debug* nil))
+    (yacc:parse-with-lexer
+     *basic-parser*
+     (lambda ()
+       (let ((tokens (basic-lex-source source)))
+         (lambda ()
+           (when tokens
+             (pop tokens))))))))
 
-(defun parse-line ()
-  (let ((lineno (parse-number))
-        (label nil)
-        (stmt nil))
-    (cond
-      ;; Quoted label definition at start of line: "This is a label":
-      ((and (eq (caar (peek-token)) :STRING)
-            (string= (cadar (peek-token)) ":"))
-       (setf label (prog1 (cadar (consume-token)) (consume-token)))
-       (setf stmt (parse-statement)))
-      ;; Existing numeric line format
-      ((and (eq (caar (peek-token)) :IDENT) lineno)
-       (setf label (cadar (peek-token))
-             stmt (parse-statement))))
-    (list (when lineno (list :line-number lineno))
-          (when label (list :label label))
-          (when stmt (list :statement stmt)))))
+(defun basic-make-parser ()
+  "Return the BASIC YACC parser function."
+  *basic-parser*)
 
-(defun parse-number ()
-  (let ((tok (peek-token)))
-    (when (eq (caar tok) :NUMBER)
-      (consume-token)
-      (parse-integer (cadar tok)))))
-
-(defun parse-expression () (parse-term))
-
-(defun parse-term ()
-  (let ((lhs (parse-factor)))
-    (loop while (member (caar (peek-token)) '(:TIMES :DIVIDE :PLUS :MINUS))
-          do (let ((op (caar (consume-token))))
-               (setf lhs (list (cond ((eq op :TIMES) :multiply)
-                                     ((eq op :DIVIDE) :divide)
-                                     ((eq op :PLUS) :add)
-                                     ((eq op :MINUS) :subtract)
-                                     (t :add))
-                               lhs (parse-factor)))))
-    lhs))
-
-(defun parse-factor ()
-  (let ((tok (peek-token)))
-    (ecase (caar tok)
-      (:NUMBER (prog1 (cadar tok) (consume-token)))
-      (:STRING (prog1 (cadar tok) (consume-token)))
-      (:IDENT
-       (let ((name (prog1 (cadar tok) (consume-token))))
-         (when (eq (caar (peek-token)) :LPAREN)
-           (consume-token)
-           (let ((index (parse-expression)))
-             (when (eq (caar (consume-token)) :RPAREN)
-               (list :subscript name index)))))
-      (:LPAREN (consume-token) (let ((e (parse-expression))) (consume-token) e)))))
-
-(defun parse-statement ()
-  (let ((tok (peek-token)))
-    (ecase (caar tok)
-      (:LET (consume-token)
-            (let ((target (prog1 (cadar (consume-token)) (consume-token)))
-              (consume-token)
-              (let ((source (parse-expression)))
-                (list :move :to target :from source))))
-      (:GOTO (consume-token)
-              (let ((target (prog1 (cadar (consume-token)) (consume-token)))
-                    (library nil)
-                    (bank-intro nil))
-                (when (and (eq (caar (peek-token)) :COMMA))
-                  (consume-token)
-                  (let ((next-tok (peek-token)))
-                    (cond
-                      ((and (eq (caar next-tok) :LIBRARY))
-                       (setf library t)
-                       (consume-token))
-                      ((eq (caar next-tok) :IDENT)
-                       (setf bank-intro (cadar (consume-token)))))))
-                (list :goto :target target :library library :bank-intro bank-intro)))
-      (:GOSUB (consume-token)
-               (let ((target (prog1 (cadar (consume-token)) (consume-token)))
-                     (library nil)
-                     (bank-intro nil))
-                 (when (and (eq (caar (peek-token)) :COMMA))
-                   (consume-token)
-                   (let ((next-tok (peek-token)))
-                     (cond
-                       ((and (eq (caar next-tok) :LIBRARY))
-                        (setf library t)
-                        (consume-token))
-                       ((eq (caar next-tok) :IDENT)
-                        (setf bank-intro (cadar (consume-token)))))))
-                 (list :gosub :target target :library library :bank-intro bank-intro)))
-      (:RETURN (consume-token) (list :return))
-      (:IF (consume-token)
-           (let ((cond (parse-expression))
-                 (consume-token)
-                 (then-stmt (parse-statement)))
-             (when (eq (caar (peek-token)) :ELSE)
-               (consume-token)
-               (let ((else-stmt (parse-statement)))
-                 (list :if :condition cond :then then-stmt :else else-stmt)))))
-       (:FOR (consume-token)
-             (let ((var (prog1 (cadar (consume-token)) (consume-token)))
-                   (consume-token)
-                   (start (parse-expression))
-                   (consume-token)
-                   (end (parse-expression))
-                   (step (when (eq (caar (peek-token)) :STEP)
-                           (consume-token)
-                           (parse-expression))))
-               (list :perform-varying var :from start :to end :by step)))
-       (:WHILE (consume-token)
-               (let ((condition (parse-expression))
-                     (body (parse-statement)))
-                 (when (and (eq (caar (peek-token)) :NEXT))
-                   (consume-token))
-                 (list :while :condition condition :body body)))
-       (:UNTIL (consume-token)
-                (let ((condition (parse-expression))
-                      (body (parse-statement)))
-                  (when (and (eq (caar (peek-token)) :NEXT))
-                    (consume-token))
-                  (list :until :condition condition :body body)))
-      (:LOG (consume-token)
-            (consume-token)
-            (let ((msg (prog1 (cadar (consume-token)) (consume-token))))
-              (list :log-fault :code msg)))))))
-
-(defun basic-parse-string (text)
-  "Parse BASIC TEXT and return AST plist."
-  (parse-basic text))
-
-(export 'basic-parse-string 'parse-basic 'basic-lex-stream))
+(export '(basic-lex parse-basic basic-make-parser
+          *basic-parser* basic-token-list))
