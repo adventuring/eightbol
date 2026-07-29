@@ -7,11 +7,11 @@
 (defun make-program-node (class-id &key data methods identification environment)
   "Build a :program AST node matching ast.lisp:make-program-node."
   (list :program
-        :class-id      class-id
+        :class-id class-id
         :identification identification
-        :environment   environment
-        :data          (or data '())
-        :methods       (or methods '())))
+        :environment environment
+        :data data
+        :methods methods))
 
 (defun make-method-node (method-id &key statements)
   "Build a :method AST node matching ast.lisp:make-method-node."
@@ -216,71 +216,3 @@
 (defun make-error-node (code)
   "Build an error AST node for invalid syntax."
   (list :error :code code))
-
-;;; Utility functions
-
-(defun header-case (string)
-  "Convert string to Header-Case (e.g., 'foo-bar' -> 'Foo-Bar')."
-  (when (stringp string)
-    (cl-change-case:header-case string)))
-
-(defun pascal-case (string)
-  "Convert string to PascalCase (e.g., 'foo-bar' -> 'FooBar')."
-  (when (stringp string)
-    (cl-change-case:pascal-case string)))
-
-(export '(make-program-node
-         make-method-node
-         make-procedure-node
-         make-move-node
-         make-invoke-node
-         make-call-node
-         make-if-node
-         make-goback-node
-         make-exit-method-node
-         make-stop-run-node
-         make-log-fault-node
-         make-perform-node
-         make-set-node
-         make-assembly-entry-node
-         make-copy-node
-         make-string-blt-node
-         make-identifier
-         make-qualified-identifier
-         make-subscript-node
-         make-refmod-node
-         make-add-node
-         make-subtract-node
-         make-multiply-node
-         make-divide-node
-         make-compute-node
-         make-expression-add
-         make-expression-subtract
-         make-expression-multiply
-         make-expression-divide
-         make-expression-shift-left
-         make-expression-shift-right
-         make-expression-bit-and
-         make-expression-bit-or
-         make-expression-bit-xor
-         make-expression-bit-not
-         make-conditional-eq
-         make-conditional-ne
-         make-conditional-lt
-         make-conditional-le
-         make-conditional-gt
-         make-conditional-ge
-         make-conditional-and
-         make-conditional-or
-         make-conditional-not
-         make-conditional-is-null
-         make-conditional-is-not-null
-         make-conditional-is-zero
-         make-conditional-is-not-zero
-         make-literal-number
-         make-literal-string
-         make-self
-         make-null
-         make-error-node
-         header-case
-         pascal-case))

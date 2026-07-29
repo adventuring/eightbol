@@ -60,7 +60,7 @@ The trimmed string, or @code{NIL} on empty interactive input (caller may retry).
 (defun read-basic-file-text (path)
   "Read PATH as UTF-8 and return a string."
   (with-open-file (in path :direction :input :element-type 'character
-                          :external-format :utf-8)
+                           :external-format :utf-8)
     (with-output-to-string (out)
       (loop for c = (read-char in nil nil)
             while c
@@ -70,8 +70,8 @@ The trimmed string, or @code{NIL} on empty interactive input (caller may retry).
   "Write TEXT to PATH as UTF-8."
   (ensure-directories-exist path)
   (with-open-file (out path :direction :output :if-exists :supersede
-                          :if-does-not-exist :create
-                          :external-format :utf-8)
+                            :if-does-not-exist :create
+                            :external-format :utf-8)
     (write-string text out)))
 
 (defun basic-workspace-lines-as-string (lines)
@@ -122,13 +122,11 @@ Uses the file stem (name without extension), header-cased."
 This now delegates to the YACC parser and extracts line info from AST."
   (let ((ast (parse-basic text)))
     (when (and ast (eq (first ast) :program))
-      (let ((methods (getf (rest ast) :methods))
-            (data (getf (rest ast) :data)))
-        (loop for method in methods
-              when (eq (first method) :method)
+      (loop for method in (getf (rest ast) :methods)
+            when (eq (first method) :method)
               append (loop for stmt in (getf (rest method) :statements)
                            when (and (listp stmt) (eq (first stmt) :line))
-                           collect (cons (second stmt) (third stmt))))))))
+                             collect (cons (second stmt) (third stmt)))))))
 
 (defun ensure-basic-line-numbers (lines)
   "Ensure LINE-NUMBERS are sequential starting from 10."
@@ -141,11 +139,11 @@ This now delegates to the YACC parser and extracts line info from AST."
     (nreverse result)))
 
 (defun compile-basic-from-path (bas-path
-                                 &key (cpus '(:6502))
-                                      output-file
-                                      ast-output-file
-                                      copybook-paths
-                                      (root-directory (truename ".")))
+                                &key (cpus '(:6502))
+                                     output-file
+                                     ast-output-file
+                                     copybook-paths
+                                     (root-directory (truename ".")))
   "Compile @code{.bas} at BAS-PATH to assembly via BASIC → AST → backend.
 CPUS, OUTPUT-FILE, AST-OUTPUT-FILE, COPYBOOK-PATHS, ROOT-DIRECTORY follow
 @code{compile-eightbol}. GAME-NAME selects the Globals COPY stem.
@@ -159,12 +157,11 @@ Pathname designator to UTF-8 BASIC source.
 
 @subsection Outputs
 Return value of @code{compile-eightbol}."
-  (let* ((path (uiop:parse-native-namestring (namestring bas-path)))
-         (text (read-basic-file-text path))
-         (class-id (parse-bas-class-id path))
-         (ast (parse-basic text))
-         (paths (or copybook-paths
-                    (project-copybook-paths root-directory (first cpus)))))
+(let* ((path (uiop:parse-native-namestring (namestring bas-path)))
+           (text (read-basic-file-text path))
+           (ast (parse-basic text))
+           (paths (or copybook-paths
+                      (project-copybook-paths root-directory (first cpus)))))
     ;; Inject $GAME-Globals.cpy at program level
     (when (and ast (eq (first ast) :program))
       (setf (getf (rest ast) :copybook)
@@ -360,26 +357,10 @@ See https://interworldly.com/eightbol/ for manual~%"))
                   (unless (getf workspace :class-id)
                     (error "RUN: set class name with NEW or OLD first"))
                   (basic-workspace-sync-text workspace)
-                  (let ((paths (project-copybook-paths root (first +supported-cpus+)))
-                        (class-id (getf workspace :class-id))
-                        (text (getf workspace :text)))
-                    (uiop:with-temporary-file (:pathname tmp :suffix "eightbol-basic-run.cob")
-                      ;; Parse BASIC to AST directly
-                      (let ((ast (parse-basic text)))
-                        ;; Inject copybook
-                        (when (and ast (eq (first ast) :program))
-                          (setf (getf (rest ast) :copybook)
-                                (format nil "~A-Globals" *basic-default-game-name*)))
-                        ;; Write minimal COBOL wrapper for compile-eightbol
-                        (with-open-file (out tmp :direction :output :if-exists :supersede
-                                                 :external-format :utf-8)
-                          (format out "IDENTIFICATION DIVISION.~%PROGRAM-ID. \"~A\".~%~%"
-                                  class-id))
-                        (compile-eightbol (list tmp)
-                                          :cpus +supported-cpus+
-                                          :root-directory root
-                                          :copybook-paths paths))))
-                  (format *query-io* "~&RUN completed for all CPUs.~%"))
+                  (let* ((text (getf workspace :text))
+                         (ast (parse-basic text)))
+                    (compile-eightbol-from-ast ast)
+                    (format *query-io* "~&RUN completed for all CPUs.~%")))
                  (t
                   (setf (getf workspace :lines) nil
                         (getf workspace :class-id) nil)

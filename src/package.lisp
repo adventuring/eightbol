@@ -14,7 +14,6 @@
    ;; Core entry points used by external tools
    :main
    :compile-eightbol
-   :parse-eightbol-string-for-codegen
    :write-ast
    :make-path-name
    :with-open-file*
@@ -26,6 +25,11 @@
    :basic-lex
    :parse-basic
    :basic-make-parser
+   
+   ;; Pascal API (exposed for external Pascal drivers)
+   :pascal-lex
+   :pascal-parse
+   :pascal-tokenize
    
    ;; End‑to‑end compilation helpers (externally invoked)
    :compile-basic-from-path)

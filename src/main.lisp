@@ -77,7 +77,7 @@ following @file{.bas} path are stripped before option parsing.
 @end table
 
 @subsection Behavior
-Compiles @file{.cob} or @file{.bas}, prints @code{--help}, or starts the BASIC
+Compiles @file{.cob} or @file{.bas}, @file{.pas}, or prints @code{--help}, or starts the BASIC interpreter
 shell when @code{--basic} is given without a file on an interactive stream.
 
 Buildapp passes argv as a single argument; use @code{uiop:command-line-arguments}

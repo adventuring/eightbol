@@ -11,196 +11,196 @@
               log fault stop method on class procedure end
               while until do library
               and or not
-              number string ident))))
+              number string ident)))
 
 ;;; Parser action functions for BASIC
 
-(defun basic-parse-program (statements)
-  "Top-level program node from list of statement nodes.
+  (defun basic-parse-program (statements)
+    "Top-level program node from list of statement nodes.
 STATEMENTS is a list where each element is either:
   - (:line lineno label stmt)
   - (:error :code line-text)
 The line number and label are used to create BASIC_Lnnnnnn labels."
-  (let* ((class-id *basic-current-class*)
-         (methods '())
-         (procedures '())
-         (main-statements '()))
-    (dolist (item statements)
-      (cond
-        ((eq (first item) :method)
-         (push item methods))
-        ((eq (first item) :procedure)
-         (push item procedures))
-        ((and (listp item) (eq (first item) :line))
-         (push (third item) main-statements))
-        ((eq (first item) :error)
-         (push item main-statements))
-        (t (push item main-statements))))
-    (make-program-node
-     class-id
-     :methods (append (nreverse methods) (nreverse procedures))
-     :data (when main-statements
-             (list (cons 'main-block main-statements))))))
+    (let* ((class-id *basic-current-class*)
+           (methods '())
+           (procedures '())
+           (main-statements '()))
+      (dolist (item statements)
+        (cond
+          ((eq (first item) :method)
+           (push item methods))
+          ((eq (first item) :procedure)
+           (push item procedures))
+          ((and (listp item) (eq (first item) :line))
+           (push (third item) main-statements))
+          ((eq (first item) :error)
+           (push item main-statements))
+          (t (push item main-statements))))
+      (make-program-node
+       class-id
+       :methods (append (nreverse methods) (nreverse procedures))
+       :data (when main-statements
+               (list (cons 'main-block main-statements))))))
 
-(defun basic-parse-statement-line (lineno label stmt)
-  "Parse a line with optional line number and label."
-  (list :line lineno label stmt))
+  (defun basic-parse-statement-line (lineno label stmt)
+    "Parse a line with optional line number and label."
+    (list :line lineno label stmt))
 
-(defun basic-parse-error (line-text)
-  "Create error node for invalid syntax."
-  (make-error-node line-text))
+  (defun basic-parse-error (line-text)
+    "Create error node for invalid syntax."
+    (make-error-node line-text))
+  
+  (defun basic-parse-let (target expr)
+    "LET target = expr"
+    (make-move-node expr target))
 
-(defun basic-parse-let (target expr)
-  "LET target = expr"
-  (make-move-node expr target))
+  (defun basic-parse-if-then (cond then-stmt)
+    "IF condition THEN statement"
+    (make-if-node cond (list then-stmt) '()))
 
-(defun basic-parse-if-then (cond then-stmt)
-  "IF condition THEN statement"
-  (make-if-node cond (list then-stmt) '()))
+  (defun basic-parse-if-then-else (cond then-stmt else-stmt)
+    "IF condition THEN statement ELSE statement"
+    (make-if-node cond (list then-stmt) (list else-stmt)))
 
-(defun basic-parse-if-then-else (cond then-stmt else-stmt)
-  "IF condition THEN statement ELSE statement"
-  (make-if-node cond (list then-stmt) (list else-stmt)))
+  (defun basic-parse-for (var start end step)
+    "FOR var = start TO end [STEP step]"
+    (make-perform-node
+     (format nil "FOR-~A" var)
+     :varying var
+     :from start
+     :by (or step 1)
+     :until (make-conditional-gt (make-identifier var) end)))
 
-(defun basic-parse-for (var start end step)
-  "FOR var = start TO end [STEP step]"
-  (make-perform-node
-   (format nil "FOR-~A" var)
-   :varying var
-   :from start
-   :by (or step 1)
-   :until (make-conditional-gt (make-identifier var) end)))
+  (defun basic-parse-next (var)
+    "NEXT [var] - loop variable is optional"
+    (make-goback-node))  ; Simplified; NEXT just continues the loop
 
-(defun basic-parse-next (var)
-  "NEXT [var] - loop variable is optional"
-  (make-goback-node))  ; Simplified; NEXT just continues the loop
+  (defun basic-parse-while (cond stmt)
+    "WHILE condition statement"
+    (make-if-node cond (list stmt) '()))
 
-(defun basic-parse-while (cond stmt)
-  "WHILE condition statement"
-  (make-if-node cond (list stmt) '()))
+  (defun basic-parse-until (cond stmt)
+    "UNTIL condition statement"
+    (make-if-node (make-conditional-not cond) (list stmt) '()))
 
-(defun basic-parse-until (cond stmt)
-  "UNTIL condition statement"
-  (make-if-node (make-conditional-not cond) (list stmt) '()))
+  (defun basic-parse-do (stmts while-cond)
+    "DO : statements... : NEXT WHILE condition"
+    (let ((label (format nil "DO-~A" (gensym))))
+      (make-perform-node label
+                         :until (make-conditional-not while-cond))))
 
-(defun basic-parse-do (stmts while-cond)
-  "DO : statements... : NEXT WHILE condition"
-  (let ((label (format nil "DO-~A" (gensym))))
-    (make-perform-node label
-      :until (make-conditional-not while-cond))))
+  (defun basic-parse-do-until (stmts until-cond)
+    "DO : statements... : NEXT UNTIL condition"
+    (let ((label (format nil "DO-~A" (gensym))))
+      (make-perform-node label
+                         :until until-cond)))
 
-(defun basic-parse-do-until (stmts until-cond)
-  "DO : statements... : NEXT UNTIL condition"
-  (let ((label (format nil "DO-~A" (gensym))))
-    (make-perform-node label
-      :until until-cond)))
+  (defun basic-parse-log-fault (code)
+    "LOG FAULT \"CODE\""
+    (make-log-fault-node code))
 
-(defun basic-parse-log-fault (code)
-  "LOG FAULT \"CODE\""
-  (make-log-fault-node code))
+  (defun basic-parse-stop (code)
+    "STOP \"CODE\""
+    (make-stop-run-node code))
 
-(defun basic-parse-stop (code)
-  "STOP \"CODE\""
-  (make-stop-run-node code))
+  (defun basic-parse-goto (target)
+    "GOTO target"
+    (list :goto :target target))
 
-(defun basic-parse-goto (target)
-  "GOTO target"
-  (list :goto :target target))
+  (defun basic-parse-gosub (target)
+    "GOSUB target"
+    (list :perform :procedure target))
 
-(defun basic-parse-gosub (target)
-  "GOSUB target"
-  (list :perform :procedure target))
+  (defun basic-parse-return ()
+    "RETURN"
+    (make-goback-node))
 
-(defun basic-parse-return ()
-  "RETURN"
-  (make-goback-node))
+  (defun basic-parse-method (name class)
+    "METHOD \"Name\" ON \"Class\""
+    (make-method-node name))
 
-(defun basic-parse-method (name class)
-  "METHOD \"Name\" ON \"Class\""
-  (make-method-node name))
+  (defun basic-parse-procedure (name)
+    "PROCEDURE \"Name\""
+    (make-procedure-node name))
 
-(defun basic-parse-procedure (name)
-  "PROCEDURE \"Name\""
-  (make-procedure-node name))
+  (defun basic-parse-class (name)
+    "CLASS \"Name\""
+    (setf *basic-current-class* name)
+    (make-program-node name))
 
-(defun basic-parse-class (name)
-  "CLASS \"Name\""
-  (setf *basic-current-class* name)
-  (make-program-node name))
+  (defun basic-parse-end ()
+    "END"
+    (make-goback-node))
 
-(defun basic-parse-end ()
-  "END"
-  (make-goback-node))
+  (defun basic-parse-invoke (obj method)
+    "INVOKE obj \"Method\""
+    (make-invoke-node obj method))
 
-(defun basic-parse-invoke (obj method)
-  "INVOKE obj \"Method\""
-  (make-invoke-node obj method))
+  (defun basic-parse-call (target)
+    "CALL target"
+    (make-call-node target))
 
-(defun basic-parse-call (target)
-  "CALL target"
-  (make-call-node target))
+  (defun basic-parse-move (from to)
+    "MOVE from TO to"
+    (make-move-node from to))
 
-(defun basic-parse-move (from to)
-  "MOVE from TO to"
-  (make-move-node from to))
+  (defun basic-parse-set (target value)
+    "SET target TO value"
+    (make-set-node target value))
 
-(defun basic-parse-set (target value)
-  "SET target TO value"
-  (make-set-node target value))
+  (defun basic-parse-expression-or (e1 e2)
+    (make-conditional-or e1 e2))
 
-(defun basic-parse-expression-or (e1 e2)
-  (make-conditional-or e1 e2))
+  (defun basic-parse-expression-and (e1 e2)
+    (make-conditional-and e1 e2))
 
-(defun basic-parse-expression-and (e1 e2)
-  (make-conditional-and e1 e2))
+  (defun basic-parse-expression-not (expr)
+    (make-conditional-not expr))
 
-(defun basic-parse-expression-not (expr)
-  (make-conditional-not expr))
+  (defun basic-parse-expression-rel (e1 op e2)
+    (ecase op
+      (:equal (make-conditional-eq e1 e2))
+      (:ne (make-conditional-ne e1 e2))
+      (:lt (make-conditional-lt e1 e2))
+      (:le (make-conditional-le e1 e2))
+      (:gt (make-conditional-gt e1 e2))
+      (:ge (make-conditional-ge e1 e2))))
 
-(defun basic-parse-expression-rel (e1 op e2)
-  (ecase op
-    (:equal (make-conditional-eq e1 e2))
-    (:ne (make-conditional-ne e1 e2))
-    (:lt (make-conditional-lt e1 e2))
-    (:le (make-conditional-le e1 e2))
-    (:gt (make-conditional-gt e1 e2))
-    (:ge (make-conditional-ge e1 e2))))
+  (defun basic-parse-expression-add (e1 e2)
+    (make-expression-add e1 e2))
 
-(defun basic-parse-expression-add (e1 e2)
-  (make-expression-add e1 e2))
+  (defun basic-parse-expression-sub (e1 e2)
+    (make-expression-subtract e1 e2))
 
-(defun basic-parse-expression-sub (e1 e2)
-  (make-expression-subtract e1 e2))
+  (defun basic-parse-expression-mul (e1 e2)
+    (make-expression-multiply e1 e2))
 
-(defun basic-parse-expression-mul (e1 e2)
-  (make-expression-multiply e1 e2))
+  (defun basic-parse-expression-div (e1 e2)
+    (make-expression-divide e1 e2))
 
-(defun basic-parse-expression-div (e1 e2)
-  (make-expression-divide e1 e2))
+  (defun basic-parse-paren (expr)
+    expr)
 
-(defun basic-parse-paren (expr)
-  expr)
+  (defun basic-parse-identifier (name)
+    (make-identifier name))
 
-(defun basic-parse-identifier (name)
-  (make-identifier name))
+  (defun basic-parse-number (n)
+    (make-literal-number n))
 
-(defun basic-parse-number (n)
-  (make-literal-number n))
+  (defun basic-parse-string (s)
+    (make-literal-string s))
 
-(defun basic-parse-string (s)
-  (make-literal-string s))
+  (defun basic-parse-self ()
+    (make-self))
 
-(defun basic-parse-self ()
-  (make-self))
+  (defun basic-parse-null ()
+    (make-null))
 
-(defun basic-parse-null ()
-  (make-null))
+  (defun basic-parse-assembly-entry (label)
+    (make-assembly-entry-node label))
 
-(defun basic-parse-assembly-entry (label)
-  (make-assembly-entry-node label))
-
-(defun basic-parse-copy (name)
-  (make-copy-node name))
+  (defun basic-parse-copy (name)
+    (make-copy-node name)))
 
 ;;; YACC grammar definition for BASIC
 (eval-when (:compile-toplevel :execute :load-toplevel)
@@ -208,14 +208,13 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
    `(yacc:define-parser *basic-parser*
       (:start-symbol basic-program)
       (:terminals (,@(basic-token-list)
-                    number string ident))
-      (:precedence
-       (:left or)
-       (:left and)
-       (:left not)
-       (:left = <> < <= > >=)
-       (:left + -)
-       (:left * /))
+                   number string ident))
+(:precedence ((:left or)
+              (:left and)
+              (:left not)
+              (:left = <= < <= > >=)
+              (:left + -)
+              (:left * /)))
       (:muffle-conflicts :some)
 
       ;; Program is a list of lines/statements
@@ -227,12 +226,12 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
        (statement
         (lambda (s) (list s)))
        (statement-list statement
-        (lambda (list stmt) (append list (list stmt)))))
+                       (lambda (list stmt) (append list (list stmt)))))
 
       ;; Each statement can have line number and label
       (statement
        (lineno-opt label-opt colon stmt
-        #'basic-parse-statement-line)
+                   #'basic-parse-statement-line)
        (error-line
         #'basic-parse-error))
 
@@ -275,19 +274,19 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
       ;; LET target = expression
       (let-stmt
        (:LET ident :EQUAL expression
-        #'basic-parse-let))
+         #'basic-parse-let))
 
       ;; IF condition THEN statement [ELSE statement]
       (if-stmt
        (:IF condition :THEN stmt
-        #'basic-parse-if-then)
+            #'basic-parse-if-then)
        (:IF condition :THEN stmt :ELSE stmt
-        #'basic-parse-if-then-else))
+            #'basic-parse-if-then-else))
 
       ;; FOR var = start TO end [STEP step]
       (for-stmt
        (:FOR ident :EQUAL expression :TO expression step-opt
-        #'basic-parse-for))
+         #'basic-parse-for))
 
       (step-opt
        (:STEP expression (lambda (e) e))
@@ -296,7 +295,7 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
       ;; NEXT [var]
       (next-stmt
        (:NEXT ident-opt
-        #'basic-parse-next))
+              #'basic-parse-next))
 
       (ident-opt
        (ident (lambda (i) i))
@@ -305,65 +304,65 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
       ;; WHILE condition statement
       (while-stmt
        (:WHILE condition stmt
-        #'basic-parse-while))
+         #'basic-parse-while))
 
       ;; UNTIL condition statement
       (until-stmt
        (:UNTIL condition stmt
-        #'basic-parse-until))
+         #'basic-parse-until))
 
       ;; DO : statements... : NEXT WHILE condition
       (do-stmt
-       (:DO colon stmt-list :NEXT :WHILE condition
-        #'basic-parse-do)
-       (:DO colon stmt-list :NEXT :UNTIL condition
-        #'basic-parse-do-until))
+          (:DO colon stmt-list :NEXT :WHILE condition
+            #'basic-parse-do)
+        (:DO colon stmt-list :NEXT :UNTIL condition
+          #'basic-parse-do-until))
 
       (stmt-list
        (stmt
         (lambda (s) (list s)))
        (stmt-list colon stmt
-        (lambda (list s) (append list (list s)))))
+                  (lambda (list s) (append list (list s)))))
 
       ;; LOG FAULT "code"
       (log-fault-stmt
        (:LOG :FAULT string
-        #'basic-parse-log-fault))
+             #'basic-parse-log-fault))
 
       ;; STOP "code"
       (stop-stmt
        (:STOP string
-        #'basic-parse-stop))
+              #'basic-parse-stop))
 
       ;; GOTO target
       (goto-stmt
        (:GOTO ident
-        #'basic-parse-goto))
+              #'basic-parse-goto))
 
       ;; GOSUB target
       (gosub-stmt
        (:GOSUB ident
-        #'basic-parse-gosub))
+               #'basic-parse-gosub))
 
       ;; RETURN
       (return-stmt
        (:RETURN
-        #'basic-parse-return))
+         #'basic-parse-return))
 
       ;; METHOD "Name" ON "Class"
       (method-def
        (:METHOD string :ON string
-        #'basic-parse-method))
+         #'basic-parse-method))
 
       ;; PROCEDURE "Name"
       (procedure-def
        (:PROCEDURE string
-        #'basic-parse-procedure))
+                   #'basic-parse-procedure))
 
       ;; CLASS "Name"
       (class-def
        (:CLASS string
-        #'basic-parse-class))
+               #'basic-parse-class))
 
       ;; END
       (end-stmt
@@ -373,32 +372,32 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
       ;; INVOKE obj "Method"
       (invoke-stmt
        (:INVOKE ident string
-        #'basic-parse-invoke))
+                #'basic-parse-invoke))
 
       ;; CALL target
       (call-stmt
        (:CALL ident
-        #'basic-parse-call))
+              #'basic-parse-call))
 
       ;; MOVE from TO to
       (move-stmt
        (:MOVE expression :TO ident
-        #'basic-parse-move))
+              #'basic-parse-move))
 
       ;; SET target TO value
       (set-stmt
        (:SET ident :TO expression
-        #'basic-parse-set))
+             #'basic-parse-set))
 
       ;; ASSEMBLY ENTRY "label"
       (assembly-entry-stmt
        (:ASSEMBLY :ENTRY string
-        #'basic-parse-assembly-entry))
+                  #'basic-parse-assembly-entry))
 
       ;; COPY "name"
       (copy-stmt
        (:COPY string
-        #'basic-parse-copy))
+              #'basic-parse-copy))
 
       ;; expression statement (standalone expression)
       (expression-stmt
@@ -414,46 +413,46 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
       (or-expr
        (and-expr)
        (or-expr :OR and-expr
-        #'basic-parse-expression-or))
+                #'basic-parse-expression-or))
 
       (and-expr
        (not-expr)
        (and-expr :AND not-expr
-        #'basic-parse-expression-and))
+                 #'basic-parse-expression-and))
 
       (not-expr
        (rel-expr)
        (:NOT not-expr
-        #'basic-parse-expression-not))
+             #'basic-parse-expression-not))
 
       (rel-expr
        (add-expr)
        (add-expr :EQUAL add-expr
-        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :equal e2)))
+                 (lambda (e1 _ e2) (basic-parse-expression-rel e1 :equal e2)))
        (add-expr :NE add-expr
-        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :ne e2)))
+                 (lambda (e1 _ e2) (basic-parse-expression-rel e1 :ne e2)))
        (add-expr :LT add-expr
-        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :lt e2)))
+                 (lambda (e1 _ e2) (basic-parse-expression-rel e1 :lt e2)))
        (add-expr :LE add-expr
-        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :le e2)))
+                 (lambda (e1 _ e2) (basic-parse-expression-rel e1 :le e2)))
        (add-expr :GT add-expr
-        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :gt e2)))
+                 (lambda (e1 _ e2) (basic-parse-expression-rel e1 :gt e2)))
        (add-expr :GE add-expr
-        (lambda (e1 _ e2) (basic-parse-expression-rel e1 :ge e2))))
+                 (lambda (e1 _ e2) (basic-parse-expression-rel e1 :ge e2))))
 
       (add-expr
        (mul-expr)
        (add-expr :PLUS mul-expr
-        #'basic-parse-expression-add)
+                 #'basic-parse-expression-add)
        (add-expr :MINUS mul-expr
-        #'basic-parse-expression-sub))
+                 #'basic-parse-expression-sub))
 
       (mul-expr
        (primary)
        (mul-expr :TIMES primary
-        #'basic-parse-expression-mul)
+                 #'basic-parse-expression-mul)
        (mul-expr :DIVIDE primary
-        #'basic-parse-expression-div))
+                 #'basic-parse-expression-div))
 
       (primary
        :NUMBER #'basic-parse-number
@@ -492,5 +491,3 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
   "Return the BASIC YACC parser function."
   *basic-parser*)
 
-(export '(basic-lex parse-basic basic-make-parser
-          *basic-parser* basic-token-list))

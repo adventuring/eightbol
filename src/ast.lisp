@@ -13,7 +13,7 @@
 ;; Statement nodes:
 ;;   (:move       :from expr :to identifier)
 ;;   (:invoke     :object expr :method "Kill" [:returning identifier])
-;;   (:call       :target name :bank bank-or-nil)
+;;   (:call-acc :target name :bank bank-or-nil)
 ;;   (:if         :condition cond :then stmts :else stmts)
 ;;   (:goback)
 ;;   (:exit-method)
