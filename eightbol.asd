@@ -65,7 +65,11 @@
                           :components ((:file "backend-i286")))
                          (:module "backend-f8"
                           :components ((:file "backend-f8")))
-                         (:file "basic-transpile")
+                         (:file "grammar-build" :depends-on ("package" "ast"))
+                         (:file "basic-lexer")
+                         (:file "basic-parser" :depends-on ("package" "basic-lexer" "ast" "grammar-build"))
+                         (:file "pascal-lexer" :depends-on ("package"))
+                         (:file "pascal-parser" :depends-on ("package" "pascal-lexer" "ast" "grammar-build"))
                          (:file "eightbol-compile"
                           :depends-on ("package"
                                        "ast"
@@ -89,7 +93,7 @@
                                        "parser"
                                        ))
                          (:file "basic-shell"
-                          :depends-on ("package" "basic-transpile" "eightbol-compile"))
+                          :depends-on ("package" "basic-parser" "eightbol-compile"))
                          (:file "main"
                           :depends-on ("package" "basic-shell" "eightbol-compile")))))
   :in-order-to ((test-op :eightbol-test)))
