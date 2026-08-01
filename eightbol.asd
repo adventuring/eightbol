@@ -26,14 +26,90 @@
             
             :components ((:file "package")
                          (:file "conditions" :depends-on ("package"))
-                         (:file "lexer" :depends-on ("package" "conditions"))
+                         
+                         ;; Core compiler infrastructure
                          (:file "ast" :depends-on ("package"))
                          (:file "ast-optimize" :depends-on ("package" "ast"))
                          (:file "ast-validate"
                           :depends-on ("package" "ast" "ast-optimize" "conditions"))
-                         (:file "parser" :depends-on ("package" "conditions" "lexer" "ast"))
                          (:file "backend" :depends-on ("package" "conditions" "ast"))
-                         (:file "copybook-load" :depends-on ("package" "conditions" "backend"))
+                         (:file "grammar-build" :depends-on ("package" "ast"))
+                         (:file "cobol-copybook"
+                          :depends-on ("package" "conditions" "backend"))
+                         (:file "eightbol-compile"
+                          :depends-on ("package"
+                                       "ast"
+                                       "ast-optimize"
+                                       "ast-validate"
+                                       "backend"
+                                       "cobol-copybook"
+                                       "frontend-cobol"))
+
+                         ;; COBOL frontend (first, as most mature)
+                         (:module "frontend-cobol"
+                          :depends-on ("package" "conditions" "ast")
+                          :components ((:file "cobol-lexer")
+                                       (:file "cobol-parser"
+                                        :depends-on ("cobol-lexer"))))
+
+                         ;; BASIC frontend
+                         (:module "frontend-basic"
+                          :depends-on ("package" "ast" "grammar-build" "eightbol-compile")
+                          :components ((:file "basic-lexer")
+                                       (:file "basic-parser"
+                                        :depends-on ("basic-lexer"))
+                                       (:file "basic-shell"
+                                        :depends-on ("basic-parser"))
+                                       (:file "basic-transpile"
+                                        :depends-on ("basic-parser"))))
+
+                         ;; FORTRAN frontend
+                         #+ () (:module "frontend-fortran"
+                                :depends-on ("package" "ast" "grammar-build")
+                                :components ((:file "fortran-lexer")
+                                             (:file "fortran-parser"
+                                              :depends-on ("fortran-lexer"))))
+
+                         ;; Pascal frontend
+                         (:module "frontend-pascal"
+                          :depends-on ("package" "ast" "grammar-build")
+                          :components ((:file "pascal-lexer")
+                                       (:file "pascal-parser"
+                                        :depends-on ("pascal-lexer"))))
+
+                         ;; Lingo frontend
+                         #+ () (:module "frontend-lingo"
+                                :depends-on ("package" "conditions" "ast" "grammar-build")
+                                :components ((:file "lingo-lexer")
+                                             (:file "lingo-parser"
+                                              :depends-on ("lingo-lexer"))
+                                             (:file "lingo-make-parser"
+                                              :depends-on ("lingo-parser"))))
+
+                         ;; SmallTalk frontend
+                         (:module "frontend-smalltalk"
+                          :depends-on ("package" "conditions" "ast" "grammar-build")
+                          :components ((:file "smalltalk-lexer")
+                                       (:file "smalltalk-parser"
+                                        :depends-on ("smalltalk-lexer"))
+                                       (:file "smalltalk-make-parser"
+                                        :depends-on ("smalltalk-parser"))))
+
+                         ;; Lua frontend
+                         #+ () (:module "frontend-lua"
+                                :depends-on ("package" "ast" "grammar-build")
+                                :components ((:file "lua-lexer")
+                                             (:file "lua-parser"
+                                              :depends-on ("lua-lexer"))))
+
+                         ;; Objective-C frontend
+                         #+ () (:module "frontend-objective"
+                                :depends-on ("package" "ast" "grammar-build")
+                                :components ((:file "objective-lexer")
+                                             (:file "objective-parser"
+                                              :depends-on ("objective-lexer"))))
+
+                         ;; Backend modules
                          (:module "backend-6502"
                           :components ((:file "backend-6502-part1")
                                        (:file "backend-6502-part2")
@@ -58,6 +134,7 @@
                          (:module "backend-sm83"
                           :components ((:file "backend-sm83")))
                          (:module "backend-m6800"
+                          :depends-on ("backend-z80")
                           :components ((:file "backend-m6800")))
                          (:module "backend-arm7"
                           :components ((:file "backend-arm7")))
@@ -65,35 +142,9 @@
                           :components ((:file "backend-i286")))
                          (:module "backend-f8"
                           :components ((:file "backend-f8")))
-                         (:file "grammar-build" :depends-on ("package" "ast"))
-                         (:file "basic-lexer")
-                         (:file "basic-parser" :depends-on ("package" "basic-lexer" "ast" "grammar-build"))
-                         (:file "pascal-lexer" :depends-on ("package"))
-                         (:file "pascal-parser" :depends-on ("package" "pascal-lexer" "ast" "grammar-build"))
-                         (:file "eightbol-compile"
-                          :depends-on ("package"
-                                       "ast"
-                                       "ast-optimize"
-                                       "ast-validate"
-                                       "backend"
-                                       "backend-6502"
-                                       "backend-65c02"
-                                       "backend-65c816"
-                                       "backend-arm7"
-                                       "backend-cp1610"
-                                       "backend-f8"
-                                       "backend-huc6280"
-                                       "backend-i286"
-                                       "backend-m6800"
-                                       "backend-m68k"
-                                       "backend-rp2a03"
-                                       "backend-sm83"
-                                       "backend-z80"
-                                       "copybook-load"
-                                       "parser"
-                                       ))
-                         (:file "basic-shell"
-                          :depends-on ("package" "basic-parser" "eightbol-compile"))
+
+                         ;; Main entry point
                          (:file "main"
-                          :depends-on ("package" "basic-shell" "eightbol-compile")))))
+                          :depends-on ("package" "frontend-basic" "frontend-cobol"
+                                                 "eightbol-compile")))))
   :in-order-to ((test-op :eightbol-test)))

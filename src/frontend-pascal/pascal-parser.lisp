@@ -26,10 +26,17 @@
     ("END" . :end)
     ("CALL" . :call)
     ("LABEL" . :label)
+    ("GOTO" . :goto)
+    ("GO" . :go)
+    ("TO" . :to)
     ("METHOD" . :method)
     ("LIBRARY" . :library)
+    ("IN" . :in)
     ("ON" . :on)
     ("PROTOCOL" . :protocol)
+    ("AND" . :and)
+    ("OR" . :or)
+    ("NOT" . :not)
     ("IF" . :if)
     ("THEN" . :then)
     ("ELSE" . :else)
@@ -81,6 +88,7 @@
   (:terminals
    (:number :string :ident
             :procedure :var :begin :end :call :label :method :on :protocol
+            :library :in :and :or :not
     :if :then :else :while :until :do :next :step :for
             :exit :goback :log :fault :stop :copy :as :returning
             :colon :semicolon :comma :lparen :rparen :dot
@@ -173,14 +181,14 @@
          (lambda (ignored1 method-name ignored2 object-name)
            (declare (ignore ignored1 ignored2))
            (make-invoke-node object-name method-name)))
-   (CALL IDENTIFIER IN NUMBER
-         (lambda (_call routine-name _in bank-name)
-           (declare (ignore _call _in))
-           (error "unimplemented: far call")))
-   (CALL IDENTIFIER IN LIBRARY
-         (lambda (_call routine-name _in _library)
-           (declare (ignore _call _in _library))
-           (error "unimplemented: library call"))))
+    (CALL IDENTIFIER IN NUMBER
+          (lambda (_call routine-name _in bank-name)
+            (declare (ignore _call _in))
+            (make-call-node routine-name :bank bank-name)))
+    (CALL IDENTIFIER IN LIBRARY
+          (lambda (_call routine-name _in _library)
+            (declare (ignore _call _in _library))
+            (list :call :target routine-name :bank nil :library t))))
   
   (conditional
    (IF expression THEN statement-list ELSE statement-list
@@ -242,10 +250,10 @@
    (primary)
    (expression binary-op expression
                (lambda (left op right)
-                 (make-binary-op-node :operator op :left left :right right)))
+                 (pascal-binary-operator op left right)))
    (unary-op expression
              (lambda (op expr)
-               (make-unary-op-node :operator op :operand expr))))
+               (pascal-unary-operator op expr))))
   
   (primary
    (IDENT (lambda (id) (cadr id)))
@@ -275,7 +283,11 @@
    (GE
     (constantly :ge))
    (NE
-    (constantly :ne)))
+    (constantly :ne))
+   (AND
+    (constantly :and))
+   (OR
+    (constantly :or)))
   
   (unary-op
    (NOT
@@ -283,14 +295,28 @@
    (MINUS
     (constantly :unary-minus))))
 
+(defun pascal-binary-operator (operator left right)
+  "Combine LEFT OPERATOR RIGHT into a standard EIGHTBOL expression node."
+  (ecase operator
+    (:plus (make-expression-add left right))
+    (:minus (make-expression-subtract left right))
+    (:times (make-expression-multiply left right))
+    (:divide (make-expression-divide left right))
+    (:equals (make-conditional-eq left right))
+    (:ne (make-conditional-ne left right))
+    (:lt (make-conditional-lt left right))
+    (:le (make-conditional-le left right))
+    (:gt (make-conditional-gt left right))
+    (:ge (make-conditional-ge left right))
+    (:and (make-conditional-and left right))
+    (:or (make-conditional-or left right))))
+
+(defun pascal-unary-operator (operator operand)
+  "Combine OPERATOR OPERAND into a standard EIGHTBOL expression node."
+  (ecase operator
+    (:not (make-conditional-not operand))
+    (:unary-minus (make-expression-subtract 0 operand))))
+
 (defun make-debug-break-node (code)
   "Create a :debug-break AST node."
   (list :debug-break :code code))
-
-(defun make-binary-op-node (&key operator left right)
-  "Create a binary operation AST node."
-  (list :binary-op :operator operator :left left :right right))
-
-(defun make-unary-op-node (&key operator operand)
-  "Create a unary operation AST node."
-  (list :unary-op :operator operator :operand operand))

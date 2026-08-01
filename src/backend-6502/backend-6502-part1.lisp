@@ -63,6 +63,17 @@ Controls opcode choice: bra vs jmp, stz vs lda/sta, undocumented opcodes.")
   "Last time the Y register was used (for LRU tracking).")
 (defvar *6502-lru-counter* 0
   "Global counter for LRU timestamping.")
+(defvar *6502-opt-level* 2
+  "Optimization level: 0=none, 1=basic, 2=full (default).")
+(defvar *6502-enable-undoc-opcodes* T
+  "Enable usage of undocumented opcodes when CPU supports them.")
+(defvar *6502-undoc-policy* t
+  "Policy for undocumented opcode usage: T for all, or restricted list.")
+(defmacro with-fast-paths (&body body)
+  "Execute BODY with fast-path optimizations enabled for register-intensive code."
+  `(let ((*6502-opt-level* 2)
+         (*6502-undoc-policy* t))
+     ,@body))
 
 (defun touch-register (reg)
   "Update LRU time for REG (:a :x :y) and increment counter."

@@ -31,9 +31,11 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
       '(|(| |)| |:| |,| + - * / × ÷ |.| /= < <= = > >= ≠ ≤ ≥ |[| |]|
         add address after all alphabet alphabetic also and any are as assembly
         argument ascii atascii at author
+        accept
         bank before binary bit-and bit-not bit-or bit-xor blank break by
         call cancel characters class class-id comment compute
         configuration constant continue converting count
+        close
         data date date-compiled date-written debug decimal
         delimited delimiter depending display divide division down
         else end end-evaluate end-if end-method end-perform end-search
@@ -50,7 +52,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
         object object-computer occurs of offset on or other outdent
          packed-decimal perform petscii pic picture pointer positive process
         procedure procedure-pointer program program-id
-        redefines reference remainder renames replacing returning right run
+        read redefines reference remainder renames replacing returning right run
         search section security self sentence sentences service set
         shift-left shift-right sign signed size subtract
         source-computer special-names stop string super symbol
@@ -58,6 +60,7 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
         unicode unsigned until up usage using
         value values varying
         when with working-storage
+        write
         zero zeroes))))
 
 ;;; Parser action functions
@@ -659,6 +662,36 @@ OUTPUT: perform AST plist."
 (defun parse/inspect-replacing (_insp id _repl _chars _by repl)
   (declare (ignore _insp _repl _chars _by))
   (list :inspect :target id :replacing :characters :by repl))
+
+;;; Accept — not supported
+(defun parse/accept-statement-unsupported (_accept _into _identifier &optional _from _file)
+  (declare (ignore _accept _into _identifier _from _file))
+  (unsupported-statement "ACCEPT is not supported"))
+
+;;; Display — not supported
+(defun parse/display-statement-unsupported (_display _identifier &optional _from _file)
+  (declare (ignore _display _identifier _from _file))
+  (unsupported-statement "DISPLAY is not supported"))
+
+;;; Read — not supported
+(defun parse/read-statement-unsupported (_read _identifier &optional _into)
+  (declare (ignore _read _identifier _into))
+  (unsupported-statement "READ is not supported"))
+
+;;; Write — not supported
+(defun parse/write-statement-unsupported (_write _identifier &optional _from)
+  (declare (ignore _write _identifier _from))
+  (unsupported-statement "WRITE is not supported"))
+
+;;; Open — not supported
+(defun parse/open-statement-unsupported (_open _identifier _mode)
+  (declare (ignore _open _identifier _mode))
+  (unsupported-statement "OPEN is not supported"))
+
+;;; Close — not supported
+(defun parse/close-statement-unsupported (_close _identifier)
+  (declare (ignore _close _identifier))
+  (unsupported-statement "CLOSE is not supported"))
 
 ;;; GOTO — implemented
 (defun parse/paragraph (name)
@@ -1297,23 +1330,29 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (expression is less than or equal to expression)
           (expression is less or equal to expression))
 
-         ;; Statements
-         (statement
-          add-statement
-          assembly-entry-statement
-          call-statement cancel-statement compute-statement 
-          debug-break-statement divide-statement
-          evaluate-statement
-          exit-method-statement exit-program-statement exit-statement
-          goback-statement goto-statement
-          if-statement inspect-statement invoke-statement
-          log-fault-statement
-          move-statement multiply-statement
-          paragraph-statement
-          perform-statement
-          search-statement set-statement stop-statement
-          string-statement subtract-statement
-          unstring-statement)
+;; Statements
+          (statement
+           add-statement
+           accept-statement
+           assembly-entry-statement
+           call-statement cancel-statement close-statement
+           compute-statement 
+           debug-break-statement divide-statement
+           display-statement
+           evaluate-statement
+           exit-method-statement exit-program-statement exit-statement
+           goback-statement goto-statement
+           if-statement inspect-statement invoke-statement
+           log-fault-statement
+           move-statement multiply-statement
+           open-statement
+           paragraph-statement
+           perform-statement
+           read-statement
+           search-statement set-statement stop-statement
+           string-statement subtract-statement
+           unstring-statement
+           write-statement)
 
          (paragraph-statement
           (paragraph-name #'parse/paragraph))

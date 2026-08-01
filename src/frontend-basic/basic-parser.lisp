@@ -15,16 +15,16 @@
 
 ;;; Parser action functions for BASIC
 
-(defun basic-parse-program (statements)
-     "Top-level program node from list of statement nodes.
+  (defun basic-parse-program (statements)
+    "Top-level program node from list of statement nodes.
 STATEMENTS is a list where each element is either:
   - (:line lineno label stmt)
   - (:error :code line-text)
 The line number and label are used to create BASIC_Lnnnnnn labels."
-     (let* ((class-id "Program")
-            (methods '())
-            (procedures '())
-            (main-statements '()))
+    (let* ((class-id *current-class*)
+           (methods '())
+           (procedures '())
+           (main-statements '()))
       (dolist (item statements)
         (cond
           ((eq (first item) :method)
@@ -143,9 +143,10 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
     "PROCEDURE \"Name\""
     (make-procedure-node name))
 
-(defun basic-parse-class (name)
-     "CLASS \"Name\""
-     (make-program-node name))
+  (defun basic-parse-class (name)
+    "CLASS \"Name\""
+    (setf *current-class* name)
+    (make-program-node name))
 
   (defun basic-parse-end ()
     "END"
@@ -222,7 +223,7 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
     (make-copy-node name)))
 
 ;;; YACC grammar definition for BASIC
-(eval-when (:compile-toplevel :execute :load-toplevel)
+(eval-when (:execute :load-toplevel)
   (eval
    `(yacc:define-parser *basic-parser*
       (:start-symbol basic-program)
@@ -506,13 +507,15 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
 
 (defun parse-basic (source)
   "Parse BASIC source string and return AST."
-  (yacc:parse-with-lexer
-   *basic-parser*
-   (lambda ()
-     (let ((tokens (basic-lex-source source)))
-       (lambda ()
-         (when tokens
-           (pop tokens)))))))
+  (let ((*basic-current-class* "Program")
+        (*yacc-debug* nil))
+    (yacc:parse-with-lexer
+     *basic-parser*
+     (lambda ()
+       (let ((tokens (basic-lex-source source)))
+         (lambda ()
+           (when tokens
+             (pop tokens))))))))
 
 (defun basic-make-parser ()
   "Return the BASIC YACC parser function."

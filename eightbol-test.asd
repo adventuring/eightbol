@@ -45,8 +45,10 @@
                               :depends-on ("eightbol-tests"))
                              (:file "numeric-precision-all-backends"
                               :depends-on ("eightbol-tests"))
-                             (:file "numeric-precision-tests"
-                              :depends-on ("eightbol-tests")))))
+                              (:file "numeric-precision-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "lua-parser-tests"
+                               :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
                           (let ((suites '(:eightbol :backend-matrix :ast-optimize
                                           :backend-output :parser-structure

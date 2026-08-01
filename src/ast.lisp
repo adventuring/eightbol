@@ -15,6 +15,7 @@
 ;;   (:invoke     :object expr :method "Kill" [:returning identifier])
 ;;   (:call-acc :target name :bank bank-or-nil)
 ;;   (:if         :condition cond :then stmts :else stmts)
+;;   (:goto       :target identifier)          ; GOTO/GO TO; GOBACK equivalent
 ;;   (:goback)
 ;;   (:exit-method)
 ;;   (:exit-program)
@@ -41,10 +42,23 @@
 ;;   (:refmod :base name :start expr :length expr)  — reference modification name(start:length)
 ;;   (:subscript name index)  — subscripted identifier name(index)
 ;;   :self / :null        — SELF / NULL
+;;
+;; FORTRAN-inspired node shapes (explicit typing, no implicit numeric):
+;;   (:fortran-move       :from expr :to identifier :target-type type-keyword)
+;;   (:fortran-compute    :target identifier :expression expr :result-type type-keyword)
+;;   (:fortran-declare    :name identifier :type type-keyword [:init expr])
+;;   (:fortran-do         :var identifier :from expr :to expr [:by expr] :stmts stmts)
+;;   (:fortran-if         :condition expr :then stmts :else stmts)
+;;   (:fortran-logical-op :op keyword :left expr :right expr)
+;;   (:fortran-arith-op   :op keyword :left expr :right expr :result-type type-keyword)
 
 (in-package :eightbol)
 
 ;;; Constructors
+
+(defun make-goto-node (target)
+  "Build a :goto AST node for GOTO/GO TO statements."
+  (list :goto :target target))
 
 (defun make-program-node (class-id &key data methods identification environment)
   "Build a :program AST node."
@@ -60,6 +74,36 @@
   (list :method
         :method-id  method-id
         :statements (or statements '())))
+
+;;; FORTRAN Constructors with explicit typing (no implicit numeric)
+
+(defun make-fortran-move (from to &optional target-type)
+  "Build a :fortran-move AST node with explicit typing."
+  (list :fortran-move :from from :to to :target-type target-type))
+
+(defun make-fortran-compute (target expression &optional result-type)
+  "Build a :fortran-compute AST node with explicit result typing."
+  (list :fortran-compute :target target :expression expression :result-type result-type))
+
+(defun make-fortran-declare (name &key type init)
+  "Build a :fortran-declare AST node for variable declarations."
+  (list :fortran-declare :name name :type type :init init))
+
+(defun make-fortran-do (var from to &key by stmts)
+  "Build a :fortran-do AST node for DO loops."
+  (list :fortran-do :var var :from from :to to :by by :stmts stmts))
+
+(defun make-fortran-if (condition then else)
+  "Build a :fortran-if AST node."
+  (list :fortran-if :condition condition :then then :else else))
+
+(defun make-fortran-arithmetic (op left right &optional result-type)
+  "Build a :fortran-arithmetic AST node with type info."
+  (list :fortran-arithmetic :op op :left left :right right :result-type result-type))
+
+(defun make-fortran-type (name type &key fields)
+  "Build a :fortran-type AST node for structured types."
+  (list :fortran-type :name name :type type :fields fields))
 
 ;;; Accessors
 
@@ -111,7 +155,7 @@ Raw @code{:statements} list from a @code{:method} node (may contain NIL).
 
 Used by termination validation: @code{:assembly-entry} is not executable code."
   (multiple-value-bind (_ body) (split-method-leading-assembly-entry
-                                 (ast-method-statements method-node))
+                                  (ast-method-statements method-node))
     (declare (ignore _))
     body))
 
@@ -174,4 +218,3 @@ Used by termination validation: @code{:assembly-entry} is not executable code."
   "Return the canonical output directory component for a CPU keyword.
 Uses display names: cp1610, 65c02, RP2A03, m68k, i286, Z80, etc."
   (cpu-display-name cpu))
-

@@ -216,3 +216,33 @@
 (defun make-error-node (code)
   "Build an error AST node for invalid syntax."
   (list :error :code code))
+
+;;; FORTRAN-specific constructors (explicit typing, no implicit numeric)
+
+(defun make-fortran-move-node (from to &optional target-type)
+  "Build a :fortran-move AST node with explicit target-type."
+  (list :fortran-move :from from :to to :target-type target-type))
+
+(defun make-fortran-compute-node (target expression &optional result-type)
+  "Build a :fortran-compute AST node with explicit result-type."
+  (list :fortran-compute :target target :expression expression :result-type result-type))
+
+(defun make-fortran-declare-node (name &key type init)
+  "Build a :fortran-declare AST node for typed variable declarations."
+  (list :fortran-declare :name name :type type :init init))
+
+(defun make-fortran-do-node (var from to &key by stmts)
+  "Build a :fortran-do AST node for DO loops."
+  (list :fortran-do :var var :from from :to to :by by :stmts stmts))
+
+(defun make-fortran-if-node (condition then else)
+  "Build a :fortran-if AST node."
+  (list :fortran-if :condition condition :then then :else else))
+
+(defun make-fortran-arithmetic-node (op left right &optional result-type)
+  "Build a :fortran-arithmetic AST node with type info."
+  (list :fortran-arithmetic :op op :left left :right right :result-type result-type))
+
+(defun make-fortran-type-node (name type &key fields)
+  "Build a :fortran-type AST node for structured type definitions."
+  (list :fortran-type :name name :type type :fields fields))
