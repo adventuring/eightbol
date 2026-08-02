@@ -314,10 +314,10 @@ Used for STZ when MOVE ZERO to a direct-memory destination on 65c02+."
 
 (defun emit-6502-move-two-slots-16bit-lax (out from to-dest &rest _)
   "Copy 16 bits from source slot OF Self to dest slot OF Self.
-
-Uses lax (Self),y for the low byte (A and X), iny/lda (Self),y for high,
-stores high then txa/sta (Self),y for low — 6502 has no stx (zp),y.
-NMOS 6502 only (lax); other CPUs use the generic byte loop."
+ 
+ Uses lax (Self),y for the low byte (A and X), iny/lda (Self),y for high,
+ stores high then txa/sta (Self),y for low — 6502 has no stx (zp),y.
+ NMOS 6502 only (lax); other CPUs use the generic byte loop."
   (declare (ignore _))
   (let ((source (apply #'slot-symbol (rest (slot-of-expression from))))
         (source-object (third from))
@@ -326,22 +326,29 @@ NMOS 6502 only (lax); other CPUs use the generic byte loop."
     (ecase (first from)
       (:of
        (format out "~%~10Tldy # ~a" source)
-       (format out "~%~10Tlax (~a), y" source-object)
+       (format out "~%~10T~a (~a), y" 
+               (if (and *6502-enable-undoc-opcodes* (eq *6502-family-cpu* :6502))
+                   "lax" "lda") source-object)
        (format out "~%~10Tiny")
        (format out "~%~10Tlda (~a), y" source-object))
       (:on
-       (format out "~%~10Tlax ~a + ~a" source-object source)
+       (format out "~%~10T~a ~a + ~a" 
+               (if (and *6502-enable-undoc-opcodes* (eq *6502-family-cpu* :6502))
+                   "lax" "lda") source-object source)
        (format out "~%~10Tlda ~a + ~a + 1" source-object source)))
     (ecase (first to-dest)
       (:of
        (format out "~%~10Tldy # ~a + 1" dest)
        (format out "~%~10Tsta (~a), y" dest-object)
        (format out "~%~10Tdey")
-       (format out "~%~10Ttxa")
+       (format out "~%~10T~a" (if (and *6502-enable-undoc-opcodes* (eq *6502-family-cpu* :6502))
+                                "txa" "tax"))
        (format out "~%~10Tsta (~a), y" dest-object))
       (:on
        (format out "~%~10Tsta ~a + ~a + 1" dest-object dest)
-       (format out "~%~10Tstx ~a + ~a" dest-object dest))))
+       (format out "~%~10T~a ~a + ~a" 
+               (if (and *6502-enable-undoc-opcodes* (eq *6502-family-cpu* :6502))
+                   "stx" "sta") dest-object dest))))
   (setf *6502-accumulator-expression* :trash/move.w
         *6502-x-index-expression* :trash/move.w))
 
@@ -426,22 +433,30 @@ Array fetches use X or Y; when true, avoid using X for temp storage."
 
 ;;; MOVE statement
 
-(defun compile-6502-move (out statement class-id)
-  (let* ((from (safe-getf (rest statement) :from))
-         (to-dest (safe-getf (rest statement) :to))
-         (to-w (expression-operand-width to-dest))
-         (from-signed (expression-operand-signed-p from))
-         (to-signed (expression-operand-signed-p to-dest))
-         (sign-extend (and from-signed to-signed)))
-    (cond
-      ;; MOVE NULL TO pointer — 6502: set pointer to NULL by zeroing high byte
-      ((eql from :null)
-       (with-accumulator-value (0)
-         (format out "~%~10Tlda # 0"))
-       (emit-6502-store-byte-n out to-dest class-id (1- to-w) to-w))
-      (t
-       (let ((from-w (expression-operand-width from)))
-         (emit-6502-move-n-bytes out from to-dest from-w to-w class-id :sign-extend sign-extend))))))
+ (defun compile-6502-move (out statement class-id)
+   (let* ((from (safe-getf (rest statement) :from))
+          (to-dest (safe-getf (rest statement) :to))
+          (to-w (expression-operand-width to-dest))
+          (from-signed (expression-operand-signed-p from))
+          (to-signed (expression-operand-signed-p to-dest))
+          (sign-extend (and from-signed to-signed)))
+     (cond
+       ;; MOVE NULL TO pointer — 6502: set pointer to NULL by zeroing high byte
+       ((eql from :null)
+        (with-accumulator-value (0)
+          (format out "~%~10Tlda # 0"))
+        (emit-6502-store-byte-n out to-dest class-id (1- to-w) to-w))
+       ;; Optimise: MOVE literal TO variable (byte only) → lda #imm; sta var
+       ((and (expression-constant-p from) (= to-w 1) (stringp to-dest))
+        (with-accumulator-value (from)
+          (format out "~%~10Tlda # ~a" (expression-constant-value from)))
+        (emit-6502-store-byte-n out to-dest class-id 0 1))
+       ;; Optimise: MOVE literal TO literal → constant fold
+       ((and (expression-constant-p from) (expression-constant-p to-dest))
+        nil)  ; constant-to-constant move is a no-op at compile time
+       (t
+        (let ((from-w (expression-operand-width from)))
+          (emit-6502-move-n-bytes out from to-dest from-w to-w class-id :sign-extend sign-extend))))))
 
 ;;; STRING BLT (block transfer)
 ;;; STRING source DELIMITED BY SIZE INTO dest [LENGTH length]

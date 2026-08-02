@@ -93,8 +93,7 @@
                        :varying var
                        :from from
                        :by by
-                       :until (list '> var to)
-                       :stmts body)))
+                       :until (list '> var to)))
 
 (defun fortran-parse-read (unit vars)
   "READ → :move AST node (simplified)"
@@ -230,11 +229,11 @@
         (declare (ignore _ eq-keyword comma-keyword enddo-keyword))
         (fortran-parse-do-loop var from to opt-step stmts)))
 
-     (read ident var-list
-           (lambda (_ u v) (declare (ignore _ u)) (fortran-parse-read u v)))
+      (read ident
+            (lambda (_ u) (declare (ignore _)) (fortran-parse-read u nil)))
 
-     (write ident format var-list
-            (lambda (_ u f v) (declare (ignore _ u f)) (fortran-parse-write u f v)))
+      (write ident format
+             (lambda (_ u f) (declare (ignore _ u f)) (fortran-parse-write u f nil)))
 
      (data ident :EQUAL expression
            (lambda (_ n eq-keyword e)
@@ -249,13 +248,11 @@
      (type-spec ident
                 (lambda (_ type-name v) (declare (ignore _)) (fortran-parse-type-declaration type-name v)))
 
-     (common ident var-list
-             (lambda (_ b v) (declare (ignore _)) (fortran-parse-common b v)))
+      (common ident
+              (lambda (_ b) (declare (ignore _)) (fortran-parse-common b nil)))
 
-     (dimension ident lpar var-list rpar
-                (lambda (_ n open-paren d close-paren)
-                  (declare (ignore _ open-paren close-paren))
-                  (fortran-parse-dimension n d)))
+      (dimension ident
+                 (lambda (_ n) (declare (ignore _)) (fortran-parse-dimension n nil)))
 
 (include string
                (lambda (_ f) (declare (ignore _)) (fortran-parse-include f)))
@@ -286,14 +283,17 @@
          (declare (ignore _1 _2 _3 _4 _5))
          (fortran-parse-super-call :self method args)))
 
-    (arg-list
-     ()
-     (var-list))
+     (arg-list
+      ())
+     (arg-list
+      (var-list)
+      (arg-list comma var-list
+                (lambda (l _ v) (declare (ignore _)) (append (ensure-list l) (ensure-list v)))))
 
     (var-list
      (ident (lambda (i) (list i)))
      (var-list comma ident
-               (lambda (l _ i) (declare (ignore _)) (append l (list i)))))
+               (lambda (l _ i) (declare (ignore _)) (append (ensure-list l) (list i)))))
 
     (step-opt
      (step ident expression

@@ -1,6 +1,11 @@
 ;; src/lingo-parser.lisp -- YACC parser for Lingo source
 (in-package :eightbol)
 
+(defun collect-methods (modules)
+  "Collect method names from module list. Currently returns the modules list as-is.
+   Placeholder for future method collection logic."
+  modules)
+
 ;; Lingo YACC grammar with AST node construction
 
 (eval

@@ -83,18 +83,16 @@
 
 (defun objective-parse-while (condition stmts)
   "Build WHILE loop as PERFORM UNTIL NOT condition."
-  (make-perform-node "WHILE" :until (list :not condition) :stmts (ensure-list stmts)))
+  (make-perform-node "WHILE" :until (list :not condition)))
 
 (defun objective-parse-for (var from to step stmts)
   "Build FOR loop as PERFORM VARYING."
-  (let ((by (or step 1))
-        (until (list '> var to)))
+  (let ((by (or step 1)))
     (make-perform-node (format nil "FOR-~a" var)
                        :varying var
                        :from from
                        :by by
-                       :until until
-                       :stmts (ensure-list stmts))))
+                       :until (list '> var to))))
 
 (defun objective-parse-method-def (modifier name parameters return-type stmts)
   "Build method node from definition."
@@ -185,18 +183,19 @@
   "Build NOT condition."
   (list :not expr))
 
-(eval
- `(yacc:define-parser *objective-parser*
-    (:start-symbol objective-program)
-    (:terminals (,@(objective-token-list) number string ident))
-    (:precedence ((:left or)
-                  (:left and)
-                  (:left not)
-                  (:left = != < <= > >=)
-                  (:left + -)
-                  (:left * /))
-                 (:right =))
-    (:muffle-conflicts :all)
+(eval-when (:execute :load-toplevel)
+  (eval
+   `(yacc:define-parser *objective-parser*
+      (:start-symbol objective-program)
+      (:terminals (,@(objective-token-list) number string ident))
+      (:precedence ((:left or)
+                    (:left and)
+                    (:left not)
+                    (:left = != < <= > >=)
+                    (:left + -)
+                    (:left * /))
+                   (:right =))
+      (:muffle-conflicts :all)
 
     ;; Top level
     (objective-program

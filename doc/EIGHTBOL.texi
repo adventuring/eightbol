@@ -16,7 +16,7 @@ under the terms of the MIT License, which can be found at
 
 @titlepage
 @title EIGHTBOL Compiler Manual
-@subtitle An EIGHTBOL for 8-bit and 16-bit Microprocessors
+@subtitle A Programmer's Reference for Eight Front-End Languages
 @subtitle Edition 0.8, for EIGHTBOL version 0.8
 @author Bruce-Robert Pocock
 
@@ -31,23 +31,36 @@ under the terms of the MIT License, which can be found at
 @node Top
 @top EIGHTBOL Compiler Manual
 
-This  manual documents  EIGHTBOL, a  EIGHTBOL compiler  that generates
-assembly code  for multiple  8-bit and 16-bit  microprocessors including
-the 6502, Z80, cp1610, and m68k.
+This manual documents EIGHTBOL, a compiler that accepts programs written
+in any of eight higher-level languages --- COBOL, BASIC, FORTRAN, Pascal,
+Lua, Lingo, Objective-C, and SmallTalk --- and generates assembly code for
+a wide variety of 8-bit and 16-bit microprocessors, including the 6502,
+65c02, 65c816, HuC6280, RP2A03, cp1610, Z80, SM83, m68k, i286, ARM7, and
+F8.
+
+The manual is organized in the manner of the classic Programmer's
+Reference Guides published for the Commodore VIC-20, 64, and 128, with a
+dedicated chapter for each language, a chapter describing the abstract
+syntax tree (AST) EIGHTBOL uses internally, and a chapter describing the
+application binary interface (ABI) and assembler syntax for each
+supported processor.
 
 @insertcopying
 @end ifnottex
 
 @menu
-* Introduction::                What is EIGHTBOL?
-* Installation::                Getting EIGHTBOL up and running
-* Quick Start::                 Your first EIGHTBOL program
-* Programmers Reference::       Architecture, entry points, and workflow
-* Language Reference::          EIGHTBOL features supported
-* CPU Backends::                Target processor specifics
-* Examples::                    Complete example programs
-* Troubleshooting::             Common issues and solutions
-* Appendix Dartmouth BASIC::   Optional @code{.bas} authoring and @code{--basic}
+* Introduction::                Chapter I -- Introduction and invocation
+* BASIC::                       Chapter II -- the BASIC front end
+* COBOL::                       Chapter III -- the COBOL front end
+* FORTRAN::                     Chapter IV -- the FORTRAN front end
+* Lingo::                       Chapter V -- the Lingo front end
+* Lua::                         Chapter VI -- the Lua front end
+* Objective-C::                 Chapter VII -- the Objective-C front end
+* Pascal::                      Chapter VIII -- the Pascal front end
+* SmallTalk::                   Chapter IX -- the SmallTalk front end
+* Abstract Syntax Tree::        Chapter X -- AST syntax and node reference
+* ABI::                         Chapter XI -- ABI formats and assembler syntax
+* Error Conditions::            Appendix A -- error conditions and fault codes
 * Index::                       Complete index
 @end menu
 
@@ -56,1447 +69,1904 @@ the 6502, Z80, cp1610, and m68k.
 
 @cindex introduction
 @cindex EIGHTBOL compiler
-@cindex 8-bit programming
-@cindex retro computing
+@cindex eight front-ends
 
-Welcome to EIGHTBOL, your friendly guide to programming classic video game
-consoles and computers! If you've ever wanted to create your own games for
-systems like the Atari 7800, Nintendo Entertainment System, or even the
-Intellivision, you're in the right place.
+EIGHTBOL is a compiler for 8-bit and 16-bit microprocessors.  Programs
+are written in one of eight source languages and compiled to assembly
+source, which is then assembled by the platform's ordinary assembler
+(such as 64tass, for the Atari 7800 and other 6502-family systems).
 
-@section What is Programming?
+This manual is intended to be useful both to a first-time user who wants
+to write and compile a small program, and to an experienced user who
+needs the exact grammar of every statement a front end accepts.  Each
+language chapter is organized in the style of the Commodore Programmer's
+Reference Guides: it opens with the overall structure of a program,
+enumerates every statement the front end understands with its exact
+syntax, describes the operators and expressions, and closes with the
+things the language commonly offers that EIGHTBOL deliberately does
+@emph{not} support.  In particular, @strong{none of the eight front ends
+performs file or console I/O}: there is no @code{PRINT}, @code{READ},
+@code{INPUT}, @code{OPEN}, or @code{CLOSE}.  Programs interact with the
+machine through global variables and through platform subroutines invoked
+with the @code{INVOKE} or @code{CALL} mechanisms.
 
-Before we dive into EIGHTBOL, let's take a moment to understand
-what programming really is. Imagine you're giving instructions to a very
-patient but not very bright friend. You need to break down every single
-step of what you want them to do.
+@menu
+* About EIGHTBOL::              What EIGHTBOL is and is not
+* Installing EIGHTBOL::         Dependencies and setup
+* Invoking EIGHTBOL::           Command-line usage and file selection
+* Program Structure::           Programs, classes, methods, and routines
+* Data and Parameters::         Variables, storage, and register arguments
+* A Guided Tour::               A small annotated example program
+@end menu
 
-For example, if you want your friend to make a peanut butter sandwich:
+@node About EIGHTBOL
+@section About EIGHTBOL
 
-@enumerate
-@item Go to the kitchen
-@item Open the bread bag
-@item Take out 2 slices of bread
-@item Put them on a plate
-@item Open the peanut butter jar
-@item Get a knife
-@item Scoop peanut butter onto one slice
-@item Spread it evenly
-@item Put the knife down
-@item Put the other slice on top
-@item Give me the sandwich
-@end enumerate
+@cindex COBOL heritage
+@cindex eight languages
 
-Programming is  exactly like  this! You write  step-by-step instructions
-that  tell  a computer  exactly  what  to  do.  The difference  is  that
-computers are incredibly fast and never get bored or distracted.
-
-@section Meet EIGHTBOL
-
-EIGHTBOL is based on COBOL (COmmon  Business Oriented Language)  was created in 1959  to help
-businesses process  data and  generate reports. Unlike  many programming
-languages  that use  cryptic symbols,  EIGHTBOL was  designed to  read like
-English sentences.
-
-Here's what a simple EIGHTBOL instruction looks like:
+EIGHTBOL takes its name and its original grammar from COBOL (COmmon
+Business Oriented Language), a language created in 1959 to help
+businesses process data and generate reports.  Unlike many programming
+languages that use cryptic symbols, COBOL was designed to read like
+English sentences:
 
 @example
 ADD 1 TO Counter.
 @end example
 
-See how it reads almost like a sentence? That's the beauty of EIGHTBOL!
+Reads almost like a sentence.  EIGHTBOL preserves that quality in the
+COBOL front end and extends the same compiling machinery to seven more
+languages: BASIC, FORTRAN, Pascal, Lua, Lingo, Objective-C, and
+SmallTalk.  Every front end compiles into the same internal
+representation, an abstract syntax tree, so the code generator and the
+per-processor back ends are shared regardless of which language the
+program was written in.
 
-@section What is EIGHTBOL?
+The languages are not all equally complete.  EIGHTBOL was developed with
+COBOL as the flagship language, and the COBOL front end is the most
+thoroughly implemented.  The BASIC front end implements a substantial
+dialect.  The Pascal front end is functional but narrow.  The FORTRAN,
+Lua, Lingo, Objective-C, and SmallTalk front ends are best regarded as
+@emph{designed grammars}: they describe the syntax the languages intend
+to accept, but the front ends are not yet wired into the command line,
+and in places the grammars are incomplete.  Each language chapter says
+plainly what is implemented, what is designed-but-not-implemented, and
+what is not supported at all.
 
-EIGHTBOL is  an EIGHTBOL variant designed for creating  games on
-classic 8-bit  and 16-bit computers.  It takes EIGHTBOL programs  you write
-and  converts  them  into  the low-level  instructions  that  these  old
-computers understand.
-
-Think  of EIGHTBOL  as  a translator  between  human-friendly EIGHTBOL  and
-machine-friendly assembly language.
-
-@section Why Learn EIGHTBOL?
-
-Creating games  for classic systems teaches  you fundamental programming
-concepts that apply to all programming:
-
-@itemize
-@item @strong{Problem Solving}: Breaking complex problems into small steps
-@item @strong{Logic}: Making decisions and controlling program flow
-@item @strong{Data Management}: Organizing and manipulating information
-@item @strong{Performance}: Writing efficient code for limited hardware
-@end itemize
-
-Plus, you'll have the satisfaction of creating games that run on real
-vintage hardware!
-
-@section Your First Mental Model
-
-Imagine your program as a recipe book. Each recipe (procedure) contains
-step-by-step instructions. Your data is like the ingredients stored in
-the pantry (memory).
-
-When you run a program, it's like following a recipe: you get ingredients
-from storage, follow the steps, and create something new.
-
-@section What You'll Learn
-
-By the end of this manual, you'll be able to:
-
-@itemize
-@item Write complete EIGHTBOL programs
-@item Create variables to store data
-@item Use arithmetic and logic operations
-@item Control program flow with conditions and loops
-@item Organize code into reusable procedures
-@item Debug and fix common programming errors
-@item Compile programs for multiple classic game systems
-@end itemize
-
-@section Target Platforms
-
-EIGHTBOL generates assembly code for these CPU architectures:
-
-@table @asis
-@item 6502
-MOS Technology 6502 8-bit processor
-@item Z80
-Zilog Z80 8-bit processor
-@item CP1610
-General Instrument CP1610 16-bit processor
-@item M68K
-Motorola 68000 series 16-bit/32-bit processors
-@end table
-
-@section Ready to Start?
-
-Programming can seem intimidating at first, but remember: every expert
-programmer was once a beginner. We'll take it one small step at a time,
-and you'll be surprised how quickly concepts start to click.
-
-Let's begin your programming journey!
-
-@node Installation
-@chapter Installation
+@node Installing EIGHTBOL
+@section Installing EIGHTBOL
 
 @cindex installation
-@cindex setup
-@cindex requirements
+@cindex Common Lisp
+@cindex ASDF
+@cindex Classes.Defs
 
-@section System Requirements
-
-EIGHTBOL requires:
-@itemize
-@item Common Lisp implementation (SBCL recommended)
-@item ASDF system definition facility
-@item Texinfo (for documentation)
-@end itemize
-
-@section Loading EIGHTBOL
-
-To use EIGHTBOL in your Lisp environment:
+EIGHTBOL is written in Common Lisp and is loaded with ASDF.  Its source
+tree is a submodule of the Phantasia repository and lives at
+@file{SkylineTool/eightbol/}.  To load it:
 
 @example
-(ql:quickload :eightbol)
+(cd SkylineTool/eightbol)
+sbcl --non-interactive --load go.lisp
 @end example
 
-Or manually:
+or, from a Slime or SLIME-compatible REPL:
 
 @example
 (asdf:load-system :eightbol)
 @end example
 
-@section Integration with Phantasia
-
-EIGHTBOL is automatically available when using the Skyline Tool:
-
-@example
-(ql:quickload :skyline-tool)
-@end example
-
-@section Running Tests
-
-To run the EIGHTBOL test suite:
+The test suite is run with:
 
 @example
 (asdf:test-system :eightbol)
 @end example
 
-Tests cover the lexer, parser, AST structure, unsupported-statement errors,
-STRING BLT with reference modification, and all CPU backends.
+@subsection The Classes.Defs File
 
-@node Quick Start
-@chapter Quick Start
+@cindex Classes.Defs
+@cindex class definitions
+@cindex METHOD-ID
 
-@cindex quick start
-@cindex hello world
-@cindex first program
-
-Congratulations! You're about to write your first computer program. We'll
-start with something simple but complete. By the end of this chapter,
-you'll have a working program that you can compile and run.
-
-@section Understanding Program Structure
-
-Before we write code, let's understand how EIGHTBOL programs are organized.
-Think of an EIGHTBOL program like a recipe book with specific sections:
+Before compiling a program that defines or uses classes, EIGHTBOL must
+know about the classes.  Class and method declarations are stored in a
+file named @file{Classes.Defs} (uppercase, with a hyphen replacing the
+space).  The file is processed by a small tool that extracts the
+available classes and methods and writes the tables EIGHTBOL uses for
+name resolution and for generating class and method labels.
 
 @table @asis
-@item IDENTIFICATION DIVISION
-The title page - tells us what this program is
-@item ENVIRONMENT DIVISION
-The kitchen setup - tells us what tools we need
-@item DATA DIVISION
-The ingredient list - defines our data storage
-@item PROCEDURE DIVISION
-The cooking instructions - the actual program logic
+@item @file{Classes.Defs}
+The master list of classes, written one class per line in the form
+@code{#Class/@var{Class-Name}}, optionally followed by method names in
+the form @code{#/@var{Method-Name}}.
+@item @file{Classes/Phantasia-Globals.cpy}
+A generated COBOL copybook containing the global symbol table.
 @end table
 
-@section Your First Object: Score Counter
+The Phantasia build regenerates these files automatically; a standalone
+EIGHTBOL installation must provide them before compiling COBOL or BASIC
+programs that reference classes.
 
-Let's create a simple object that manages a score counter. This will teach us
-about classes, methods, and data management in EIGHTBOL.
+@node Invoking EIGHTBOL
+@section Invoking EIGHTBOL
 
-Create a file called @file{ScoreCounter.cob} with this content:
+@cindex command line
+@cindex @code{--basic}
+@cindex .cob files
+@cindex .bas files
+
+The compiled driver is the @command{eightbol} executable (built by the
+Phantasia Makefile as @file{SkylineTool/bin/eightbol}).  The command
+line has the form:
 
 @example
-IDENTIFICATION DIVISION.
-CLASS-ID. ScoreCounter.
-
-OBJECT.
-    DATA DIVISION.
-        COPY WorkingStorage.
-
-    PROCEDURE DIVISION.
-
-        METHOD-ID. "Initialize".
-            PROCEDURE DIVISION.
-            MOVE 0 TO Current-Score.
-            EXIT METHOD.
-        END METHOD "Initialize".
-
-        METHOD-ID. "Increment".
-            PROCEDURE DIVISION.
-            IF Current-Score < Max-Score THEN
-                ADD 1 TO Current-Score
-            END-IF.
-            EXIT METHOD.
-        END METHOD "Increment".
-
-        METHOD-ID. "GetScore".
-            PROCEDURE DIVISION.
-            GOBACK GIVING Current-Score.
-        END METHOD "GetScore".
-
-        METHOD-ID. "IsComplete".
-            PROCEDURE DIVISION.
-            IF Current-Score >= Max-Score THEN
-                GOBACK GIVING 1
-            ELSE
-                GOBACK GIVING 0
-            END-IF.
-        END METHOD "IsComplete".
-END OBJECT.
-
-END CLASS ScoreCounter.
+eightbol [--basic] @var{source-file} ...
 @end example
 
-Let's break this down line by line:
+The front end is chosen from the file name suffix:
 
-@table @code
-@item IDENTIFICATION DIVISION.
-This marks the beginning of our object's identity section
-@item CLASS-ID. ScoreCounter.
-We name our class "ScoreCounter"
-@item OBJECT.
-This defines the object structure
-@item DATA DIVISION.
-Here we define our object's data storage
-@item COPY WorkingStorage.
-Includes system-provided data definitions
-@item METHOD-ID. "Initialize".
-A method to set up the object
-@item MOVE 0 TO Current-Score.
-Reset the score to 0
-@item METHOD-ID. "Increment".
-A method to increase the score
-@item IF Current-Score < Max-Score THEN
-Only increment if we haven't reached the maximum
-@item METHOD-ID. "GetScore".
-A method to retrieve the current score
-@item GOBACK GIVING Current-Score.
-Return the current score value
+@table @asis
+@item @code{.cob}
+COBOL source; compiled with the COBOL front end.  This is the default
+when no option is given.
+@item @code{--basic @var{file.bas}}
+BASIC source; compiled with the BASIC front end.  The @code{--basic}
+option must precede the file name.
 @end table
 
-@section Compiling Your Program
+At the time of writing, only the COBOL and BASIC front ends are
+reachable from the command line.  The Pascal, FORTRAN, Lua, Lingo,
+Objective-C, and SmallTalk front ends are not yet wired into the driver;
+their chapters document the grammar they intend to implement.
 
-Now let's turn this EIGHTBOL program into assembly code that a computer can
-understand.
+@node Program Structure
+@section Program Structure
 
-In your Lisp environment, load EIGHTBOL and compile:
+@cindex standalone program
+@cindex object method
+@cindex routine
 
-@example
-;; Load EIGHTBOL
-(asdf:load-system :eightbol)
+Every source file compiles to a single object: either a standalone
+@emph{program} or routine, or an object @emph{method}.  The two shapes
+are nearly the same in all eight languages; the difference is only in
+the wrapper the front end expects.
 
-;; Compile for the 6502 processor (Atari 7800/NES)
-;; Include copybook directories for COPY statements
-(eightbol:compile-file "counter.cob" :cpu 6502
-                       :include '("Source/Generated" "Source/Classes"))
-@end example
+@table @asis
+@item Standalone program
+A complete, compilable unit.  In COBOL this is a
+@code{PROGRAM-ID}@dots{}@code{END PROGRAM} body; in BASIC a
+@code{METHOD}@dots{}@code{END METHOD} or subroutine body; in the other
+languages their corresponding top-level form.
+@item Object method
+A method named in @file{Classes.Defs}.  The method belongs to a class,
+and the compiler arranges for the method's label to be the class and
+method name so the object dispatcher can reach it.
+@end table
 
-This creates a file called @file{counter.s} containing 6502 assembly code.
+The generated assembly defines the object's entry point with a label of
+the form @code{Method@var{ClassName}@var{MethodName}} for the 6502
+family (matching the OOPS convention), or the platform's equivalent for
+other processors.
 
-@section Running Your Program
+@node Data and Parameters
+@section Data and Parameters
 
-The assembly code needs to be assembled into machine code and run on
-the target platform. This usually involves:
+@cindex parameter passing
+@cindex registers
+@cindex global variables
+@cindex storage
 
-@enumerate
-@item Using an assembler (like 64tass for 6502)
-@item Linking with system libraries
-@item Running on an emulator or real hardware
-@end enumerate
+Memory allocation is a serious matter on 8-bit machines.  EIGHTBOL
+therefore keeps parameter passing extremely simple:
 
-For learning purposes, you can examine the generated assembly code to
-see how your EIGHTBOL translates to machine instructions.
+@quotation
+@strong{Parameter passing is limited to one register in and one register
+out.}  Data is generally passed through (global) variables rather than
+through an argument list.
+@end quotation
 
-@section Try This!
-
-Modify the counter program to count down from 10 to 1 instead of up.
-Hint: Use SUBTRACT instead of ADD, and change the UNTIL condition.
-
-@section What You Learned
-
-In this chapter, you learned:
+Consequences of this rule:
 
 @itemize
-@item How EIGHTBOL programs are structured into divisions
-@item How to declare variables with PIC clauses
-@item How to use PERFORM for looping
-@item How to display output
-@item How to compile EIGHTBOL to assembly
+@item A method or routine accepts at most a single argument, carried in
+the machine's first argument register (@code{A} on the 6502 family,
+@code{A} on the Z80, and so on).
+@item It returns at most a single value, in the same register.
+@item Anything larger --- strings, records, arrays --- is communicated by
+writing it to a global variable before the call and reading that
+variable after the call.
+@item The compilers allocate storage from a fixed address table; the
+assembler source names storage with labels derived from the variable
+names.
 @end itemize
 
-Great job on your first program! In the next chapter, we'll dive deeper
-into variables and data types.
+Each language chapter repeats this rule where it matters, because it is
+the single most important difference between EIGHTBOL and a desktop
+compiler for the same language.
 
-@node Programmers Reference
-@chapter Programmers Reference
+@node A Guided Tour
+@section A Guided Tour
 
-@cindex programmers reference
-@cindex AST
-@cindex assembly entry
-@cindex jsr
+@cindex example
+@cindex guided tour
 
-This chapter is the technical hub for integrating EIGHTBOL with hand-written
-assembly and build tooling.  It complements the tutorial tone of
-@ref{Quick Start} and the syntax inventory in @ref{Language Reference}.
-
-@section Pipeline overview
-
-An EIGHTBOL class file is lexed and parsed into a @code{:program} AST: a plist
-with @code{:class-id}, optional @code{:data}, and @code{:methods}.  Each method
-is a @code{(:method :method-id … :statements …)} node.  The AST is validated,
-optionally optimized, and passed to the backend selected with @code{-m}
-(@pxref{CPU Backends}).
-
-@section External assembly entry points
-
-Sometimes a method body should be reachable both from the game's method
-dispatch table (@emph{INVOKE}) and from plain assembly in another translation
-unit (@code{jsr} on 6502-family targets, or the analogous call instruction on
-other CPUs).
-
-Place one optional declaration as the @strong{first} procedure statement in
-that method:
+To give the shape of the manual, here is a complete small COBOL program
+that sets a global flag and returns:
 
 @example
-ASSEMBLY ENTRY MyRoutine.
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. SetFlag.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 Result PIC 9 VALUE 0.
+       PROCEDURE DIVISION.
+       Main.
+           MOVE 1 TO Result
+           GOBACK.
+       END PROGRAM SetFlag.
 @end example
 
-The parser records @code{(:assembly-entry :label "MyRoutine")}.  Backends then:
-
-@enumerate
-@item
-Emit the executable block under the identifier produced from @code{MyRoutine}
-(PascalCase / assembler rules for that CPU).
-@item
-Keep the usual dispatch label (@code{MethodClassMethod} on 6502-family output)
-as an alias (@code{=} in 64tass-style listings, a second label on the same line
-for some CPUs, @code{EQU}/@code{endp} pairing on others) so existing
-@code{INVOKE} paths still resolve.
-@end enumerate
-
-Only one @code{ASSEMBLY ENTRY} is allowed per method, and it must precede every
-executable COBOL statement (comments and the entry line itself may appear
-first).
-
-@section Dartmouth BASIC and this manual
-
-The Dartmouth BASIC front-end is documented in @ref{Appendix Dartmouth BASIC}.
-It transpiles @file{.bas} sources to the same COBOL-shaped AST the lexer and
-parser already understand; you may emit @code{ASSEMBLY ENTRY} from BASIC with a
-line of the form @code{ASSEMBLY ENTRY Name} (see the appendix).
-
-@node Language Reference
-@chapter Language Reference
-
-@cindex language reference
-@cindex syntax
-@cindex EIGHTBOL features
-
-Now that you understand the basics, let's explore EIGHTBOL's features in detail.
-We'll build your understanding step by step, with examples you can try.
-
-@section The Recipe Book: Program Structure
-
-Imagine an EIGHTBOL program as a cookbook. Just like a cookbook has sections
-for ingredients and instructions, an EIGHTBOL program has divisions that
-organize different types of information.
+The same effect in BASIC:
 
 @example
-IDENTIFICATION DIVISION.      @c What is this object?
-CLASS-ID. Player.
-
-OBJECT.
-    DATA DIVISION.            @c What data do we need?
-        COPY PlayerData.
-
-    PROCEDURE DIVISION.       @c What methods do we have?
-
-        METHOD-ID. "AddPoints".
-            PROCEDURE DIVISION USING Points-To-Add.
-            ADD Points-To-Add TO Player-Score.
-            EXIT METHOD.
-        END METHOD "AddPoints".
-
-        METHOD-ID. "GetScore".
-            PROCEDURE DIVISION.
-            GOBACK GIVING Player-Score.
-        END METHOD "GetScore".
-END OBJECT.
-
-END CLASS Player.
+METHOD SetFlag
+  Result = 1
+END METHOD
 @end example
 
-Each division has a specific purpose:
-
-@table @asis
-@item IDENTIFICATION DIVISION
-Like the title page - tells us what this class is
-@item CLASS-ID
-Names our class (like a blueprint for objects)
-@item OBJECT
-Defines the object structure and behavior
-@item DATA DIVISION
-Like the ingredient list - defines our object's data storage
-@item PROCEDURE DIVISION
-Like the methods - defines our object's behavior
-@end table
-
-@section Naming Your Class
-
-Every EIGHTBOL class needs an identity. This is like giving your blueprint
-a name and author.
-
-@example
-IDENTIFICATION DIVISION.
-CLASS-ID. Space-Invaders-Clone.
-AUTHOR. Your Name Here.
-DATE-WRITTEN. 2026.
-@end example
-
-The @code{CLASS-ID} is required and must be unique. Think of it as
-your class's name.
-
-EIGHTBOL supports object-oriented programming with:
-
-@table @code
-@item CLASS-ID. name.
-Defines a class (like a blueprint for objects)
-@item METHOD-ID. name.
-Defines a method within a class
-@item OBJECT.
-Contains the data and methods for the class
-@end table
-
-@example
-IDENTIFICATION DIVISION.
-CLASS-ID. Player-Character.
-AUTHOR. Game Developer.
-DATE-WRITTEN. 2024.
-@end example
-
-@section Storing Information: Variables
-
-Variables are like containers that hold data. In EIGHTBOL, we declare
-variables in the DATA DIVISION, just like listing ingredients before
-cooking.
-
-@subsection Understanding PIC Clauses
-
-PIC (Picture) clauses describe what kind of data a variable can hold.
-Think of them as labels on storage containers.
-
-@example
-DATA DIVISION.
-WORKING-STORAGE SECTION.
-01 Player-Name PIC X(20).        @c Up to 20 letters
-01 Player-Score PIC 9(5).        @c 5-digit number (0-99999)
-01 Game-Over-Flag PIC X.         @c Single character: 'Y' or 'N'
-01 Bonus-Multiplier PIC 9V9.     @c Decimal number: 1.5, 2.0, etc.
-@end example
-
-@table @code
-@item PIC X
-Single character (letter or symbol)
-@item PIC X(n)
-String of n characters
-@item PIC 9
-Single digit (0-9)
-@item PIC 9(n)
-n-digit number
-@item PIC 9V9
-Decimal number (like 1.5)
-@end table
-
-@strong{Important:} EIGHTBOL doesn't support string variables (PIC X).
-Use byte arrays or numeric variables instead.
-
-@subsection Try This: Variable Declaration
-
-Create variables for a simple game character:
-
-@example
-DATA DIVISION.
-COPY CharacterData.
-@end example
-
-What happens if you try to store "SuperLongCharacterName" in Character-Name?
-
-@subsection Arrays: Storing Lists
-
-Sometimes you need to store collections of data, like high scores or
-inventory items.
-
-@example
-DATA DIVISION.
-WORKING-STORAGE SECTION.
-01 High-Scores PIC 9(5) OCCURS 10 TIMES.
-01 Inventory PIC X(20) OCCURS 50 TIMES.
-
-PROCEDURE DIVISION.
-Store-High-Score.
-    MOVE Player-Score TO High-Scores(1).
-    GOBACK.
-@end example
-
-Access array elements with parentheses: @code{Array-Name(index)}
-
-@strong{Note:} EIGHTBOL arrays are 1-based (start at 1, not 0 like some languages).
-
-@section Making Your Program Do Things: Procedures
-
-The PROCEDURE DIVISION is where the action happens - this is your
-program's recipe steps. Here you write the instructions that tell
-the computer what to do.
-
-@subsection Basic Statements
-
-EIGHTBOL statements read like English sentences. Here are the most common:
-
-@table @code
-@item MOVE source TO destination
-Copy data from one place to another
-@item ADD amount TO variable
-Add numbers together
-@item SUBTRACT amount FROM variable
-Subtract numbers
-@item COMPUTE result = expression
-Perform calculations
-@item STRING source DELIMITED BY SIZE INTO dest
-Block transfer (BLT): copy bytes from source to dest. Supports reference
-modification: @code{name(start:length)} for partial buffer copy.
-@end table
-
-@example
-    METHOD-ID. "Copy".
-        PROCEDURE DIVISION.
-        STRING SrcBuf(1:64) DELIMITED BY SIZE INTO DstBuf(1:64).
-        GOBACK.
-    END METHOD "Copy".
-@end example
-
-@strong{Note:} STRING with character delimiter is not supported; use
-@code{DELIMITED BY SIZE} for block transfer only.
-
-@subsection Unsupported Statements (compile-time error)
-
-The following COBOL statements are not implemented and signal a compile-time
-error: DIVIDE, MULTIPLY, UNSTRING, INSPECT (all forms), GOTO/GO TO,
-EVALUATE, and SET forms other than @code{SET identifier TO expression}.
-
-@example
-    METHOD-ID. "Initialize".
-        PROCEDURE DIVISION.
-        MOVE 100 TO Player-Health.
-        MOVE "Ready Player One" TO Game-Status.
-        EXIT METHOD.
-    END METHOD "Initialize".
-@end example
-
-@subsection Including Code: COPY Statements
-
-Sometimes you want to reuse the same data definitions across multiple
-programs. COBOL's COPY statement lets you include copybook files:
-
-@example
-IDENTIFICATION DIVISION.
-PROGRAM-ID. Game-Logic.
-
-DATA DIVISION.
-WORKING-STORAGE SECTION.
-COPY Game-Constants.     @c Include constants
-COPY Player-Data.        @c Include player definitions
-
-PROCEDURE DIVISION.
-    MOVE Max-Health TO Player-Health
-    GOBACK.
-@end example
-
-Copybooks use the WORKING-STORAGE SECTION with EXTERNAL data items
-and USAGE BINARY for proper byte alignment:
-
-@example
-WORKING-STORAGE SECTION.
-01  WS-SHARED-DATA EXTERNAL.
-    05  Decal-XH USAGE BINARY 1.
-    05  Player-Score USAGE BINARY 2.
-@end example
-
-Copybooks are searched for in the directories specified by the
-@code{:include} parameter when compiling:
-
-@example
-(eightbol:compile-file "game-logic.cob"
-                       :include '("Source/Generated" "Source/Classes"))
-@end example
-
-@subsection Organizing Code: Procedures
-
-Procedures are like sub-recipes. Break complex tasks into smaller,
-manageable pieces.
-
-@example
-PROCEDURE DIVISION.
-
-Main-Game-Loop.
-    PERFORM Handle-Input
-    PERFORM Update-Game-State
-    PERFORM Render-Screen
-    PERFORM Check-Game-Over
-    GOBACK.
-
-Handle-Input.
-    IF Button-A-Pressed THEN
-        PERFORM Player-Jump
-    END-IF
-    GOBACK.
-
-Player-Jump.
-    ADD Jump-Power TO Player-Velocity-Y
-    GOBACK.
-@end example
-
-Each procedure ends with GOBACK, which returns to the caller.
-
-@subsection Making Decisions: IF Statements
-
-Programs need to make choices based on conditions.
-
-@example
-IF Health-Points < 20 THEN
-    MOVE 1 TO Low-Health-Flag
-END-IF.
-@end example
-
-EIGHTBOL's IF statements read like English. You can include ELSE for alternatives:
-
-@example
-IF Enemy-Strength > Player-Level THEN
-    PERFORM Run-Away
-ELSE
-    PERFORM Attack-Enemy
-END-IF.
-@end example
-
-@subsection Repeating Actions: Loops
-
-Games often repeat actions, like updating all enemies.
-
-@table @code
-@item PERFORM procedure
-Call a procedure once
-@item PERFORM procedure UNTIL condition
-Repeat until condition is true
-@item PERFORM procedure VARYING var FROM start BY step UNTIL end
-Count through a range
-@end table
-
-@example
-PERFORM Update-All-Enemies.
-
-PERFORM Process-Game-Turn UNTIL Game-Over = 1.
-
-PERFORM Check-Enemy VARYING I FROM 1 BY 1 UNTIL I > Enemy-Count.
-@end example
-
-@subsection Multiple Choices: EVALUATE
-
-When you have many options, EVALUATE is cleaner than nested IFs:
-
-@example
-EVALUATE Player-Choice
-    WHEN 1
-        PERFORM Start-New-Game
-    WHEN 2
-        PERFORM Load-Saved-Game
-    WHEN 3
-        PERFORM Show-Options
-    WHEN OTHER
-        MOVE 1 TO Invalid-Choice-Flag
-END-EVALUATE.
-@end example
-
-@subsection Game Programming Extensions
-
-EIGHTBOL includes special features for game development:
-
-@table @code
-@item property OF object
-Access object properties (like Player.Health)
-@item INVOKE object "method"
-Call object methods
-@item CALL subroutine IN BANK bank
-Banked memory calls
-@item LOG FAULT "code"
-Log fault condition (uses LogFault)
-@item BREAK FOR FAULT "code"
-Break execution on fault (uses DebugBreak)
-@end table
-
-@example
-INVOKE Player "TakeDamage" USING 25.
-
-IF Health OF Player < 10 THEN
-    LOG FAULT "LOWH"
-END-IF.
-
-BREAK FOR FAULT "CRIT" WHEN Health OF Player <= 0.
-@end example
-
-@section Expressions and Conditions
-
-@cindex expressions
-@cindex conditions
-@cindex operators
-
-EIGHTBOL expressions compare values and combine conditions.
-
-@subsection Comparison Operators
-
-EIGHTBOL uses words for comparisons, making them readable:
-
-@table @code
-@item A = B
-A equals B
-@item A <> B
-A is not equal to B
-@item A < B
-A is less than B
-@item A > B
-A is greater than B
-@item A <= B
-A is less than or equal to B
-@item A >= B
-A is greater than or equal to B
-@end table
-
-@example
-IF Player-Score >= High-Score THEN
-    MOVE Player-Name TO Champion-Name
-END-IF.
-@end example
-
-@subsection Logical Operators
-
-Combine conditions with AND, OR, and NOT:
-
-@table @code
-@item AND
-Both conditions must be true
-@item OR
-At least one condition must be true
-@item NOT
-Reverse the condition
-@end table
-
-@example
-IF Health > 0 AND Mana > 10 THEN
-    MOVE 1 TO Spell-Ready-Flag
-END-IF.
-
-IF NOT Game-Over THEN
-    PERFORM Continue-Game
-END-IF.
-@end example
-
-@subsection Complex Conditions
-
-You can combine multiple conditions:
-
-@example
-IF Player-Level >= 5 AND Has-Magic-Sword = 'Y' OR Is-Cheat-Mode = 1 THEN
-    PERFORM Unlock-Secret-Level
-END-IF.
-@end example
-
-@strong{Remember:} AND is evaluated before OR. Use parentheses if needed.
-
-@section Doing Math: Arithmetic
-
-EIGHTBOL provides several ways to calculate:
-
-@example
-ADD 100 TO Player-Score.
-
-SUBTRACT Damage FROM Health-Points.
-
-MULTIPLY Attack-Power BY 2 GIVING Total-Damage.
-
-COMPUTE Final-Score = Base-Score + (Bonus * Multiplier).
-@end example
-
-@subsection Arithmetic Operations
-
-@table @asis
-@item ADD source TO destination
-Add to existing value
-@item ADD source TO destination GIVING result
-Add and store in new variable
-@item SUBTRACT source FROM destination
-Subtract from existing value
-@item MULTIPLY source BY destination
-Multiply values
-@item DIVIDE source INTO destination
-Divide values
-@item COMPUTE result = expression
-Complex calculations
-@end table
-
-@subsection Try This: Score Calculation
-
-@example
-COMPUTE Final-Score = Base-Score + (Time-Bonus * 10) - Penalties.
-
-COMPUTE Average-Damage = Total-Damage / Hit-Count.
-@end example
-
-@section Built-in Functions
-
-@cindex functions
-@cindex RANDOM
-@cindex WHEN-COMPILED
-
-EIGHTBOL provides special functions for game programming:
-
-@table @code
-@item RANDOM
-Generate a random number (0-255)
-@item RANDOM(seed)
-Generate seeded random number
-@item WHEN-COMPILED
-Get compilation timestamp
-@end table
-
-@example
-COMPUTE Random-Direction = RANDOM.
-
-IF RANDOM > 128 THEN
-    PERFORM Move-Right
-ELSE
-    PERFORM Move-Left
-END-IF.
-@end example
-
-@section Common Programming Patterns
-
-Here are patterns you'll use frequently:
-
-@subsection Game Loop Pattern
-
-@example
-PROCEDURE DIVISION.
-Main-Loop.
-    PERFORM Read-Input
-    PERFORM Update-Objects
-    PERFORM Draw-Screen
-    IF NOT Game-Over THEN
-        GO TO Main-Loop
-    END-IF
-    PERFORM Show-Game-Over
-    GOBACK.
-@end example
-
-@subsection State Machine Pattern
-
-@example
-EVALUATE Game-State
-    WHEN 1  @c Title Screen
-        PERFORM Show-Title
-    WHEN 2  @c Playing
-        PERFORM Run-Game
-    WHEN 3  @c Game Over
-        PERFORM Show-Results
-END-EVALUATE.
-@end example
-
-@subsection Input Handling Pattern
-
-@example
-Check-Input.
-    IF Left-Pressed THEN
-        SUBTRACT 1 FROM Player-X
-    END-IF
-    IF Right-Pressed THEN
-        ADD 1 TO Player-X
-    END-IF
-    IF Jump-Pressed AND On-Ground THEN
-        MOVE 'Y' TO Is-Jumping
-    END-IF
-    GOBACK.
-@end example
-
-@section Best Practices
-
-As you write more EIGHTBOL, follow these guidelines:
-
-@enumerate
-@item Use descriptive variable names (Player-Health, not PH)
-@item Add comments explaining complex logic
-@item Break large procedures into smaller ones
-@item Initialize variables with VALUE clauses
-@item Test procedures individually before combining
-@item Use PERFORM instead of GO TO when possible
-@item Keep procedures under 50 lines when practical
-@end enumerate
-
-@node CPU Backends
-@chapter CPU Backends
-
-@cindex CPU backends
-@cindex target processors
-@cindex assembly generation
-@cindex ABI
-@cindex calling convention
-
-EIGHTBOL generates optimized assembly code for multiple CPU architectures.
-Each backend documents its ABI (Application Binary Interface): register usage,
-calling conventions, and procedure entry/exit. Hand-written assembly that
-calls or is called by EIGHTBOL-generated code must follow these conventions.
-
-@section 6502 Backend
-
-@cindex 6502
-@cindex MOS 6502
-
-The 6502 backend generates code for the MOS 6502 processor family (6502, 65c02,
-65c816, HuC6280, RP2A03). Output uses 64tass assembler syntax.
-
-@subsection Registers
-@table @code
-@item A
-Accumulator; holds byte results and operands
-@item X
-X index register; used for indexing
-@item Y
-Y index register; used for slot offsets (ldy #Slot, lda (Self),y)
-@end table
-
-@subsection ABI and Calling Conventions
-@table @asis
-@item Procedure call (PERFORM / CALL)
-@code{jsr} to procedure label. Caller and callee share same bank.
-Near @code{CALL} to a local label uses @code{jsr}; a tail @code{CALL} immediately before
-@code{GOBACK}/@code{EXIT@dots{}} may use @code{jmp}.  Service, library, and bank-switched
-forms use @code{.FarCall}, @code{.FarJSR}, or @code{jsr Lib.@dots{}} as appropriate.
-@item Return
-@code{rts}. No return value in registers.
-@item INVOKE Self @code{"Method"}
-@code{.CallMethod Call@var{Class}@var{Method}, @var{Class}Class} --- same Phantasia
-@code{CallMethod} macro as @code{INVOKE} on a typed object (dispatches via @code{DoCallMethod}).
-@item INVOKE variable @code{"Method"}
-@code{.CallMethod Call@var{Type}@var{Method}, @var{Type}Class, @var{Var}}
-@item Slot access
-@code{ldy #@var{OriginClass}@var{Slot}; lda (Self),y} for slot OF Self
-@item Caller-saved
-A, X, Y may be clobbered by any call
-@end table
-
-@subsection Memory Access
-6502 uses zero-page and absolute addressing. Variables map to direct addresses.
-
-@section Z80 Backend
-
-@cindex Z80
-@cindex Zilog Z80
-
-Z80 code generation. Output: lowercase Z80 assembly (ld a,(hl), etc.)
-
-@subsection Registers
-@table @code
-@item A
-Accumulator (8-bit); byte results
-@item HL
-16-bit accumulator; word results, pointer for slot/array access
-@item BC
-Count register; loop counters, array indexing
-@item DE
-Destination pointer; block copy dest, temp for slot math
-@item B
-Temp for comparisons and bit ops
-@end table
-
-@subsection ABI and Calling Conventions
-@table @asis
-@item Procedure call
-@code{call @var{label}}. Return with @code{ret}.
-@item Return value
-Byte: in A. Word: in HL.
-@item INVOKE Self
-@code{call Invoke@var{Class}@var{Method}}
-@item INVOKE variable
-@code{call Call@var{Type}@var{Method}}
-@item Caller-saved
-A, HL, BC, DE, B may be clobbered. IX, IY not used by backend.
-@end table
-
-@section SM83 Backend (Game Boy)
-
-@cindex SM83
-@cindex Game Boy
-
-SM83 (Sharp) is the Game Boy CPU, Z80/8080-like. Output: RGBDS syntax.
-
-@subsection Registers
-Same allocation as Z80: A=accumulator, HL=ptr, BC=count, DE=dest-ptr.
-
-@subsection ABI and Calling Conventions
-@code{call} / @code{ret}. Byte return in A, word in HL. Same INVOKE
-conventions as Z80.
-
-@section CP1610 Backend (Intellivision)
-
-@cindex CP1610
-@cindex Intellivision
-
-General Instrument CP1610, 16-bit RISC. Output: as1600 assembler syntax.
-
-@subsection Registers
-@table @code
-@item R0
-Accumulator; 8-bit values use low byte
-@item R1-R4
-General purpose
-@item R5
-Return address for @code{JSR R5,addr}; @code{JR R5} returns
-@item R6
-Stack pointer
-@item R7
-Program counter
-@end table
-
-@subsection ABI and Calling Conventions
-@table @asis
-@item Procedure call
-@code{JSR R5, @var{label}}. Return address in R5; callee returns with @code{JR R5}.
-@item Return value
-In R0 (byte or word)
-@item Caller-saved
-R0-R4 may be clobbered. R5, R6 must be preserved.
-@end table
-
-@section M68K Backend (68000)
-
-@cindex M68K
-@cindex Motorola 68000
-
-Motorola 68000. Output: GAS/AT&T syntax (move.b, move.w).
-
-@subsection Registers
-@table @code
-@item D0
-Accumulator; byte/word results
-@item D1
-Temp for expressions
-@item A0
-Address temp, slot/array base
-@item A7
-Stack pointer
-@end table
-
-@subsection ABI and Calling Conventions
-@table @asis
-@item Procedure call
-@code{jsr @var{label}}. Return with @code{rts}.
-@item Return value
-Byte/word in D0
-@item Caller-saved
-D0, D1, A0 may be clobbered. A1-A6, D2-D7 callee-saved if used.
-@end table
-
-@section i286 Backend (Intel 80286)
-
-@cindex i286
-@cindex 80286
-@cindex Intel
-
-Intel 80286, 16-bit. Output: Intel syntax (.286, .model small).
-
-@subsection Registers
-@table @code
-@item AL/AX
-Accumulator; AL for byte, AX for word
-@item BL/BX
-Temp; byte or word
-@item CX
-Temp for bit ops, loop count (STRING)
-@item SI
-Index for array/subscript access
-@item DI
-Destination pointer for block copy
-@end table
-
-@subsection ABI and Calling Conventions
-@table @asis
-@item Procedure call
-@code{call @var{label}}. Return with @code{ret}.
-@item Return value
-Byte in AL, word in AX
-@item INVOKE
-@code{call Invoke@var{Class}@var{Method}} or @code{call Call@var{Type}@var{Method}}
-@item Caller-saved
-AX, BX, CX, SI, DI may be clobbered. BP, SP preserved.
-@end table
-
-@section ARM7 Backend (ARM7TDMI)
-
-@cindex ARM7
-@cindex ARM7TDMI
-
-ARM7TDMI. Output: Thumb-mode GAS assembly.
-
-@subsection Registers
-@table @code
-@item R0
-Accumulator; byte/word results
-@item R1
-Temp, dest pointer
-@item R2
-Source pointer, temp
-@item R13 (SP)
-Stack pointer
-@item R14 (LR)
-Link register; @code{bx lr} returns
-@end table
-
-@subsection ABI and Calling Conventions
-@table @asis
-@item Procedure call
-@code{bl @var{label}}. Return with @code{bx lr}.
-@item Return value
-In R0
-@item Caller-saved
-R0, R1, R2 may be clobbered. R4-R11 callee-saved.
-@end table
-
-@node Examples
-@chapter Examples
-
-@cindex examples
-@cindex sample programs
-
-Let's learn by doing! This chapter provides complete, working examples
-you can compile and run. Start with simple programs and build up to
-more complex ones.
-
-@section Your First Object: Game Manager
-
-@example
-IDENTIFICATION DIVISION.
-CLASS-ID. GameManager.
-
-OBJECT.
-    PROCEDURE DIVISION.
-
-        METHOD-ID. "ShowWelcome".
-            PROCEDURE DIVISION.
-            MOVE "Welcome to EIGHTBOL Gaming!" TO Message.
-            MOVE "Ready Player One..." TO Subtitle.
-            EXIT METHOD.
-        END METHOD "ShowWelcome".
-END OBJECT.
-
-END CLASS GameManager.
-@end example
-
-@strong{Try This:} Create a GameManager object and call its ShowWelcome method.
-
-@section Simple Calculator Object
-
-Let's create a calculator object that performs basic math:
-
-@example
-IDENTIFICATION DIVISION.
-CLASS-ID. Calculator.
-
-OBJECT.
-    DATA DIVISION.
-        COPY CalculatorData.
-
-    PROCEDURE DIVISION.
-
-        METHOD-ID. "Add".
-            PROCEDURE DIVISION.
-            ADD Number-A TO Number-B GIVING Result.
-            GOBACK GIVING Result.
-        END METHOD "Add".
-
-        METHOD-ID. "Subtract".
-            PROCEDURE DIVISION.
-            SUBTRACT Number-B FROM Number-A GIVING Result.
-            GOBACK GIVING Result.
-        END METHOD "Subtract".
-
-        METHOD-ID. "Multiply".
-            PROCEDURE DIVISION.
-            MULTIPLY Number-A BY Number-B GIVING Result.
-            GOBACK GIVING Result.
-        END METHOD "Multiply".
-END OBJECT.
-
-END CLASS Calculator.
-@end example
-
-@strong{Modify It:} Add a division method and change the numbers.
-
-@section Simple Game Character
-
-Let's create a character that can take damage:
-
-@example
-IDENTIFICATION DIVISION.
-CLASS-ID. Game-Character INHERITS Basic-Object.
-
-OBJECT.
-    DATA DIVISION.
-    COPY CharacterInstanceData.
-
-    PROCEDURE DIVISION.
-
-        METHOD-ID. "Take-Damage".
-        DATA DIVISION.
-        LINKAGE SECTION.
-        01 Damage-Amount PIC 9(3).
-        PROCEDURE DIVISION USING BY VALUE Damage-Amount.
-            SUBTRACT Damage-Amount FROM Health-Points
-            IF Health-Points < 1 THEN
-                INVOKE SELF "Die"
-            ELSE
-                MOVE 1 TO Damage-Taken-Flag
-            END-IF
-            EXIT METHOD.
-        END METHOD "Take-Damage".
-
-        METHOD-ID. "Heal".
-        DATA DIVISION.
-        LINKAGE SECTION.
-        01 Heal-Amount PIC 9(3).
-        PROCEDURE DIVISION USING BY VALUE Heal-Amount.
-            ADD Heal-Amount TO Health-Points
-            IF Health-Points > Max-Health THEN
-                MOVE Max-Health TO Health-Points
-            END-IF
-            MOVE 1 TO Healed-Flag
-            EXIT METHOD.
-        END METHOD "Heal".
-
-        METHOD-ID. "Die".
-        PROCEDURE DIVISION.
-            MOVE 1 TO Dead-Flag
-            LOG FAULT "DEAD"
-            EXIT METHOD.
-        END METHOD "Die".
-END OBJECT.
-
-END CLASS Game-Character.
-@end example
-
-@section Complete Game: Number Guessing
-
-Here's a complete, playable game:
-
-@example
-IDENTIFICATION DIVISION.
-CLASS-ID. Number-Guessing-Game.
-
-OBJECT.
-    DATA DIVISION.
-        COPY GuessingGameData.
-
-    PROCEDURE DIVISION.
-
-        METHOD-ID. "Initialize".
-            PROCEDURE DIVISION.
-            COMPUTE Secret-Number = RANDOM.
-            MOVE 0 TO Guess-Count.
-            MOVE 'N' TO Game-Over.
-            EXIT METHOD.
-        END METHOD "Initialize".
-
-        METHOD-ID. "MakeGuess".
-            PROCEDURE DIVISION USING Guess-Value.
-            MOVE Guess-Value TO Player-Guess.
-            ADD 1 TO Guess-Count.
-
-            IF Player-Guess = Secret-Number THEN
-                MOVE 3 TO Guess-Result  @c Correct!
-                MOVE 'Y' TO Game-Over
-            ELSE
-                IF Player-Guess < Secret-Number THEN
-                    MOVE 1 TO Guess-Result  @c Too low
-                ELSE
-                    MOVE 2 TO Guess-Result  @c Too high
-                END-IF
-            END-IF.
-            EXIT METHOD.
-        END METHOD "MakeGuess".
-
-        METHOD-ID. "GetResult".
-            PROCEDURE DIVISION.
-            GOBACK GIVING Guess-Result.
-        END METHOD "GetResult".
-
-        METHOD-ID. "IsGameOver".
-            PROCEDURE DIVISION.
-            IF Game-Over = 'Y' THEN
-                GOBACK GIVING 1
-            ELSE
-                GOBACK GIVING 0
-            END-IF.
-        END METHOD "IsGameOver".
-END OBJECT.
-
-END CLASS Number-Guessing-Game.
-@end example
-
-@section Tips for Writing Your Own Objects
-
-As you write more EIGHTBOL programs, here are some helpful tips:
-
-@enumerate
-@item Start simple - get one feature working at a time
-@item Test methods individually before combining them
-@item Keep methods short and focused on one task
-@item Use meaningful variable and method names
-@item Use COPY statements for data definitions
-@item Comment complex logic
-@item Use return values to communicate results
-@item Experiment with different approaches
-@end enumerate
-
-@strong{Remember:} Every expert programmer started as a beginner. The key
-is to practice regularly and learn from each program you write!
-
-@node Troubleshooting
-@chapter Troubleshooting
-
-@cindex troubleshooting
-@cindex errors
-@cindex debugging
-
-Common issues and their solutions.
-
-@section Compilation Errors
-
-@subsection Undefined Variable
-@code{MOVE 1 TO UndefinedVar} generates an error because the variable
-isn't declared in DATA DIVISION.
-
-@strong{Solution:} Declare all variables in WORKING-STORAGE SECTION.
-
-@subsection Invalid PIC Clause
-String variables (PIC X) are not supported.
-
-@strong{Solution:} Use byte arrays or numeric variables instead.
-
-@section Runtime Issues
-
-@subsection Stack Overflow
-Deep recursion can cause stack overflow on 8-bit systems.
-
-@strong{Solution:} Use iteration instead of recursion where possible.
-
-@subsection Memory Limits
-8-bit systems have limited RAM.
-
-@strong{Solution:} Minimize variable usage and optimize data structures.
-
-@section Platform-Specific Issues
-
-@subsection 6502 Zero Page
-6502 code uses zero-page addressing for efficiency.
-
-@subsection Z80 Memory Banking
-Z80 systems may require bank switching for large programs.
-
-@node Appendix Dartmouth BASIC
-@appendix Dartmouth BASIC Compiler
+Both compile to assembly that stores 1 in the @code{Result} variable and
+returns.  The chapter on each language explains the syntax in detail and
+gives more complete examples, including object methods and loops.
+
+@node BASIC
+@chapter BASIC
 
 @cindex BASIC
-@cindex .bas
-@cindex eightbol --basic
+@cindex Dartmouth BASIC
+@cindex Microsoft BASIC
 
-You may author a class as UTF-8 Dartmouth-style BASIC in
-@file{Source/Classes/@var{ClassName}.bas}.  The compiler transpiles that text
-to an EIGHTBOL-shaped COBOL program in memory (no sibling @file{.cob} is written),
-then runs the usual lexer, parser, and backends described in
-@ref{Programmers Reference}.
+The BASIC front end compiles programs written in a dialect descended from
+Dartmouth BASIC, with a number of structured-programming extensions
+borrowed from later dialects and from EIGHTBOL's own conventions.  A
+program is a sequence of statements separated by colons (@code{:}).  A
+statement may carry an optional line number and an optional string label.
+
+Each front-end chapter is arranged as follows: structure of a program,
+statement-by-statement reference, operators and expressions, storage, and
+finally the constructs the language normally offers that EIGHTBOL does
+not implement.
+
+@menu
+* BASIC Program Structure::     Lines, colons, classes, methods
+* BASIC Statements::            Reference to every BASIC statement
+* BASIC Operators and Expressions::  Arithmetic, relational, and logical
+* BASIC Data::                  Variables and storage
+* BASIC Standalone Programs::   Writing a routine or program
+* BASIC Object Methods::        Writing a method on a class
+* BASIC Unsupported Constructs::  What EIGHTBOL BASIC does not do
+@end menu
+
+@node BASIC Program Structure
+@section Program Structure
+
+@cindex line number
+@cindex label
+@cindex colon
+
+A BASIC program is a sequence of @emph{statements}.  Statements are
+separated by a colon (@code{:}) or by a newline.  Each statement may be
+prefixed by an optional line number and an optional string label:
+
+@example
+100        REM a numbered line
+MainLabel: WHILE Alive
+           MOVE 1 TO Ticks
+           WEND
+           GOTO "MainLabel"
+@end example
+
+Line numbers are compiled into labels of the form
+@code{BASIC_L@var{nnnnnn}}, so that @code{GOTO 100} jumps to the
+assembly label @code{BASIC_L100}.  String labels are compiled verbatim
+and may be used as the targets of @code{GOTO} and @code{GOSUB}.
+
+A file may contain a main block followed by any number of @code{METHOD},
+@code{PROCEDURE}, and @code{CLASS} declarations.  The main block is the
+standalone program; the methods and procedures become separate callable
+objects.  See @ref{BASIC Standalone Programs} and @ref{BASIC Object
+Methods}.
+
+@node BASIC Statements
+@section Statements
+
+@cindex LET
+@cindex IF@dots{}THEN
+@cindex FOR@dots{}TO@dots{}STEP
+@cindex NEXT
+@cindex WHILE
+@cindex UNTIL
+@cindex DO@dots{}NEXT
+@cindex LOG FAULT
+@cindex STOP
+@cindex GOTO
+@cindex GOSUB
+@cindex RETURN
+@cindex METHOD
+@cindex PROCEDURE
+@cindex CLASS
+@cindex END
+@cindex INVOKE
+@cindex CALL
+@cindex MOVE
+@cindex SET
+@cindex ASSEMBLY ENTRY
+@cindex COPY
+
+This section lists every statement the BASIC front end accepts, with its
+syntax and a short description.  Metavariables are written in
+lowercase; keywords are written uppercase.
 
 @table @asis
-@item @kbd{eightbol --basic}
-On an interactive terminal, starts the BASIC shell (@code{eightbol-basic}) on
-@code{*query-io*}.  In batch, pass a @file{.bas} file path after @code{--basic}.
-@item @kbd{eightbol --basic @var{file}.bas -m @var{cpu} -o @var{out}}
-Transpiles and compiles one class for one CPU (or @code{-m all}).
-@item Make integration
-Skyline-tool emits one rule per class stem from the union of @file{*.cob} and
-@file{*.bas}; when both exist for one stem, the @file{.bas} recipe wins.
+@item @code{@var{variable} = @var{expression}}
+Assignment (same as @code{LET}); compiles to a @code{:move} AST node.
+@item @code{LET @var{variable} = @var{expression}}
+Explicit assignment; also a @code{:move}.
+@item @code{IF @var{condition} THEN @var{statement}}
+Conditional execution; no @code{ELSE} required.
+@item @code{IF @var{condition} THEN @var{statement} ELSE @var{statement}}
+Conditional execution with alternative.
+@item @code{FOR @var{variable} = @var{start} TO @var{end}}
+Counted loop; equivalent to @code{PERFORM FOR-@var{variable} VARYING}
+compiled as a @code{:perform} node.
+@item @code{FOR @var{variable} = @var{start} TO @var{end} STEP @var{step}}
+Counted loop with explicit increment.
+@item @code{NEXT}
+End of a @code{FOR} loop.  The optional variable of classic BASIC is
+accepted but ignored.
+@item @code{WHILE @var{condition} @var{statement}}
+Loop while the condition holds; compiled as a conditional.
+@item @code{UNTIL @var{condition} @var{statement}}
+Loop until the condition holds.
+@item @code{DO : @var{statement-list} NEXT WHILE @var{condition}}
+Repeat a statement list while a condition holds.  Statements within the
+list are separated by colons.
+@item @code{DO : @var{statement-list} NEXT UNTIL @var{condition}}
+Repeat a statement list until a condition holds.
+@item @code{LOG FAULT "@var{code}"}
+Signal the fault handler with the given fault code.
+@item @code{STOP "@var{code}"}
+Halt execution with the given stop code.
+@item @code{GOTO @var{target}}
+Unconditional jump.  @var{target} is a line number (compiled to
+@code{BASIC_L@var{nnnnnn}}), a string label, or an identifier.
+@item @code{GOSUB @var{target}}
+Call a subroutine and return with @code{RETURN}.  Four variants:
+@table @asis
+@item @code{GOSUB "@var{label}"}
+Local subroutine call.
+@item @code{GOSUB @var{ident}}
+Subroutine call by identifier.
+@item @code{GOSUB "@var{name}" IN LIBRARY}
+Resident-library call; assembles to @code{jsr Lib.@var{Name}} on the 6502.
+@item @code{GOSUB "@var{method}" ON @var{object}}
+OOPS method invocation (same as @code{INVOKE}).
+@item @code{GOSUB "@var{name}" SERVICE}
+Service-dispatch call; the bank is resolved at link time.
+@end table
+@item @code{RETURN}
+Return from a @code{GOSUB}; compiles to a @code{:goback}.
+@item @code{METHOD "@var{Name}" ON "@var{Class}"}
+Begin an object method named @var{Name} on class @var{Class}.  The rest
+of the file until @code{END} is the method body.
+@item @code{PROCEDURE "@var{Name}"}
+Begin a named standalone routine.
+@item @code{CLASS "@var{Name}"}
+Set the current class for subsequent methods.
+@item @code{END}
+End the current method, procedure, or program; compiles to a
+@code{:goback}.
+@item @code{INVOKE @var{object} "@var{Method}"}
+Invoke method @var{Method} on @var{object}.
+@item @code{CALL @var{target}}
+Call a named target.
+@item @code{MOVE @var{expression} TO @var{variable}}
+Copy a value.
+@item @code{SET @var{variable} TO @var{expression}}
+Assign a value.
+@item @code{ASSEMBLY ENTRY "@var{label}"}
+Declare the assembly label at which this program or method is entered.
+@item @code{COPY "@var{name}"}
+Expand a copybook (such as a generated classes file).
 @end table
 
-@section Assembly entry from BASIC
+@node BASIC Operators and Expressions
+@section Operators and Expressions
 
-Inside a method (after a @code{METHOD "Name"} line), a line of the form
-@code{ASSEMBLY ENTRY Foo} transpiles to COBOL @code{ASSEMBLY ENTRY FOO.} as the
-first statement of that method's procedure division, which selects the
-assembly label for the generated routine (@pxref{Programmers Reference}).
+@cindex operators
+@cindex expressions
+@cindex precedence
+
+Expressions are built from literals, identifiers, @code{SELF}, and
+@code{NULL}, combined with the usual operators.  Precedence is from
+highest to lowest:
+
+@table @asis
+@item parentheses
+@code{( @var{expression} )}
+@item unary
+@code{NOT}
+@item multiplicative
+@code{*} @code{/}
+@item additive
+@code{+} @code{-}
+@item relational
+@code{=} @code{<>} @code{<} @code{<=} @code{>} @code{>=}
+@item logical
+@code{AND}, then @code{OR}
+@end table
+
+The relational and logical operators produce @code{:conditional-*},
+@code{:and}, @code{:or}, and @code{:not} AST nodes.  The arithmetic
+operators produce @code{:expression-add}, @code{:expression-subtract},
+@code{:expression-multiply}, and @code{:expression-divide} nodes.
+
+@cindex SELF
+@cindex NULL
+@code{SELF} refers to the current object and @code{NULL} to a null
+reference; both may appear where an expression is expected.
+
+@node BASIC Data
+@section Data
+
+@cindex variables
+@cindex globals
+@cindex storage
+
+Variables are global.  Storage is allocated by the back end from the
+fixed address tables, and the assembler refers to each variable by the
+label derived from its name.  There are no dimensioned arrays and no
+records in the current BASIC dialect; see @ref{BASIC Unsupported
+Constructs}.  As with every front end, parameter passing is limited to a
+single register in and a single register out; pass data through global
+variables.  See @ref{Data and Parameters}.
+
+@node BASIC Standalone Programs
+@section Writing a Standalone Program
+
+@cindex standalone program
+
+A standalone BASIC program is a sequence of statements at the top level
+of the file.  It is compiled as the @code{main-block} of the object.
+Line numbers give the assembler a jump target for classic
+@code{GOTO}/@code{GOSUB} flow.  Example --- a routine that counts down
+from 10 to 1 in a global variable:
+
+@example
+METHOD "CountDown" ON "Demo"
+  X = 10
+  FOR I = 1 TO 10
+    X = X - 1
+  NEXT
+END
+@end example
+
+A procedure, which is not tied to a class, is written with
+@code{PROCEDURE}:
+
+@example
+PROCEDURE "Delay"
+  Ticks = 200
+  WHILE Ticks > 0
+    Ticks = Ticks - 1
+  WEND
+END
+@end example
+
+@node BASIC Object Methods
+@section Writing an Object Method
+
+@cindex object method
+
+An object method is introduced with @code{METHOD "@var{Name}" ON
+"@var{Class}"} and terminated with @code{END}.  The method's assembly
+entry label follows the OOPS convention (@code{Method@var{ClassName}@var{MethodName}}
+on the 6502 family) so the object dispatcher can find it:
+
+@example
+METHOD "Heal" ON "Hero"
+  HP = HP + 10
+END
+@end example
+
+The class must be declared in @file{Classes.Defs} before compilation.
+See @ref{Installing EIGHTBOL}.  Methods receive and return a single
+register; anything more must travel through globals.
+
+@node BASIC Unsupported Constructs
+@section Constructs EIGHTBOL BASIC Does Not Support
+
+@cindex unsupported
+@cindex PRINT
+@cindex INPUT
+@cindex READ
+@cindex OPEN
+@cindex CLOSE
+@cindex DIM
+@cindex arrays
+@cindex DATA
+@cindex REM
+@cindex DEF FN
+
+The following constructs are common in BASIC dialects but are
+@strong{not} recognized by the EIGHTBOL BASIC front end.  Do not use
+them; the compiler will signal a syntax error (or, in the case of
+unknown tokens, a token error).
+
+@itemize
+@item @code{PRINT} --- no console or screen output.
+@item @code{INPUT} --- no terminal input.
+@item @code{READ} --- no data-file input (there is no @code{DATA} either).
+@item @code{OPEN} / @code{CLOSE} --- no file system.
+@item @code{DIM} / array subscripting --- no dimensioned storage.
+@item @code{DEF FN} --- no user-defined functions.
+@item @code{REM} --- comments are not part of the grammar; use the
+assembler's comment conventions or the platform's comment character.
+@item Classic line-number-only flow with line-number arithmetic.
+@end itemize
+
+Interaction with the machine happens through global variables and
+through @code{INVOKE}/@code{CALL}/@code{GOSUB@dots{}@var{kind}@dots{}}
+calls to platform routines, never through I/O statements.
+
+@node COBOL
+@chapter COBOL
+
+@cindex COBOL
+@cindex EIGHTBOL heritage language
+
+COBOL is EIGHTBOL's original and flagship language, and its front end is
+the most complete.  The dialect is a business-oriented language whose
+statements read like English sentences:
+
+@example
+ADD 1 TO Counter.
+MOVE Name TO DisplayBuffer.
+@end example
+
+Every statement ends with a period.  Data is described separately from
+code in a DATA DIVISION using level numbers and picture clauses, in the
+standard COBOL manner.
+
+@menu
+* COBOL Program Structure::     Divisions, paragraphs, classes
+* COBOL Data Division::         Level numbers, PIC, copybooks
+* COBOL Statements::            Reference to every COBOL statement
+* COBOL Conditions and Expressions::  Conditional syntax
+* COBOL Object Methods::        Writing a method on a class
+* COBOL Unsupported Constructs::  What EIGHTBOL COBOL does not do
+@end menu
+
+@node COBOL Program Structure
+@section Program Structure
+
+@cindex divisions
+@cindex IDENTIFICATION DIVISION
+@cindex DATA DIVISION
+@cindex PROCEDURE DIVISION
+@cindex PROGRAM-ID
+@cindex paragraphs
+
+A COBOL program is divided into divisions, of which three are used:
+
+@itemize
+@item @code{IDENTIFICATION DIVISION.} --- names the program with
+@code{PROGRAM-ID. @var{name}.}
+@item @code{DATA DIVISION.} --- declares storage (see @ref{COBOL Data
+Division}).
+@item @code{PROCEDURE DIVISION.} --- the executable statements.
+@end itemize
+
+The PROCEDURE DIVISION is organized into @emph{paragraphs}, each headed
+by a paragraph name followed by a period.  Paragraphs are called with
+@code{PERFORM}, exactly as in standard COBOL:
+
+@example
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. Demo.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 Counter PIC 99 VALUE 0.
+       PROCEDURE DIVISION.
+       Main.
+           PERFORM Bump
+           GOBACK.
+       Bump.
+           ADD 1 TO Counter.
+@end example
+
+@node COBOL Data Division
+@section Data Division
+
+@cindex WORKING-STORAGE
+@cindex level numbers
+@cindex PIC
+@cindex PICTURE
+@cindex USAGE
+@cindex VALUE
+@cindex 01
+@cindex copybook
+@cindex COPY
+
+Storage is declared in the @code{DATA DIVISION}, most often in the
+@code{WORKING-STORAGE SECTION}.  Each data item begins on a line with a
+level number, conventionally @code{01} for a top-level item and higher
+numbers for subordinate items.  The picture clause @code{PIC} describes
+the storage format:
+
+@example
+       01 Score PIC 99 VALUE 0.
+       01 Name   PIC X(10).
+       01 Amount PIC S99V9 COMP-3.
+@end example
+
+@table @asis
+@item @code{PIC 9...} / @code{PIC X...}
+Numeric / character storage.  Repetition counts such as @code{PIC X(10)}
+are accepted.
+@item @code{PIC S...}
+Signed decimal; the sign counts as one nibble of storage.
+@item @code{PIC V...}
+Implied decimal point (no storage consumed).
+@item @code{COMP-3} / @code{PACKED-DECIMAL} / @code{USAGE}
+Storage usage qualifiers.
+@item @code{VALUE @var{literal}}
+Initial value.
+@item @code{OCCURS @var{n}}
+Repeated items.
+@item @code{REDEFINES}
+Overlapping storage.
+@end table
+
+Copybooks are expanded with @code{COPY @var{name}.} in the data
+division.  EIGHTBOL's copybook reader accepts a token following
+@code{COPY} and expands it from the generated copybook files such as
+@file{Classes/Phantasia-Globals.cpy}.  See
+@code{read-copybook} in @file{src/cobol-copybook.lisp}.
+
+@node COBOL Statements
+@section Statements
+
+@cindex MOVE
+@cindex ADD
+@cindex SUBTRACT
+@cindex COMPUTE
+@cindex IF@dots{}ELSE
+@cindex PERFORM
+@cindex INVOKE
+@cindex CALL
+@cindex GOBACK
+@cindex SET
+@cindex STRING
+@cindex INSPECT
+@cindex EVALUATE
+@cindex SEARCH
+@cindex subscript
+
+Every statement the COBOL front end accepts is listed below.  Statements
+end with a period.
+
+@table @asis
+@item @code{MOVE @var{expression} TO @var{data-item}}
+Copy a value.
+@item @code{ADD @var{expression} TO @var{item}}
+@itemx @code{ADD @var{expression} TO @var{item} GIVING @var{item}}
+Arithmetic addition.
+@item @code{SUBTRACT @var{expression} FROM @var{item}}
+@itemx @code{SUBTRACT @var{expression} FROM @var{item} GIVING @var{item}}
+Arithmetic subtraction.
+@item @code{COMPUTE @var{item} = @var{expression}}
+Arithmetic from an expression.
+@item @code{IF @var{condition} @var{statement} [ELSE @var{statement}]}
+Conditional execution.  @code{END-IF} is accepted.
+@item @code{PERFORM @var{paragraph}}
+Call a paragraph.
+@item @code{PERFORM @var{paragraph} UNTIL @var{condition}}
+Call a paragraph until a condition holds.
+@item @code{PERFORM @var{paragraph} VARYING @var{item} FROM @var{expr} BY @var{expr} UNTIL @var{condition}}
+Indexed loop.
+@item @code{PERFORM @var{n} TIMES}
+Fixed-iteration loop.
+@item @code{INVOKE @var{object} "@var{Method}"}
+Invoke a method on an object.  On the 6502 family this assembles to
+@code{.CallMethod Call@var{Class}@var{Method}, @var{Class}Class}; other
+processors keep their own dispatch.
+@item @code{CALL @var{target}}
+@itemx @code{CALL "@var{name}" IN LIBRARY}
+@itemx @code{CALL SERVICE @var{name}}
+Call a target: a plain identifier, a resident library routine
+(@code{jsr Lib.@var{name}} on the 6502), or a service whose bank is
+resolved at link time.
+@item @code{GOBACK}
+Return from the current program or paragraph.
+@item @code{EXIT METHOD}
+Return from a method.
+@item @code{EXIT PROGRAM}
+Return from a program.
+@item @code{EXIT}
+Terminate a paragraph.
+@item @code{SET @var{item} TO @var{expression}}
+Assign a value.  Other SET variants are unsupported (see @ref{COBOL
+Unsupported Constructs}).
+@item @code{STRING @var{source} DELIMITED BY SIZE INTO @var{destination}}
+Block transfer (BLT) of a string of fixed size.
+@item @code{INSPECT @var{item} TALLYING @var{counter} FOR @var{characters}}
+@itemx @code{INSPECT @var{item} CONVERTING @var{a} TO @var{b}}
+@itemx @code{INSPECT @var{item} REPLACING CHARACTERS BY @var{char}}
+String inspection and translation.
+@item @code{EVALUATE @var{expression} WHEN @var{value} @var{statement}}
+@itemx @code{EVALUATE TRUE WHEN @var{condition} @var{statement}}
+Multi-way branch.  @code{END-EVALUATE} is accepted.
+@item @code{SEARCH @var{table} VARYING @var{item} WHEN @var{condition}}
+Table search.  @code{END-SEARCH} is accepted.
+@item @code{LOG FAULT @var{code}}
+Signal a fault to the fault handler.
+@item @code{BREAK}
+Debug break; on the 6502 this fires the monitor's @code{brk}.
+@item @code{DEBUG}
+Debug statement.
+@item @code{ASSEMBLY ENTRY "@var{label}"}
+Declare the assembly entry label.
+@item @code{COPY "@var{name}"}
+Expand a copybook.
+@item @code{CONTINUE}
+No-op.
+@end table
+
+Subscripted access is supported for @code{OCCURS} items, e.g.
+@code{MOVE List(Index) TO Item.} with the subscript in parentheses.
+
+@node COBOL Conditions and Expressions
+@section Conditions and Expressions
+
+@cindex conditions
+@cindex relational operators
+
+Conditions compare expressions with the relational operators
+@code{=}, @code{<}, @code{<=}, @code{>}, @code{>=}, and @code{<>}, plus
+the spelled-out forms:
+
+@example
+@var{expr} IS GREATER THAN @var{expr}
+@var{expr} IS LESS THAN OR EQUAL TO @var{expr}
+@var{expr} IS EQUAL TO @var{expr}
+@end example
+
+Conditions may be combined with @code{AND} and @code{OR} and negated
+with @code{NOT}.  Logical operators on bit values are available as
+@code{AND}, @code{OR}, @code{XOR}, @code{NOT}, @code{BIT-AND},
+@code{BIT-OR}, @code{BIT-XOR}, @code{BIT-NOT}, @code{SHIFT-LEFT}, and
+@code{SHIFT-RIGHT}.  Literal constants @code{ZERO}, @code{HIGH-VALUES},
+@code{LOW-VALUES}, @code{NULLS}, @code{SPACES}, and similar are
+recognized.
+
+@node COBOL Object Methods
+@section Writing a Method on a Class
+
+@cindex METHOD-ID
+
+An object method is written as an @code{OBJECT} with a
+@code{PROCEDURE DIVISION} (an optional inline @code{DATA DIVISION} is
+accepted).  The method is named with @code{METHOD-ID. @var{Name}.}:
+
+@example
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. Hero.
+       OBJECT.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 HP PIC 999 VALUE 100.
+       PROCEDURE DIVISION.
+       METHOD-ID. Heal.
+           ADD 10 TO HP.
+           EXIT METHOD.
+       END METHOD Heal.
+       END OBJECT.
+@end example
+
+The class and method must be declared in @file{Classes.Defs}.  The
+compiler generates the OOPS-compatible label @code{MethodHeroHeal} for
+the 6502 family, regardless of hyphens in the @code{METHOD-ID} (a
+hyphenated name such as @code{Song--Heal--ID} emits @code{Song_Heal_ID}).
+See @ref{Data and Parameters} for the single-register calling rule.
+
+@node COBOL Unsupported Constructs
+@section Constructs EIGHTBOL COBOL Does Not Support
+
+@cindex DIVIDE
+@cindex MULTIPLY
+@cindex UNSTRING
+@cindex GOTO
+@cindex ACCEPT
+@cindex DISPLAY
+@cindex READ
+@cindex WRITE
+@cindex OPEN
+@cindex CLOSE
+
+EIGHTBOL deliberately does not implement these COBOL constructs.  The
+front end recognizes them and signals an @code{EIGHTBOL-SOURCE-ERROR}
+with the message shown, rather than failing obscurely.
+
+@table @asis
+@item @code{ACCEPT}
+Signals @code{ACCEPT is not supported}.  No terminal input.
+@item @code{DISPLAY}
+Signals @code{DISPLAY is not supported}.  No console output.
+@item @code{READ}
+Signals @code{READ is not supported}.  No file input.
+@item @code{WRITE}
+Signals @code{WRITE is not supported}.  No file output.
+@item @code{OPEN}
+Signals @code{OPEN is not supported}.  No file system.
+@item @code{CLOSE}
+Signals @code{CLOSE is not supported}.  No file system.
+@item @code{DIVIDE}
+@code{DIVIDE ... GIVING ...} is supported; @code{DIVIDE ... REMAINDER ...}
+signals @code{DIVIDE ... REMAINDER ... is not supported}.
+@item @code{MULTIPLY}
+Not supported.
+@item @code{UNSTRING}
+Signals @code{UNSTRING is not supported}.
+@item @code{GOTO}
+Not supported; use @code{PERFORM} or @code{EVALUATE}.
+@item @code{STRING @var{source} DELIMITED BY @var{character}}
+Only @code{DELIMITED BY SIZE} is supported.  A character delimiter
+signals @code{STRING with character delimiter is not supported; use
+DELIMITED BY SIZE for BLT}.
+@item @code{SET ... UP BY} / @code{SET ... DOWN BY}
+Not supported.
+@item @code{SET @var{condition-name} TO TRUE}
+Signals @code{SET condition-name TO TRUE is not supported}.
+@item @code{SET ... TO NULLS}
+Signals @code{SET ... TO NULLS is not supported}.
+@end table
+
+@node FORTRAN
+@chapter FORTRAN
+
+@cindex FORTRAN
+@cindex designed grammar
+
+The FORTRAN front end compiles a dialect of FORTRAN that includes
+structured-programming and object-oriented extensions borrowed from
+EIGHTBOL's other front ends.  At the time of writing this front end is
+@strong{not wired into the command line} and is best regarded as a
+designed grammar: the compiler machinery exists, but the front end is not
+yet active in the build, and the lexer has known limitations (see
+@ref{FORTRAN Limitations}).  The grammar below is the grammar the front
+end intends to accept.
+
+@menu
+* FORTRAN Program Structure::   Programs, subroutines, functions
+* FORTRAN Statements::          Statement reference
+* FORTRAN Expressions::         Arithmetic, relational, and logical
+* FORTRAN Object Orientation::  OOPS classes and methods
+* FORTRAN Limitations::         Designed grammar caveats
+@end menu
+
+@node FORTRAN Program Structure
+@section Program Structure
+
+@cindex PROGRAM
+@cindex SUBROUTINE
+@cindex FUNCTION
+
+A FORTRAN program is introduced by @code{PROGRAM @var{name}}, followed by
+a sequence of statements, and closed by @code{END @var{name}}:
+
+@example
+PROGRAM CountDown
+  INTEGER I
+  I = 10
+  DO 100 I = 1, 10
+    I = I - 1
+  ENDDO
+  STOP
+END CountDown
+@end example
+
+Subroutines and functions use the conventional @code{SUBROUTINE} and
+@code{FUNCTION} forms, each compiled as a method node:
+
+@example
+SUBROUTINE Bump
+  I = I + 1
+  RETURN
+END Bump
+
+FUNCTION Double(X) INTEGER
+  Double = X * 2
+  RETURN
+END Double
+@end example
+
+Note that the subroutines and functions compile to @code{:method} AST
+nodes, and @code{FUNCTION} return values follow the language's assignment
+convention (assign to the function name).
+
+@node FORTRAN Statements
+@section Statements
+
+@table @asis
+@item @code{PROGRAM @var{name} @dots{} END @var{name}}
+Top-level program.
+@item @code{SUBROUTINE @var{name}(@var{args}) @dots{} END @var{name}}
+Subroutine definition; @var{args} are accepted but discarded.
+@item @code{FUNCTION @var{name}(@var{args}) @var{type} @dots{} END @var{name}}
+Function definition; the return type is accepted but discarded.
+@item @code{@var{variable} = @var{expression}}
+Assignment; compiles to a @code{:move}.
+@item @code{CALL @var{name}(@var{args})}
+Calls a named target.
+@item @code{GOTO @var{label}}
+Unconditional jump.
+@item @code{RETURN}
+Return from a subroutine or function; compiles to a @code{:goback}.
+@item @code{STOP}
+Halt; compiles to a @code{:stop-run}.
+@item @code{IF (@var{condition}) THEN @dots{} ENDIF}
+@itemx @code{IF (@var{condition}) THEN @dots{} ELSE @dots{} ENDIF}
+Conditional execution.
+@item @code{DO @var{variable} = @var{from}, @var{to} @dots{} ENDDO}
+Counted loop; compiles to a @code{:perform} node.
+@item @code{READ @var{unit}}
+Recognized but compiles to a degenerate @code{:move} of the unit number;
+there is no real input.
+@item @code{WRITE @var{unit} @var{format}}
+Recognized but compiles to a degenerate @code{:move}; there is no real
+output.
+@item @code{DATA @var{name} = @var{value}}
+Compiles to a @code{:set}.
+@item @code{PARAMETER @var{name} = @var{value}}
+Compiles to a @code{:set}.
+@item @code{INTEGER}, @code{REAL}, @code{LOGICAL}, @code{CHARACTER},
+@code{COMPLEX} @var{name}
+Type declarations; recorded in the type table, no code generated.
+@item @code{COMMON @var{name}}
+Recorded in the compiler tables, no code generated.
+@item @code{DIMENSION @var{name}(@var{dims})}
+Recorded in the compiler tables, no code generated.
+@item @code{INCLUDE "@var{file}"}
+Compiles to a @code{:copy} node.
+@end table
+
+@node FORTRAN Expressions
+@section Expressions
+
+@cindex exponentiation
+
+Arithmetic expressions use @code{+}, @code{-}, @code{*}, @code{/}, and
+exponentiation @code{**}.  The relational operators are @code{=},
+@code{<>}, @code{<}, @code{<=}, @code{>}, and @code{>=}; logical
+operators are @code{AND}, @code{OR}, and @code{NOT}.  Literals are
+numbers and strings; @code{TRUE} and @code{FALSE} are recognized.
+Parentheses group sub-expressions.
+
+@node FORTRAN Object Orientation
+@section Object Orientation
+
+@cindex OOPS
+@cindex NEW
+@cindex INVOKE
+@cindex SUPER
+@cindex CLASS
+
+The FORTRAN dialect includes object-oriented extensions that compile to
+OOPS calls:
+
+@table @asis
+@item @code{CLASS @var{name} @dots{} END @var{name}}
+Class body; compiles to a @code{:fortran-class} node.
+@item @code{CLASS #:@var{method} @dots{} ENDMETHOD}
+Class method definition.
+@item @code{INSTANCE @var{variable} = NEW @var{class-name}(@var{args})}
+Instantiation; compiles to a @code{:fortran-new} node.
+@item @code{INVOKE @var{object}.@var{method}(@var{args})}
+Message send; compiles to a @code{:invoke} node.
+@item @code{INVOKE SUPER.@var{method}(@var{args})}
+Superclass dispatch; compiles to a @code{:sup-call} node.
+@end table
+
+@node FORTRAN Limitations
+@section Designed-Grammar Caveats
+
+@cindex lexer limitations
+
+@itemize
+@item The front end is disabled in the build (@code{#+ ()} in
+@file{eightbol.asd}); it is not reachable from the command line.
+@item The lexer drops the last character of an identifier, and cannot
+tokenize a single-character identifier at all.  Until this is fixed,
+identifiers longer than one character lose their final character.
+@item The lexer emits keyword symbols that never match the parser's
+terminals, so even correct text can fail to parse.
+@item Several grammar non-terminals referenced by the rules (for
+example the @code{arg-list?} forms and the loop terminator variants) are
+still being reconciled; the parser compiles, but untested end to end.
+@end itemize
+
+Until these are addressed, treat the FORTRAN front end as documentation
+of intent rather than as a working compiler.
+
+@node Lingo
+@chapter Lingo
+
+@cindex Lingo
+@cindex Director
+@cindex designed grammar
+
+Lingo is the scripting language of Macromedia Director.  EIGHTBOL's
+Lingo front end targets the classic Director MX-era dialect, adapted to
+8-bit constraints.  Like the FORTRAN front end, it is a @strong{designed
+grammar}: it is disabled in the build, not reachable from the command
+line, and its lexer has structural defects (see @ref{Lingo
+Limitations}).
+
+@menu
+* Lingo Program Structure::     Modules and handlers
+* Lingo Statements::            Statement reference
+* Lingo Limitations::           Designed grammar caveats
+@end menu
+
+@node Lingo Program Structure
+@section Program Structure
+
+A Lingo program is a sequence of module definitions.  Each module is
+either a handler (function-like) or a procedure:
+
+@example
+on tick
+  set Ticks to Ticks + 1
+  return Ticks
+end
+
+on init
+  Ticks = 0
+end
+@end example
+
+Lingo's @code{set @var{x} to @var{y}} and assignment (@code{@var{x} =
+@var{y}}) forms are both accepted; assignments compile to
+@code{:move} nodes.
+
+@node Lingo Statements
+@section Statements
+
+@table @asis
+@item @code{set @var{target} to @var{expression}}
+@itemx @code{@var{target} = @var{expression}}
+Assignment; compiles to a @code{:move}.
+@item @code{move @var{expression} to @var{target}}
+Copy a value.
+@item @code{property @var{list}}
+Property declaration; compiles to a @code{:move} of the property list.
+@item @code{call @var{target}(@var{args})}
+Function call.
+@item @code{call @var{target}(@var{args} @dots{} "library" @dots{})}
+Library call; compiled with the library flag set.
+@item @code{for @var{var} in @var{start} to @var{end} step @var{step} do @dots{} end}
+Counted loop; compiles to a @code{:perform} node.
+@item @code{while @var{condition} do @dots{} end}
+Conditional loop.
+@item @code{if @var{condition} then @dots{} else @dots{} end if}
+Conditional execution.
+@item @code{return}
+Return; compiles to a @code{:goback}.
+@item @code{return @var{expression}}
+Return a value; compiles to a @code{:move} into @code{RESULT}.
+@item @code{goto @var{label}}
+Unconditional jump.
+@item @code{@var{object} : @var{method}(@var{args})}
+@itemx @code{@var{object}.@var{method}(@var{args})}
+Message send; compiles to an @code{:invoke}.
+@end table
+
+@node Lingo Limitations
+@section Designed-Grammar Caveats
+
+@itemize
+@item The front end is disabled in the build; it is not reachable from
+the command line.
+@item The lexer contains an unbalanced parenthesis that closes the
+label/name rule early and orphans a loop that calls undefined functions;
+it cannot tokenize real Lingo text.
+@item The token scheme the parser expects can never match what the lexer
+produces, so no input can parse end to end.
+@item Sprites, scores, and Director's media model are outside the scope
+of the EIGHTBOL dialect.
+@end itemize
+
+@node Lua
+@chapter Lua
+
+@cindex Lua
+@cindex designed grammar
+
+The Lua front end targets a subset of the Lua 5.x language.  It is a
+@strong{design sketch}: the parser file is not a real CL-YACC grammar, it
+cannot be loaded, and the front end is disabled in the build.  The
+syntax below is the syntax the front end intends to accept.
+
+@menu
+* Lua Program Structure::       Chunks, data, and statements
+* Lua Statements::              Statement reference
+* Lua Limitations::             Design-sketch caveats
+@end menu
+
+@node Lua Program Structure
+@section Program Structure
+
+A Lua program is a @emph{chunk}: an optional set of data definitions
+followed by statements.  Data definitions use @code{local}:
+
+@example
+local Health = 100
+local Table = @{1, 2, 3@}
+
+while Health > 0 do
+  Health = Health - 1
+end
+@end example
+
+Data definitions compile to @code{:dd} nodes; array definitions using
+table literals are treated as fixed-size arrays.
+
+@node Lua Statements
+@section Statements
+
+@table @asis
+@item @code{local @var{var} = @var{value}}
+Data definition; compiles to a @code{:dd} node.
+@item @code{local @var{arr} = @{@var{e1}, @var{e2}, @dots{}@}}
+Array definition; compiles to a @code{:dd} node with an @code{OCCURS}
+count equal to the number of elements.
+@item @code{@var{target} = @var{expression}}
+Assignment; compiles to a @code{:set}.
+@item @code{if @var{condition} then @dots{} else @dots{} end}
+Conditional execution; compiles to an @code{:if}.
+@item @code{while @var{condition} do @dots{} end}
+Loop; compiles to a @code{:perform}.
+@item @code{for @var{var} = @var{start}, @var{end} do @dots{} end}
+Counted loop; compiles to a @code{:perform}.
+@item @code{@var{name}(@var{args})}
+Function call; compiles to a @code{:call}.
+@item @code{@var{object}:@var{method}(@var{args})}
+Method call; compiles to a @code{:call} on the object.
+@item @code{return @var{expression}}
+Return; compiles to an @code{:exit-method}.
+@end table
+
+@node Lua Limitations
+@section Design-Sketch Caveats
+
+@itemize
+@item The front end is disabled in the build; it is not reachable from
+the command line.
+@item The parser file cannot be loaded at all: it is not a valid CL-YACC
+grammar and references unbound symbols.
+@item The lexer cannot tokenize decimal literals (the number scanner
+fails on a decimal point), and consequently cannot tokenize most real
+Lua programs.
+@item The language's metatables, closures, and multiple return values are
+outside the scope of the EIGHTBOL dialect.
+@end itemize
+
+@node Objective-C
+@chapter Objective-C
+
+@cindex Objective-C
+@cindex designed grammar
+
+The Objective-C front end targets a small object-oriented dialect with
+message-passing syntax.  Like FORTRAN, Lingo, and Lua, it is a
+@strong{designed grammar}: it is disabled in the build and its parser has
+known structural defects (see @ref{Objective-C Limitations}).
+
+@menu
+* Objective-C Program Structure::  Interfaces, implementations, and messages
+* Objective-C Statements::      Statement reference
+* Objective-C Expressions::     Messages, properties, and operators
+* Objective-C Exception Handling::  @code{@@try} and friends
+* Objective-C Limitations::     Designed grammar caveats
+@end menu
+
+@node Objective-C Program Structure
+@section Program Structure
+
+A program is a sequence of class definitions, method definitions, and
+statements.  Classes use the conventional
+@code{@@interface}@dots{}@code{@@end} form:
+
+@example
+@@interface Hero : Actor
+  int hitPoints;
+- (void) heal;
+@@end
+
+@@implementation Hero
+- (void) heal
+@{
+  hitPoints = hitPoints + 10;
+@}
+@@end
+@end example
+
+@code{@@interface} and @code{@@implementation} are both recognized;
+instance and class method definitions are introduced with @code{-} and
+@code{+} respectively.
+
+@node Objective-C Statements
+@section Statements
+
+@table @asis
+@item @code{@var{target} = @var{expression}}
+Assignment; compiles to a @code{:move}.  Assignment through a property
+compiles to a move into the @code{@var{Property}Of@var{Object}} slot.
+@item @code{[@var{receiver} @var{selector}]}
+Message send; compiles to an @code{:invoke}.
+@item @code{[@var{receiver} @var{keyword}: @var{arg} @var{keyword}: @var{arg}]}
+Keyword message send; the keyword parts are concatenated into the method
+name.
+@item @code{if (@var{condition}) @var{statement}}
+@itemx @code{if (@var{condition}) @var{statement} else @var{statement}}
+Conditional execution; compiles to an @code{:if}.
+@item @code{while (@var{condition}) @var{statement}}
+Loop; compiles to a @code{:perform} running until the condition is
+false.
+@item @code{for (@var{var} = @var{start}; @var{condition}; @var{step}) @var{statement}}
+Counted loop; compiles to a @code{:perform}.
+@item @code{return @var{expression}}
+Return a value.
+@item @code{return;}
+Return; compiles to a @code{:goback}.
+@end table
+
+@node Objective-C Expressions
+@section Expressions
+
+Message sends and property access are the distinctive expressions of the
+dialect:
+
+@table @asis
+@item @code{@var{object}.@var{property}}
+Property get; compiles to a message send to the getter.
+@item @code{self}, @code{super}
+The current object and its superclass; @code{super} is accepted as a
+receiver.
+@item @code{nil}, @code{YES}, @code{NO}, @code{true}, @code{false}
+Literal constants.
+@item @code{@@selector(@var{name})}
+Selectors are recognized by the token list.
+@end table
+
+Arithmetic and relational operators are @code{+} @code{-} @code{*}
+@code{/}, @code{==} @code{!=} @code{<} @code{<=} @code{>} @code{>=},
+plus the logical @code{&&} @code{||} @code{!}.
+
+@node Objective-C Exception Handling
+@section Exception Handling
+
+@cindex @code{@@try}
+@cindex @code{@@throw}
+
+Exception directives are recognized by the lexer but the designed
+behavior is to lower them to EIGHTBOL fault handling:
+
+@table @asis
+@item @code{@@try} @dots{} @code{@@catch} @dots{} @code{@@finally}
+Lowered to @code{:log-fault} handling.
+@item @code{@@throw}
+Lowered to a @code{:debug-break}.
+@end table
+
+@node Objective-C Limitations
+@section Designed-Grammar Caveats
+
+@itemize
+@item The front end is disabled in the build; it is not reachable from
+the command line.
+@item The lexer has the same unbalanced-parenthesis defect as the Lingo
+lexer (the label rule closes early), so it cannot tokenize real
+Objective-C text.
+@item The parser's parentheses are unbalanced and the @code{eval-when}
+form is never closed; the parser cannot be compiled.
+@item Protocols, categories, properties, and the full runtime model are
+outside the scope of the EIGHTBOL dialect.
+@end itemize
+
+@node Pascal
+@chapter Pascal
+
+@cindex Pascal
+@cindex Turbo Pascal
+
+The Pascal front end compiles a dialect derived from Turbo Pascal 7.0,
+with adjustments for EIGHTBOL's storage model.  It is the most complete
+of the non-COBOL, non-BASIC front ends and is enabled in the build
+(loaded from @file{eightbol.asd}); however it is not yet wired into the
+command line.
+
+@menu
+* Pascal Program Structure::    Methods, procedures, and bodies
+* Pascal Statements::           Statement reference
+* Pascal Operators and Expressions::  Operator reference
+* Pascal Unsupported Constructs::  What EIGHTBOL Pascal does not do
+@end menu
+
+@node Pascal Program Structure
+@section Program Structure
+
+A Pascal program is a list of methods.  Each method is a
+@code{PROCEDURE} whose body is a @code{BEGIN}@dots{}@code{END} block.
+A procedure may be attached to a class with @code{ON}:
+
+@example
+PROCEDURE Bump;
+BEGIN
+  Ticks := Ticks + 1;
+END;
+
+PROCEDURE Heal ON Hero;
+BEGIN
+  HP := HP + 10;
+END;
+@end example
+
+Procedures attached to a class compile to a method named
+@code{@var{Class}#@var{Procedure}}.
+
+@node Pascal Statements
+@section Statements
+
+@table @asis
+@item @code{@var{target} := @var{expression}}
+Assignment; compiles to a @code{:move}.  (@code{=} is accepted as an
+alias in some contexts.)
+@item @code{MOVE @var{expression} @var{target}}
+Copy a value.
+@item @code{CALL @var{name}}
+Call a named target.
+@item @code{CALL @var{method} ON @var{object}}
+Method invocation; compiles to an @code{:invoke}.
+@item @code{CALL @var{name} IN @var{bank}}
+Call a routine in a named bank.
+@item @code{CALL @var{name} IN LIBRARY}
+Resident-library call.
+@item @code{IF @var{condition} THEN @var{statements}}
+@itemx @code{IF @var{condition} THEN @var{statements} ELSE @var{statements}}
+Conditional execution; compiles to an @code{:if}.
+@item @code{WHILE @var{condition} NEXT @var{statements}}
+Loop; compiles to a @code{:perform}.
+@item @code{UNTIL @var{condition} NEXT @var{statements}}
+Loop.
+@item @code{DO NEXT WHILE @var{condition} @var{statements}}
+@itemx @code{DO NEXT UNTIL @var{condition} @var{statements}}
+Do-while variants.
+@item @code{FOR @var{var} FROM @var{from} TO @var{to} STEP @var{step} NEXT @var{statements}}
+Counted loop; compiles to a @code{:perform}.
+@item @code{EXIT}
+Exit the current method.
+@item @code{GOBACK}
+Return from the current method.
+@item @code{LOG FAULT @var{expression}}
+Signal a fault.
+@item @code{STOP @var{expression}}
+Debug break with a code.
+@item @code{COPY "@var{name}"}
+Expand a copybook.
+@item @code{@var{number}:} / @code{@var{label}:}
+Assembly entry label; compiles to an @code{:assembly-entry}.
+@end table
+
+@node Pascal Operators and Expressions
+@section Operators and Expressions
+
+Expressions are built from identifiers, numbers, and strings, combined
+with the binary operators @code{+} @code{-} @code{*} @code{/},
+relational @code{=} @code{<} @code{>} @code{<=} @code{>=} @code{<>},
+and logical @code{AND} @code{OR} @code{NOT}.  A unary minus is
+recognized.  Precedence follows Pascal: multiplication and division bind
+more tightly than addition, relational operators bind more loosely, and
+logical @code{AND}/@code{OR} lowest.
+
+@node Pascal Unsupported Constructs
+@section Constructs EIGHTBOL Pascal Does Not Support
+
+@itemize
+@item @code{WITH} --- not supported; use fully qualified names.
+@item Records and variants --- records map to @code{:dd} storage nodes;
+record field access syntax is not supported.
+@item File I/O --- @code{WRITE}, @code{WRITELN}, @code{READ},
+@code{READLN}, and file variables are not supported.
+@item @code{CASE} --- not in the grammar.
+@item Arrays, pointers, and @code{NEW}/@code{DISPOSE} --- not supported.
+@item The loop grammar drops the loop body in current code (a known
+limitation of the @code{:perform} construction).
+@end itemize
+
+@node SmallTalk
+@chapter SmallTalk
+
+@cindex SmallTalk
+@cindex designed grammar
+
+The SmallTalk front end targets a minimal SmallTalk dialect: assignment,
+message sending, literals, and variables.  It is enabled in the build but
+the implementation is incomplete --- the lexer is a copy of the defective
+Lingo lexer, the parser has no keywords beyond the bare minimum, and no
+SmallTalk symbols are exported from the package (see @ref{SmallTalk
+Limitations}).
+
+@menu
+* SmallTalk Program Structure::  Statements and messages
+* SmallTalk Statements::        Statement reference
+* SmallTalk Limitations::       Implementation caveats
+@end menu
+
+@node SmallTalk Program Structure
+@section Program Structure
+
+A SmallTalk program is a list of statements: assignments, message sends,
+and expressions.  Statements are evaluated in order:
+
+@example
+Ticks := 0.
+self update.
+Ticks := Ticks + 1.
+@end example
+
+Statements are separated by periods, in the SmallTalk manner.  Message
+sends compile to @code{:invoke} nodes.
+
+@node SmallTalk Statements
+@section Statements
+
+@table @asis
+@item @code{@var{variable} := @var{expression}}
+Assignment; compiles to a @code{:move}.
+@item @code{@var{receiver} @var{selector} @dots{}}
+Message send; compiles to an @code{:invoke} with the selector as the
+method name and the arguments (if any) passed through.
+@item @code{@var{expression}}
+An expression statement; typically a literal or variable.
+@item @code{@var{number}} / @code{'@var{string}'}
+Literals.
+@end table
+
+@node SmallTalk Limitations
+@section Implementation Caveats
+
+@itemize
+@item The lexer is a byte-identical copy of the defective Lingo lexer,
+so it cannot tokenize real SmallTalk text.
+@item The parser grammar contains only assignments, messages, and
+literals; there are no blocks, temporaries, or control structures.
+@item No SmallTalk symbols are exported from the package, so nothing
+invokes the front end.
+@item @file{smalltalk-parser.lisp} is a symbolic link to a file outside
+the repository; a real, committed parser must replace it.
+@end itemize
+
+@node Abstract Syntax Tree
+@chapter Abstract Syntax Tree
+
+@cindex abstract syntax tree
+@cindex AST
+@cindex plist
+
+Every front end compiles its source into the same internal
+representation: an abstract syntax tree (AST).  The AST is a tree of
+plain Common Lisp plists, so it can be printed, read, edited, and
+serialized without any special format.  The back ends consume the AST
+and produce assembly.
+
+This chapter is the reference for the AST syntax.  It is most useful to
+two audiences: people debugging a compiler pass, and people who want to
+inspect the AST EIGHTBOL generates for a source file.
+
+@menu
+* AST Program and Method::      Program, method, and procedure nodes
+* AST Statements::              Executable statement nodes
+* AST Operands::                Operands, identifiers, and literals
+* AST Serialization::           Reading and writing AST files
+@end menu
+
+@node AST Program and Method
+@section Program and Method Nodes
+
+@table @asis
+@item @code{(:program :class-id "@var{name}" :data (...) :methods (...) :identification ... :environment ...)}
+The root of every compiled object.  @code{:data} holds the data items
+(@code{:dd} nodes) and @code{:methods} the method and procedure nodes.
+@item @code{(:method :method-id "@var{name}" :statements (...))}
+An object method.  The first statement may be an
+@code{:assembly-entry} node naming the assembly label.
+@item @code{(:procedure :name "@var{name}" :statements (...))}
+A standalone routine.
+@item @code{(:dd :level @var{n} :label "@var{name}" :attr (...))}
+A data definition.  Attributes include @code{:usage}, @code{:value},
+and @code{:occurs}.
+@end table
+
+@node AST Statements
+@section Statement Nodes
+
+@table @asis
+@item @code{(:move :from @var{expr} :to @var{identifier})}
+Assignment and @code{MOVE}.
+@item @code{(:invoke :object @var{expr} :method "@var{name}" [:returning @var{id}])}
+Method invocation.
+@item @code{(:call-acc :target @var{name} :bank @var{bank-or-nil})}
+A CALL that passes a value in the accumulator.  Also
+@code{(:call :target @var{name} :bank @var{b} :library t)} for library
+calls and @code{(:call :service @var{name})} for service dispatch.
+@item @code{(:if :condition @var{cond} :then @var{stmts} :else @var{stmts})}
+Conditional execution.
+@item @code{(:goto :target @var{identifier})}
+Unconditional jump.
+@item @code{(:goback)}
+Return from the current routine.
+@item @code{(:exit-method)}
+@itemx @code{(:exit-program)}
+@itemx @code{(:exit)}
+Exit forms.
+@item @code{(:stop-run)}
+@itemx @code{(:stop-run :code "@var{code}")}
+Stop execution, optionally with a code.
+@item @code{(:add :from @var{expr} :to @var{identifier})}
+@itemx @code{(:add :from @var{expr} :to @var{expr} :giving @var{identifier})}
+Addition.
+@item @code{(:subtract :subtrahend @var{expr} :from @var{expr} [:giving @var{id}])}
+Subtraction.
+@item @code{(:multiply :by @var{expr} :multiplier @var{expr} [:giving @var{id}])}
+Multiplication.
+@item @code{(:divide :numerator @var{expr} :denominator @var{expr} [:giving @var{id}])}
+Division.
+@item @code{(:compute :target @var{identifier} :expression @var{expr})}
+Computed assignment.
+@item @code{(:perform :procedure @var{name} [:times @var{expr}] [:until @var{cond}] [:varying @var{var} :from @var{expr} :by @var{expr}])}
+Loop or paragraph call.
+@item @code{(:set :target @var{identifier} :value @var{expr})}
+Assignment.
+@item @code{(:log-fault :code @var{dword-expr})}
+Fault signalling.
+@item @code{(:debug-break :code @var{expr})}
+Debug break.
+@item @code{(:copy :name "@var{CopybookName}")}
+Residual copybook reference after a failed expansion.
+@item @code{(:string-blt :source @var{operand} :dest @var{operand} [:length @var{expr}])}
+@code{STRING DELIMITED BY SIZE} block transfer.
+@item @code{(:assembly-entry :label "@var{Symbol}")}
+Names the assembly entry symbol; must be the first executable-area
+statement.
+@item @code{(:error :code @var{text})}
+An error node produced by the parser's error recovery.
+@end table
+
+FORTRAN-specific nodes carry explicit type information:
+
+@table @asis
+@item @code{(:fortran-move :from @var{expr} :to @var{id} :target-type @var{type})}
+@itemx @code{(:fortran-compute :target @var{id} :expression @var{expr} :result-type @var{type})}
+@itemx @code{(:fortran-declare :name @var{id} :type @var{type} [:init @var{expr}])}
+@itemx @code{(:fortran-do :var @var{id} :from @var{expr} :to @var{expr} [:by @var{expr}] :stmts @var{stmts})}
+@itemx @code{(:fortran-if :condition @var{expr} :then @var{stmts} :else @var{stmts})}
+@itemx @code{(:fortran-arithmetic :op @var{kw} :left @var{expr} :right @var{expr} :result-type @var{type})}
+@end table
+
+@node AST Operands
+@section Operands
+
+Operands and expressions appearing in the nodes above take these forms:
+
+@table @asis
+@item number
+A numeric literal.
+@item string
+A string literal.
+@item symbol
+An identifier reference.
+@item @code{(:of @var{slot} @var{obj})}
+Qualified identifier (@code{slot OF obj}).
+@item @code{(:address-of @var{id})}
+@code{ADDRESS OF id}.
+@item @code{(:refmod :base @var{name} :start @var{expr} :length @var{expr})}
+Reference modification, @code{name(start:length)}.
+@item @code{(:subscript @var{name} @var{index})}
+Subscripted identifier.
+@item @code{:self} / @code{:null}
+@code{SELF} and @code{NULL}.
+@item @code{(= @var{a} @var{b})}, @code{(/= @var{a} @var{b})},
+@code{(< @var{a} @var{b})}, @code{(<= @var{a} @var{b})},
+@code{(> @var{a} @var{b})}, @code{(>= @var{a} @var{b})}
+Relational conditions.
+@item @code{(:and @var{a} @var{b})}, @code{(:or @var{a} @var{b})},
+@code{(:not @var{a})}
+Logical conditions.
+@item @code{(:bit-and @var{a} @var{b})}, @code{(:bit-or @var{a} @var{b})},
+@code{(:bit-xor @var{a} @var{b})}, @code{(:bit-not @var{a})},
+@code{(:shift-left @var{a} @var{n})}, @code{(:shift-right @var{a} @var{n})}
+Bit operations.
+@item @code{(:null @var{expr})} / @code{(:not-null @var{expr})}
+Null tests.
+@end table
+
+@node AST Serialization
+@section Reading and Writing AST Files
+
+Because the AST is plain plists, it round-trips through
+@code{print}@dots{}@code{read}.  An AST may be written to a file, edited
+by hand, and passed back to the compiler with
+@code{compile-eightbol-from-ast}, which accepts an AST (or a path to a
+file holding one) and a list of target CPUs:
+
+@example
+(compile-eightbol-from-ast ast :cpus '(:6502))
+@end example
+
+@node ABI
+@chapter ABI Formats and Assembler Syntax
+
+@cindex ABI
+@cindex assembler syntax
+@cindex register usage
+
+Every back end follows the same calling convention: a single value is
+passed in the machine's first register and returned in the same
+register; everything else travels through global variables.  See
+@ref{Data and Parameters}.  This chapter records the assembler dialect,
+register conventions, and invocation text for each supported processor.
+
+@menu
+* Common ABI::                  Shared conventions and naming
+* 6502 Family ABI::             6502, 65c02, 65c816, HuC6280, RP2A03
+* Z80 ABI::                     Zilog Z80
+* SM83 ABI::                    Sharp SM83 (Game Boy)
+* cp1610 ABI::                  Intellivision
+* m6800 ABI::                   Motorola 6800
+* m68k ABI::                    Motorola 68000
+* i286 ABI::                    Intel 80286
+* ARM7 ABI::                    ARM7TDMI (Game Boy Advance)
+* F8 ABI::                      Fairchild F8 (Channel F)
+@end menu
+
+@node Common ABI
+@section Common Conventions
+
+@cindex method labels
+@cindex OOPS
+@cindex variable labels
+
+@itemize
+@item Method entry labels follow the OOPS convention
+@code{Method@var{ClassName}@var{MethodName}} on the 6502 family.
+Hyphenated names translate to underscores (@code{Song--Heal--ID} emits
+@code{Song_Heal_ID}).
+@item Global variables are referred to by their derived assembly
+symbols; class slots are fetched through the object pointer.
+@item A method returns with the platform's return instruction
+(@code{rts} on the 6502 family and Z80, @code{ret} on the i286 and
+SM83, @code{pul pc} on the cp1610, @code{rts} on the m68k, and so on).
+@end itemize
+
+@node 6502 Family ABI
+@section 6502, 65c02, 65c816, HuC6280, RP2A03
+
+@cindex 64tass
+@cindex 6502 registers
+
+Output uses 64tass assembler syntax.  Register usage: @code{A} is the
+accumulator (the calling-convention register), @code{X} carries
+subscript indices or temporary values, and @code{Y} carries slot
+offsets.  Array fetches use @code{X}; slot-of-self fetches use
+@code{Y}.
+
+@table @asis
+@item @code{INVOKE Var "M"}
+Emits @code{.CallMethod  Call@var{Type}M, @var{Type}Class} (a Phantasia
+OOPS macro expanding to @code{jsr DoCallMethod}), not a bare
+@code{jsr Invoke@dots{}} label.
+@item @code{CALL @var{name} IN LIBRARY}
+Emits @code{jsr Lib.@var{name}} for a resident-library call.
+@item @code{CALL SERVICE @var{name}}
+Emits a service-dispatch call whose bank is resolved at link time
+(@code{.FarCall} / @code{.FarJSR}).
+@item @code{LOG FAULT}
+Emits @code{.LogFault "@var{code}"}, a 4-character fault string.
+@item @code{BREAK}
+Emits @code{brk}.
+@end table
+
+CPU-specific instruction sets (64tass format):
+
+@table @asis
+@item @code{:6502}
+Plain 6502: @code{jmp} for unconditional branches; @code{SED}/@code{CLD}
+for BCD arithmetic; undocumented opcodes (@code{lax}, @code{dcp}) where
+helpful.
+@item @code{:65c02}
+Adds @code{bra}, @code{stz}, @code{trb}, @code{tsb}; no undocumented
+opcodes.
+@item @code{:65c816}
+Like the 65c02 in emulation mode; 64tass syntax.
+@item @code{:huc6280}
+Like the 65c02; bank switching via macros.  Executes all 6502
+instructions; delegates code generation to the 6502 backend.
+@item @code{:rp2a03}
+NES CPU.  6502 subset with no decimal mode: no @code{SED}; BCD and
+packed-decimal arithmetic uses software correction routines instead
+(binary ADC, then add 6 to the low nibble if it exceeds 9, and so on).
+@end table
+
+@node Z80 ABI
+@section Zilog Z80
+
+@cindex Z80 registers
+
+Output is lowercase Z80 assembly in the common dialect (@code{ld a,(hl)},
+and so on).  Registers: @code{A} is the accumulator and calling-
+convention register; @code{HL} is the pointer/result register;
+@code{BC} is the count; @code{DE} is a destination pointer or temp
+(preferred over the stack).  Control flow uses @code{jp}, @code{jr},
+@code{call}, @code{ret}, and @code{djnz}.
+
+@node SM83 ABI
+@section Sharp SM83 (Game Boy)
+
+@cindex RGBDS
+
+Output is RGBDS assembler syntax (@code{ld a,[hl]}, @code{jr nz}, and so
+on).  The register conventions mirror the Z80: @code{A} accumulator,
+@code{HL} pointer/result, @code{BC} count, @code{DE} destination/temp.
+
+@node cp1610 ABI
+@section Intellivision cp1610
+
+@cindex as1600
+
+Output is as1600 assembler syntax.  The cp1610 uses the classic
+instruction set @code{MVII} (move immediate), @code{MVI} (load),
+@code{MVO} (store), @code{ADDR}, and @code{SUBR}.  A single 16-bit
+register carries the calling-convention value.
+
+@node m6800 ABI
+@section Motorola 6800
+
+@cindex Vectrex
+
+A minimal m6800 emitter intended for Vectrex-style Motorola-family
+workflows.  Uses plain 6800 mnemonics (@code{LDAA}, @code{STAA},
+@code{CMPA}, @code{BEQ}, @code{BNE}, @code{JSR}, @code{JMP}, @code{RTS})
+with direct symbols for generated labels.
+
+@node m68k ABI
+@section Motorola 68000
+
+@cindex 68000
+
+Targets the Motorola 68000 instruction set only.  Data registers
+@code{D0}--@code{D7}, address registers @code{A0}--@code{A7} (@code{A7}
+is the stack pointer).  Instructions: @code{move}, @code{add},
+@code{sub}, @code{cmp}, @code{and}, @code{or}, @code{eor}, @code{not},
+@code{neg}, @code{clr}; control: @code{jsr}, @code{jmp}, @code{rts},
+@code{bra}, and the conditional branches.  Operand sizes are @code{.b}
+(byte), @code{.w} (word), and @code{.l} (long).  The calling-convention
+value rides in @code{D0}.
+
+@node i286 ABI
+@section Intel 80286
+
+@cindex 16-bit
+@cindex Intel syntax
+
+A 16-bit backend producing Intel-syntax assembly (@code{mov ax, bx},
+@code{mov al, [si]}).  Registers: @code{AX} accumulator and calling-
+convention register, @code{BX} temp, @code{SI} index, @code{DI}
+destination pointer, @code{CX} count; segments @code{CS}, @code{DS},
+@code{SS}, @code{ES}.  Control: @code{call}, @code{ret}, @code{jmp},
+@code{jz}, @code{jnz}.
+
+@node ARM7 ABI
+@section ARM7TDMI (Game Boy Advance)
+
+@cindex Thumb
+@cindex GAS
+
+Targets the Game Boy Advance ARM7TDMI (@code{armv4t}).  Thumb is the
+default code path for size, using unified GAS syntax with
+@code{.thumb}, @code{.syntax unified}, and @code{.cpu arm7tdmi}.
+Instructions used: @code{movs}, @code{ldr}/@code{ldrb}/@code{ldrh},
+@code{str}/@code{strb}/@code{strh}, @code{add}, @code{subs}, @code{cmp},
+@code{b}/@code{bl}/@code{bne}@dots{}, @code{bx lr}.  Register usage:
+@code{r0} is the value and calling-convention register; @code{r1},
+@code{r2}, @code{r3} are scratch and address registers.
+
+@node F8 ABI
+@section Fairchild F8 (Channel F)
+
+@cindex F8
+@cindex Channel F
+
+Emits Fairchild F8 assembly with the Turner/Fairchild mnemonics: the
+@code{A} accumulator, @code{DC0} data counter, @code{LM}/@code{ST},
+@code{DCI}, @code{LI}/@code{AI}/@code{CI}, @code{LR H/DC0}, branches
+@code{BR}/@code{BZ}/@code{BNZ}@dots{}, and subroutine call/return
+@code{PI}/@code{POP}.  16-bit values use scratch 10 (lo) and 11 (hi);
+scratch 6--9 are code-generation temporaries.
+
+@node Error Conditions
+@appendix Error Conditions and Fault Codes
+
+@cindex errors
+@cindex faults
+@cindex conditions
+
+This appendix lists the compiler's error conditions and the runtime
+fault mechanism.
+
+@menu
+* Compiler Errors::             Compile-time condition hierarchy
+* Runtime Faults::              The fault system and fault codes
+@end menu
+
+@node Compiler Errors
+@section Compiler Errors
+
+All compiler errors are subtypes of @code{compiler-error} and carry a
+@code{message}.  The hierarchy, from most to least specific:
+
+@table @asis
+@item @code{source-error}
+A source-level error: a parser or unsupported-statement failure.  Reports
+the file, line, and sequence number when known.
+@item @code{lexer-error}
+A lexing failure; reports the file and line plus the offending form.
+@item @code{copybook-error}
+A copybook failure.  Subtypes: @code{copybook-not-found},
+@code{copybook-invalid-name}, @code{copybook-read-error}.
+@item @code{backend-error}
+A code-generation failure for a specific CPU.  Subtypes:
+@code{backend-ast-error} (unexpected AST shape),
+@code{backend-condition-not-implemented},
+@code{backend-string-blt-error},
+@code{backend-call-service-error}, @code{backend-copy-not-expanded}.
+@item @code{compile-error}
+A pipeline failure; reports the compilation stage and input.  Subtypes:
+@code{input-file-not-found}, @code{parse-failed-error},
+@code{invalid-ast-error}, @code{undefined-class-reference},
+@code{routine-not-terminated}.
+@item @code{usage-error}
+A command-line error.  Subtypes: @code{unknown-option-error},
+@code{dangling-option-error}, @code{unknown-cpu-error}.
+@end table
+
+@node Runtime Faults
+@section Runtime Faults
+
+@cindex LOG FAULT
+@cindex LogFault
+
+At runtime, @code{LOG FAULT} (or @code{LogFault}) signals a fault
+through the platform fault handler.  Fault codes are four-character
+strings; the assembler renders them in the platform's minifont for the
+debugger.  A @code{STOP RUN} halts the program.  On the 6502 family a
+@code{BREAK} statement fires the processor's @code{brk} to enter the
+monitor.
 
 @node Index
-@chapter Index
-
-@cindex index
+@appendix Index
 
 @printindex cp
 
