@@ -1,272 +1,167 @@
-;; src/main.lisp
+;; src/main.lisp — Command-line interface for EIGHTBOL compiler
+;; Copyright © 2026 Interworldly Adventuring, LLC
 (in-package :eightbol)
 
-(defun extract-basic-cli (args)
-  "Strip @code{--basic} and optional @code{.bas} path from ARGS (argv without program).
-Return @code{(values BASIC-P BASIC-FILE REMAINING-ARGS)}. When the first token after
-@code{--basic} does not start with @code{#\\-}, it is consumed as BASIC-FILE.
+(defparameter *eightbol-version*
+  (asdf:component-version (asdf:find-system :eightbol)))
 
-@table @asis
-@item ARGS
-List of strings (e.g. from @code{uiop:command-line-arguments}).
-@end table
-
-@subsection Outputs
-@code{BASIC-P} is true when @code{--basic} was present; @code{BASIC-FILE} is the optional
-path token; @code{REMAINING-ARGS} is suitable for @code{parse-arguments}."
-  (let ((pos (position "--basic" args :test #'string=)))
-    (if (null pos)
-        (values nil nil args)
-        (let* ((before (subseq args 0 pos))
-               (after (subseq args (1+ pos)))
-               (file (when (and after (stringp (first after)))
-                       (let ((x (first after)))
-                         (when (and (plusp (length x))
-                                    (not (char= #\- (char x 0))))
-                           x))))
-               (rest (append before (if file (rest after) after))))
-          (values t file rest)))))
-
-(defun extract-fortran-cli (args)
-  "Strip @code{--fortran} and optional @code{.f} path from ARGS.
-Return @code{(values FORTRAN-P FORTRAN-FILE REMAINING-ARGS)}."
-  (let ((pos (position "--fortran" args :test #'string=)))
-    (if (null pos)
-        (values nil nil args)
-        (let* ((before (subseq args 0 pos))
-               (after (subseq args (1+ pos)))
-               (file (when (and after (stringp (first after)))
-                       (let ((x (first after)))
-                         (when (and (plusp (length x))
-                                    (not (char= #\- (char x 0))))
-                           x))))
-               (rest (append before (if file (rest after) after))))
-          (values t file rest)))))
-
-(defun extract-pascal-cli (args)
-  "Strip @code{--pascal} and optional @code{.pas} path from ARGS.
-Return @code{(values PASCAL-P PASCAL-FILE REMAINING-ARGS)}."
-  (let ((pos (position "--pascal" args :test #'string=)))
-    (if (null pos)
-        (values nil nil args)
-        (let* ((before (subseq args 0 pos))
-               (after (subseq args (1+ pos)))
-               (file (when (and after (stringp (first after)))
-                       (let ((x (first after)))
-                         (when (and (plusp (length x))
-                                    (not (char= #\- (char x 0))))
-                           x))))
-               (rest (append before (if file (rest after) after))))
-          (values t file rest)))))
+;; We use unix-opts for command-line parsing (must match print-usage)
+(defmacro define-eightbol-opts ()
+  `(unix-opts:define-opts
+     (:name :help
+      :description "Print usage information"
+      :short #\h
+      :long "help")
+     (:name :version
+      :description "Print version"
+      :short #\V
+      :long "version")
+     (:name :basic
+      :description "Dartmouth BASIC: start REPL on a TTY"
+      :long "basic")
+     (:name :lang
+      :description "Language for next input file: bas/basic, cob/cobol, f/fortran, ls/lingo, lua, m/objective-c, p/pascal, st/smalltalk"
+      :short #\l
+      :long "lang"
+      :arg-parser #'identity)
+     (:name :machine
+      :description "Target CPU: <name> or \"all\""
+      :short #\m
+      :long "machine"
+      :arg-parser #'identity)
+     (:name :output-file
+      :description "Output to file"
+      :short #\o
+      :long "output"
+      :arg-parser #'identity)
+     (:name :include-path
+      :description "Include directory"
+      :short #\I
+      :long "include"
+      :arg-parser #'identity)))
 
 (defun parse-arguments (args)
-  "Parse command line arguments."
-  (let ((argv
-	(remove
-	 nil
-	 (flatten
-	  (loop for arg in args
-                  with last-wants-arg-p = nil
-                  collect (cond
-                            ((string= arg "--version")
-                             '(:version t))
-                            ((string= arg "--help")
-                             '(:help t))
-                            ((string= arg "-I")
-                             (setf last-wants-arg-p :include-path)
-                             nil)
-                            ((string= arg "-m")
-                             (setf last-wants-arg-p :machine)
-                             nil)
-                            ((string= arg "-o")
-                             (setf last-wants-arg-p :object-file)
-                             nil)
-                            ((equal #\- (char arg 0))
-		         (error 'unknown-option-error :option arg))
-                            (t (if last-wants-arg-p
-                                   (prog1
-                                       (list last-wants-arg-p arg)
-                                     (setf last-wants-arg-p nil))
-                                   (list :input-file arg)))))))))
-    (when (keywordp (lastcar argv))
-      (error "Looks like a dangling option ends arguments: missing ~a"
-	   (lastcar argv)))
-    argv))
-
-
-(defun format-date (&optional (universal-time (get-universal-time)))
-  (local-time:format-timestring nil
-			  (local-time:universal-to-timestamp universal-time)
-			  :format '(:year #\- (:month 2) #\- (:day 2))))
-
-(defun main (args)
-  "Run the EIGHTBOL CLI from ARGS (argv including program name).
+  "Parse command line arguments using unix-opts.
+Returns a plist of parsed options.
 
 @table @asis
-@item ARGS
-@code{(uiop:command-line-arguments)}-style list; @code{--basic} and an optional
-following @file{.bas} path are stripped before option parsing.
-@end table
+@item :input-file
+Pathname string(s) for input COBOL source file(s).
+@item :machine
+String value of -m option (CPU name or \"all\").
+@item :output-file
+String value of -o option (output pathname).
+@item :include-path
+String value of -I option (copybook include directory).
+@item :basic
+Boolean, true when --basic flag is present.
+@item :lang
+Keyword value of -l option (language override).
+@item :root-directory
+Root directory for output paths.
+@end table"
+  (multiple-value-bind (options free-args)
+      (unix-opts:get-opts args)
+    (let ((result (copy-list options)))
+      (when free-args
+        (setf (getf result :input-file)
+              (if (= (length free-args) 1)
+                  (first free-args)
+                  free-args)))
+      result)))
 
-@subsection Behavior
-Compiles @file{.cob} or @file{.bas}, @file{.pas}, or prints @code{--help}, or starts the BASIC interpreter
-shell when @code{--basic} is given without a file on an interactive stream.
+(defun expand-language-alias (lang)
+  "Expand a short language alias to a keyword."
+  (let ((ext (string-downcase lang)))
+    (cond
+      ((member ext '("bas" "basic") :test #'string=) :basic)
+      ((member ext '("cob" "cobol" "cbl") :test #'string=) :cobol)
+      ((member ext '("f" "fortran" "for" "for77") :test #'string=) :fortran)
+      ((member ext '("ls" "lingo" "stx") :test #'string=) :lingo)
+      ((string= ext "lua") :lua)
+      ((member ext '("m" "objective-c") :test #'string=) :objective-c)
+      ((member ext '("p" "pascal" "pas") :test #'string=) :pascal)
+      ((string= ext "st") :smalltalk)
+      (t nil))))
 
-Buildapp passes argv as a single argument; use @code{uiop:command-line-arguments}
-when available."
-  (multiple-value-bind (basic-p basic-file argv-rest)
-      (extract-basic-cli (rest args))
-    (let ((options (parse-arguments argv-rest))
-          (start-time (get-universal-time)))
-      (cond
-        ((getf options :version)
-         (format t "EIGHTBOL Compiler version ~a~%"
-                 (asdf:component-version (asdf:find-system :eightbol))
-                 ((getf options :help)
-                  (let ((cpus (append (mapcar #'cdr +cpu-display-names+)
-                                      (list "all"))))
-                    (format t "Usage: eightbol [OPTIONS] input-file
-   Options:
-        -I <path>    Add <path> to include path for copybooks
-	-l <lang> Language for next input file is LANG: ~
-bas/basic, cob/cobol, f/fortran, ls/lingo, lua, m/objective-c, p/pascal, st/smalltalk
-        -m <cpu>     Target CPU: ~{~a~^, ~} (or \"all\")
-        -o <file>    Output to <file>
-        --basic      Dartmouth BASIC: start REPL on a TTY
-        --version    Print the version of the compiler
-        --help       Print this help message"
-                            cpus)))
-                 ((multiple-value-bind (basic-p basic-file argv-rest)
-                      (extract-basic-cli (rest args))
-                    (multiple-value-bind (fortran-p fortran-file argv-rest-2)
-                        (extract-fortran-cli argv-rest)
-                      (multiple-value-bind (pascal-p pascal-file argv-rest-3)
-                          (extract-pascal-cli argv-rest-2)
-                        (let ((options (parse-arguments argv-rest-3))
-                              (start-time (get-universal-time)))
-                          (cond
-                            ((getf options :version)
-                             (format t "EIGHTBOL Compiler version 0.6~%"))
-                            ((getf options :help)
-                             (let ((cpus (append (mapcar #'cdr +cpu-display-names+)
-                                                 (list "all"))))
-                               (format t "Usage: eightbol [OPTIONS] input-file.cob
-        eightbol --basic [file.bas] [OPTIONS]
-        eightbol --fortran [file.f] [OPTIONS]
-        eightbol --pascal [file.pas] [OPTIONS]
-   Options:
-        -I <path>    Add <path> to include path for copybooks
-        -m <cpu>     Target CPU: ~{~a~^, ~} (or \"all\")
-        -o <file>    Output to <file>
-        --basic      Dartmouth BASIC: with file.bas, transpile then compile; without file, start REPL on a TTY
-        --fortran    FORTRAN: compile FORTRAN source to assembly
-        --pascal     Pascal: compile Pascal source to assembly
-        --version    Print the version of the compiler
-        --help       Print this help message"
-                                       cpus)))
-                            (basic-p
-                             (let* ((copybook-paths
-                                      (loop for (key value) on options by #'cddr
-                                            when (and (eql key :include-path)
-                                                      (or (stringp value) (pathnamep value)))
-                                              collect (uiop:ensure-directory-pathname
-                                                       (merge-pathnames (pathname value) (truename ".")))))
-                                    (cpu-opt (when (getf options :machine)
-                                               (parse-cli-cpu-arg (getf options :machine))))
-                                    (cpus (cond ((null cpu-opt) (list :6502))
-                                                ((eq cpu-opt :all) +supported-cpus+)
-                                                (t (list cpu-opt))))
-                                    (output-file (getf options :object-file)))
-                               (cond
-                                 (basic-file
-                                  (unless (probe-file basic-file)
-                                    (error 'input-file-not-found :path basic-file))
-                                  (format t "~&Compiling BASIC ~a to ~a" basic-file
-                                          (or output-file "per-CPU outputs"))
-                                  (compile-basic-from-path basic-file
-                                                           :cpus cpus
-                                                           :copybook-paths (when copybook-paths copybook-paths)
-                                                           :output-file (when output-file (pathname output-file))
-                                                           :root-directory (truename "."))
-                                  (fresh-line)
-                                  (format t " … completed in ~[less than a second~:;~~~:*~:d second~:p~]."
-                                          (- (get-universal-time) start-time))
-                                  (terpri)
-                                  (finish-output))
-                                 ((interactive-stream-p *query-io*)
-                                  (eightbol-basic :root-directory (truename ".")))
-                                 (t
-                                  (error 'usage-error
-                                         :option "--basic"
-                                         :message
-                                         "No BASIC file after --basic and standard input is not interactive; pass a .bas path (e.g. eightbol --basic Source/Classes/Foo.bas -m 6502 -o …)."))))
-                             (fortran-p
-                              (let* ((copybook-paths
-                                       (loop for (key value) on options by #'cddr
-                                             when (and (eql key :include-path)
-                                                       (or (stringp value) (pathnamep value)))
-                                               collect (uiop:ensure-directory-pathname
-                                                        (merge-pathnames (pathname value) (truename ".")))))
-                                     (cpu-opt (when (getf options :machine)
-                                                (parse-cli-cpu-arg (getf options :machine))))
-                                     (cpus (cond ((null cpu-opt) (list :6502))
-                                                 ((eq cpu-opt :all) +supported-cpus+)
-                                                 (t (list cpu-opt))))
-                                     (output-file (getf options :object-file)))
-                                (cond
-                                  (fortran-file
-                                   (unless (probe-file fortran-file)
-                                     (error 'input-file-not-found :path fortran-file))
-                                   (format t "~&Compiling FORTRAN ~a to ~a" fortran-file
-                                           (or output-file "per-CPU outputs"))
-                                   (compile-fortran-from-path fortran-file
-                                                              :cpus cpus
-                                                              :copybook-paths (when copybook-paths copybook-paths)
-                                                              :output-file (when output-file (pathname output-file))
-                                                              :root-directory (truename "."))
-                                   (fresh-line)
-                                   (format t " … completed in ~[less than a second~:;~~~:*~:d second~:p~]."
-                                           (- (get-universal-time) start-time))
-                                   (terpri)
-                                   (finish-output))
-                                  (t
-                                   (error 'usage-error
-                                          :option "--fortran"
-                                          :message
-                                          "No FORTRAN file after --fortran; pass a .f path (e.g. eightbol --fortran Source/Classes/Foo.f -m 6502 -o …).")))))
-                             (pascal-p
-                              ((getf options :input-file)
-                               (let* ((input-file (getf options :input-file))
-                                      (output-file (getf options :object-file))
-                                      (cpu-opt (when (getf options :machine)
-                                                 (parse-cli-cpu-arg (getf options :machine))))
-                                      (cpus (cond ((null cpu-opt) (list :6502))
-                                                  ((eq cpu-opt :all) +supported-cpus+)
-                                                  (t (list cpu-opt))))
-                                      (copybook-paths (loop for (key value) on options by #'cddr
-                                                            when (and (eql key :include-path)
-                                                                      (or (stringp value) (pathnamep value)))
-                                                              collect (uiop:ensure-directory-pathname
-                                                                       (merge-pathnames (pathname value) (truename "."))))))
-                                 (unless (probe-file input-file)
-                                   (error 'input-file-not-found :path input-file))
-                                 (format t "~&Compiling ~a to ~a" input-file
-                                         (or output-file "standard output"))
-                                 (compile-eightbol (list input-file)
-                                                   :cpus cpus
-                                                   :copybook-paths (when copybook-paths copybook-paths)
-                                                   :output-file (when output-file (pathname output-file))
-                                                   :root-directory (truename "."))
-                                 (fresh-line)
-                                 (format t " … completed in ~[less than a second~:;~~~:*~:d second~:p~]."
-                                         (- (get-universal-time) start-time))
-                                 (terpri)
-                                 (finish-output)))
-                              (t (error 'usage-error
-	                              :option "input file"
-	                              :argument nil
-	                              :message
-	                              (format nil
-		                            "No input file specified. ~
-Use --help for usage information.
-Processed: ~s" options)))))))))))))))))
+(defun language-from-extension (pathname)
+  "Guess language from file extension."
+  (expand-language-alias (pathname-type pathname)))
+
+(defun get-cpus (machine-arg)
+  "Get the list of CPUs from the --machine argument."
+  (cond
+    ((null machine-arg) +supported-cpus+)
+    ((string= machine-arg "all") +supported-cpus+)
+    (t (list (parse-cli-cpu-arg machine-arg)))))
+
+(defun dispatch-language (input-file options)
+  "Dispatch compilation based on language derived from extension or -l flag."
+  (let* ((explicit-lang (getf options :lang))
+         (lang (or (and explicit-lang (expand-language-alias explicit-lang))
+                   (language-from-extension input-file))))
+    (unless lang
+      (error "Cannot determine language for file ~a. Use -l <lang> (bas, cob, f, ls, lua, m, p, st)." input-file))
+    (let* ((output-file (getf options :output-file))
+           (cpus (get-cpus (getf options :machine)))
+           (include-paths (loop for (key value) on options by #'cddr
+                                when (eql key :include-path)
+                                  collect (uiop:ensure-directory-pathname
+                                           (merge-pathnames (pathname value)
+                                                            (truename "."))))))
+      (case lang
+        (:basic
+         (compile-basic-from-path input-file :cpus cpus))
+        (:cobol
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :copybook-paths (or include-paths
+                                               (project-copybook-paths (truename ".")))
+                           :output-file (when output-file (pathname output-file))))))))
+
+(defun main (args)
+  "Main entry point for the EIGHTBOL compiler. ARGS is the argv list
+including the program name (as passed by buildapp)."
+  (define-eightbol-opts)
+  (let* ((options (parse-arguments (rest args)))
+         (raw-free (getf options :input-file))
+         (free-args (cond ((null raw-free) nil)
+                          ((listp raw-free) raw-free)
+                          (t (list raw-free)))))
+    (when (getf options :help)
+      (unix-opts:describe
+       :usage-of "eightbol"
+       :args "[OPTIONS] input-file"
+       :prefix "Usage: eightbol [OPTIONS] input-file"
+       :suffix "Options are parsed with unix-opts library.")
+      (finish-output)
+      (return-from main 0))
+    (when (getf options :version)
+      (format t "Eightbol Compiler Version ~a~%" *eightbol-version*)
+      (finish-output)
+      (return-from main 0))
+    (when (getf options :basic)
+      (if (null free-args)
+          (progn (eightbol-basic)
+                 (return-from main 0))
+          (progn
+            (format t "Error: --basic cannot be used with input file~%")
+            (return-from main 1))))
+    (cond
+      ((null free-args)
+       (format t "Error: No input file specified.~%")
+       (unix-opts:describe
+        :usage-of "eightbol"
+        :args "[OPTIONS] input-file")
+       1)
+      ((> (length free-args) 1)
+       (format t "Error: Multiple input files specified: ~{~a~^ ~}~%" free-args)
+       1)
+      (t
+       (let ((input-file (first free-args)))
+         (unless (probe-file input-file)
+           (error "Input file does not exist: ~a" input-file))
+         (format t "Compiling ~a~%" input-file)
+         (let ((result (dispatch-language input-file options)))
+           (format t "~&Compilation complete.~%")
+           (if result 0 1)))))))

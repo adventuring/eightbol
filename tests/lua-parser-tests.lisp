@@ -16,8 +16,8 @@
            (list "CLASS-ID. TestLua.")
            (list "ENVIRONMENT DIVISION.")
            (list "OBJECT.")
-           "  PROCEDURE DIVISION."
-           (append statements "  ")
+           (list "  PROCEDURE DIVISION.")
+           (append statements (list "  "))
            (list "END OBJECT.")
            (list "END CLASS TestLua."))))
 
@@ -193,7 +193,7 @@
     (handler-case 
         (eightbol::parse-eightbol-string invalid-source)
       (error () t)  ; Expected error or empty result
-      (:no-error () (pass "Consider if this should error"))))
+      (:no-error () (pass "Consider if this should error")))))
 
 ;;; ===== Method Definition Tests =====
 

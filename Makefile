@@ -25,5 +25,8 @@ clean:
 	rm -f $(DIST_DIR)/*
 	rm -rf $(DIST_DIR)
 
-.PHONY: all clean
+.PHONY: all clean test
 
+test:
+	@echo "Running eightbol tests..."
+	@sbcl --noinform --eval '(asdf:test-system :eightbol)' --eval '(sb-ext:quit)'

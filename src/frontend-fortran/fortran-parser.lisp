@@ -1,9 +1,7 @@
-;; src/fortran-parser.lisp — YACC grammar for FORTRAN → EIGHTBOL AST
-;; Following the pattern of basic-parser.lisp
+;; src/frontend-fortran/fortran-parser.lisp — YACC grammar for FORTRAN → EIGHTBOL AST
 (in-package :eightbol)
 
-;; Token list for FORTRAN YACC parser
-(eval-when (:execute :load-toplevel)
+(eval-when (:compile-toplevel :load-toplevel :execute)
   (defun fortran-token-list ()
     (mapcar (compose #'intern #'string)
             '(|(| |)| |:| |,| + - * / ** = < <= > >= <>
@@ -15,132 +13,73 @@
               class method instance new delete invoke super self procedure
               number string ident))))
 
-;; Source location tracking
 (defvar *fortran-token-location* nil
   "plist (:source-file :source-line :source-sequence) of current token.")
 
-;; Action functions for FORTRAN parser - using existing AST nodes only
+(defmacro fortran-unsupported (feature)
+  `(error 'source-error
+          :message (format nil "FORTRAN ~a is not supported." ,feature)
+          :source-line (getf *fortran-token-location* :source-line)))
 
 (defun fortran-parse-program (name statements)
-  "Top-level PROGRAM node"
-  (make-program-node
-   (string-upcase name)
-   :methods (list (make-method-node "MAIN" :statements statements))))
+  (make-program-node (string-upcase name)
+                     :methods (list (make-method-node "MAIN" :statements statements))))
 
 (defun fortran-parse-subroutine (name args statements)
-  "SUBROUTINE → :method AST node"
   (declare (ignore args))
   (make-method-node (string-upcase name) :statements statements))
 
 (defun fortran-parse-function (name args return-type statements)
-  "FUNCTION → :method AST node with return type"
   (declare (ignore args return-type))
   (make-method-node (string-upcase name) :statements statements))
 
 (defun fortran-parse-assignment (target expr)
-  "ASSIGNMENT → :move AST node"
   (make-move-node expr target))
 
 (defun fortran-parse-call (target args)
-  "CALL → :call or :invoke AST node"
   (declare (ignore args))
   (make-call-node target))
 
 (defun fortran-parse-instantiation (class-name init-args)
-  "NEW class-name(...) → :fortran-new AST node for OOPS"
   (list :fortran-new :target class-name :args init-args))
 
 (defun fortran-parse-invoke (obj method args)
-  "INVOKE OBJECT-METHOD → :invoke AST node"
   (declare (ignore args))
   (list :invoke :target obj :method method))
 
 (defun fortran-parse-create-method (name parameters body)
-  "CLASS #:method-name DEF:PROCEDURE ... ENDMETHOD → :method-marker node"
-  (list :fortran-method :method-name name :parameters parameters :body body))
+  (declare (ignore parameters body))
+  (list :fortran-method :method-name name))
 
-(defun fortran-parse-super-call (obj super-method args)
-  "INVOKE SUPER -> :sup-call AST node"
-  (declare (ignore args))
-  (list :sup-call :object obj :method super-method))
+(defun fortran-parse-super-call (method)
+  (list :sup-call :method method))
 
 (defun fortran-parse-goto (label)
-  "GOTO → :goto AST node"
   (list :goto :target label))
 
 (defun fortran-parse-return ()
-  "RETURN → :goback AST node"
   (make-goback-node))
 
 (defun fortran-parse-stop ()
-  "STOP → :stop-run AST node"
   (make-stop-run-node))
 
 (defun fortran-parse-if-then (condition then-stmts)
-  "IF condition THEN → :if AST node"
   (make-if-node condition then-stmts '()))
 
 (defun fortran-parse-if-then-else (condition then-stmts else-stmts)
-  "IF condition THEN ... ELSE ... → :if AST node"
   (make-if-node condition then-stmts else-stmts))
 
-(defun fortran-parse-do-loop (var start end step body)
-  "DO loop → :perform AST node"
-  (let ((from start)
-        (to end)
-        (by (or step 1)))
-    (make-perform-node (format nil "DO-~A" var)
-                       :varying var
-                       :from from
-                       :by by
-                       :until (list '> var to)))
+(defun fortran-parse-do-loop (var from to by stmts)
+  (make-perform-node (format nil "DO-~A" var)
+                     :varying var
+                     :from from
+                     :by (or by 1)
+                     :until (list '> var to)
+                     :stmts stmts))
 
-(defun fortran-parse-read (unit vars)
-  "READ → :move AST node (simplified)"
-  (declare (ignore unit))
-  (make-move-node :stdin vars))
-
-(defun fortran-parse-write (unit format vars)
-  "WRITE → :move AST node (simplified)"
-  (declare (ignore unit format))
-  (make-move-node vars :stdout))
-
-(defun fortran-parse-data (name value)
-  "DATA → :set AST node"
-  (make-set-node name value))
-
-(defun fortran-parse-parameter (name value)
-  "PARAMETER → :set AST node"
-  (make-set-node name value))
-
-(defun fortran-parse-type-declaration (type vars)
-  "Type declaration → store in type table, no AST node"
-  (declare (ignore type vars))
-  nil)
-
-(defun fortran-parse-common (block vars)
-  "COMMON → handled by compiler tables"
-  (declare (ignore block vars))
-  nil)
-
-(defun fortran-parse-dimension (name dims)
-  "DIMENSION → handled by compiler tables"
-  (declare (ignore name dims))
-  nil)
-
-(defun fortran-parse-include (filename)
-  "INCLUDE → :copy AST node"
-  (make-copy-node filename))
-
-;; Expression builders using existing AST nodes
-(defun fortran-build-literal (value)
-  value)
-
-(defun fortran-build-string (value)
-  value)
-
-(defun fortran-build-identifier (name)
-  (string-upcase name))
+(defun fortran-build-literal (value) value)
+(defun fortran-build-string (value) value)
+(defun fortran-build-identifier (name) (string-upcase name))
 
 (defun fortran-build-arithmetic (op left right)
   (ecase op
@@ -159,237 +98,263 @@
     (:less-equal (list '<= left right))
     (:greater-equal (list '>= left right))))
 
-(defun fortran-build-logical (op left right)
+(defun fortran-build-logical (op left &optional right)
   (ecase op
     (:and (list :and left right))
     (:or (list :or left right))
     (:not (list :not left))))
 
-(defun fortran-build-parenthesized (expr)
-  expr)
+(defun fortran-build-parenthesized (expr) expr)
 
-;; YACC grammar
 (eval
  `(yacc:define-parser *fortran-parser*
     (:start-symbol fortran-program)
-    (:terminals (,@(fortran-token-list) number string ident))
-    (:precedence ((:left :and) (:left :or) (:right :not)
-                  (:left :equal :not-equal :lt :le :gt :ge)
-                  (:left :plus :minus)
-                  (:left :times :divide)
-                  (:right :power)))
+    (:terminals `(,@(fortran-token-list) number string ident))
+    (:precedence ((:left and :or) (:right not)
+                  (:left equal not-equal lt le gt ge)
+                  (:left plus minus)
+                  (:left times divide)
+                  (:right power)))
     (:muffle-conflicts :some)
-    
-(fortran-program
+
+    (fortran-program
       (program ident stmt-list end
-       (lambda (_ name stmts __ end-name)
-         (declare (ignore _ __ end-name))
-         (fortran-parse-program name stmts))))
+        (lambda (_ name stmts __ end-name)
+          (declare (ignore _ __ end-name))
+          (fortran-parse-program name stmts))))
 
     (stmt-list
-     ()
-     (stmt-list stmt (lambda (s st) (append s (list st)))))
+      ()
+      (stmt-list stmt (lambda (s st) (append s (list st)))))
 
     (stmt
-     (subroutine ident arg-list stmt-list end ident
-      (lambda (_ name args stmts __ end-name)
-        (declare (ignore _ __ end-name))
-        (fortran-parse-subroutine name args stmts)))
-     
-     (function ident arg-list type-spec stmt-list end ident
-      (lambda (_ name args rtype stmts __ end-name)
-        (declare (ignore _ __ end-name))
-        (fortran-parse-function name args rtype stmts)))
+      (subroutine ident arg-list stmt-list end ident
+        (lambda (_ name args stmts __ end-name)
+          (declare (ignore _ __ end-name))
+          (fortran-parse-subroutine name args stmts)))
 
-     (ident :EQUAL expression
-            (lambda (target _ e) (declare (ignore _)) (fortran-parse-assignment target e)))
-     
-     (call ident arg-list
-           (lambda (_ target args) (declare (ignore _)) (fortran-parse-call target args)))
-     
-     (goto ident
-           (lambda (_ l) (declare (ignore _)) (fortran-parse-goto l)))
-     
-     (return (lambda (_) (declare (ignore _)) (fortran-parse-return)))
-     
-     (stop (lambda (_) (declare (ignore _)) (fortran-parse-stop)))
+      (function ident arg-list type-spec stmt-list end ident
+        (lambda (_ name args rtype stmts __ end-name)
+          (declare (ignore _ __ end-name))
+          (fortran-parse-function name args rtype stmts)))
 
-     (if lpar condition rpar then stmt-list
-      (lambda (_ open-paren cond close-paren then-keyword then-stmts)
-        (declare (ignore _ open-paren close-paren then-keyword))
-        (fortran-parse-if-then cond then-stmts)))
+      (ident :EQUAL expression
+        (lambda (target _ e)
+          (declare (ignore _))
+          (fortran-parse-assignment target e)))
 
-     (if lpar condition rpar then stmt-list else stmt-list
-      (lambda (_ open-paren cond close-paren then-keyword then-stmts else-keyword else-stmts)
-        (declare (ignore _ open-paren close-paren then-keyword else-keyword))
-        (fortran-parse-if-then-else cond then-stmts else-stmts)))
+      (call ident arg-list
+        (lambda (_ target args)
+          (declare (ignore _))
+          (fortran-parse-call target args)))
 
-     (do ident :EQUAL expression comma expression step-opt stmt-list enddo
-      (lambda (_ var eq-keyword from comma-keyword to opt-step stmts enddo-keyword)
-        (declare (ignore _ eq-keyword comma-keyword enddo-keyword))
-        (fortran-parse-do-loop var from to opt-step stmts)))
+      (goto ident
+        (lambda (_ l)
+          (declare (ignore _))
+          (fortran-parse-goto l)))
 
-      (read ident
-            (lambda (_ u) (declare (ignore _)) (fortran-parse-read u nil)))
+      (return
+        (lambda (_)
+          (declare (ignore _))
+          (fortran-parse-return)))
 
-      (write ident format
-             (lambda (_ u f) (declare (ignore _ u f)) (fortran-parse-write u f nil)))
+      (stop
+        (lambda (_)
+          (declare (ignore _))
+          (fortran-parse-stop)))
 
-     (data ident :EQUAL expression
-           (lambda (_ n eq-keyword e)
-             (declare (ignore _ eq-keyword))
-             (fortran-parse-data n e)))
+      (if lpar condition rpar then stmt-list
+        (lambda (_ open-paren cond close-paren then-keyword then-stmts)
+          (declare (ignore _ open-paren close-paren then-keyword))
+          (fortran-parse-if-then cond then-stmts)))
 
-     (parameter ident :EQUAL expression
-                (lambda (_ n eq-keyword e)
-                  (declare (ignore _ eq-keyword))
-                  (fortran-parse-parameter n e)))
+      (if lpar condition rpar then stmt-list else stmt-list
+        (lambda (_ open-paren cond close-paren then-keyword then-stmts else-keyword else-stmts)
+          (declare (ignore _ open-paren close-paren then-keyword else-keyword))
+          (fortran-parse-if-then-else cond then-stmts else-stmts)))
 
-     (type-spec ident
-                (lambda (_ type-name v) (declare (ignore _)) (fortran-parse-type-declaration type-name v)))
+      (do ident :EQUAL expression :COMMA expression step-opt stmt-list enddo
+        (lambda (_ var eq-keyword from comma-keyword to opt-step stmts enddo-keyword)
+          (declare (ignore _ eq-keyword comma-keyword enddo-keyword))
+          (fortran-parse-do-loop var from to opt-step stmts)))
 
-      (common ident
-              (lambda (_ b) (declare (ignore _)) (fortran-parse-common b nil)))
+      (read ident arg-list
+        (lambda (_ u args)
+          (declare (ignore _ u))
+          (fortran-unsupported "READ")))
 
-      (dimension ident
-                 (lambda (_ n) (declare (ignore _)) (fortran-parse-dimension n nil)))
+      (write ident format arg-list
+        (lambda (_ u f args)
+          (declare (ignore _ u f))
+          (fortran-unsupported "WRITE")))
 
-(include string
-               (lambda (_ f) (declare (ignore _)) (fortran-parse-include f)))
+      (data ident :EQUAL expression
+        (lambda (_ n eq-keyword e)
+          (declare (ignore _ eq-keyword))
+          (fortran-unsupported "DATA")))
 
-      ;; OOP constructs for OOPS system
+      (parameter ident :EQUAL expression
+        (lambda (_ n eq-keyword e)
+          (declare (ignore _ eq-keyword))
+          (fortran-unsupported "PARAMETER")))
+
+      (type-spec ident
+        (lambda (_ type-name v)
+          (declare (ignore _))
+          (fortran-unsupported "type declaration")))
+
+      (common ident variable-list
+        (lambda (_ b v)
+          (declare (ignore _))
+          (fortran-unsupported "COMMON")))
+
+      (dimension ident lpar variable-list rpar
+        (lambda (_ n open-paren d close-paren)
+          (declare (ignore _ open-paren close-paren))
+          (fortran-unsupported "DIMENSION")))
+
+      (include string
+        (lambda (_ f)
+          (declare (ignore _))
+          (fortran-unsupported "INCLUDE")))
+
       (class ident end ident
-       (lambda (_ name _2 body _3 end-name)
-         (declare (ignore _ _2 _3 end-name))
-         (list :fortran-class :name name :body body)))
+        (lambda (_ name _2 body _3 end-name)
+          (declare (ignore _ _2 _3 end-name))
+          (list :fortran-class :name name)))
 
       (class method ident colon ident parameter-list stmt-list endmethod
-       (lambda (_1 _2 mname _3 mname2 params body _4)
-         (declare (ignore _1 _2 _3 _4))
-         (fortran-parse-create-method mname params body)))
+        (lambda (_1 _2 mname _3 mname2 params body _4)
+          (declare (ignore _1 _2 _3 _4))
+          (fortran-parse-create-method mname params body)))
 
-      (instance ident :EQUAL new ident lpar init-args? rpar
-       (lambda (_1 var _2 _3 _4 cname _5 args _6)
-         (declare (ignore _1 _2 _3 _4 _5 _6))
-         (fortran-parse-instantiation cname args)))
+      (instance ident :EQUAL new ident lpar arg-list rpar
+        (lambda (_1 var _2 _3 _4 cname _5 args _6)
+          (declare (ignore _1 _2 _3 _4 _5 _6))
+          (fortran-parse-instantiation cname args)))
 
-      (invoke ident dot ident lpar arg-list? rpar
-       (lambda (_1 obj _2 _3 method _4 args _5)
-         (declare (ignore _1 _2 _3 _4 _5))
-         (fortran-parse-invoke obj method args)))
+      (invoke ident dot ident lpar arg-list rpar
+        (lambda (_1 obj _2 _3 method _4 args _5)
+          (declare (ignore _1 _2 _3 _4 _5))
+          (fortran-parse-invoke obj method args)))
 
-      (invoke super dot ident lpar arg-list? rpar
-       (lambda (_1 _2 _3 method _4 args _5)
-         (declare (ignore _1 _2 _3 _4 _5))
-         (fortran-parse-super-call :self method args)))
+      (invoke super dot ident lpar arg-list rpar
+        (lambda (_1 _2 _3 method _4 args _5)
+          (declare (ignore _1 _2 _3 _4 _5))
+          (fortran-parse-super-call method))))
 
-     (arg-list
-      ())
-     (arg-list
-      (var-list)
-      (arg-list comma var-list
-                (lambda (l _ v) (declare (ignore _)) (append (ensure-list l) (ensure-list v)))))
+    (arg-list () (variable-list))
 
-    (var-list
-     (ident (lambda (i) (list i)))
-     (var-list comma ident
-               (lambda (l _ i) (declare (ignore _)) (append (ensure-list l) (list i)))))
+    (variable-list
+      (ident (lambda (i) (list i)))
+      (variable-list :COMMA ident
+        (lambda (vars _ comma v)
+          (declare (ignore _ comma))
+          (append vars (list v)))))
 
     (step-opt
-     (step ident expression
-           (lambda (_ step-ident e)
-             (declare (ignore _ step-ident))
-             e))
-     ())
+      (step ident expression
+        (lambda (_ step-ident e)
+          (declare (ignore _ step-ident))
+          e))
+      ())
 
     (expression
-     (literal-expression)
-     (string-expression)
-     (identifier-expression)
-     (parenthesized-expression)
-     (arithmetic-expression)
-     (relational-expression)
-     (logical-expression))
+      (literal-expression)
+      (string-expression)
+      (identifier-expression)
+      (parenthesized-expression)
+      (arithmetic-expression)
+      (relational-expression)
+      (expression and expression
+        (lambda (left _op right)
+          (declare (ignore _op))
+          (fortran-build-logical :and left right)))
+      (expression or expression
+        (lambda (left _op right)
+          (declare (ignore _op))
+          (fortran-build-logical :or left right)))
+      (not expression
+        (lambda (_op expr)
+          (declare (ignore _op))
+          (fortran-build-logical :not expr))))
 
     (literal-expression (number #'fortran-build-literal))
     (string-expression (string #'fortran-build-string))
     (identifier-expression (ident #'fortran-build-identifier))
 
     (parenthesized-expression
-     (lpar expression rpar #'fortran-build-parenthesized))
+      (lpar expression rpar #'fortran-build-parenthesized))
 
     (arithmetic-expression
-     (expression plus expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :plus l r)))
-     (expression minus expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :minus l r)))
-     (expression times expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :times l r)))
-     (expression divide expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :divide l r)))
-     (expression power expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :power l r))))
+      (expression plus expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :plus l r)))
+      (expression minus expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :minus l r)))
+      (expression times expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :times l r)))
+      (expression divide expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :divide l r)))
+      (expression power expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :power l r))))
 
     (relational-expression
-     (expression equal expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :equal l r)))
-     (expression not-equal expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :not-equal l r)))
-     (expression lt expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :less-than l r)))
-     (expression gt expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :greater-than l r)))
-     (expression le expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :less-equal l r)))
-     (expression ge expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :greater-equal l r))))
-
-    (logical-expression
-     (expression and expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-logical :and l r)))
-     (expression or expression
-                 (lambda (l _ r) (declare (ignore _)) (fortran-build-logical :or l r)))
-     (not expression
-        (lambda (_ e) (declare (ignore _)) (fortran-build-logical :not e))))
+      (expression equal expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :equal l r)))
+      (expression not-equal expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :not-equal l r)))
+      (expression lt expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :less-than l r)))
+      (expression gt expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :greater-than l r)))
+      (expression le expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :less-equal l r)))
+      (expression ge expression
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :greater-equal l r))))
 
     (condition (expression))
 
-    ;; Keywords
     (keyword
-     (program (constantly :PROGRAM))
-     (subroutine (constantly :SUBROUTINE))
-     (function (constantly :FUNCTION))
-     (end (constantly :END))
-     (return (constantly :RETURN))
-     (stop (constantly :STOP))
-     (call (constantly :CALL))
-     (goto (constantly :GOTO))
-     (if (constantly :IF))
-     (then (constantly :THEN))
-     (else (constantly :ELSE))
-     (do (constantly :DO))
-     (enddo (constantly :ENDDO))
-     (read (constantly :READ))
-     (write (constantly :WRITE))
-     (real-type (constantly :REAL-TYPE))
-     (integer-type (constantly :INTEGER-TYPE))
-     (logical-type (constantly :LOGICAL-TYPE))
-     (character-type (constantly :CHARACTER-TYPE))
-     (complex-type (constantly :COMPLEX-TYPE))
-     (type-spec (constantly :TYPE))
-     (data (constantly :DATA))
-     (parameter (constantly :PARAMETER))
-     (dimension (constantly :DIMENSION))
-     (common (constantly :COMMON))
-     (equivalence (constantly :EQUIVALENCE))
-     (include (constantly :INCLUDE))
-     (while (constantly :WHILE))
-     (until (constantly :UNTIL))
-     (and (constantly :AND))
-     (or (constantly :OR))
-     (not (constantly :NOT))
-     (true (constantly :TRUE))
-     (false (constantly :FALSE)))
+      (program (constantly :PROGRAM))
+      (subroutine (constantly :SUBROUTINE))
+      (function (constantly :FUNCTION))
+      (end (constantly :END))
+      (return (constantly :RETURN))
+      (stop (constantly :STOP))
+      (call (constantly :CALL))
+      (goto (constantly :GOTO))
+      (if (constantly :IF))
+      (then (constantly :THEN))
+      (else (constantly :ELSE))
+      (do (constantly :DO))
+      (enddo (constantly :ENDDO))
+      (read (constantly :READ))
+      (write (constantly :WRITE))
+      (print (constantly :PRINT))
+      (open (constantly :OPEN))
+      (close (constantly :CLOSE))
+      (data (constantly :DATA))
+      (parameter (constantly :PARAMETER))
+      (dimension (constantly :DIMENSION))
+      (common (constantly :COMMON))
+      (equivalence (constantly :EQUIVALENCE))
+      (include (constantly :INCLUDE))
+      (while (constantly :WHILE))
+      (until (constantly :UNTIL))
+      (and (constantly :AND))
+      (or (constantly :OR))
+      (not (constantly :NOT))
+      (true (constantly :TRUE))
+      (false (constantly :FALSE))
+      (class (constantly :CLASS))
+      (method (constantly :METHOD))
+      (instance (constantly :INSTANCE))
+      (new (constantly :NEW))
+      (delete (constantly :DELETE))
+      (invoke (constantly :INVOKE))
+      (super (constantly :SUPER))
+      (self (constantly :SELF))
+      (procedure (constantly :PROCEDURE)))
 
     (lpar (|(| (constantly :LPAR)))
     (rpar (|)| (constantly :RPAR)))
@@ -409,13 +374,12 @@
     (step (step (constantly :STEP)))
 
     (type-spec
-     (real-type (constantly :REAL))
-     (integer-type (constantly :INTEGER))
-     (logical-type (constantly :LOGICAL))
-     (character-type (constantly :CHARACTER))
-     (complex-type (constantly :COMPLEX))))))
+      (real (constantly :REAL))
+      (integer (constantly :INTEGER))
+      (logical (constantly :LOGICAL))
+      (character (constantly :CHARACTER))
+      (complex (constantly :COMPLEX)))))
 
-;; Lexer adapter
 (defun fortran-stream-code (tokens)
   (let ((*fortran-token-location*
           (or *fortran-token-location*
@@ -427,9 +391,7 @@
           (when token
             (return (values (first token) (second token)))))))))
 
-;; Entry point
 (defun parse-fortran (source)
-  "Parse FORTRAN source string to EIGHTBOL AST."
   (let ((*fortran-token-location* nil))
     (handler-case
         (yacc:parse-with-lexer
@@ -443,13 +405,9 @@
                                 (yacc:yacc-parse-error-expected-terminals c))
                :source-line (getf *fortran-token-location* :source-line))))))
 
-;; Type info table for COPY book integration
 (defvar *fortran-type-table* (make-hash-table :test 'equalp)
   "FORTRAN variable type information from COPY books.")
 
 (defun load-fortran-copybook (pathname)
-  "Load FORTRAN type definitions from COPY book file."
   (declare (ignore pathname))
   nil)
-
-(provide 'fortran-parser)

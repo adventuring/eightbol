@@ -61,15 +61,15 @@
     ("==" . :EQUAL-EQUAL)
     ("/=" . :NOT-EQUAL)
     ("<>" . :NOT-EQUAL)
-    ("<" . :LT)
-    (">" . :GT)
-    ("<=" . :LE)
-    (">=" . :GE)
-    ("(" . :LPAREN)
-    (")" . :RPAREN)
-    ("," . :COMMA)
-    (":" . :COLON)
-    ("." . :DOT))
+    ("<" . :LESS-THAN)
+    (">" . :GREATER-THAN)
+    ("<=" . :LESS-EQUAL)
+    (">=" . :GREATER-EQUAL)
+    ("(" . :LEFT-PAREN)
+    (")" . :RIGHT-PAREN)
+    ("," . :|,|)
+    (":" . :|:|)
+    ("." . :|.|))
   "Association list of FORTRAN operators to token symbols.")
 
 (defun fortran-token-type (lexeme)
@@ -83,8 +83,8 @@
      (cdr (assoc lexeme *fortran-keyword-alist* :test #'string-equal)))
     ((assoc lexeme *fortran-operators-alist* :test #'string-equal)
      (cdr (assoc lexeme *fortran-operators-alist* :test #'string-equal)))
-    ((string= lexeme "(") :LPAREN)
-    ((string= lexeme ")") :RPAREN)
+    ((string= lexeme "(") :LEFT-PAREN)
+    ((string= lexeme ")") :RIGHT-PAREN)
     ((string= lexeme ",") :COMMA)
     ((string= lexeme ":") :COLON)
     ((fortran-valid-identifier-p lexeme) :IDENT)
@@ -101,8 +101,8 @@
 
 (defun fortran-lex-line (line)
   "Split LINE into token list of (type value) pairs.
-  Handles quoted strings, operators, and identifiers."
-  (let ((tokens '())
+   Handles quoted strings, operators, and identifiers."
+  (let ((tokens '()))
         (chars (coerce line 'list))
         (i 0))
     (labels ((peek () (nth i chars))
@@ -111,7 +111,7 @@
              (skip-whitespace ()
                (loop while (and (not (eof?))
                                 (find (peek) '(#\Space #\Tab #\Return #\Newline)))
-                     do (next-char)))
+                   do (next-char)))
              (flush-token (start end type)
                (let ((text (coerce (subseq chars start end) 'string)))
                  (unless (zerop (length text))
@@ -159,9 +159,12 @@
                     ((and op2 (string= (concatenate 'string op1 op2) ">="))
                      (next-char)
                      (flush-token (1- i) i :GREATER-OR-EQUAL))
+                    ((string= op1 ",")
+                     (next-char)
+                     (flush-token (1- i) i :COMMA))
                     (t
                      (flush-token (1- i) i :OP)))))))
-       (nreverse tokens))))
+        (nreverse tokens)))
 
 (defun fortran-lex-source (source)
   "Lex complete FORTRAN SOURCE string into token stream."
@@ -170,9 +173,9 @@
       (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
         (unless (or (zerop (length trimmed))
                     (char= #\; (char trimmed 0))
-                    (char= #\' (char trimmed 0)))
+                    (char= #\' (char trimmed 0))))
           (setf all-tokens (nconc all-tokens (fortran-lex-line trimmed))))))
-    all-tokens))
+    all-tokens)
 
 (defun fortran-lex (source)
   "Lex FORTRAN SOURCE string into a token list for YACC."
@@ -180,7 +183,7 @@
 
 (defun fortran-parse-line-prefix (tokens)
   "Parse line number and optional quoted label from start of TOKENS.
-  Returns (values line-number label remaining-tokens)."
+   Returns (values line-number label remaining-tokens)."
   (declare (ignore tokens))
   (values nil nil))
 

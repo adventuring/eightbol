@@ -18,6 +18,7 @@
                :serapeum
                :split-sequence
                :uiop
+               :unix-opts
                :yacc
                )
   :encoding :utf-8
@@ -64,11 +65,11 @@
                                         :depends-on ("basic-parser"))))
 
                          ;; FORTRAN frontend
-                         #+ () (:module "frontend-fortran"
-                                :depends-on ("package" "ast" "grammar-build")
-                                :components ((:file "fortran-lexer")
-                                             (:file "fortran-parser"
-                                              :depends-on ("fortran-lexer"))))
+                         (:module "frontend-fortran"
+                          :depends-on ("package" "ast" "grammar-build")
+                          :components ((:file "fortran-lexer")
+                                       (:file "fortran-parser"
+                                        :depends-on ("fortran-lexer"))))
 
                          ;; Pascal frontend
                          (:module "frontend-pascal"
@@ -76,15 +77,15 @@
                           :components ((:file "pascal-lexer")
                                        (:file "pascal-parser"
                                         :depends-on ("pascal-lexer"))))
-
+                         
                          ;; Lingo frontend
-                         #+ () (:module "frontend-lingo"
-                                :depends-on ("package" "conditions" "ast" "grammar-build")
-                                :components ((:file "lingo-lexer")
-                                             (:file "lingo-parser"
-                                              :depends-on ("lingo-lexer"))
-                                             (:file "lingo-make-parser"
-                                              :depends-on ("lingo-parser"))))
+                         (:module "frontend-lingo"
+                          :depends-on ("package" "conditions" "ast" "grammar-build")
+                          :components ((:file "lingo-lexer")
+                                       (:file "lingo-parser"
+                                        :depends-on ("lingo-lexer"))
+                                       (:file "lingo-make-parser"
+                                        :depends-on ("lingo-parser"))))
 
                          ;; SmallTalk frontend
                          (:module "frontend-smalltalk"
@@ -94,20 +95,20 @@
                                         :depends-on ("smalltalk-lexer"))
                                        (:file "smalltalk-make-parser"
                                         :depends-on ("smalltalk-parser"))))
-
+                         
                          ;; Lua frontend
-                         #+ () (:module "frontend-lua"
-                                :depends-on ("package" "ast" "grammar-build")
-                                :components ((:file "lua-lexer")
-                                             (:file "lua-parser"
-                                              :depends-on ("lua-lexer"))))
+                         (:module "frontend-lua"
+                          :depends-on ("package" "ast" "grammar-build")
+                          :components ((:file "lua-lexer")
+                                       (:file "lua-parser"
+                                        :depends-on ("lua-lexer"))))
 
                          ;; Objective-C frontend
-                         #+ () (:module "frontend-objective"
-                                :depends-on ("package" "ast" "grammar-build")
-                                :components ((:file "objective-lexer")
-                                             (:file "objective-parser"
-                                              :depends-on ("objective-lexer"))))
+                         (:module "frontend-objective"
+                          :depends-on ("package" "ast" "grammar-build")
+                          :components ((:file "objective-lexer")
+                                       (:file "objective-parser"
+                                        :depends-on ("objective-lexer"))))
 
                          ;; Backend modules
                          (:module "backend-6502"

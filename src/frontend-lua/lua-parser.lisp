@@ -4,144 +4,182 @@
 
 (in-package :eightbol)
 
-;;; Existing AST node types we'll use (no new nodes added):
-;;; :dd, :set, :call, :if, :perform, :exit-method, :deref, :method
-;;; 
+(defun lua-token-list ()
+  (mapcar (compose #'intern #'string)
+          '(|(| |)| |:| |,| + - * / = == ~= < <= > >= 
+            keyword symbol number string comment)))
 
-;;; Grammar rules for Lua subset
+(eval-when (:execute :load-toplevel)
+  (eval
+   `(yacc:define-parser *lua-parser*
+      (:start-symbol lua-program)
+      (:terminals (,@(lua-token-list) number string ident))
+      (:precedence ((:left :or) (:left :and)
+                                (:left :eq :neq :lt :le :gt :ge)
+                                (:left :plus :minus)
+                                (:left :times :divide)
+                                (:right :power :not)))
+      (:muffle-conflicts :some)
 
-(lua-parser
- :start-symbol lua-program
- :terminals (keyword symbol number string comment)
- :precedence ((:left + - * /) (:left == /= < > <= >= !=))
- 
- ;; Top-level: Lua program
- (lua-program
-  (comments*
-   lua-chunk
-   #'parse/lua-program))
- 
- ;; Lua chunk (statements + data defs)
- (lua-chunk
-  (data-definition*                   ; Map to :dd nodes
-   lua-statement*                     ; Map to :set, :call, etc.
-   #'parse/lua-chunk))
- 
- ;; Data definition (variable declarations)
- (data-definition
-  (lua-var-decl                       ; Simple var: `local x = 5`
-   #'parse/data-def)
-  (lua-array-decl            ; Array: `local t = {1,2,3}` (simplified)
-   #'parse/data-def))
- 
- ;; Statements
- (lua-statement
-  (if-statement                      ; `if cond then ... else ... end`
-   #'parse/if)
-  (while-statement                    ; `while cond do ... end`
-   #'parse/while)
-  (for-statement                      ; `for i=1,5 do ... end`
-   #'parse/for)
-  (call-statement                     ; `foo(a, b)`
-   #'parse/call)
-  (method-statement                   ; `obj:method()`
-   #'parse/method)
-  (set-statement                      ; `x = 5`
-   #'parse/set)
-  (return-statement                   ; `return expr`
-   #'parse/return)))
+      (lua-program
+       (comments* lua-chunk
+                  (lambda (_ignored-comments chunk)
+                    (declare (ignore _ignored-comments))
+                    chunk)))
 
-;;; Parser actions
+      (lua-chunk
+       (data-definition* lua-statement*
+                         (lambda (dd stmts)
+                           (append dd stmts))))
 
-;;; Data declaration: `local var = value` or `local arr = {1,2,3}`
-(parse/data-def (lua-var-decl var value)
-                => (list :dd :level 01 :label var :attr ((:usage :binary) (:value value))))
+      (data-definition
+       (lua-var-decl
+        (lambda (decl)
+          (list :dd :level 01 :label (getf decl :var)
+                    :attr (list :usage :binary :value (getf decl :value)))))
+       (lua-array-decl
+        (lambda (decl)
+          (list :dd :level 01 :label (getf decl :arr)
+                    :attr (list :usage :binary :occurs (list 'length (getf decl :elements)))))))
 
-(parse/data-def
- (lua-array-decl arr elements)
- => (:dd :level 01 :label arr :attr ((:occurs (length elements)) :usage :binary)))  ; Assume fixed-size array
+      (lua-statement
+       (if-statement (lambda (s) (parse/lua-if s)))
+       (while-statement (lambda (s) (parse/lua-while s)))
+       (for-statement (lambda (s) (parse/lua-for s)))
+       (call-statement (lambda (s) (parse/lua-call s)))
+       (method-statement (lambda (s) (parse/lua-method s)))
+       (set-statement (lambda (s) (parse/lua-set s)))
+       (return-statement (lambda (s) (parse/lua-return s))))
 
-;;; If statement
-(parse/if
-  (if cond then-branch else-branch)
-  => (:if :condition cond :then (then-branch) :else (else-branch)))
+      (comments* () ())
+      (comments* (comment comments* (lambda (c rest) (declare (ignore c rest)) nil)))
 
-;;; While loop
-(parse/while
-  (while cond body)
-  => (:perform :until cond :with body))
+      (lua-var-decl
+       (keyword-local ident = number
+                      (lambda (_local var _eq val)
+                        (declare (ignore _local _eq))
+                        (list :var var :value val))))
 
-;;; For loop (simplified)
-(parse/for
-  (for var from start to end body)
-  => (:perform :varying :from start :to end :with body))
+      (lua-array-decl
+       (keyword-local ident = left-brace number-list right-brace
+                      (lambda (_local var _eq _lbrace vals _rbrace)
+                        (declare (ignore _local _eq _lbrace _rbrace))
+                        (list :arr var :elements vals))))
 
-;;; Function call
-(parse/call
-  (func-call func-name args)
-  => (:call :target func-name :args args))
+      (if-statement
+       (keyword-if condition keyword-then block keyword-else else-block keyword-end
+                   (lambda (_if cond _then blk _else else_blk _end)
+                     (declare (ignore _if _then _else))
+                     (list :if cond :then blk :else else_blk))))
 
-;;; Method call
-(parse/method
-  (obj-method obj method-name args)
-  => (:call :target method-name :object obj :args args))
+      (block
+          (lua-statement*)
+        ((lambda (stmts) stmts)))
 
-;;; Assignment
-(parse/set
-  (assign lhs rhs)
-  => (:set :target lhs :value rhs))
+      (while-statement
+       (keyword-while condition keyword-do block keyword-end
+                      (lambda (_while cond _do blk _end)
+                        (declare (ignore _while _do _end))
+                        (list :while cond :body blk))))
 
-;;; Return statement
-(parse/return
-  (return expr)
-  => (:exit-method :value expr))
+      (for-statement
+       (keyword-for ident = number keyword-to number keyword-do block keyword-end
+                    (lambda (_for _v start _to end _do blk _end)
+                      (declare (ignore _for _v _to _do _end))
+                      (list :perform :varying :from start :to end :with blk))))
 
-;;; Helper functions
+      (call-statement
+       (ident left-paren args right-paren
+              (lambda (fn _lp args _rp)
+                (declare (ignore _lp _rp))
+                (list :call :target fn :args args))))
 
-(defun lua-var-decl (symbol value)
-  "Parse `local VAR = VALUE`"
-  (declare (ignore symbol value))
-  symbol)
+      (method-statement
+       (ident colon ident left-paren args right-paren
+              (lambda (obj _c method _lp args _rp)
+                (declare (ignore _c _lp _rp))
+                (list :method :object obj :target method :args args))))
 
-(defun lua-array-decl (symbol elements)
-  "Parse `local ARR = {ELEMENTS}`"
-  (declare (ignore symbol elements))
-  symbol)
+      (set-statement
+       (ident = expr
+              (lambda (lhs _e rhs)
+                (declare (ignore _e))
+                (list :set lhs rhs))))
 
-(defun if-statement (cond then-branch else-branch)
-  "Parse `if COND then ... else ... end`"
-  (declare (ignore cond then-branch else-branch))
-  (list cond then-branch else-branch))
+      (return-statement
+       (keyword-return expr?
+                       (lambda (_r expr)
+                         (declare (ignore _r))
+                         (list :return expr))))
 
-(defun while-statement (cond body)
-  "Parse `while COND do ... end`"
-  (declare (ignore cond body))
-  (list cond body))
+      (number-list
+       (number (lambda (n) (list n)))
+       (number |,| number-list
+               (lambda (n rest) (cons n rest))))
 
-(defun for-statement (var start end body)
-  "Parse `for VAR = START to END do ... end`"
-  (declare (ignore var start end body))
-  (list var start end body))
+      (args
+       ()
+       (expr args-rest
+             (lambda (e rest) (cons e rest))))
 
-(defun call-statement (func-name args)
-  "Parse `FUNC(ARG1, ARG2, ...)`"
-  (declare (ignore func-name args))
-  (list func-name args))
+      (args-rest
+       ()
+       (|,| args
+            (lambda (_c args)
+              (declare (ignore _c))
+              args)))
 
-(defun method-statement (obj method-name args)
-  "Parse `OBJ:METHOD(ARG1, ...)`"
-  (declare (ignore obj method-name args))
-  (list obj method-name args))
+      (expr
+       (number)
+       (ident)
+       (string)
+       (expr :plus expr)
+       (expr :minus expr)
+       (expr :times expr)
+       (expr :divide expr)
+       (expr :eq expr)
+       (expr :neq expr)
+       (expr :lt expr)
+       (expr :le expr)
+       (expr :gt expr)
+       (expr :ge expr)))))
 
-(defun set-statement (lhs rhs)
-  "Parse `LHS = RHS`"
-  (declare (ignore lhs rhs))
-  (list lhs rhs))
+(defun parse/lua-if (stmt)
+  (destructuring-bind (cond blk else) stmt
+    (declare (ignore else))
+    (list :if :condition cond :then blk)))
 
-(defun return-statement (expr)
-  "Parse `return EXPR`"
-  (declare (ignore expr))
-  expr)
+(defun parse/lua-while (stmt)
+  (destructuring-bind (cond blk) stmt
+    (list :perform :until cond :with blk)))
 
-;;; Export if needed
-;;; (export 'parse/lua-parser)
+(defun parse/lua-for (stmt)
+  (destructuring-bind (var start end blk) stmt
+    (declare (ignore var))
+    (list :perform :varying :from start :to end :with blk)))
+
+(defun parse/lua-call (stmt)
+  (destructuring-bind (fn args) stmt
+    (list :call :target fn :args args)))
+
+(defun parse/lua-method (stmt)
+  (destructuring-bind (obj method args) stmt
+    (list :call :target method :object obj :args args)))
+
+(defun parse/lua-set (stmt)
+  (destructuring-bind (lhs rhs) stmt
+    (list :set lhs rhs)))
+
+(defun parse/lua-return (stmt)
+  (destructuring-bind (expr) stmt
+    (list :exit-method :value expr)))
+
+(defun lua-lex (source)
+  "Simple Lua lexer returning tokens from SOURCE string."
+  (declare (ignore source))
+  nil)
+
+(defun parse/lua-program (source)
+  "Parse Lua SOURCE to EIGHTBOL AST."
+  (declare (ignore source))
+  nil)

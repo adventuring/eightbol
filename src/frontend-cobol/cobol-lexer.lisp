@@ -368,13 +368,11 @@ not greater than previous ~s — must be strictly increasing"
                         (tokenize-line (getf parsed-line :contents))))
                ((comment-line-p parsed-line)
                 (appendf body (cons (list* 'comment (getf parsed-line :contents) parsed-line) nil)))
-               ((copy-line-p parsed-line)
-                (let ((book (parse-copy-line parsed-line)))
-                  (appendf body
-                           (append (cons (list 'comment (format nil "*// START COPYBOOK ~a" book)) nil)
-                                   (append (read-copybook book)
-                                           (cons (list 'comment (format nil "**/ END COPYBOOK ~a" book)) nil)))))
-                (setf parsed-line nil))
+((copy-line-p parsed-line)
+                 (let ((book (parse-copy-line parsed-line)))
+                   (appendf body
+                            (append (read-copybook book)
+                                    nil))))
                (t
                 (mapcar (lambda (token) (appendf body (cons token nil)))
                         (tokenize-line (getf parsed-line :contents))))))

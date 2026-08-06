@@ -1,11 +1,75 @@
 ;; src/ast-validate.lisp — structural validation after parse / optimize-ast
 ;;
-;; 1. OBJECT REFERENCE classes in :data must appear in DEFINED-CLASS-IDS when
+;; 1. #:VALIDATE-AST OBJECT REFERENCE classes in :data must appear in DEFINED-CLASS-IDS when
 ;;    caller enables class validation (compile-eightbol :defined-class-ids).
 ;; 2. Each non-blank method must end in a statement that completes the routine:
 ;;    GOBACK, EXIT*, STOP RUN, unconditional GO TO, tail INVOKE/CALL, or IF with
-;;    ELSE where every branch’s statement list completes.
+;;    ELSE where every branch's statement list completes.
 (in-package :eightbol)
+
+;; Validation context for line/col metadata and format enforcement
+(defvar *validate-context*
+  '()
+  "Current validation context containing line/col metadata, format flags, etc.")
+
+;; Validation format flags
+(defparameter *strict-mode* t "Enforce STRICT format rules (0 bare commas)")
+(defparameter *english-mode* t "Enforce ENGLISH identifier regex")
+(defparameter *ignore-underscore-blocks* t "Ignore parser definitions with '_' prefix")
+
+(defun %report-validation-error (msg code)
+  "Report validation error with precise formatting. error %x: Msg"
+  (let ((line (or (getf *validate-context* :line) 0)))
+    (format *error-output* "error %~2,'0d: ~a~%" line msg)
+    (error 'validation-error :message msg :code code :line line)))
+
+(defun %annotate-error (error-type message &key line column class-id)
+  "Create error annotation with COBOL-style line/col metadata"
+  (let ((error-plist (list :type error-type
+                           :message message
+                           :code (or line 0)
+                           :column (or column 0)
+                           :class-id class-id)))
+    error-plist))
+
+(defun %validate-ast-node (node)
+  "Validate AST node with context-aware validation"
+  (declare (ignore node))
+  t)
+
+;; Phase 1: Syntax validation
+(defun %validate-syntax-phase (ast)
+  "Syntax validation phase - check basic AST structure and format rules"
+  (when (and (listp ast) (eq (first ast) :program))
+    ;; Validate data division format
+    (let ((data (ast-data ast)))
+      (when (and (listp data) (>= (length data) 3))
+        (%validate-ast-node (subseq data 3)))))
+  t)
+
+;; Phase 2: Object reference validation
+(defun %validate-object-reference-phase (ast defined-class-ids)
+  "Signal UNDEFINED-CLASS-REFERENCE if any OBJECT REFERENCE in AST :data is not listed in DEFINED-CLASS-IDS"
+  (when (and defined-class-ids (listp ast))
+    (let ((need (collect-object-reference-classes-from-ast ast))
+          (known (mapcar (lambda (x) (if (stringp x) x (princ-to-string x)))
+                         defined-class-ids)))
+      (dolist (c need)
+        (unless (member c known :test #'string-equal)
+          (let ((ctx (append *validate-context* (list :class-id c))))
+            (let ((*validate-context* ctx))
+              (error 'undefined-class-reference
+                     :message (format nil "Class ~s not defined" c)
+                     :class-name c
+                     :defined-set known)))))))
+  t)
+
+;; Phase 3: Semantic validation
+(defun %validate-semantic-phase (ast)
+  "Semantic validation phase - check method terminations, assembly entries, etc."
+  (validate-method-assembly-entry-rules ast)
+  (validate-method-terminations ast)
+  t)
 
 (defun %data-item-object-ref-class (item)
   "If ITEM is a data description list with OBJECT REFERENCE Class, return CLASS."

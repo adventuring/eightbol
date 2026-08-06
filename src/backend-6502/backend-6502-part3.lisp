@@ -33,13 +33,13 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
              mnemonic (emit-6502-value (third arg0))
              (apply #'slot-symbol (rest arg0)) n))
     (t
-     (emit-6502-load-byte-n out arg0 nil n w)
-     (format out "~%~10Tpha")
      (emit-6502-load-byte-n out arg1 nil n w)
+     (format out "~%~10Tpha")
+     (emit-6502-load-byte-n out arg0 nil n w)
      (format out "~%~
 ~10Ttsx
 ~10T~a $101, x
-~10Tdex
+~10Tinx
 ~10Ttxs"
              mnemonic)
      (setf *6502-x-index-expression* :trash/rithmetic))))

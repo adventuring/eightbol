@@ -4,6 +4,8 @@
 
 (defpackage #:eightbol
   (:use :cl :cl-change-case :yacc :alexandria :serapeum/bundle)
+  (:shadow #:describe)
+  (:import-from :unix-opts #:define-opts #:get-opts #:option #:exit)
   ;;--- Shadow settings -------------------------------------------------------
   (:shadow #:true)
   (:shadowing-import-from :serapeum #:partition #:comment #:occurs)
@@ -52,9 +54,14 @@
                                         ;(frontend-lua:package) -- Lua 5.3 grammar with 16-bit memory limits; memory mgmt→manual :move ops
    :tokenize-lua
    
-   ;; End-to-end compilation helpers (externally invoked)
-   :compile-basic-from-path
-   :compile-lingo-from-path)
+;; End-to-end compilation helpers (externally invoked)
+    :compile-basic-from-path
+    :compile-lingo-from-path
+    ;; Conditions
+    :source-error
+    :copybook-not-found
+    ;; Include path support
+    :include-path)
   
   (:shadowing-import-from :serapeum #:partition #:comment #:occurs)
   (:import-from :split-sequence :split-sequence))
