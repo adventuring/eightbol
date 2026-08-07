@@ -46,12 +46,23 @@
                                        "cobol-copybook"
                                        "frontend-cobol"))
 
-                         ;; COBOL frontend (first, as most mature)
-                         (:module "frontend-cobol"
-                          :depends-on ("package" "conditions" "ast")
-                          :components ((:file "cobol-lexer")
-                                       (:file "cobol-parser"
-                                        :depends-on ("cobol-lexer"))))
+                          ;; COBOL frontend (first, as most mature)
+                          (:module "frontend-cobol"
+                           :depends-on ("package" "conditions" "ast")
+                           :components ((:file "cobol-lexer")
+                                        (:file "cobol-parser"
+                                         :depends-on ("cobol-lexer"))))
+
+                          ;; AGI frontend
+                          (:module "frontend-agi"
+                           :depends-on ("package" "conditions" "ast" "eightbol-compile")
+                           :components ((:file "agi-lexer")
+                                        (:file "agi-parser"
+                                         :depends-on ("agi-lexer"))
+                                        (:file "agi-transpile"
+                                         :depends-on ("agi-parser"))
+                                        (:file "make-parser"
+                                         :depends-on ("agi-parser"))))
 
                          ;; BASIC frontend
                          (:module "frontend-basic"
@@ -78,14 +89,49 @@
                                        (:file "pascal-parser"
                                         :depends-on ("pascal-lexer"))))
                          
-                         ;; Lingo frontend
-                         (:module "frontend-lingo"
-                          :depends-on ("package" "conditions" "ast" "grammar-build")
-                          :components ((:file "lingo-lexer")
-                                       (:file "lingo-parser"
-                                        :depends-on ("lingo-lexer"))
-                                       (:file "lingo-make-parser"
-                                        :depends-on ("lingo-parser"))))
+                          ;; Lingo frontend
+                          (:module "frontend-lingo"
+                           :depends-on ("package" "conditions" "ast" "grammar-build")
+                           :components ((:file "lingo-lexer")
+                                        (:file "lingo-parser"
+                                         :depends-on ("lingo-lexer"))
+                                        (:file "lingo-make-parser"
+                                         :depends-on ("lingo-parser"))))
+
+                          ;; Burgermistress frontend
+                          (:module "frontend-burgermistress"
+                           :depends-on ("package" "ast" "grammar-build")
+                           :components ((:file "burger-lexer")
+                                        (:file "burger-parser"
+                                         :depends-on ("burger-lexer"))))
+
+                          ;; Muddle frontend
+                          (:module "frontend-muddle"
+                           :depends-on ("package" "ast" "grammar-build")
+                           :components ((:file "muddle-lexer")
+                                        (:file "muddle-parser"
+                                         :depends-on ("muddle-lexer"))))
+
+                          ;; SCI frontend
+                          (:module "frontend-sci"
+                           :depends-on ("package" "ast" "grammar-build")
+                           :components ((:file "sci-lexer")
+                                        (:file "sci-parser"
+                                         :depends-on ("sci-lexer"))))
+
+                          ;; SCUMM frontend
+                          (:module "frontend-scumm"
+                           :depends-on ("package" "ast" "grammar-build")
+                           :components ((:file "scumm-lexer")
+                                        (:file "scumm-parser"
+                                         :depends-on ("scumm-lexer"))))
+
+                          ;; ZIL frontend
+                          (:module "frontend-zil"
+                           :depends-on ("package" "ast" "grammar-build")
+                           :components ((:file "zil-lexer")
+                                        (:file "zil-parser"
+                                         :depends-on ("zil-lexer"))))
 
                          ;; SmallTalk frontend
                          (:module "frontend-smalltalk"
@@ -103,14 +149,14 @@
                                        (:file "lua-parser"
                                         :depends-on ("lua-lexer"))))
 
-                         ;; Objective-C frontend
-                         (:module "frontend-objective"
-                          :depends-on ("package" "ast" "grammar-build")
-                          :components ((:file "objective-lexer")
-                                       (:file "objective-parser"
-                                        :depends-on ("objective-lexer"))))
+                          ;; Objective-C frontend
+                          (:module "frontend-objective"
+                           :depends-on ("package" "ast" "grammar-build")
+                           :components ((:file "objective-lexer")
+                                        (:file "objective-parser"
+                                         :depends-on ("objective-lexer"))))
 
-                         ;; Backend modules
+                          ;; Backend modules
                          (:module "backend-6502"
                           :components ((:file "backend-6502-part1")
                                        (:file "backend-6502-part2")
@@ -146,6 +192,11 @@
 
                          ;; Main entry point
                          (:file "main"
-                          :depends-on ("package" "frontend-basic" "frontend-cobol"
-                                                 "eightbol-compile")))))
+                          :depends-on ("package" "frontend-agi" "frontend-basic" "frontend-cobol"
+                                                 "frontend-burgermistress" "frontend-fortran"
+                                                 "frontend-lingo" "frontend-lua"
+                                                 "frontend-muddle" "frontend-objective"
+                                                 "frontend-pascal" "frontend-sci"
+                                                 "frontend-scumm" "frontend-smalltalk"
+                                                 "frontend-zil" "eightbol-compile")))))
   :in-order-to ((test-op :eightbol-test)))

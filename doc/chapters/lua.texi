@@ -1,0 +1,546 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In Lua, variable names use @code{case-sensitive} naming (conventionally @code{snake_case} or @code{camelCase}).
+All keywords are case-sensitive and written in lowercase.
+
+@table @asis
+@item Keywords: and, break, do, else, elseif, end, false, for, function, if, in, local, nil, not, or, repeat, return, then, true, until, while
+@item Operators: +, -, *, /, ^, %, ==, ~=, <, >, <=, >=, and, or, not, # (length)
+@item String delimiters: Double quotes (@code{"..."}), single quotes (@code{'...'}), or long brackets (@code{[==[ ... ]==]})
+@item Comments: Single line starts with @code{--}, block comment @code{--[[ ... --]]}
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+A Lua program consists of statements and function definitions that are executed sequentially unless altered by control flow.
+
+@example
+-- Initialize game
+local score = 0
+local livesLeft = 3
+local currentRoom = 1
+
+local function initializeGame()
+    score = 0
+    livesLeft = 3
+    currentRoom = 1
+end
+
+local function processInput()
+    -- Simulate input handling
+    if love.keyboard.isDown("right") then
+        currentRoom = currentRoom + 10
+    end
+end
+
+local function updateGame()
+    -- Game logic updates
+end
+
+local function renderDisplay()
+    -- Rendering code
+end
+
+initializeGame()
+while not gameOver do
+    processInput()
+    updateGame()
+    renderDisplay()
+end
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+Lua supports object-oriented programming through tables and metatables.
+
+@example
+-- Define a Player class
+Player = {}
+Player.__index = Player
+
+function Player.new(x, y, sprite)
+    local self = setmetatable({}, Player)
+    self.x = x
+    self.y = y
+    self.sprite = sprite
+    return self
+end
+
+function Player:move(dx, dy)
+    self.x = self.x + dx
+    self.y = self.y + dy
+end
+
+-- Create instance
+local player = Player.new(100, 100, 5)
+end
+@end example
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a function that takes no arguments:
+
+@example
+initializeGraphics()
+clearScreen()
+playStartupMusic()
+end
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To call a function that returns a single value:
+
+@example
+score = calculateBonus(level, timeLeft)
+bonusFactor = getInputFactor()
+volume = getMasterVolume()
+end
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in Lua's standard calling convention.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To call a function with parameters:
+
+@example
+drawSprite(spriteId, xPos, yPos)
+playSound(soundId, volume, loopFlag)
+checkCollision(obj1, obj2, resultVar)
+end
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+Lua accesses library routines through standard function calls or object methods:
+
+@example
+loadLevel(levelNumber)          @r{Direct call}
+farProc(libraryAddress)         @r{Far call}
+result = libraryFunction(input) @r{Library function}
+object:method(param1, param2)   @r{Object method call}
+end
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: FunctionName(...)
+@item Far: AbsoluteAddress(...) (via FFI or external module)
+@item Library: LibraryEntry(...) or FunctionName(...)
+@item Object: OBJECT:MethodName(...)
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far procedures in Lua are called using the foreign function interface (FFI) or external modules:
+
+@example
+-- Assume we have a C function farLoadLibrary at address 0x8000
+local ffi = require("ffi")
+ffi.cdef("void farLoadLibrary(uint32_t addr);")
+local farLoadLibrary = ffi.C.farLoadLibrary
+
+farLoadLibrary(0x8000)   @r{Call routine in bank 1}
+end
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: FFI call to absolute address
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in Lua uses the colon syntax:
+
+@example
+player:move(5, 10)
+scoreDisplay:update(score)
+gameState:isGameOver()
+end
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties via table assignment
+@item Far: Not applicable for methods (objects typically in same memory)
+@item Library: Method may call library routines internally
+@item Object: METHOD invocation on object instance
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using the assignment operator (=):
+
+@example
+score = 0                           @r{Explicit assignment}
+livesLeft = 3                       @r{Implicit assignment}
+counter = counter + 1               @r{Increment}
+livesLeft = livesLeft - 1           @r{Decrement}
+score = score + 10                  @r{Arithmetic assignment}
+message = "Hello, World!"           @r{String assignment}
+end
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots (table fields) are assigned using dot or colon notation:
+
+@example
+player.x = 160                      @r{Set object's x coordinate}
+player.y = 100                      @r{Set object's y coordinate}
+player.sprite = 5                   @r{Set sprite number}
+player:setVisible(true)             @r{Set visibility flag}
+end
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+Lua uses tables for arrays. Elements are assigned using index:
+
+@example
+local scoreList = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+local initialsList = {"", "", "", "", "", "", "", "", "", ""}
+local board = {
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0}
+}
+
+scoreList[1] = 100
+initialsList[1] = "ALI"
+board[3][4] = 1
+end
+@end example
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses the + and - operators:
+
+@example
+score = score + 10                    @r{Addition}
+livesLeft = livesLeft - 1             @r{Subtraction}
+total = width + height                @r{Add two variables}
+finalPrice = price - discount         @r{Subtraction}
+delta = newValue - oldValue           @r{Subtraction}
+end
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting for multiplication/division by powers of two is not directly supported in standard Lua.
+Use bit32 library (Lua 5.2+) or external bit library:
+
+@example
+-- Lua 5.2+ bit32 library
+local bit32 = require("bit32")
+result = bit32.lshift(value, 2)   @r{Left shift 2 bits (multiply by 4)}
+result = bit32.rshift(value, 1)   @r{Right shift 1 bit (divide by 2)}
+
+-- Or using external bit library
+local bit = require("bit")
+result = bit.lshift(value, 2)
+result = bit.rshift(value, 1)
+
+-- Or using multiplication/division
+result = value * 4
+result = value / 2
+result = value * 8
+result = value / 16
+end
+@end example
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions follow standard precedence rules:
+
+@example
+total = (baseSalary * 12) + bonus - deductions
+average = (sum1 + sum2 + sum3) / 3.0
+distance = math.sqrt((x2 - x1)^2 + (y2 - y1)^2)
+end
+@end example
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use logical operators and comparison operators:
+
+@example
+if score > 1000 then ...             @r{Greater than}
+if score < 50 then ...               @r{Less than}
+if score == 100 then ...             @r{Equality}
+if score ~= 0 then ...               @r{Inequality}
+if x >= 0 and x < MAX_X then ...     @r{Combined conditions}
+if button == BUTTON_A or button == BUTTON_B then ... @r{Alternative conditions}
+end
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses if/then/else/end blocks:
+
+@example
+if temperature > THOT then
+    status = "HOT"
+elseif temperature > TCOLD then
+    status = "WARM"
+else
+    status = "COLD"
+end
+
+-- Lua does not have a switch statement, but we can use if-elseif-else
+-- or a table dispatch for multi-way branching
+if answer == "Y" or answer == "y" then
+    response = "YES"
+elseif answer == "N" or answer == "n" then
+    response = "NO"
+else
+    response = "INVALID"
+end
+end
+@end example
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using while, repeat, and numeric for loops:
+
+@example
+! Numeric for loop equivalent (known iterations)
+for i = 1, 10 do
+    print("Count: ", i)
+end
+
+! While loop equivalent (pre-test)
+i = 1
+while i <= 10 do
+    print("Count: ", i)
+    i = i + 1
+end
+
+! Repeat loop equivalent (post-test)
+repeat
+    io.write("Continue? (Y/N): ")
+    response = io.read()
+until response:upper() == "Y"
+
+! Generic for loop with iterators
+for i, v in ipairs(array) do
+    print(i, v)
+end
+end
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using break statement:
+
+@example
+! Exit numeric for loop early
+for i = 1, 100 do
+    if array[i] == TARGET_VALUE then
+        print("Found at index: ", i)
+        break                    @r{Exit loop immediately}
+    end
+end
+
+! Skip current iteration in while loop
+while condition do
+    if skipCondition then
+        -- Do nothing, effectively skipping
+    else
+        -- Process
+    end
+end
+
+! Nested loop control
+for i = 1, 10 do
+    for j = 1, 10 do
+        if matrix[i][j] == 0 then
+            break                @r{Exit inner loop only}
+        end
+        -- Process non-zero elements
+    end
+end
+end
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+Lua does not directly call Forth dialogue scripts. Instead, it uses
+its own functions. However, through the semantic-sugar
+layer, Lua commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+! Original Lua code
+if (x > 100) and (x < 200) then
+    showMessage(MSG_WELCOME)
+end
+
+! Desugared via semantic-sugar layer
+if ((x > 100) and (x < 200)) then
+    (:call-acc :target "ShowWelcomeMessage" :using nil)
+end
+end
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+! Direct memory access (mode-dependent)
+-- Assuming direct memory access via pointer
+local videoMemory = ffi.cast("uint8_t*", 0xB8000)
+local offset = (row * 80 + col) * 2
+videoMemory[offset] = tileNum
+videoMemory[offset + 1] = attribute
+
+! Library routine approach
+loadTileSet(tileSetId)
+placeTile(layer, x, y, tileIndex)
+scrollBackground(dx, dy)
+end
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+! Hardware sprite approach (if available)
+initSprites()
+setSpritePosition(spriteId, x, y)
+setSpriteImage(spriteId, imageId)
+showSprite(spriteId, -1)   @r{-1 = visible}
+
+! Software sprite approach
+local sprite = {
+    x = 100,
+    y = 50,
+    frame = 0
+}
+
+sprite.x = 100
+sprite.y = 50
+sprite.frame = (sprite.frame + 1) % 4
+end
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+! Using tables with metatables (classes)
+local GameObject = {}
+GameObject.__index = GameObject
+
+function GameObject.new(x, y, width, height)
+    local self = setmetatable({}, GameObject)
+    self.x = x
+    self.y = y
+    self.width = width
+    self.height = height
+    self.active = true
+    return self
+end
+
+function GameObject:move(dx, dy)
+    self.x = self.x + dx
+    self.y = self.y + dy
+end
+
+! Create instances
+local gameObjects = {}
+for i = 1, 20 do
+    table.insert(gameObjects, GameObject.new(100, 100, 16, 16))
+end
+
+! Update object position
+for _, obj in ipairs(gameObjects) do
+    obj.x = obj.x + dx
+    obj.y = obj.y + dy
+end
+
+! Check active status and draw
+for _, obj in ipairs(gameObjects) do
+    if obj.active then
+        drawObject(obj)
+    end
+end
+end
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following Lua features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (io.open, file:read, file:write, file:close)
+@item Standard libraries beyond basic math and string (unless emulated)
+@item Coroutines (unless using external scheduler)
+@item Debugging facilities (debug library)
+@item Garbage collection manual control (unless via external interface)
+@item Variadic functions and arg table (unless using external interface)
+@item Bitwise operations (unless using bit32 or external library)
+@item UTF-8 string handling (unless using external library)
+@item Dynamic module loading (require) beyond pre-loaded libraries
+@end table
+
+@node Muddle

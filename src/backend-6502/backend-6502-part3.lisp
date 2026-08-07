@@ -107,13 +107,55 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
   (declare (ignore class-id n w))
   (emit-6502-load-expression out expression nil))
 
-(defun emit-6502-load-byte-n-shift-left (out expression class-id n w)
-  (declare (ignore class-id n w))
-  (emit-6502-load-expression out expression nil))
+
 
 (defun emit-6502-load-byte-n-shift-right (out expression class-id n w)
-  (declare (ignore class-id n w))
-  (emit-6502-load-expression out expression nil))
+   (cond
+    ;; Handle numeric literals: compute shifted value literally
+    ((numberp expression)
+     (let* ((value (ash expression (- n))) ; logical right shift (assuming non-negative)
+            (byte-val (ldb (byte 8 (* n 8)) value)))
+       (with-accumulator-value (byte-val)
+         (format out "~%~10Tlda # ~a" byte-val))))
+    ;; Handle simple variable references (bare data names): in-place shift then load byte n
+    ((stringp expression)
+     (let* ((addr (to-identifier expression))
+            (low-addr addr)
+            (high-addr (format nil "~a+1" addr)))
+      ;; In-place shift right by n: repeat n times: lsr [high]; ror [low]
+      (with-accumulator-value (nil)
+        (dotimes (_ n)
+          (format out "~%~10Tlsr ~a" high-addr)
+          (format out "~%~10Tror ~a" low-addr)))
+      ;; Load byte n from the shifted variable
+      (format out "~%~10Tldy # ~a" n)
+      (format out "~%~10Tlda (~a), y" addr)))
+    ;; Fall back to original behavior for complex expressions, slots, etc.
+    (t (emit-6502-load-expression out expression nil))))
+
+(defun emit-6502-load-byte-n-shift-left (out expression class-id n w)
+   (cond
+    ;; Handle numeric literals: compute shifted value literally
+    ((numberp expression)
+     (let* ((value (ash expression n))
+            (byte-val (ldb (byte 8 (* n 8)) value)))
+       (with-accumulator-value (byte-val)
+         (format out "~%~10Tlda # ~a" byte-val))))
+    ;; Handle simple variable references (bare data names): in-place shift then load byte n
+    ((stringp expression)
+     (let* ((addr (to-identifier expression))
+            (low-addr addr)
+            (high-addr (format nil "~a+1" addr)))
+      ;; In-place shift left by n: repeat n times: asl [low], rol [high]
+      (with-accumulator-value (nil)
+        (dotimes (_ n)
+          (format out "~%~10Tasl ~a" low-addr)
+          (format out "~%~10Trol ~a" high-addr)))
+      ;; Load byte n from the shifted variable
+      (format out "~%~10Tldy # ~a" n)
+      (format out "~%~10Tlda (~a), y" addr)))
+    ;; Fall back to original behavior for complex expressions, slots, etc.
+    (t (emit-6502-load-expression out expression nil))))
 
 (defun emit-6502-load-byte-n-bit-and (out expression class-id n w)
   (declare (ignore class-id))

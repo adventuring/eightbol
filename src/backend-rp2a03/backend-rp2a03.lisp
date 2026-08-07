@@ -1,5 +1,5 @@
-;; src/backend-RP2A03.lisp — NES RP2A03 (6502 without decimal mode) code
-;; generation
+;; src/backend-rp2a03/backend-rp2a03.lisp — NES RP2A03 (6502 without decimal
+;; mode) code generation
 ;;
 ;; The RP2A03  is the CPU  in the  Nintendo Entertainment System.  It is
 ;; a 6502  variant that LACKS  decimal mode: the  D flag is  ignored and
@@ -27,6 +27,7 @@
                                       pic-nybble-semantics-table)
         (load-copybook-tables class-id)
       (let ((*output-stream* output-stream)
+            (*standard-output* output-stream)
             (*class-id* class-id)
             (*slot-table* slot-table)
             (*type-table* type-table)
@@ -156,6 +157,26 @@
                 (format nil "\"~a\"" code)
                 (emit-6502-value code)))))
 
+(def-rp2a03-statement :break
+  (declare (ignore ast-node-data))
+  (error "BREAK statement outside of PERFORM loop"))
+
+(def-rp2a03-statement :continue
+  (declare (ignore ast-node-data))
+  (error "CONTINUE statement outside of PERFORM loop"))
+
+(def-rp2a03-statement :call-acc
+  (let* ((target (safe-getf (rest ast-node-data) :target))
+         (bank (safe-getf (rest ast-node-data) :bank)))
+    (cond
+      (bank
+       ;; far call to bank
+       (let ((bank-sym (sym-string bank)))
+         (format *output-stream* "~&~10T.FarJSR ~a, ~a~%" (sym-string target) bank-sym)))
+      (t
+       ;; near call
+       (format *output-stream* "~&~10Tjsr ~a~%" (sym-string target))))))
+
 (def-rp2a03-statement :perform
   (compile-6502-perform *output-stream* (rp2a03-stmt :perform ast-node-data) *class-id*))
 
@@ -163,10 +184,10 @@
   (compile-6502-string-blt *output-stream* (rp2a03-stmt :string-blt ast-node-data) *class-id*))
 
 (def-rp2a03-statement :goto
-  (compile-6502-goto (rp2a03-stmt :goto ast-node-data)))
+  (compile-6502-goto *output-stream* (rp2a03-stmt :goto ast-node-data) *class-id* *method-id*))
 
 (def-rp2a03-statement :paragraph
-  (compile-6502-paragraph (rp2a03-stmt :paragraph ast-node-data)))
+  (compile-6502-paragraph *output-stream* (rp2a03-stmt :paragraph ast-node-data) *class-id* *method-id*))
 
 (def-rp2a03-statement :evaluate
   (compile-6502-evaluate *output-stream* (rp2a03-stmt :evaluate ast-node-data) :rp2a03))

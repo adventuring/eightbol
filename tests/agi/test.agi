@@ -1,0 +1,9 @@
+IF (score > 10) THEN
+    SET (health, health + 5)
+    INCREMENT (lives)
+ELSE
+    DECREMENT (health)
+END-IF
+
+GOSUB (saveGame)
+QUIT

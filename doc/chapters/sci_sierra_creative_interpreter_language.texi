@@ -1,0 +1,531 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In SCI, variable names use @code{case-insensitive} naming (conventionally @code{lowerCase} or @code{upperCase} for globals).
+All keywords are case-insensitive but conventionally written in lowercase.
+
+@table @asis
+@item Keywords: (if), (else), (then), (while), (for), (foreach), (break), (continue), (return), (define), (setq), (set), (get), (put), (call), (proc), (method), (class), (instance), (send), (super), (self), (print), (format), (strcat), (strlen), (substr), (upcase), (downcase), (numtostr), (strtonum), (+), (-), (*), (/), (=), (<>), (<), (>), (<=), (>=), (and), (or), (not)
+@item Operators: Same as keywords for arithmetic and logical operations
+@item String delimiters: Double quotes (@code{"..."}) for strings, single quotes (@code{'...'}) for symbols or characters
+@item Comments: Semicolon (;) to end of line
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+An SCI program consists of procedure and method definitions, and a main entry point that is called by the interpreter.
+
+@example
+; Initialize game
+(define gScore 0)
+(define gLivesLeft 3)
+(define gCurrentRoom 1)
+
+(procedure (InitializeGame)
+  (= gScore 0)
+  (= gLivesLeft 3)
+  (= gCurrentRoom 1)
+)
+
+(procedure (ProcessInput)
+  ; Simulate input handling
+  (if (Said '/?move/?north')
+      (= gCurrentRoom (+ gCurrentRoom 10)))
+)
+
+(procedure (UpdateGame)
+  ; Game logic updates
+)
+
+(procedure (RenderDisplay)
+  ; Rendering code
+)
+
+(instance gGame of Game
+  (properties)
+  (method (init)
+    (InitializeGame)
+    (= gGameOver FALSE)
+    (while (not gGameOver)
+      (ProcessInput)
+      (UpdateGame)
+      (RenderDisplay))
+  )
+)
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+SCI supports object-oriented programming through classes and instances, with methods defined in the class or instance.
+
+@example
+; Define a Player class
+(class CPlayer of BaseViewer
+  (properties
+    x 0
+    y 0
+    sprite 0)
+  (method (init theX theY theSprite)
+    (= x theX)
+    (= y theY)
+    (= sprite theSprite)
+    (super init:))
+  (method (changePos dx dy)
+    (= x (+ x dx))
+    (= y (+ y dy)))
+)
+
+; Create instance
+(instance gPlayer of CPlayer
+  (properties)
+)
+@end example
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a procedure that takes no arguments:
+
+@example
+(InitializeGraphics)
+(ClearScreen)
+(PlayStartupMusic)
+(SomeProcedure)
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To call a procedure that returns a single value (in accumulator):
+
+@example
+(= gScore (CalculateBonus gLevel gTimeLeft))
+(= gBonusFactor (GetInputFactor))
+(= gVolume (GetMasterVolume))
+(SomeFunction)
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in SCI's standard calling convention.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To call a procedure with parameters:
+
+@example
+(DrawSprite gSpriteId gXPos gYPos)
+(PlaySound gSoundId gVolume gLoopFlag)
+(CheckCollision gObj1 gObj2 gResultVar)
+(SomeProcedure Param1 Param2)
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+SCI accesses library routines through standard procedure calls or object methods:
+
+@example
+(LoadLevel gLevelNumber)          @r{Direct call}
+(FarProc gLibraryAddress)         @r{Far call}
+(= gResult (LibraryFunction gInput)) @r{Library function}
+(Send gObject 'Method gParam1 gParam2)  @r{Object method call}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: ProcedureName(...)
+@item Far: AbsoluteAddress(...) (via external interface)
+@item Library: LibraryEntry(...) or FunctionName(...)
+@item Object: Send OBJECT 'Method ...
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far procedures in SCI are called using the FarProc kernel call or through
+the export/import mechanism:
+
+@example
+; Declare far procedure
+(export FarLoadLibrary from "farproc")
+
+; Call far routine
+(FarProc FarLoadLibrary #x8000)   @r{Call routine in bank 1}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: FarProc kernel call
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in SCI uses the send keyword:
+
+@example
+(Send gPlayer 'changePos 5 10)
+(Send gScoreDisplay 'update gScore)
+(= gGameOver (Send gGameState 'isGameOver))
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties via direct assignment
+@item Far: Not applicable for methods (objects typically in same memory)
+@item Library: Method may call library routines internally
+@item Object: Send OBJECT 'Method ...
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using setq or set:
+
+@example
+(setq gScore 0)                     @r{Explicit assignment}
+(setq gLivesLeft 3)                 @r{Implicit assignment}
+(setq gCounter (1+ gCounter))       @r{Increment}
+(setq gLivesLeft (1- gLivesLeft))   @r{Decrement}
+(setq gScore (+ gScore 10))         @r{Arithmetic assignment}
+(setq gMessage "Hello, World!")     @r{String assignment}
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots (properties) are assigned using setq or set with property access:
+
+@example
+(setq gPlayer:x 160)                @r{Set object's x coordinate}
+(setq gPlayer:y 100)                @r{Set object's y coordinate}
+(setq gPlayer:sprite 5)             @r{Set sprite number}
+(setq gPlayer:visible TRUE)         @r{Set visibility flag}
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+SCI uses lists and arrays. Elements are assigned using setq or set with accessor:
+
+@example
+(define gScoreList (CreateArray 10 0))
+(define gInitialsList (CreateArray 10 ""))
+(define gBoard (CreateArray 8 8 0))
+
+(= (ArrayGet gScoreList 0) 100)
+(= (ArrayGet gInitialsList 0) "ALI")
+(= (ArrayGet gBoard 2 3) 1)
+@end example
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses the + and - kernel calls:
+
+@example
+(= gScore (+ gScore 10))                  @r{Addition}
+(= gLivesLeft (- gLivesLeft 1))           @r{Subtraction}
+(= gTotal (+ gWidth gHeight))             @r{Add two variables}
+(= gFinalPrice (- gPrice gDiscount))      @r{Subtraction}
+(= gDelta (- gNewValue gOldValue))        @r{Subtraction}
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting for multiplication/division by powers of two uses the << and >> operators (via * and / with powers of two):
+
+@example
+(= gResult (* gValue 4))                  @r{Left shift 2 bits (multiply by 4)}
+(= gResult (/ gValue 2))                  @r{Right shift 1 bit (divide by 2)}
+(= gResult (* gValue 8))                  @r{Multiply by 8}
+(= gResult (/ gValue 16))                 @r{Divide by 16}
+; Or using bitwise operators if available (not standard in SCI)
+@end example
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions follow standard precedence rules:
+
+@example
+(= gTotal (+ (* gBaseSalary 12) gBonus (- gDeductions)))
+(= gAverage (/ (+ gSum1 gSum2 gSum3) 3.0))
+(= gDistance (sqrt (+ (sqr (- gX2 gX1)) (sqr (- gY2 gY1)))))
+@end example
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use logical operators and comparison operators:
+
+@example
+(if (> gScore 1000) ...)                 @r{Greater than}
+(if (< gScore 50) ...)                   @r{Less than}
+(if (= gScore 100) ...)                  @r{Equality}
+(if (<> gScore 0) ...)                   @r{Inequality}
+(if (and (>= gX 0) (< gX gMAX_X)) ...)   @r{Combined conditions}
+(if (or (= gButton gBUTTON_A) (= gButton gBUTTON_B)) ...) @r{Alternative conditions}
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses if/then/else blocks:
+
+@example
+(if (> gTemperature gTHOT)
+    (setq gStatus "HOT")
+  (elseif (> gTemperature gTCOLD)
+    (setq gStatus "WARM")
+  (else
+    (setq gStatus "COLD"))
+  )
+
+; SCI does not have a built-in case statement, but we can use if/elseif/else/endif
+(if (or (= gAnswer "Y") (= gAnswer "y"))
+    (print "YES")
+  (elseif (or (= gAnswer "N") (= gAnswer "n"))
+    (print "NO")
+  (else
+    (print "INVALID"))
+  )
+@end example
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using while, for, and foreach loops:
+
+@example
+; while loop equivalent (pre-test)
+(= gI 1)
+(while (<= gI 10)
+    (Printf "Count: %d" gI)
+    (= gI (+ gI 1))
+)
+
+; for loop equivalent (known iterations)
+(for gI 1 10
+    (Printf "Count: %d" gI)
+)
+
+; foreach loop equivalent (for lists)
+(foreach gElem gList
+    (Printf "%s" gElem)
+)
+
+; Loop with break and continue
+(= gI 1)
+(while (<= gI 100)
+    (if (= (ListGet gArray gI) gTARGET_VALUE)
+        (progn
+          (Printf "Found at index: %d" gI)
+          (break)))   @r{Exit loop immediately}
+    (if (< (ListGet gArray gI) 0)
+        (continue))   @r{Skip to next iteration}
+    ; Process positive values
+    (= gI (+ gI 1))
+)
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using break and continue statements:
+
+@example
+Exit while loop early
+(= gI 1)
+(while (<= gI 100)
+    (if (= (ListGet gArray gI) gTARGET_VALUE)
+        (progn
+          (Printf "Found at index: %d" gI)
+          (break)))   @r{Exit loop immediately}
+    (= gI (+ gI 1))
+)
+
+; Skip current iteration
+(= gI 1)
+(while (<= gI 100)
+    (if (< (ListGet gArray gI) 0)
+        (continue))   @r{Skip to next iteration}
+    ; Process non-negative values
+    (= gI (+ gI 1))
+)
+
+; Nested loop control
+(= gI 1)
+(while (<= gI 10)
+    (= gJ 1)
+    (while (<= gJ 10)
+        (if (= (ListGet (ListGet gMatrix gI) gJ) 0)
+            (break))   @r{Exit inner loop only}
+        ; Process non-zero elements
+        (= gJ (+ gJ 1))
+    )
+    (= gI (+ gI 1))
+)
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+SCI does not directly call Forth dialogue scripts. Instead, it uses
+its own procedures. However, through the semantic-sugar
+layer, SCI commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+; Original SCI code
+(if (and (> gX 100) (< gX 200))
+    (ShowMessage gMSG_WELCOME)
+  )
+
+; Desugared via semantic-sugar layer
+(if (and (> gX 100) (< gX 200))
+    (:call-acc :target "ShowWelcomeMessage" :using nil)
+  )
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+; Direct memory access (mode-dependent)
+; Assuming direct memory access via pointer
+(= gVideoMemory #xb8000)
+(= gOffset (* (+ (* gRow 80) gCol) 2))
+(= (Peek gVideoMemory gOffset) gTileNum)
+(= (Peek gVideoMemory (+ gOffset 1)) gAttribute)
+
+; Library routine approach
+(LoadTileSet gTILESET_ID)
+(PlaceTile gLAYER gX gY gTILE_INDEX)
+(ScrollBackground gDX gDY)
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+; Hardware sprite approach (if available)
+(InitSprites)
+(SetSpritePosition gSPRITE_ID gX gY)
+(SetSpriteImage gSPRITE_ID gIMAGE_ID)
+(ShowSprite gSPRITE_ID -1)   @r{-1 = visible}
+
+; Software sprite approach
+; Define a sprite structure
+(struct sprite
+  (x 0)
+  (y 0)
+  (frame 0)
+)
+
+; Create instance
+(= gSprite (new sprite x 100 y 50 frame 0))
+
+; Update
+(= gSprite:x 100)
+(= gSprite:y 50)
+(= gSprite:frame (mod (+ gSprite:frame 1) 4))
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+; Define a game object class
+(class CGameObject of BaseViewer
+  (properties
+    x 0
+    y 0
+    width 0
+    height 0
+    active #t)
+  (method (init theX theY theWidth theHeight)
+    (= x theX)
+    (= y theY)
+    (= width theWidth)
+    (= height theHeight)
+    (= active #t)
+    (super init:))
+  (method (move dx dy)
+    (= x (+ x dx))
+    (= y (+ y dy)))
+)
+
+; Create instances
+(define gGameObjects (CreateArray 20))
+(= (ArrayGet gGameObjects 0) (new CGameObject x 100 y 100 width 16 height 16))
+
+; Update object position
+(= gI 0)
+(while (< gI 20)
+    (Send (ArrayGet gGameObjects gI) 'move gDX gDY)
+    (= gI (+ gI 1))
+)
+
+; Check active status and draw
+(= gI 0)
+(while (< gI 20)
+    (if (Send (ArrayGet gGameObjects gI) 'isActive)
+        (DrawObject (ArrayGet gGameObjects gI)))
+    (= gI (+ gI 1))
+)
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following SCI features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (Fopen, Fread, Fwrite, Fclose)
+@item Graphics commands (DrawPic, Animate, ShowPic, etc.)
+@item Hardware-specific features (Joystick, Mouse, Keyboard beyond basic)
+@item Extended memory handling (unless emulated)
+@item Multithreading or concurrent execution
+@item Exception handling (unless via external interface)
+@item Pointer arithmetic and manual memory management
+@item Preprocessor directives (#define, #ifdef)
+@item Object-oriented multiple inheritance (unless using external library)
+@item Sound and music commands (unless using external library)
+@end table
+
+@node SCUMM

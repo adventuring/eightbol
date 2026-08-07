@@ -12,7 +12,7 @@
 ;;
 ;; Statement nodes:
 ;;   (:move       :from expr :to identifier)
-;;   (:invoke     :object expr :method "Kill" [:returning identifier])
+;;   (:invoke     :object expr :method "Kill" [:returning identifier] [:using expr])
 ;;   (:call-acc :target name :bank bank-or-nil)
 ;;   (:if         :condition cond :then stmts :else stmts)
 ;;   (:goto       :target identifier)          ; GOTO/GO TO; GOBACK equivalent
@@ -26,7 +26,7 @@
 ;;   (:subtract   :from expr :from-target identifier)
 ;;   (:subtract   :from expr :from-target expr :giving identifier)
 ;;   (:compute    :target identifier :expression expr)
-;;   (:perform    :procedure name [:times expr] [:until cond] [:varying ...])
+;;   (:perform    :procedure name [:times expr] [:until cond] [:varying ...] [:body stmts])
 ;;   (:set        :target identifier :value expr)
 ;;   (:log-fault  :code dword-expr)
 ;;   (:debug-break :code expr)

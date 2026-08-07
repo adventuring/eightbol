@@ -1,0 +1,567 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In SmallTalk, variable names use @code{case-sensitive} naming (conventionally @code{camelCase} for variables and @code{UpperCamelCase} for classes).
+All keywords are case-sensitive and written in lowercase.
+
+@table @asis
+@item Keywords: self, super, true, false, nil, thisContext, ifTrue:, ifFalse:, ifTrue:ifFalse:, whileTrue:, whileFalse:, timesRepeat:, to:do:, to:by:do:
+@item Operators: +, -, *, /, //, \\, =, ~=, >, <, >=, <=, and, or, not
+@item String delimiters: Single quotes (@code{'...'}) for strings, double quotes (@code{"..."}) for comments
+@item Comments: Double quotes (@code{"..."}) to end of line
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+A SmallTalk program consists of class definitions and method definitions, and is executed by sending messages to objects.
+
+@example
+! Initialize game !
+| score livesLeft currentRoom |
+score := 0.
+livesLeft := 3.
+currentRoom := 1.
+
+GameState new
+    initializeGame;
+    [
+        gameOver not
+    ] whileTrue: [
+        self processInput.
+        self updateGame.
+        self renderDisplay.
+    ].
+
+! Define GameState class !
+Object subclass: #GameState
+    instanceVariableNames: 'score livesLeft currentRoom gameOver'
+    classVariableNames: ''
+    poolDictionaries: ''
+    category: 'Phantasia-Game' !
+
+! Methods !
+GameState>>initializeGame
+    score := 0.
+    livesLeft := 3.
+    currentRoom := 1.
+    gameOver := false.
+
+GameState>>processInput
+    "Simulate input handling"
+    (self keyPressed: #rightArrow) ifTrue: [
+        currentRoom := currentRoom + 10.
+    ].
+
+GameState>>updateGame
+    "Game logic updates".
+
+GameState>>renderDisplay
+    "Rendering code".
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+SmallTalk is purely object-oriented; all computation is done by sending messages to objects.
+
+@example
+! Define Player class !
+Object subclass: #Player
+    instanceVariableNames: 'x y sprite'
+    classVariableNames: ''
+    poolDictionaries: ''
+    category: 'Phantasia-Game' !
+
+Player>>initialize
+    super initialize.
+    x := 0.
+    y := 0.
+    sprite := 0.
+
+Player>>moveDX:dx dy:dy
+    x := x + dx.
+    y := y + dy.
+! End !
+
+! Create instance !
+| player |
+player := Player new.
+player initialize.
+player moveDX: 5 dy: 10.
+@end example
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To send a message that takes no arguments:
+
+@example
+initializeGraphics.
+clearScreen.
+playStartupMusic.
+someObject someMessage.
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To send a message that returns a single value:
+
+@example
+| score bonusFactor volume |
+score := someObject calculateBonus: level withTimeLeft: timeLeft.
+bonusFactor := someObject getInputFactor.
+volume := someObject getMasterVolume.
+someObject someMessage.
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in SmallTalk's standard calling convention.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To send a message with parameters:
+
+@example
+someObject drawSprite: spriteId atX: xPos andY: yPos.
+someObject playSound: soundId withVolume: volume andLoopFlag: loopFlag.
+someObject checkCollision: obj1 with: obj2 puttingResultIn: resultVar.
+someObject someMessageWithParam1: param1 andParam2: param2.
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+SmallTalk accesses library routines through standard message sends:
+
+@example
+someObject loadLevel: levelNumber.          @r{Direct call}
+someObject farProc: libraryAddress.         @r{Far call}
+| result |
+result := someObject libraryFunction: input. @r{Library function}
+someObject someObject: param1 with: param2.   @r{Object method call}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: OBJECT messageName
+@item Far: OBJECT farProc: address
+@item Library: OBJECT libraryFunction: input
+@item Object: OBJECT someMessage:param1 with:param2
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far procedures in SmallTalk are called using external interfaces or through
+the foreign function interface (if available):
+
+@example
+! Assume we have a C function farLoadLibrary at address 0x8000 !
+| farLoadLibrary |
+farLoadLibrary := ExternalFunction
+    returnType: #void
+    parameterTypes: #( #unsignedInt )
+    module: 'farproc'
+    function: #farLoadLibrary.
+
+farLoadLibrary value: 16r8000.   @r{Call routine in bank 1}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: External function call
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in SmallTalk is done by sending messages:
+
+@example
+player moveDX: 5 dy: 10.
+score-display update: score.
+game-state isGameOver.
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties via setter messages
+@item Far: Not applicable for methods (objects typically in same memory)
+@item Library: Method may call library routines internally
+@item Object: METHOD invocation on object instance
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using the assignment operator (:=):
+
+@example
+| score livesLeft counter message |
+score := 0.                           @r{Explicit assignment}
+livesLeft := 3.                       @r{Implicit assignment}
+counter := counter + 1.               @r{Increment}
+livesLeft := livesLeft - 1.           @r{Decrement}
+score := score + 10.                  @r{Arithmetic assignment}
+message := 'Hello, World!'.           @r{String assignment}
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots (instance variables) are assigned via setter messages or direct access (if allowed):
+
+@example
+player x: 160.                          @r{Set object's x coordinate}
+player y: 100.                          @r{Set object's y coordinate}
+player sprite: 5.                       @r{Set sprite number}
+player visible: true.                   @r{Set visibility flag}
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+SmallTalk uses Array and other collections. Elements are assigned using at:put: or similar:
+
+@example
+| scoreList initialsList board |
+scoreList := Array new: 10.
+initialsList := Array new: 10.
+board := Array new: 8.
+1 to: 8 do: [ :i | board at: i put: (Array new: 8) ].
+
+scoreList at: 1 put: 100.
+initialsList at: 1 put: 'ALI'.
+(board at: 3) at: 4 put: 1.
+@end example
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses the + and - operators:
+
+@example
+score := score + 10.                  @r{Addition}
+livesLeft := livesLeft - 1.           @r{Subtraction}
+| total |
+total := width + height.              @r{Add two variables}
+| finalPrice |
+finalPrice := price - discount.       @r{Subtraction}
+| delta |
+delta := newValue - oldValue.         @r{Subtraction}
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting for multiplication/division by powers of two is not directly supported in standard SmallTalk.
+Use arithmetic shift or external libraries:
+
+@example
+| result |
+result := value bitShift: 2.          @r{Left shift 2 bits (multiply by 4)}
+result := value bitShift: -1.         @r{Right shift 1 bit (divide by 2)}
+result := value * 4.                  @r{Multiply by 4}
+result := value / 2.                  @r{Divide by 2}
+result := value * 8.                  @r{Multiply by 8}
+result := value / 16.                 @r{Divide by 16}
+@end example
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions follow standard precedence rules:
+
+@example
+| total average distance |
+total := (baseSalary * 12) + bonus - deductions.
+average := (sum1 + sum2 + sum3) / 3.0.
+distance := ((x2 - x1) squared + (y2 - y1) squared) sqrt.
+@end example
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use logical operators and comparison operators:
+
+@example
+(score > 1000) ifTrue: [ ... ].              @r{Greater than}
+(score < 50) ifTrue: [ ... ].                @r{Less than}
+(score = 100) ifTrue: [ ... ].               @r{Equality}
+(score ~= 0) ifTrue: [ ... ].                @r{Inequality}
+((x >= 0) and: [ x < MAX_X ]) ifTrue: [ ... ] @r{Combined conditions}
+((button = BUTTON_A) or: [ button = BUTTON_B ]) ifTrue: [ ... ] @r{Alternative conditions}
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses ifTrue:/ifFalse: and ifTrue:ifFalse: messages:
+
+@example
+(temperature > THOT)
+    ifTrue: [ status := 'HOT' ]
+    ifFalse: [
+        (temperature > TCOLD)
+            ifTrue: [ status := 'WARM' ]
+            ifFalse: [ status := 'COLD' ]
+    ].
+
+(answer = 'Y') or: [ answer = 'y' ] ifTrue: [ response := 'YES' ] ifFalse: [
+    (answer = 'N') or: [ answer = 'n' ]
+        ifTrue: [ response := 'NO' ]
+        ifFalse: [ response := 'INVALID' ]
+].
+@end example
+
+SmallTalk does not have an EXAMINE/COND structure; the ifTrue:/ifFalse: messages serve
+a similar purpose for conditional execution, and nested conditionals can handle multi-way branching.
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using whileTrue:, whileFalse:, timesRepeat:, and to:do: messages:
+
+@example
+! whileTrue: loop equivalent (pre-test) !
+| i |
+i := 1.
+[ i <= 10 ] whileTrue: [
+    'Count: ', i asString printNl.
+    i := i + 1.
+].
+
+! timesRepeat: loop equivalent (known iterations) !
+10 timesRepeat: [ | i |
+    'Count: ', i asString printNl.
+    i := i + 1. ].
+
+! to:do: loop equivalent (known iterations) !
+1 to: 10 do: [ :i |
+    'Count: ', i asString printNl.
+].
+
+! Loop with break and continue (using a flag) !
+| i breakFlag |
+i := 1.
+breakFlag := false.
+[ i <= 100 ] whileTrue: [
+    ( (scoreList at: i) = TARGET_VALUE )
+        ifTrue: [
+            'Found at index: ', i asString printNl.
+            breakFlag := true.
+        ].
+    breakFlag ifFalse: [
+        ( (scoreList at: i) < 0 )
+            ifTrue: [ ]   @r{Skip to next iteration}
+            ifFalse: [
+                'Processing positive value: ', (scoreList at: i) asString printNl.
+            ].
+    ].
+    i := i + 1.
+] whileFalse: [ breakFlag ].
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using a flag or by returning from a block:
+
+@example
+Exit whileTrue: loop early
+| i |
+i := 1.
+[ i <= 100 ] whileTrue: [
+    ( (scoreList at: i) = TARGET_VALUE )
+        ifTrue: [
+            'Found at index: ', i asString printNl.
+            ^ self   @r{Exit loop immediately (by returning from enclosing method)}
+        ].
+    i := i + 1.
+].
+
+! Skip current iteration !
+| i |
+i := 1.
+[ i <= 100 ] whileTrue: [
+    ( (scoreList at: i) < 0 )
+        ifTrue: [ ]   @r{Skip to next iteration}
+        ifFalse: [
+            'Processing non-negative value: ', (scoreList at: i) asString printNl.
+        ].
+    i := i + 1.
+].
+
+! Nested loop control !
+| i j |
+i := 1.
+[ i <= 10 ] whileTrue: [
+    j := 1.
+    [ j <= 10 ] whileTrue: [
+        ( (matrix at: i) at: j ) = 0
+            ifTrue: [ ^ self ]   @r{Exit inner loop only (by returning from enclosing method)}
+        ].
+    j := j + 1.
+].
+    i := i + 1.
+].
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+SmallTalk does not directly call Forth dialogue scripts. Instead, it uses
+its own methods. However, through the semantic-sugar
+layer, SmallTalk commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+! Original SmallTalk code !
+| x |
+x := 150.
+( (x > 100) and: [ x < 200 ] )
+    ifTrue: [ self showMessage: MSG_WELCOME ] .
+
+! Desugared via semantic-sugar layer !
+( (x > 100) and: [ x < 200] )
+    ifTrue: [ (:call-acc :target "ShowWelcomeMessage" :using nil) ] .
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+! Direct memory access (mode-dependent) !
+| videoMemory offset tileNum attribute |
+videoMemory := 16rB8000 asSmallInt.
+offset := ((row * 80) + col) * 2.
+tileNum := 42.
+attribute := 7.
+(videoMemory byteAt: offset) put: tileNum.
+(videoMemory byteAt: offset + 1) put: attribute.
+
+! Library routine approach !
+someObject loadTileSet: tileSetId.
+someObject placeTile: layer atX: x atY: y tileIndex: tileIndex.
+someObject scrollBackground: dx by: dy.
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+! Hardware sprite approach (if available) !
+someObject initSprites.
+someObject setSpritePosition: spriteId atX: x atY: y.
+someObject setSpriteImage: spriteId to: imageId.
+someObject showSprite: spriteId withVisibility: -1.   @r{-1 = visible}
+
+! Software sprite approach !
+| sprite |
+sprite := Dictionary new.
+sprite at: #x put: 100.
+sprite at: #y put: 50.
+sprite at: #frame put: 0.
+
+sprite at: #x put: 100.
+sprite at: #y put: 50.
+sprite at: #frame put: ((sprite at: #frame) + 1) \\ 4.
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+! Using classes !
+Object subclass: #GameObject
+    instanceVariableNames: 'x y width height active'
+    classVariableNames: ''
+    poolDictionaries: ''
+    category: 'Phantasia-Game' !
+
+GameObject>>initialize
+    super initialize.
+    x := 0.
+    y := 0.
+    width := 0.
+    height := 0.
+    active := true.
+
+GameObject>>moveDX:dx dy:dy
+    x := x + dx.
+    y := y + dy.
+
+! Create instances !
+| gameObjects |
+gameObjects := Array new: 20.
+1 to: 20 do: [ :i |
+    | obj |
+    obj := GameObject new.
+    obj initialize.
+    obj x: 100; y: 100; width: 16; height: 16.
+    gameObjects at: i put: obj
+].
+
+! Update object position !
+gameObjects do: [ :obj |
+    obj moveDX: dx dy: dy
+].
+
+! Check active status and draw !
+gameObjects do: [ :obj |
+    obj active ifTrue: [ self drawObject: obj ]
+].
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following SmallTalk features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (FileStream read/write)
+@item Graphics commands (Graphics context: display, drawLine, etc.)
+@item Hardware-specific features (joystick, mouse, keyboard beyond basic)
+@item Extended memory handling (unless emulated)
+@item Multithreading or concurrent execution (unless using Semaphore or Monitor)
+@item Exception handling (Signal, Responder, etc.)
+@item Pointer arithmetic and manual memory management
+@item Preprocessor directives (#define, #ifdef)
+@item Object-oriented multiple inheritance (unless using traits or mixins)
+@item Just-In-Time compilation (unless using external VM)
+@end table
+
+@node ZIL

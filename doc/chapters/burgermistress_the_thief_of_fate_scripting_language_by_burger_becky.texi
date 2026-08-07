@@ -1,0 +1,500 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In Burgermistress, variable names use @code{lowerCamelCase} (e.g., @code{playerScore}, @code{currentRoom}).
+Function names use @code{UpperCamelCase} (e.g., @code{LoadLogic}, @code{MovePlayer}).
+All keywords are case-insensitive but conventionally written in lowercase.
+
+@table @asis
+@item Keywords: if, else, then, endif, while, wend, for, to, step, next, do, loop, until, exit, sub, end sub, function, end function, call, return, gosub, return
+@item Operators: +, -, *, /, ^, =, <>, <, >, <=, >=, and, or, not
+@item String delimiters: Double quotes (@code{"..."}) or single quotes (@code{'...'})
+@item Comments: Remainder of line after @code{//} or @code{#}
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+A Burgermistress program consists of statements executed sequentially unless altered by control flow statements.
+Programs may include SUB and FUNCTION procedures for modular code organization.
+
+@example
+' --- Initialize game ---
+playerScore = 0
+playerLives = 3
+currentRoom = 1
+
+while playerLives > 0
+    gosub ProcessInput
+    gosub UpdateGame
+    gosub RenderDisplay
+wend
+
+end
+
+sub ProcessInput
+    input "Command> "; command$
+    return
+end sub
+
+sub UpdateGame
+    if command$ = "MOVE NORTH" then currentRoom = currentRoom + 10
+    end sub
+
+sub RenderDisplay
+    cls
+    print "You are in room "; currentRoom
+    return
+end sub
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+Burgermistress supports object-oriented programming through user-defined types and procedure pointers.
+
+@example
+Type GameObject
+    x As Integer
+    y As Integer
+    sprite As Integer
+End Type
+
+Dim Shared player As GameObject
+
+Sub MovePlayer(dx As Integer, dy As Integer)
+    player.x = player.x + dx
+    player.y = player.y + dy
+End Sub
+@end example
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a SUB procedure or function that takes no arguments:
+
+@example
+Call InitializeGraphics
+Call ClearScreen
+Call PlayStartupMusic
+End Sub
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To call a function that returns a single value:
+
+@example
+score = CalculateBonus(level, time_left)
+ifactor = GetInputFactor()
+volume = GetMasterVolume()
+End Sub
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in Burgermistress's standard calling convention.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To call a SUB procedure with parameters:
+
+@example
+Call DrawSprite(sprite_id, x_pos, y_pos)
+Call PlaySound(sound_id, volume, loop_flag)
+Call CheckCollision(obj1, obj2, result_var)
+End Sub
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+Burgermistress accesses library routines through standard CALL statements or function invocations:
+
+@example
+Call LoadLevel(level_number)          @r{Direct call}
+Call FarProc(library_address)         @r{Far call}
+result = LibraryFunction(input)       @r{Library function}
+Object.Method param1, param2          @r{Object method call}
+End Sub
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: CALL ProcedureName(...)
+@item Far: CALL AbsoluteAddress(...)
+@item Library: CALL LibraryEntry(...) or FunctionName(...)
+@item Object: OBJECT.MethodName(...)
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far procedures in Burgermistress are called using absolute addresses or through
+DECLARE statements that specify the memory bank:
+
+@example
+Declare Sub FarLoadLIBRARY Segment
+Call FarLoadLIBRARY(&H8000)         @r{Call routine in bank 1}
+End Sub
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: CALL AbsoluteAddress or Declare Sub ... Segment
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in Burgermistress uses dot notation on user-defined types:
+
+@example
+Type SpriteObject
+    x As Integer
+    y As Integer
+    Declare Sub Draw ()
+End Type
+
+Dim Shared player As SpriteObject
+
+player.Draw                     @r{Invoke object method}
+player.x = 100                  @r{Set object property}
+End Sub
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties
+@item Far: Not applicable for methods
+@item Library: Draw method may call library routines
+@item Object: METHOD invocation on object instance
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using the LET keyword (optional) or direct assignment:
+
+@example
+Let score = 0                   @r{Explicit assignment}
+lives = 3                       @r{Implicit assignment}
+counter% = counter% + 1         @r{Integer variable}
+message$ = "Hello, World!"      @r{String variable}
+End Sub
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots (properties of user-defined types) are assigned using dot notation:
+
+@example
+player.x = 160                  @r{Set player's x coordinate}
+player.y = 100                  @r{Set player's y coordinate}
+player.sprite = 5               @r{Set player's sprite number}
+player.visible = -1             @r{Set visibility flag (TRUE)}
+End Sub
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+Array elements are assigned using parentheses for indexing:
+
+@example
+Dim scores(10) As Integer       @r{Declare array of 11 integers}
+Dim names$(5) As String         @r{Declare array of 6 strings}
+Dim board(8,8) As Integer       @r{Declare 2D array}
+
+scores(0) = 100                 @r{Set first element}
+names$(1) = "Alice"             @r{Set second element}
+board(3,4) = 1                  @r{Set matrix element}
+End Sub
+@end example
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses standard infix operators:
+
+@example
+score = score + 10              @r{Addition}
+lives = lives - 1               @r{Subtraction}
+total = (width * height) + depth @r{Combined operations}
+delta = new_value - old_value   @r{Subtraction}
+End Sub
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting operations for multiplication/division by powers of two:
+
+@example
+result = value << 2             @r{Multiply by 4 (value * 2^2)}
+result = value >> 1             @r{Divide by 2 (value \ 2^1)}
+result = value << 3             @r{Multiply by 8}
+result = value >> 4             @r{Divide by 16}
+End Sub
+@end example
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions follow standard precedence rules:
+
+@example
+total = (base_salary * 12) + bonus - deductions
+average = (sum1 + sum2 + sum3) / 3
+distance = Sqr((x2 - x1)^2 + (y2 - y1)^2)
+End Sub
+@end example
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use standard comparison operators:
+
+@example
+If score > 1000 Then ...        @r{Greater than}
+If score < 50 Then ...          @r{Less than}
+If score = 100 Then ...         @r{Equality}
+If score <> 0 Then ...          @r{Inequality}
+If (x >= 0) And (x < MAX_X) Then ... @r{Combined conditions}
+If (button = BUTTON_A) Or (button = BUTTON_B) Then ... @r{Alternative conditions}
+End Sub
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses IF/THEN/ELSE/ENDIF blocks:
+
+@example
+If temperature > THOT Then
+    status$ = "HOT"
+ElseIf temperature > TCold Then
+    status$ = "WARM"
+Else
+    status$ = "COLD"
+EndIf
+
+Select Case answer
+    Case "Y", "y"
+        Print "Yes"
+    Case "N", "n"
+        Print "No"
+    Case Else
+        Print "Invalid response"
+End Select
+End Sub
+@end example
+
+Burgermistress does not have an EXAMINE/COND structure; SELECT CASE serves
+a similar purpose for multi-way branching.
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using FOR/NEXT, WHILE/WEND, and DO/LOOP constructs:
+
+@example
+' FOR/NEXT loop (known iterations)
+For i = 0 To 9 Step 1
+    Print "Count:"; i
+Next i
+
+' WHILE/WEND loop (pre-test)
+While Not Eof(1)
+    Line Input #1, line$
+    Print line$
+Wend
+
+' DO/LOOP UNTIL (post-test)
+Do
+    Input "Continue? (Y/N) "; response$
+Loop Until Ucase$(response$) = "Y"
+
+' DO/LOOP WHILE (pre-test variant)
+Do While Not game_over
+    Call ProcessFrame
+Loop
+End Sub
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using EXIT FOR, EXIT DO, or EXIT WHILE:
+
+@example
+' Exit FOR loop early
+For i = 0 To 100
+    If array(i) = TARGET_VALUE Then
+        Print "Found at index:"; i
+        Exit For                    @r{Exit loop immediately}
+    End If
+Next i
+
+' Exit DO loop early
+Do
+    Input "Command> "; cmd$
+    If cmd$ = "QUIT" Then
+        Exit Do                     @r{Exit loop immediately}
+    End If
+    Call ProcessCommand(cmd$)
+Loop
+
+' Nested loop control
+OUTER: For i = 1 To 10
+    INNER: For j = 1 To 10
+        If matrix(i,j) = 0 Then
+            Exit Inner              @r{Exit inner loop only}
+        End If
+    Next j
+Next i
+End Sub
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+Burgermistress does not directly call Forth dialogue scripts. Instead, it uses
+its own internal procedures. However, through the semantic-sugar
+layer, Burgermistress commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+' Original Burgermistress code
+If (x > 100) And (x < 200) Then
+    Call ShowMessage(MSG_WELCOME)
+End If
+
+' Desugared via semantic-sugar layer
+If ((x > 100) And (x < 200)) Then
+    (:call-acc :target "ShowWelcomeMessage" :using nil)
+End If
+End Sub
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+' Direct memory access (mode-dependent)
+Def Seg = &HB800                @r{Set segment to video memory}
+Poke (offset * 2), tile_num     @r{Set tile number}
+Poke ((offset * 2) + 1), attr   @r{Set tile attribute}
+
+' Library routine approach
+Call LoadTileSet(tileset_id)
+Call PlaceTile(layer, x, y, tile_index)
+Call ScrollBackground(dx, dy)
+End Sub
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+' Hardware sprite approach (if available)
+Call InitSprites
+Call SetSpritePosition(sprite_id, x, y)
+Call SetSpriteImage(sprite_id, image_id)
+Call ShowSprite(sprite_id, -1)   @r{-1 = visible}
+
+' Software sprite approach
+Dim sprite_x(10) As Integer
+Dim sprite_y(10) As Integer
+Dim sprite_frame(10) As Integer
+
+sprite_x(i) = 100
+sprite_y(i) = 50
+sprite_frame(i) = (sprite_frame(i) + 1) Mod 4
+End Sub
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+' Using user-defined types
+Type GameObject
+    x As Integer
+    y As Integer
+    width As Integer
+    height As Integer
+    active As Integer
+End Type
+
+Dim objects(20) As GameObject
+
+' Initialize object
+objects(i).x = 100
+objects(i).y = 100
+objects(i).width = 16
+objects(i).height = 16
+objects(i).active = -1   @r{TRUE}
+
+' Update object position
+objects(i).x = objects(i).x + dx
+objects(i).y = objects(i).y + dy
+
+' Check active status
+If objects(i).active Then
+    Call DrawObject(objects(i))
+End If
+End Sub
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following Burgermistress features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (OPEN, CLOSE, INPUT#, PRINT#)
+@item Graphics commands (LINE, CIRCLE, PAINT, GET, PUT)
+@item Hardware-specific features (JOYSTICK, PEN, LIGHTPEN)
+@item Extended memory handling (EMM, XMS)
+@item Multithreading or concurrent execution
+@item Exception handling (ON ERROR RESUME NEXT)
+@item Pointer arithmetic and manual memory management
+@item Preprocessor directives (#DEFINE, #IFDEF)
+@item Operator overloading
+@item Generics or templates
+@end table
+
+@node COBOL

@@ -1,0 +1,571 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In Pascal, variable names use @code{case-insensitive} naming (conventionally @code{CamelCase} or @code{snake_case}).
+All keywords are case-insensitive but conventionally written in lowercase.
+
+@table @asis
+@item Keywords: and, array, begin, case, const, destructor, division, do, downto, else, end, file, for, function, goto, if, implementation, in, label, mod, nil, not, object, of, or, packed, procedure, program, record, repeat, set, shl, shr, string, then, to, type, unit, until, uses, var, while, with, xor
+@item Operators: +, -, *, /, div, mod, =, <>, <, >, <=, >=, and, or, not, <<, >>
+@item String delimiters: Single quotes (@code{'...'}) or double quotes (@code{"..."}) for string literals
+@item Comments: Curly braces (@code{@{ ... @}) or (* ... *) or // to end of line
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+A Pascal program consists of a program heading, optional uses clause, block of declarations and statements.
+
+@example
+program GameLogic;
+
+uses
+  SysUtils;
+
+var
+  Score: Integer = 0;
+  LivesLeft: Integer = 3;
+  CurrentRoom: Integer = 1;
+
+procedure InitializeGame;
+begin
+  Score := 0;
+  LivesLeft := 3;
+  CurrentRoom := 1;
+end;
+
+procedure ProcessInput;
+var
+  Input: string;
+begin
+  ReadLn(Input);
+  if Input = 'MOVE NORTH' then
+    CurrentRoom := CurrentRoom + 10;
+end;
+
+procedure UpdateGame;
+begin
+  // Game logic updates
+end;
+
+procedure RenderDisplay;
+begin
+  // Rendering code
+end;
+
+begin
+  InitializeGame;
+  while LivesLeft > 0 do
+  begin
+    ProcessInput;
+    UpdateGame;
+    RenderDisplay;
+  end;
+end.
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+Pascal supports object-oriented programming through classes and methods.
+
+@example
+type
+  TPlayer = class
+  private
+    FX: Integer;
+    FY: Integer;
+    FSprite: Integer;
+  public
+    constructor Create(X, Y, Sprite: Integer);
+    procedure Move(DX, DY: Integer);
+    property X: Integer read FX write FX;
+    property Y: Integer read FY write FY;
+    property Sprite: Integer read FSprite write FSprite;
+  end;
+
+constructor TPlayer.Create(X, Y, Sprite: Integer);
+begin
+  inherited Create;
+  FX := X;
+  FY := Y;
+  FSprite := Sprite;
+end;
+
+procedure TPlayer.Move(DX, DY: Integer);
+begin
+  FX := FX + DX;
+  FY := FY + DY;
+end;
+
+var
+  Player: TPlayer;
+
+begin
+  Player := TPlayer.Create(100, 100, 5);
+  // Use player
+end.
+@end example
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a procedure or function that takes no arguments:
+
+@example
+InitializeGraphics;
+ClearScreen;
+PlayStartupMusic;
+SomeProcedure;
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To call a function that returns a single value:
+
+@example
+Score := CalculateBonus(Level, TimeLeft);
+BonusFactor := GetInputFactor;
+Volume := GetMasterVolume;
+SomeFunction;
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in Pascal's standard calling convention.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To call a procedure with parameters:
+
+@example
+DrawSprite(SpriteId, XPos, YPos);
+PlaySound(SoundId, Volume, LoopFlag);
+CheckCollision(Obj1, Obj2, ResultVar);
+SomeProcedure(Param1, Param2);
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+Pascal accesses library routines through standard procedure/function calls or object methods:
+
+@example
+LoadLevel(LevelNumber);          @r{Direct call}
+FarProc(LibraryAddress);         @r{Far call}
+Result := LibraryFunction(Input); @r{Library function}
+Object.Method(Param1, Param2);   @r{Object method call}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: ProcedureName(...) or FunctionName(...)
+@item Far: AbsoluteAddress(...) (via external unit)
+@item Library: LibraryEntry(...) or FunctionName(...)
+@item Object: OBJECT.MethodName(...)
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far procedures in Pascal are called using external units or the absolute directive:
+
+@example
+// Declare far procedure
+procedure FarLoadLibrary(Addr: LongWord); external 'farproc' name 'FarLoadLibrary';
+
+// Call far routine
+FarLoadLibrary($8000);   @r{Call routine in bank 1}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: External procedure call
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in Pascal uses dot notation:
+
+@example
+Player.Move(5, 10);
+ScoreDisplay.Update(Score);
+GameOver := GameState.IsGameOver;
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties via property assignment
+@item Far: Not applicable for methods (objects typically in same memory)
+@item Library: Method may call library routines internally
+@item Object: METHOD invocation on object instance
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using the assignment operator (:=):
+
+@example
+Score := 0;                           @r{Explicit assignment}
+LivesLeft := 3;                       @r{Implicit assignment}
+Counter := Counter + 1;               @r{Increment}
+LivesLeft := LivesLeft - 1;           @r{Decrement}
+Score := Score + 10;                  @r{Arithmetic assignment}
+Message := 'Hello, World!';           @r{String assignment}
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots (properties) are assigned using property assignment:
+
+@example
+Player.X := 160;                      @r{Set object's x coordinate}
+Player.Y := 100;                      @r{Set object's y coordinate}
+Player.Sprite := 5;                   @r{Set sprite number}
+Player.Visible := True;               @r{Set visibility flag}
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+Array elements are assigned using indexing:
+
+@example
+var
+  ScoreList: array[0..9] of Integer;
+  InitialsList: array[0..9] of string;
+  Board: array[0..7, 0..7] of Integer;
+
+begin
+  ScoreList[0] := 100;
+  InitialsList[0] := 'ALI';
+  Board[2][3] := 1;
+end.
+@end example
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses the + and - operators:
+
+@example
+Score := Score + 10;                  @r{Addition}
+LivesLeft := LivesLeft - 1;           @r{Subtraction}
+Total := Width + Height;              @r{Add two variables}
+FinalPrice := Price - Discount;       @r{Subtraction}
+Delta := NewValue - OldValue;         @r{Subtraction}
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting for multiplication/division by powers of two uses the shl and shr operators:
+
+@example
+Result := Value shl 2;                @r{Left shift 2 bits (multiply by 4)}
+Result := Value shr 1;                @r{Right shift 1 bit (divide by 2)}
+Result := Value * 4;                  @r{Multiply by 4}
+Result := Value div 2;                @r{Divide by 2}
+Result := Value * 8;                  @r{Multiply by 8}
+Result := Value div 16;               @r{Divide by 16}
+@end example
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions follow standard precedence rules:
+
+@example
+Total := (BaseSalary * 12) + Bonus - Deductions;
+Average := (Sum1 + Sum2 + Sum3) / 3.0;
+Distance := Sqrt(Sqr(X2 - X1) + Sqr(Y2 - Y1));
+@end example
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use logical operators and comparison operators:
+
+@example
+if Score > 1000 then ...              @r{Greater than}
+if Score < 50 then ...                @r{Less than}
+if Score = 100 then ...               @r{Equality}
+if Score <> 0 then ...                @r{Inequality}
+if (X >= 0) and (X < MAX_X) then ...  @r{Combined conditions}
+if (Button = BUTTON_A) or (Button = BUTTON_B) then ... @r{Alternative conditions}
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses if/then/else/end blocks:
+
+@example
+if Temperature > THOT then
+  Status := 'HOT'
+else if Temperature > TCOLD then
+  Status := 'WARM'
+else
+  Status := 'COLD';
+
+case Answer of
+  'Y', 'y': Response := 'YES';
+  'N', 'n': Response := 'NO';
+  else    Response := 'INVALID';
+end;
+@end example
+
+Pascal does not have an EXAMINE/COND structure; case statement serves
+a similar purpose for multi-way branching.
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using for, while, and repeat-until loops:
+
+@example
+// for loop equivalent (known iterations)
+for I := 1 to 10 do
+  Writeln('Count: ', I);
+
+// while loop equivalent (pre-test)
+I := 1;
+while I <= 10 do
+begin
+  Writeln('Count: ', I);
+  Inc(I);
+end;
+
+// repeat-until loop equivalent (post-test)
+repeat
+  Write('Continue? (Y/N): ');
+  ReadLn(Response);
+until UpCase(Response) = 'Y';
+
+// for loop with break and continue
+for I := 1 to 100 do
+begin
+  if Array[I] = TARGET_VALUE then
+  begin
+    Writeln('Found at index: ', I);
+    Break;                    @r{Exit loop immediately}
+  end;
+  if Array[I] < 0 then
+    Continue;                 @r{Skip to next iteration}
+  // Process positive values
+end;
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using Break and Continue statements:
+
+@example
+Exit for loop early
+for I := 1 to 100 do
+begin
+  if Array[I] = TARGET_VALUE then
+  begin
+    Writeln('Found at index: ', I);
+    Break;                    @r{Exit loop immediately}
+  end;
+end;
+
+// Skip current iteration
+for I := 1 to 100 do
+begin
+  if Array[I] < 0 then
+    Continue;                 @r{Skip to next iteration}
+  // Process non-negative values
+end;
+
+// Nested loop control
+for I := 1 to 10 do
+begin
+  for J := 1 to 10 do
+  begin
+    if Matrix[I][J] = 0 then
+      Break;                @r{Exit inner loop only}
+    // Process non-zero elements
+  end;
+end;
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+Pascal does not directly call Forth dialogue scripts. Instead, it uses
+its own procedures. However, through the semantic-sugar
+layer, Pascal commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+// Original Pascal code
+if (X > 100) and (X < 200) then
+  ShowMessage(MSG_WELCOME);
+
+// Desugared via semantic-sugar layer
+if ((X > 100) and (X < 200)) then
+  (:call-acc :target "ShowWelcomeMessage" :using nil);
+end;
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+// Direct memory access (mode-dependent)
+// Assuming direct memory access via pointer
+var
+  VideoMemory: Pointer;
+  Offset: Integer;
+begin
+  VideoMemory := Ptr($B8000);
+  Offset := (Row * 80 + Col) * 2;
+  PByteArray(VideoMemory)^[Offset] := TileNum;
+  PByteArray(VideoMemory)^[Offset + 1] := Attribute;
+end;
+
+// Library routine approach
+LoadTileSet(TileSetId);
+PlaceTile(Layer, X, Y, TileIndex);
+ScrollBackground(DX, DY);
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+// Hardware sprite approach (if available)
+InitSprites;
+SetSpritePosition(SpriteId, X, Y);
+SetSpriteImage(SpriteId, ImageId);
+ShowSprite(SpriteId, -1);   @r{-1 = visible}
+
+// Software sprite approach
+type
+  TSprite = record
+    X, Y, Frame: Integer;
+  end;
+
+var
+  Sprite: TSprite;
+
+begin
+  Sprite.X := 100;
+  Sprite.Y := 50;
+  Sprite.Frame := 0;
+
+  Sprite.X := 100;
+  Sprite.Y := 50;
+  Sprite.Frame := (Sprite.Frame + 1) mod 4;
+end.
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+// Using classes
+type
+  TGameObject = class
+  private
+    FX, FY: Integer;
+    FWidth, FHeight: Integer;
+    FActive: Boolean;
+  public
+    constructor Create(X, Y, Width, Height: Integer);
+    procedure Move(DX, DY: Integer);
+    property X: Integer read FX write FX;
+    property Y: Integer read FY write FY;
+    property Width: Integer read FWidth write FWidth;
+    property Height: Integer read FHeight write FHeight;
+    property Active: Boolean read FActive write FActive;
+  end;
+
+constructor TGameObject.Create(X, Y, Width, Height: Integer);
+begin
+  inherited Create;
+  FX := X;
+  FY := Y;
+  FWidth := Width;
+  FHeight := Height;
+  FActive := True;
+end;
+
+procedure TGameObject.Move(DX, DY: Integer);
+begin
+  FX := FX + DX;
+  FY := FY + DY;
+end;
+
+var
+  GameObjects: array[0..19] of TGameObject;
+  I: Integer;
+
+begin
+  for I := 0 to 19 do
+    GameObjects[I] := TGameObject.Create(100, 100, 16, 16);
+  for I := 0 to 19 do
+  begin
+    GameObjects[I].Move(DX, DY);
+    if GameObjects[I].Active then
+      DrawObject(GameObjects[I]);
+  end;
+end.
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following Pascal features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (assign, reset, rewrite, close, read, write)
+@item Graphics commands (Graph unit: line, circle, floodfill, etc.)
+@item Hardware-specific features (joystick, mouse, keyboard beyond basic)
+@item Extended memory handling (unless emulated)
+@item Multithreading or concurrent execution
+@item Exception handling (try, except, finally, raise)
+@item Pointer arithmetic and manual memory management
+@item Preprocessor directives ($define, $ifdef)
+@item Object-oriented multiple inheritance (unless using interfaces)
+@item Generics and anonymous methods (unless using modern Pascal)
+@end table
+
+@node SCI

@@ -70,10 +70,9 @@
       
       (if-statement
        (keyword-if condition keyword-then block keyword-else else-block keyword-end
-                   (lambda (_i cond _t blk _e else-block  _end)
+                   (lambda (_i cond _t blk _e else-block _end)
                      (declare (ignore _i _t _e _end))
-                     (list :if cond :then blk :else else-blocks
-                           e))))
+                     (list :if cond :then blk :else else-block))))
       
       (block
           (objective-statement*)

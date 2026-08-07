@@ -48,19 +48,26 @@
                               (:file "numeric-precision-tests"
                                :depends-on ("eightbol-tests"))
                               (:file "lua-parser-tests"
-                               :depends-on ("eightbol-tests")))))
+                                :depends-on ("eightbol-tests"))
+                              (:file "frontend-lexer-parser-tests"
+                                :depends-on ("eightbol-tests")))))
   :perform (asdf:test-op (o c)
-                          (let ((suites '(:eightbol :backend-matrix :ast-optimize
-                                          :backend-output :parser-structure
-                                          :compile-regression :copybook-generation
-                                          :service-bank-lut :backend-cp1610
-                                          :backend-z80 :backend-operand-kinds
-                                          :backend-f8 :backend-6502-classification
-                                          :expression-constant :numeric-precision
-                                          :numeric-precision-all-backends
-                                          :pic-1-bit :s-decimal
-                                          :eightbol-cp1610-6502-parity
-                                          :dartmouth-basic-parity)))
+                           (let ((suites '(:eightbol :backend-matrix :ast-optimize
+                                           :backend-output :parser-structure
+                                           :compile-regression :copybook-generation
+                                           :service-bank-lut :backend-cp1610
+                                           :backend-z80 :backend-operand-kinds
+                                           :backend-f8 :backend-6502-classification
+                                           :expression-constant :numeric-precision
+                                           :numeric-precision-all-backends
+                                           :pic-1-bit :s-decimal
+                                           :eightbol-cp1610-6502-parity
+                                           :dartmouth-basic-parity
+                                           :frontend-lexers :frontend-parsers
+                                           :lexer-consistency :parser-error-handling
+                                           :ast-node-construction :lexer-performance
+                                           :cross-frontend-consistency :keyword-coverage
+                                           :parser-integration)))
                             (dolist (suite suites)
                               (format t "~&;; Running suite ~s...~%" suite)
                                (funcall (intern "RUN!" :fiveam) suite)))))

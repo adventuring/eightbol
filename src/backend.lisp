@@ -518,7 +518,7 @@ Class name string (e.g. @code{\"Course\"}), or @code{*CLASS-ID*} for Self."
                "Course")
              (when (or (string-equal name "Current-Actor")
                        (string-equal name "CurrentActor"))
-               "Actor")
+               "Character")
              (error "Unable to find reference class for ~a: ~s" symbol var)))))))
 
 (defun slot-table-origin-lookup (name symbol)
@@ -527,6 +527,23 @@ Class name string (e.g. @code{\"Course\"}), or @code{*CLASS-ID*} for Self."
 When the parser emits @code{Class-Global-Name} and the copybook row is @code{Global-Name}
 under Phantasia-Globals, stripping the @code{*CLASS-ID*} prefix finds the same row."
   (slot-class symbol name))
+
+(defun %service-bank-paired-name (name)
+  "Swap a trailing X/Y axis suffix (e.g. @code{ServiceMoveDecalX} ↔ @code{ServiceMoveDecalY}).
+
+@table @asis
+@item NAME
+Service label, possibly ending in @code{X} or @code{Y}.
+@end table
+
+@subsection Outputs
+Paired name string, or NIL when NAME does not end in @code{X}/@code{Y}."
+  (let* ((s (if (stringp name) name (princ-to-string name)))
+         (len (length s)))
+    (when (plusp len)
+      (let ((last (char s (1- len))))
+        (cond ((char-equal last #\X) (concatenate 'string (subseq s 0 (1- len)) "Y"))
+              ((char-equal last #\Y) (concatenate 'string (subseq s 0 (1- len)) "X")))))))
 
 (defun service-bank-table-lookup (name)
   "Resolve bank symbol for service NAME from @code{*service-bank-table*}.
@@ -542,7 +559,20 @@ Assembly-style service label (e.g. @code{ServiceMoveDecalY}) or COBOL form.
 Bank symbol string (e.g. @code{BankAnimation}), or NIL."
   (when (zerop (hash-table-count *service-bank-lut*))
     (build-service-bank-lut-from-banks))
-  (gethash name *service-bank-lut*))
+  (flet ((get1 (key)
+           (and key (or (gethash key *service-bank-table*)
+                        (gethash key *service-bank-lut*)))))
+    (or (get1 name)
+        (get1 (cobol-slot-table-name-key name))
+        (get1 (%service-bank-paired-name name)))))
+
+(defun %pascal-case-preserving-acronym (word)
+  "Like @code{cl-change-case:pascal-case} but leaves multi-letter, all-uppercase
+WORDs (acronyms, e.g. @code{ID}) unchanged instead of lower-casing the tail."
+  (if (and (> (length word) 1)
+           (every #'upper-case-p (remove-if-not #'alpha-char-p word)))
+      word
+      (pascal-case word)))
 
 (defun cobol-constant-to-assembly-symbol (name)
   "Map COBOL 77/78 constant name to assembly (no class prefix).
@@ -564,9 +594,9 @@ Assembly symbol string suitable after @code{# } in immediates or as an equate la
     (let ((groups (remove-if (lambda (g) (zerop (length (string-trim " " g))))
                              (cl-ppcre:split "--" s))))
       (if (null groups)
-          (pascal-case s)
+          (cobol-hyphenated-to-pascal-concat s)
           (format nil "~{~a~^_~}"
-                  (mapcar #'pascal-case groups))))))
+                  (mapcar #'cobol-hyphenated-to-pascal-concat groups))))))
 
 (defun cobol-global-data-name-to-assembly-symbol (name)
   "Map bare COBOL data name (globals, WORKING-STORAGE) to assembly without class prefix.
@@ -600,8 +630,8 @@ Single assembly-safe symbol string."
   (let ((s (string-trim " " (if (stringp name) name (format nil "~a" name)))))
     (if (find #\- s)
         (apply #'concatenate 'string
-               (mapcar #'pascal-case (split-sequence #\- s :remove-empty-subseqs t)))
-        (pascal-case s))))
+               (mapcar #'%pascal-case-preserving-acronym (split-sequence #\- s :remove-empty-subseqs t)))
+        (%pascal-case-preserving-acronym s))))
 
 (defun implicit-instance-slot-p (slot-name class-id)
   "True when SLOT-NAME is an instance field of CLASS-ID per @code{*slot-table*} origin.
@@ -902,8 +932,10 @@ fractional digits is widened (shifted left by 4 bits per digit) to match the oth
         (and dr (>= dr df) (>= dr dt)
              (<= (- dr df) 12)
              (<= (- dr dt) 12))
-        ;; Either operand can be scaled up to match the other
-        (<= (abs (- df dt)) 12))))
+        ;; No GIVING: to-op is both operand and destination; its own scale
+        ;; cannot be narrowed, so it must already have >= fractional digits
+        ;; than the addend (from can be widened up to match to-op).
+        (and (>= dt df) (<= (- dt df) 12)))))
 
 (defun pic-decimal-binary-subtract-scaling-supported-p (giving minuend subtrahend)
   "True when misaligned implied-decimal SUBTRACT can use widen-only binary scaling.
@@ -935,6 +967,11 @@ Generalized Boolean."
   "True when CPU shares the 6502-family backend that implements widen-only PIC decimal ADD/SUBTRACT."
   (member cpu '(:6502 :rp2a03 :65c02 :65c816 :huc6280 :cp1610 :z80) :test #'eq))
 
+(defun %cpu-strictly-6502-family-p (cpu)
+  "True for true 6502-family CPUs (BCD/binary widen-only rule); excludes cp1610/Z80,
+which use a more general runtime shift and are not restricted to widening-only."
+  (member cpu '(:6502 :rp2a03 :65c02 :65c816 :huc6280) :test #'eq))
+
 (defun %operand-scaling-allowed-p (cpu expression)
   "True when EXPRESSION can be V-scale adjusted on CPU (BINARY on 6502; any on cp1610/Z80)."
   (if (member cpu '(:cp1610 :z80) :test #'eq)
@@ -948,21 +985,23 @@ Generalized Boolean."
 cp1610/Z80 allow both BINARY and DECIMAL. Other CPUs signal @code{backend-error}."
   (let ((result (or giving to-op)))
     (and (add-picture-decimal-scales-mismatch-p giving result from to-op)
-         (not (and (%cpu-has-6502-pic-decimal-scaling-p cpu)
-                   (%operand-scaling-allowed-p cpu from)
-                   (%operand-scaling-allowed-p cpu to-op)
-                   (%operand-scaling-allowed-p cpu result)
-                   (pic-decimal-binary-add-scaling-supported-p giving from to-op))))))
+         (not (or (member cpu '(:cp1610 :z80) :test #'eq)
+                  (and (%cpu-strictly-6502-family-p cpu)
+                       (%operand-scaling-allowed-p cpu from)
+                       (%operand-scaling-allowed-p cpu to-op)
+                       (%operand-scaling-allowed-p cpu result)
+                       (pic-decimal-binary-add-scaling-supported-p giving from to-op)))))))
 
 (defun pic-decimal-subtract-scales-uncompiled-on-this-cpu-p (cpu giving minuend subtrahend)
   "True when SUBTRACT has mismatched implied-decimal scales and CPU cannot emit correct widen-only code."
   (let ((result (or giving minuend)))
     (and (subtract-picture-decimal-scales-mismatch-p giving result subtrahend minuend)
-         (not (and (%cpu-has-6502-pic-decimal-scaling-p cpu)
-                   (%operand-scaling-allowed-p cpu minuend)
-                   (%operand-scaling-allowed-p cpu subtrahend)
-                   (%operand-scaling-allowed-p cpu result)
-                   (pic-decimal-binary-subtract-scaling-supported-p giving minuend subtrahend))))))
+         (not (or (member cpu '(:cp1610 :z80) :test #'eq)
+                  (and (%cpu-strictly-6502-family-p cpu)
+                       (%operand-scaling-allowed-p cpu minuend)
+                       (%operand-scaling-allowed-p cpu subtrahend)
+                       (%operand-scaling-allowed-p cpu result)
+                       (pic-decimal-binary-subtract-scaling-supported-p giving minuend subtrahend)))))))
 
 (defun assert-pic-decimal-add-compiled (cpu stmt)
   "Signal @code{backend-error} when STMT is ADD with misaligned PIC decimals this CPU cannot compile.
@@ -1073,6 +1112,9 @@ Integer byte count at least 1."
                 (max (rec (getf (rest e) :multiplier)) (rec (getf (rest e) :by))))
                ((eql :divide (first e))
                 (max (rec (getf (rest e) :numerator)) (rec (getf (rest e) :denominator))))
+               ((member (first e)
+                        '(:add-expr :subtract-expr :multiply-expr :divide-expr))
+                (max (rec (second e)) (rec (third e))))
                ((member (first e)
                         '(:shift-left :shift-right :bit-and :bit-or :bit-xor))
                 (max (rec (second e)) (rec (third e))))

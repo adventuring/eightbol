@@ -813,7 +813,7 @@
 
 (test multiply/error-non-power-of-two
    "MULTIPLY by non-power-of-two signals error"
-   (signs eightbol::backend-error
+   (signals eightbol::backend-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:multiply :from "A" :by 3)))
        "T" :cp1610
@@ -822,7 +822,7 @@
 
 (test multiply/error-decimal-operands
    "MULTIPLY with USAGE DECIMAL operands signals error"
-   (signs eightbol::backend-error
+   (signals eightbol::backend-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:multiply :from "A" :by 2)))
        "T" :cp1610
@@ -831,7 +831,7 @@
 
 (test divide/error-non-power-of-two
    "DIVIDE by non-power-of-two signals error"
-   (signs eightbol::backend-error
+   (signals eightbol::backend-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:divide :from "A" :into 3)))
        "T" :cp1610
@@ -840,7 +840,7 @@
 
 (test divide/error-decimal-operands
    "DIVIDE with USAGE DECIMAL operands signals error"
-   (signs eightbol::backend-error
+   (signals eightbol::backend-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:divide :from "A" :into 2)))
        "T" :cp1610

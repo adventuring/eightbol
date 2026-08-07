@@ -1,0 +1,254 @@
+@chapter ABI Formats and Assembler Syntax
+
+@cindex ABI
+@cindex assembler syntax
+@cindex register usage
+
+Every back end follows the same calling convention: a single value is
+passed in the machine's first register and returned in the same
+register; everything else travels through global variables.  See
+@ref{Data and Parameters}.  This chapter records the assembler dialect,
+register conventions, and invocation text for each supported processor.
+
+@menu
+* Common ABI::                  Shared conventions and naming
+* 6502 Family ABI::             6502, 65c02, 65c816, HuC6280, RP2A03
+* Z80 ABI::                     Zilog Z80
+* SM83 ABI::                    Sharp SM83 (Game Boy)
+* cp1610 ABI::                  Intellivision
+* m6800 ABI::                   Motorola 6800
+* m68k ABI::                    Motorola 68000
+* i286 ABI::                    Intel 80286
+* ARM7 ABI::                    ARM7TDMI (Game Boy Advance)
+* F8 ABI::                      Fairchild F8 (Channel F)
+@end menu
+
+@node Common ABI
+@section Common Conventions
+
+@cindex method labels
+@cindex OOPS
+@cindex variable labels
+
+@itemize
+@item Method entry labels follow the OOPS convention
+@code{Method@var{ClassName}@var{MethodName}} on the 6502 family.
+Hyphenated names translate to underscores (@code{Song--Heal--ID} emits
+@code{Song_Heal_ID}).
+@item Global variables are referred to by their derived assembly
+symbols; class slots are fetched through the object pointer.
+@item A method returns with the platform's return instruction
+(@code{rts} on the 6502 family and Z80, @code{ret} on the i286 and
+SM83, @code{pul pc} on the cp1610, @code{rts} on the m68k, and so on).
+@end itemize
+
+@node 6502 Family ABI
+@section 6502, 65c02, 65c816, HuC6280, RP2A03
+
+@cindex 64tass
+@cindex 6502 registers
+
+Output uses 64tass assembler syntax.  Register usage: @code{A} is the
+accumulator (the calling-convention register), @code{X} carries
+subscript indices or temporary values, and @code{Y} carries slot
+offsets.  Array fetches use @code{X}; slot-of-self fetches use
+@code{Y}.
+
+@table @asis
+@item @code{INVOKE Var "M"}
+Emits @code{.CallMethod  Call@var{Type}M, @var{Type}Class} (a Phantasia
+OOPS macro expanding to @code{jsr DoCallMethod}), not a bare
+@code{jsr Invoke@dots{}} label.
+@item @code{CALL @var{name} IN LIBRARY}
+Emits @code{jsr Lib.@var{name}} for a resident-library call.
+@item @code{CALL SERVICE @var{name}}
+Emits a service-dispatch call whose bank is resolved at link time
+(@code{.FarCall} / @code{.FarJSR}).
+@item @code{LOG FAULT}
+Emits @code{.LogFault "@var{code}"}, a 4-character fault string.
+@item @code{BREAK}
+Emits @code{brk}.
+@end table
+
+CPU-specific instruction sets (64tass format):
+
+@table @asis
+@item @code{:6502}
+Plain 6502: @code{jmp} for unconditional branches; @code{SED}/@code{CLD}
+for BCD arithmetic; undocumented opcodes (@code{lax}, @code{dcp}) where
+helpful.
+@item @code{:65c02}
+Adds @code{bra}, @code{stz}, @code{trb}, @code{tsb}; no undocumented
+opcodes.
+@item @code{:65c816}
+Like the 65c02 in emulation mode; 64tass syntax.
+@item @code{:huc6280}
+Like the 65c02; bank switching via macros.  Executes all 6502
+instructions; delegates code generation to the 6502 backend.
+@item @code{:rp2a03}
+NES CPU.  6502 subset with no decimal mode: no @code{SED}; BCD and
+packed-decimal arithmetic uses software correction routines instead
+(binary ADC, then add 6 to the low nibble if it exceeds 9, and so on).
+@end table
+
+@node Z80 ABI
+@section Zilog Z80
+
+@cindex Z80 registers
+
+Output is lowercase Z80 assembly in the common dialect (@code{ld a,(hl)},
+and so on).  Registers: @code{A} is the accumulator and calling-
+convention register; @code{HL} is the pointer/result register;
+@code{BC} is the count; @code{DE} is a destination pointer or temp
+(preferred over the stack).  Control flow uses @code{jp}, @code{jr},
+@code{call}, @code{ret}, and @code{djnz}.
+
+@node SM83 ABI
+@section Sharp SM83 (Game Boy)
+
+@cindex RGBDS
+
+Output is RGBDS assembler syntax (@code{ld a,[hl]}, @code{jr nz}, and so
+on).  The register conventions mirror the Z80: @code{A} accumulator,
+@code{HL} pointer/result, @code{BC} count, @code{DE} destination/temp.
+
+@node cp1610 ABI
+@section Intellivision cp1610
+
+@cindex as1600
+
+Output is as1600 assembler syntax.  The cp1610 uses the classic
+instruction set @code{MVII} (move immediate), @code{MVI} (load),
+@code{MVO} (store), @code{ADDR}, and @code{SUBR}.  A single 16-bit
+register carries the calling-convention value.
+
+@node m6800 ABI
+@section Motorola 6800
+
+@cindex Vectrex
+
+A minimal m6800 emitter intended for Vectrex-style Motorola-family
+workflows.  Uses plain 6800 mnemonics (@code{LDAA}, @code{STAA},
+@code{CMPA}, @code{BEQ}, @code{BNE}, @code{JSR}, @code{JMP}, @code{RTS})
+with direct symbols for generated labels.
+
+@node m68k ABI
+@section Motorola 68000
+
+@cindex 68000
+
+Targets the Motorola 68000 instruction set only.  Data registers
+@code{D0}--@code{D7}, address registers @code{A0}--@code{A7} (@code{A7}
+is the stack pointer).  Instructions: @code{move}, @code{add},
+@code{sub}, @code{cmp}, @code{and}, @code{or}, @code{eor}, @code{not},
+@code{neg}, @code{clr}; control: @code{jsr}, @code{jmp}, @code{rts},
+@code{bra}, and the conditional branches.  Operand sizes are @code{.b}
+(byte), @code{.w} (word), and @code{.l} (long).  The calling-convention
+value rides in @code{D0}.
+
+@node i286 ABI
+@section Intel 80286
+
+@cindex 16-bit
+@cindex Intel syntax
+
+A 16-bit backend producing Intel-syntax assembly (@code{mov ax, bx},
+@code{mov al, [si]}).  Registers: @code{AX} accumulator and calling-
+convention register, @code{BX} temp, @code{SI} index, @code{DI}
+destination pointer, @code{CX} count; segments @code{CS}, @code{DS},
+@code{SS}, @code{ES}.  Control: @code{call}, @code{ret}, @code{jmp},
+@code{jz}, @code{jnz}.
+
+@node ARM7 ABI
+@section ARM7TDMI (Game Boy Advance)
+
+@cindex Thumb
+@cindex GAS
+
+Targets the Game Boy Advance ARM7TDMI (@code{armv4t}).  Thumb is the
+default code path for size, using unified GAS syntax with
+@code{.thumb}, @code{.syntax unified}, and @code{.cpu arm7tdmi}.
+Instructions used: @code{movs}, @code{ldr}/@code{ldrb}/@code{ldrh},
+@code{str}/@code{strb}/@code{strh}, @code{add}, @code{subs}, @code{cmp},
+@code{b}/@code{bl}/@code{bne}@dots{}, @code{bx lr}.  Register usage:
+@code{r0} is the value and calling-convention register; @code{r1},
+@code{r2}, @code{r3} are scratch and address registers.
+
+@node F8 ABI
+@section Fairchild F8 (Channel F)
+
+@cindex F8
+@cindex Channel F
+
+Emits Fairchild F8 assembly with the Turner/Fairchild mnemonics: the
+@code{A} accumulator, @code{DC0} data counter, @code{LM}/@code{ST},
+@code{DCI}, @code{LI}/@code{AI}/@code{CI}, @code{LR H/DC0}, branches
+@code{BR}/@code{BZ}/@code{BNZ}@dots{}, and subroutine call/return
+@code{PI}/@code{POP}.  16-bit values use scratch 10 (lo) and 11 (hi);
+scratch 6--9 are code-generation temporaries.
+
+@node Error Conditions
+@appendix Error Conditions and Fault Codes
+
+@cindex errors
+@cindex faults
+@cindex conditions
+
+This appendix lists the compiler's error conditions and the runtime
+fault mechanism.
+
+@menu
+* Compiler Errors::             Compile-time condition hierarchy
+* Runtime Faults::              The fault system and fault codes
+@end menu
+
+@node Compiler Errors
+@section Compiler Errors
+
+All compiler errors are subtypes of @code{compiler-error} and carry a
+@code{message}.  The hierarchy, from most to least specific:
+
+@table @asis
+@item @code{source-error}
+A source-level error: a parser or unsupported-statement failure.  Reports
+the file, line, and sequence number when known.
+@item @code{lexer-error}
+A lexing failure; reports the file and line plus the offending form.
+@item @code{copybook-error}
+A copybook failure.  Subtypes: @code{copybook-not-found},
+@code{copybook-invalid-name}, @code{copybook-read-error}.
+@item @code{backend-error}
+A code-generation failure for a specific CPU.  Subtypes:
+@code{backend-ast-error} (unexpected AST shape),
+@code{backend-condition-not-implemented},
+@code{backend-string-blt-error},
+@code{backend-call-service-error}, @code{backend-copy-not-expanded}.
+@item @code{compile-error}
+A pipeline failure; reports the compilation stage and input.  Subtypes:
+@code{input-file-not-found}, @code{parse-failed-error},
+@code{invalid-ast-error}, @code{undefined-class-reference},
+@code{routine-not-terminated}.
+@item @code{usage-error}
+A command-line error.  Subtypes: @code{unknown-option-error},
+@code{dangling-option-error}, @code{unknown-cpu-error}.
+@end table
+
+@node Runtime Faults
+@section Runtime Faults
+
+@cindex LOG FAULT
+@cindex LogFault
+
+At runtime, @code{LOG FAULT} (or @code{LogFault}) signals a fault
+through the platform fault handler.  Fault codes are four-character
+strings; the assembler renders them in the platform's minifont for the
+debugger.  A @code{STOP RUN} halts the program.  On the 6502 family a
+@code{BREAK} statement fires the processor's @code{brk} to enter the
+monitor.
+
+@node Index
+@appendix Index
+
+@printindex cp
+
+@bye

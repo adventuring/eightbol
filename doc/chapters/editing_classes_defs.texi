@@ -1,0 +1,107 @@
+@menu
+* Class hierarchy::
+* Basic-Object::
+* Slots and types::
+* Processing with Skyline-Tool::
+@end menu
+
+@node Class hierarchy
+@section Class hierarchy
+
+All objects in EIGHTBOL-based programs inherit from the Basic-Object
+class, which provides fundamental functionality common to all game
+entities. The class hierarchy is defined in the Classes.Defs file using
+COBOL-style class definitions, regardless of which front-end language
+is used to manipulate those classes.
+
+@node Basic-Object
+@section Basic-Object (unchangeable)
+
+The Basic-Object class is the root of all inheritance hierarchies in
+EIGHTBOL. It contains essential slots that are present in every object
+and cannot be removed or modified through inheritance. These include:
+
+@table @asis
+@item id — Unique identifier for the object
+@item x — Horizontal position coordinate
+@item y — Vertical position coordinate
+@item layer — Display layer priority
+@item flags — Boolean status flags
+@item script — Associated script or behavior
+@end table
+
+Attempts to modify or remove these slots will result in compilation
+errors, as they are required by the runtime system for basic object
+management and rendering.
+
+@node Slots and types
+@section Slots and types
+@menu
+* Numerics::
+* Arrays of numerics::
+* Character strings::
+@end menu
+
+@node Numerics
+### Subsection Numerics
+
+Numeric slots store integer values and are defined using the PICTURE
+clause with 9s for digits. They support arithmetic operations and
+can be used in mathematical expressions.
+
+@example
+01  counter        PIC 9(4)    VALUE 0.
+01  score          PIC 9(6)    VALUE 0.
+01  lives-left     PIC 9       VALUE 3.
+@end example
+
+@node Arrays of numerics
+### Subsection Arrays of numerics
+
+Arrays of numeric values are defined using the OCCURS clause. They
+allow storing multiple related values that can be accessed by index.
+
+@example
+01  high-scores.
+    05  score-entry OCCURS 10 TIMES.
+        10  initials  PIC XXX.
+        10  points    PIC 9(6).
+@end example
+
+@node Character strings
+### Subsection Character strings
+
+Character strings store textual data and are defined using the PICTURE
+clause with As for alphabetic characters or Xs for alphanumeric characters.
+
+@example
+01  player-name    PIC X(20)   VALUE SPACES.
+01  level-title    PIC A(30)   VALUE "Level One".
+01  message-box    PIC X(80)   VALUE SPACES.
+@end example
+
+@node Processing with Skyline-Tool
+@section Processing with Skyline-Tool
+
+Before compilation with EIGHTBOL, class definitions often require
+processing with Skyline-Tool to resolve dependencies, generate
+metadata, and prepare the class hierarchy for use by the various
+front-end languages. Skyline-Tool performs several important functions:
+
+@itemize @bullet
+@item Resolves inheritance relationships between classes
+@item Generates virtual method tables for object-oriented dispatch
+@item Computes memory layouts for object instances
+@item Produces header files for use with assembly language code
+@item Validates slot definitions and detects conflicts
+@end itemize
+
+Skyline-Tool is typically invoked as part of the build process before
+running EIGHTBOL:
+
+@example
+skyline-tool process Classes.Defs
+bin/eightbol -l cobol -c 6502 -o game.asm main.cobol
+@end example
+
+@node AGI

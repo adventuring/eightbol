@@ -74,6 +74,7 @@ Root directory for output paths.
   "Expand a short language alias to a keyword."
   (let ((ext (string-downcase lang)))
     (cond
+      ((member ext '("agi" "scr") :test #'string=) :agi)
       ((member ext '("bas" "basic") :test #'string=) :basic)
       ((member ext '("cob" "cobol" "cbl") :test #'string=) :cobol)
       ((member ext '("f" "fortran" "for" "for77") :test #'string=) :fortran)
@@ -82,6 +83,11 @@ Root directory for output paths.
       ((member ext '("m" "objective-c") :test #'string=) :objective-c)
       ((member ext '("p" "pascal" "pas") :test #'string=) :pascal)
       ((string= ext "st") :smalltalk)
+      ((member ext '("bms") :test #'string=) :burgermistress)
+      ((member ext '("mdl") :test #'string=) :muddle)
+      ((member ext '("sc") :test #'string=) :sci)
+      ((member ext '("scc" "scumm") :test #'string=) :scumm)
+      ((member ext '("zil") :test #'string=) :zil)
       (t nil))))
 
 (defun language-from-extension (pathname)
@@ -100,16 +106,18 @@ Root directory for output paths.
   (let* ((explicit-lang (getf options :lang))
          (lang (or (and explicit-lang (expand-language-alias explicit-lang))
                    (language-from-extension input-file))))
-    (unless lang
-      (error "Cannot determine language for file ~a. Use -l <lang> (bas, cob, f, ls, lua, m, p, st)." input-file))
+     (unless lang
+       (error "Cannot determine language for file ~a. Use -l <lang> (agi, bas, bms, cob, f, ls, lua, m, mdl, p, sc, scc, st, zil)." input-file))
     (let* ((output-file (getf options :output-file))
            (cpus (get-cpus (getf options :machine)))
            (include-paths (loop for (key value) on options by #'cddr
                                 when (eql key :include-path)
-                                  collect (uiop:ensure-directory-pathname
-                                           (merge-pathnames (pathname value)
-                                                            (truename "."))))))
+                                collect (uiop:ensure-directory-pathname
+                                          (merge-pathnames (pathname value)
+                                                           (truename "."))))))
       (case lang
+        (:agi
+         (compile-agi-from-path input-file :cpus cpus :output-file output-file))
         (:basic
          (compile-basic-from-path input-file :cpus cpus))
         (:cobol
@@ -117,7 +125,53 @@ Root directory for output paths.
                            :cpus cpus
                            :copybook-paths (or include-paths
                                                (project-copybook-paths (truename ".")))
-                           :output-file (when output-file (pathname output-file))))))))
+                           :output-file (when output-file (pathname output-file))))
+        (:fortran
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:lingo
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:lua
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:objective-c
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:pascal
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:smalltalk
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:burgermistress
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:muddle
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:sci
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:scumm
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (:zil
+         (compile-eightbol (list input-file)
+                           :cpus cpus
+                           :output-file (when output-file (pathname output-file))))
+        (otherwise
+         (error "Unsupported language ~a for file ~a" lang input-file))))))
 
 (defun main (args)
   "Main entry point for the EIGHTBOL compiler. ARGS is the argv list

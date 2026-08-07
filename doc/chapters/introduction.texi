@@ -1,0 +1,132 @@
+@menu
+* What is Eightbol::
+* Front-ends::
+* Back-ends::
+* Invoking EIGHTBOL::
+* Using in a Makefile::
+@end menu
+
+@node What is Eightbol
+@section What is Eightbol
+
+EIGHTBOL is a sophisticated compiler system designed to translate programs
+written in various high-level languages into efficient assembly code for
+a wide range of 8-bit and 16-bit microprocessors. Originally developed
+for the Phantasia game engine, EIGHTBOL provides a unified compilation
+pipeline that supports multiple source languages while maintaining
+consistent code generation across different target architectures.
+
+@node Front-ends
+@section Front-ends
+
+EIGHTBOL supports fourteen distinct front-end languages, each with its
+own syntax and semantics, but all translating to a common intermediate
+representation (the Abstract Syntax Tree or AST) before being compiled
+to target-specific assembly:
+
+@table @asis
+@item AGI — Adventure Game Interpreter language
+@item BASIC — Beginners' All-purpose Symbolic Instruction Code
+@item Burgermistress — the Thief of Fate scripting language by Burger Becky
+@item COBOL — COmmon Business Oriented Language
+@item FORTRAN — autmatic FORmula TRANslator
+@item Lingo — Macromedia Director Lingo script
+@item Lua
+@item Muddle — MIT Design Language “MDL”
+@item Objective-C — like C, but with objects
+@item Pascal
+@item SCI — Sierra Creative Interpreter language
+@item SCUMM — Script Creation Utility for Maniac Mansion
+@item SmallTalk
+@item ZIL — Zork Implementation Language
+@end table
+
+@node Back-ends
+@section Back-ends
+
+EIGHTBOL targets thirteen different microprocessor architectures, each
+with its own code generation backend:
+
+@table @asis
+@item 6502 — MOS Technology 6502
+@item 65c02 — Western Design Center 65c02
+@item 65c816 — Western Design Center 65c816
+@item HuC6280 — Hudson Soft HuC6280
+@item RP2A03 — Ricoh RP2A03 (used in NES)
+@item cp1610 — General Instrument CP1610 (used in Intellivision)
+@item Z80 — Zilog Z80
+@item SM83 — Sharp SM83 (used in Game Boy)
+@item m6800 — Motorola 6800
+@item m68k — Motorola 68000 family
+@item i286 — Intel 80286
+@item ARM7 — ARM Advanced RISC Machines ARM7
+@item F8 — Fairchild F8
+@end table
+
+@node Invoking EIGHTBOL
+@section Invoking EIGHTBOL
+
+The EIGHTBOL compiler is invoked from the command line as follows:
+
+@example
+bin/eightbol @var{options} @var{source-file}
+@end example
+
+Where @var{options} can include:
+
+@table @asis
+@item -l @var{language}
+Specify the source language (agi, basic, burgermistress, cobol, fortran,
+lingo, lua, muddle, objective-c, pascal, sci, scumm, smalltalk, zil)
+@item -c @var{cpu}
+Specify the target CPU (6502, 65c02, 65c816, huc6280, rp2a03, cp1610,
+z80, sm83, m6800, m68k, i286, arm7, f8)
+@item -o @var{output-file}
+Specify the output assembly file
+@item -I @var{path}
+Add @var{path} to the copybook search path
+@item -v
+Enable verbose output
+@item --help
+Display help information
+@end table
+
+@node Using in a Makefile
+@section Using in a Makefile
+
+EIGHTBOL integrates seamlessly with Make-based build systems. A typical
+Makefile rule for compiling a EIGHTBOL source file looks like this:
+
+@example
+%.asm: %.agi
+	bin/eightbol -l agi -c 6502 -o $@ $<
+@end example
+
+For projects with multiple source files targeting different CPUs, you can
+use pattern rules with automatic variables:
+
+@example
+OBJECTS = main.asm loader.asm sprite.asm
+
+all: $(OBJECTS)
+
+%.asm: %.cob
+	bin/eightbol -l cobol -c 6502 -o $@ $<
+
+%.asm: %.lua
+	bin/eightbol -l lua -c arm7 -o $@ $<
+@end example
+
+Additional Makefile variables can be defined for common options:
+
+@example
+EIGHTBOL = bin/eightbol
+CPU = 6502
+LANG = cobol
+COPYPATH = copysrc
+
+%.asm: %.cob
+	$(EIGHTBOL) -l $(LANG) -c $(CPU) -I $(COPYPATH) -o $@ $<
+@end example
+
+@node Editing Classes.Defs

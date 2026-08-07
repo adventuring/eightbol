@@ -1,0 +1,362 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In AGI, variable names use @code{lower_snake_case} (e.g., @code{player_score}, @code{current_room}).
+Function names use @code{dotted.snake.case} (e.g., @code{object.load}, @code{player.move}).
+All keywords are case-insensitive but conventionally written in uppercase.
+
+@table @asis
+@item Keywords: IF, ELSE, THEN, GOSUB, GOTO, NEWROOM, LOADLOGICS, RETURN, QUIT, ASSIGN, INCREMENT, DECREMENT, SET, RESET, SAID, TEST, POSN, CONTROLLER, HAVEKEY
+@item Operators: =, <, >, <=, >=, <> (for TEST command), +, - (for ASSIGN/INCREMENT/DECREMENT)
+@item String delimiters: Double quotes (@code{"..."})
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+An AGI program consists of a series of commands executed sequentially unless altered by control flow statements.
+Each line contains a single command. There is no explicit program header or termination statement.
+
+@example
+LOADLOGICS 1
+NEWROOM 2
+SET player_health 100
+IF said("look") THEN
+    PRINT "You see a sword on the ground."
+ELSE
+    PRINT "I don't understand."
+END-IF
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+AGI does not have traditional object methods. Instead, objects are manipulated through commands that
+reference object IDs directly. Object-specific behavior is implemented in logic files that respond
+to events affecting particular objects.
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a routine that takes no arguments, simply use the command name:
+
+@example
+LOADLOGICS 3    @r{Load logic number 3}
+RETURN          @r{Return from current logic}
+QUIT            @r{Quit the game}
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+Some AGI commands accept a single value parameter that is conceptually passed in an accumulator:
+
+@example
+NEWROOM 5       @r{Change to room number 5}
+SET score 100   @r{Set the score variable to 100}
+INCREMENT lives @r{Increase lives counter by 1}
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+AGI does not have routines that return values in an accumulator in the traditional sense.
+Instead, values are stored in variables and retrieved as needed.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+Not applicable in AGI's command structure.
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+AGI accesses library routines through built-in commands. All library calls are considered far
+calls to the interpreter's built-in functionality:
+
+@example
+SAID "open door"    @r{Library call: check if player typed "open door"}
+CONTROLLER 1        @r{Library call: read joystick position}
+HAVEKEY "skeleton"  @r{Library call: check inventory for skeleton key}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for library calls in AGI
+@item Far: All built-in commands are far calls to interpreter ROM
+@item Library: Not applicable (built-ins are the library)
+@item Object: Not applicable for interpreter built-ins
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+AGI does not support explicit bank switching in its standard command set.
+All interpreter services are accessed through built-in commands that
+implicitly handle any required bank switching.
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object manipulation in AGI is performed through specific commands rather
+than method invocation:
+
+@example
+POSN ego 100 150 120 180   @r{Set object "ego" position rectangle}
+SET ego.x 100              @r{Set object's x coordinate}
+SET ego.y 150              @r{Set object's y coordinate}
+@end example
+
+These operations correspond to:
+@table @asis
+@item Direct: Setting object properties via SET command
+@item Far: Not applicable
+@item Library: POSN, SET commands access object engine
+@item Object: Setting slots on object instances
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using the ASSIGN, SET, INCREMENT, or DECREMENT commands:
+
+@example
+ASSIGN player_score 0          @r{Set variable to value}
+SET player_lives 3             @r{Alternative assignment syntax}
+INCREMENT player_score         @r{Add 1 to variable}
+DECREMENT player_lives         @r{Subtract 1 from variable}
+END-IF                         @r{End conditional block}
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots (properties) are assigned using the SET command with dotted notation:
+
+@example
+SET ego.x 160                @r{Set ego object's x coordinate}
+SET ego.y 100                @r{Set ego object's y coordinate}
+SET ego.view 5               @r{Set ego object's view number}
+SET ego.loop 0               @r{Set ego object's loop number}
+SET ego.cel 0                @r{Set ego object's cel number}
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+AGI does not have native array syntax. Array-like behavior must be
+implemented using individual variables or through interpreter-specific
+mechanisms not available in standard AGI.
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic is performed using INCREMENT and DECREMENT (for +/- 1)
+or the SET command with expressions:
+
+@example
+INCREMENT counter              @r{counter = counter + 1}
+DECREMENT counter              @r{counter = counter - 1}
+SET score (score + 10)         @r{score = score + 10}
+SET diff (num1 - num2)         @r{diff = num1 - num2}
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+AGI does not provide direct bit-shift operators. Multiplication and
+division by powers of two must be implemented through repeated addition
+or subtraction, or through lookup tables.
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions can be built by combining operations:
+
+@example
+SET total ((score * 10) + bonus)
+SET average ((total / count) - penalty)
+@end example
+
+Note: Multiplication and division require library routines or
+repeated addition/subtraction implementations.
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions are used primarily in IF and TEST commands:
+
+@example
+IF (score > 1000) THEN ...     @r{Greater than}
+IF (score < 50) THEN ...       @r{Less than}
+IF (score = 100) THEN ...      @r{Equality}
+IF (score <> 0) THEN ...       @r{Inequality (not equal)}
+IF (have.key "sword") THEN ... @r{Boolean function result}
+END-IF                         @r{End conditional}
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses IF/THEN/ELSE/END-IF blocks:
+
+@example
+IF (player.x > 100) AND (player.x < 200) THEN
+    SET player.direction RIGHT
+ELSE
+    SET player.direction LEFT
+END-IF
+
+IF said("look") THEN
+    IF have.key "gold" THEN
+        PRINT "You see the glittering gold key."
+    ELSE
+        PRINT "You see an old metal key."
+    END-IF
+ELSE
+    PRINT "I don't understand that command."
+END-IF
+@end example
+
+AGI does not have an EXAMINE/COND structure; complex conditions
+are built using AND/OR combinations within IF statements.
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using GOTO statements with conditional tests:
+
+@example
+SET i 0
+:loop
+    DISPLAY counters i
+    INCREMENT i
+    IF (i < 10) THEN GOTO loop END-IF
+    PRINT "Loop finished"
+@end example
+
+WHILE-style loops:
+@example
+SET lives 3
+:game_loop
+    IF (lives = 0) THEN GOTO game_over END-IF
+    @r{Game logic here}
+    GOTO game_loop
+:game_over
+    PRINT "Game Over"
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved through conditional GOTO statements:
+
+@example
+SET i 0
+:process_items
+    IF (i >= item_count) THEN GOTO done_processing END-IF
+    IF (items i = ITEM_STOP) THEN GOTO skip_remaining END-IF
+    @r{Process item i}
+    INCREMENT i
+    GOTO process_items
+:skip_remaining
+    PRINT "Skipped remaining items"
+:done_processing
+    PRINT "All items processed"
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+AGI does not directly call Forth dialogue scripts. Instead, it uses
+its own internal scripting system. However, through the semantic-sugar
+layer, AGI commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+@r{Original AGI code}
+IF said("talk wizard") THEN
+    LOADLOGICS 15
+    NEWROOM 7
+END-IF
+
+@r{Desugared via semantic-sugar layer}
+IF (said "talk wizard") THEN
+    (:call-acc :target "TalkToWizard" :using nil)
+END-IF
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through specific commands that
+interact with the background picture resources:
+
+@example
+SET.TILE bg_tile 50 100     @r{Change tile at (50,100) to number bg_tile}
+DRAW.PIC bg_picture         @r{Draw background picture number}
+SHOW.PIC bg_picture         @r{Show previously drawn picture}
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (animated foreground elements) are manipulated using:
+
+@example
+ANIMATE.OBJ ego             @r{Start animation for ego object}
+STOP.UPDATE ego             @r{Stop animation updates for ego object}
+SET.VIEW ego 5              @r{Set ego's view to number 5}
+SET.LOOP ego 0              @r{Set ego's loop to number 0}
+SET.CEL ego 2               @r{Set ego's cel to number 2}
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation commands control positioning, visibility, and
+interaction:
+
+@example
+POSN ego 100 100 150 150    @r{Set ego's movement boundaries}
+SET.HORIZON 20              @r{Set vertical horizon line}
+IGNORE.OBJ ego              @r{Make ego ignore other objects}
+OBSERVE.OBJ ego             @r{Make ego interact with other objects}
+DRAW ego                    @r{Draw ego object on screen}
+ERASE ego                   @r{Remove ego object from screen}
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following AGI features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item Mouse control commands (MOUSE.*)
+@item Sound resource commands (SOUND.*, PLAY.*, STOP.*)
+@item Menu commands (MENU.*)
+@item Video memory access (PEEK, POKE)
+@item Random number generation (RANDOM)
+@item String concatenation and manipulation
+@item User-defined functions beyond built-in commands
+@end table
+
+@node BASIC

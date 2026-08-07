@@ -1,0 +1,485 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In Muddle, variable names use @code{case-insensitive} naming (conventionally @code{lower-case-with-hyphens} or @code{camelCase}).
+All keywords are case-insensitive but conventionally written in lowercase.
+
+@table @asis
+@item Keywords: .if, .else, .then, .endif, .while, .endwhile, .for, .endfor, .exit, .return, .define, .set, .get, .put, .call, .go, .throw, .catch, .finally
+@item Operators: +, -, *, /, ^, =, /=, <, >, <=, >=, and, or, not
+@item String delimiters: Double quotes (@code{"..."}) or vertical bars (@code{||...||}) for literal atoms
+@item Comments: Semicolon (;) to end of line
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+A Muddle program consists of expressions and function definitions that are evaluated sequentially unless altered by control flow.
+
+@example
+;; Initialize game
+(setq *score* 0)
+(setq *lives-left* 3)
+(setq *current-room* 1)
+
+(defun initialize-game ()
+  (setq *score* 0)
+  (setq *lives-left* 3)
+  (setq *current-room* 1))
+
+(defun process-input ()
+  ;; Simulate input handling
+  (if (key-pressed? "right")
+      (setq *current-room* (+ *current-room* 10))))
+
+(defun update-game ()
+  ;; Game logic updates)
+
+(defun render-display ()
+  ;; Rendering code)
+
+(initialize-game)
+(while (not *game-over*)
+  (process-input)
+  (update-game)
+  (render-display))
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+Muddle supports object-oriented programming through generic functions and methods (similar to CLOS).
+
+@example
+;; Define a Player class
+(defclass player ()
+  ((x :initarg :x :accessor player-x)
+   (y :initarg :y :accessor player-y)
+   (sprite :initarg :sprite :accessor player-sprite)))
+
+;; Define a method for moving the player
+(defmethod move-player ((p player) dx dy)
+  (incf (player-x p) dx)
+  (incf (player-y p) dy))
+
+;; Create instance
+(setq *player* (make-instance 'player :x 100 :y 100 :sprite 5))
+@end example
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a function that takes no arguments:
+
+@example
+(initialize-graphics)
+(clear-screen)
+(play-startup-music))
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To call a function that returns a single value:
+
+@example
+(setq *score* (calculate-bonus *level* *time-left*))
+(setq *bonus-factor* (get-input-factor))
+(setq *volume* (get-master-volume))
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in Muddle's standard calling convention.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To call a function with parameters:
+
+@example
+(draw-sprite *sprite-id* *x-pos* *y-pos*)
+(play-sound *sound-id* *volume* *loop-flag*)
+(check-collision *obj1* *obj2* *result-var*)
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+Muddle accesses library routines through standard function calls or method invocations:
+
+@example
+(load-level *level-number*)          @r{Direct call}
+(far-proc *library-address*)         @r{Far call}
+(setq *result* (library-function *input*))  @r{Library function}
+(send *object* :method *param1* *param2*)   @r{Object method call}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: FunctionName(...)
+@item Far: AbsoluteAddress(...) (via external interface)
+@item Library: LibraryEntry(...) or FunctionName(...)
+@item Object: OBJECT:MethodName(...)
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far procedures in Muddle are called using external interfaces or through
+the foreign function interface:
+
+@example
+;; Define external interface
+(external-call "farLoadLibrary" (address) -> void)
+
+;; Call far routine
+(external-call "farLoadLibrary" #x8000)   @r{Call routine in bank 1}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: External interface call
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in Muddle uses generic functions or send:
+
+@example
+(move-player *player* 5 10)
+(send *score-display* :update *score*)
+(send *game-state* :is-game-over)
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties via slot accessors
+@item Far: Not applicable for methods (objects typically in same memory)
+@item Library: Method may call library routines internally
+@item Object: METHOD invocation on object instance
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using setq or setf:
+
+@example
+(setq *score* 0)                     @r{Explicit assignment}
+(setf *lives-left* 3)                @r{Implicit assignment}
+(setf *counter* (1+ *counter*))      @r{Increment}
+(setf *lives-left* (1- *lives-left*)) @r{Decrement}
+(setf *score* (+ *score* 10))        @r{Arithmetic assignment}
+(setq *message* "Hello, World!")     @r{String assignment}
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots are assigned using setf with accessors:
+
+@example
+(setf (player-x *player*) 160)       @r{Set object's x coordinate}
+(setf (player-y *player*) 100)       @r{Set object's y coordinate}
+(setf (player-sprite *player*) 5)    @r{Set sprite number}
+(setf (player-visible *player*) t)   @r{Set visibility flag}
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+Muddle uses vectors for arrays. Elements are assigned using setf with accessor:
+
+@example
+(setq *score-list* (make-vector 10 :initial-element 0))
+(setq *initials-list* (make-vector 10 :initial-element ""))
+(setq *board* (make-array '(8 8) :initial-element 0))
+
+(setf (aref *score-list* 0) 100)
+(setf (aref *initials-list* 0) "ALI")
+(setf (aref *board* 2 3) 1)
+@end example
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses the + and - operators:
+
+@example
+(setq *score* (+ *score* 10))                  @r{Addition}
+(setq *lives-left* (- *lives-left* 1))         @r{Subtraction}
+(setq *total* (+ *width* *height))             @r{Add two variables}
+(setq *final-price* (- *price* *discount*))    @r{Subtraction}
+(setq *delta* (- *new-value* *old-value*))     @r{Subtraction}
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting for multiplication/division by powers of two is not directly supported.
+Use ash (arithmetic shift) or external libraries:
+
+@example
+(setq *result* (ash *value* 2))                @r{Left shift 2 bits (multiply by 4)}
+(setq *result* (ash *value* -1))               @r{Right shift 1 bit (divide by 2)}
+(setq *result* (* *value* 4))                  @r{Multiply by 4}
+(setq *result* (/ *value* 2))                  @r{Divide by 2}
+(setq *result* (* *value* 8))                  @r{Multiply by 8}
+(setq *result* (/ *value* 16))                 @r{Divide by 16}
+@end example
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions follow standard precedence rules:
+
+@example
+(setq *total* (+ (* *base-salary* 12) *bonus* (- *deductions*)))
+(setq *average* (/ (+ *sum1* *sum2* *sum3*) 3.0))
+(setq *distance* (sqrt (+ (expt (- *x2* *x1*) 2) (expt (- *y2* *y1*) 2))))
+@end example
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use logical operators and comparison operators:
+
+@example
+(.if (> *score* 1000) ...)                 @r{Greater than}
+(.if (< *score* 50) ...)                   @r{Less than}
+(.if (= *score* 100) ...)                  @r{Equality}
+(.if (/= *score* 0) ...)                   @r{Inequality}
+(.if (and (>= *x* 0) (< *x* *max-x*)) ...) @r{Combined conditions}
+(.if (or (= *button* *button-a*) (= *button* *button-b*)) ...) @r{Alternative conditions}
+.endif
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses .if/.then/.else/.endif blocks:
+
+@example
+(.if (> *temperature* *thot*)
+    (setq *status* "HOT")
+  (.elseif (> *temperature* *tcold*)
+    (setq *status* "WARM")
+  (.else
+    (setq *status* "COLD")
+  .endif)
+
+;; Muddle does not have a built-in case statement, but we can use .if/.elseif/.else/.endif
+(.if (or (= *answer* "Y") (= *answer* "y"))
+    (princ "YES")
+  (.elseif (or (= *answer* "N") (= *answer* "n"))
+    (princ "NO")
+  (.else
+    (princ "INVALID")
+  .endif)
+@end example
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using .while/.endwhile, .for/.endfor, and recursion:
+
+@example
+;; .for/.endfor loop equivalent (known iterations)
+(.for *i* 1 10
+    (princ "Count: " *i*)
+  .endfor)
+
+;; .while/.endwhile loop equivalent (pre-test)
+(setq *i* 1)
+(.while (<= *i* 10)
+    (princ "Count: " *i*)
+    (setq *i* (1+ *i*))
+  .endwhile)
+
+;; Recursive loop equivalent
+(defun loop-until-quit ()
+  (let ((command (read-input)))
+    (if (string= command "quit")
+        nil
+        (progn
+          (process-command command)
+          (loop-until-quit)))))
+
+;; .for/.endfor with exit
+(.for *i* 1 100
+    (if (= (vector-ref *array* *i*) *target-value*)
+        (progn
+          (princ "Found at index: " *i*)
+          (.return)))   @r{Exit loop}
+    (if (< (vector-ref *array* *i*) 0)
+        (.continue))   @r{Skip to next iteration}
+  .endfor)
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using .return or .continue statements:
+
+@example
+;; Exit .for loop early
+(.for *i* 1 100
+    (if (= (vector-ref *array* *i*) *target-value*)
+        (progn
+          (princ "Found at index: " *i*)
+          (.return)))   @r{Exit loop immediately}
+  .endfor)
+
+;; Skip current iteration
+(.for *i* 1 100
+    (if (< (vector-ref *array* *i*) 0)
+        (.continue))   @r{Skip to next iteration}
+  .endfor)
+
+;; Nested loop control
+(.for *i* 1 10
+    (.for *j* 1 10
+        (if (= (aref *matrix* *i* *j*) 0)
+            (.return))   @r{Exit inner loop only}
+      .endfor)
+  .endfor)
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+Muddle does not directly call Forth dialogue scripts. Instead, it uses
+its own functions. However, through the semantic-sugar
+layer, Muddle commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+;; Original Muddle code
+(.if (and (> *x* 100) (< *x* 200))
+    (show-message *msg-welcome*)
+  .endif)
+
+;; Desugared via semantic-sugar layer
+(.if (and (> *x* 100) (< *x* 200))
+    (:call-acc :target "ShowWelcomeMessage" :using nil)
+  .endif)
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+;; Direct memory access (mode-dependent)
+;; Assuming direct memory access via pointer
+(let* ((video-memory (make-pointer #xb8000 :type '(array unsigned-char)))
+       (offset (* (+ (* *row* 80) *col*) 2)))
+  (setf ( deref video-memory offset) *tile-num*)
+  (setf ( deref video-memory (+ offset 1)) *attribute*))
+
+;; Library routine approach
+(load-tile-set *tile-set-id*)
+(place-tile *layer* *x* *y* *tile-index*)
+(scroll-background *dx* *dy*)
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+;; Hardware sprite approach (if available)
+(init-sprites)
+(set-sprite-position *sprite-id* *x* *y*)
+(set-sprite-image *sprite-id* *image-id*)
+(show-sprite *sprite-id* -1)   @r{-1 = visible}
+
+;; Software sprite approach
+(defclass sprite ()
+  ((x :initarg :x :accessor sprite-x)
+   (y :initarg :y :accessor sprite-y)
+   (frame :initarg :frame :accessor sprite-frame)))
+
+(setq *sprite* (make-instance 'sprite :x 100 :y 50 :frame 0))
+
+(setf (sprite-x *sprite*) 100)
+(setf (sprite-y *sprite*) 50)
+(setf (sprite-frame *sprite*) (mod (1+ (sprite-frame *sprite*)) 4))
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+;; Using generic functions and methods (CLOS style)
+(defclass game-object ()
+  ((x :initarg :x :accessor game-object-x)
+   (y :initarg :y :accessor game-object-y)
+   (width :initarg :width :accessor game-object-width)
+   (height :initarg :height :accessor game-object-height)
+   (active :initarg :active :accessor game-object-active)))
+
+;; Create instances
+(setq *game-objects* (make-list 20 :initial-element (make-instance 'game-object
+                                                                   :x 100 :y 100
+                                                                   :width 16 :height 16
+                                                                   :active t)))
+
+;; Update object position
+(dolist (go *game-objects*)
+  (incf (game-object-x go) *dx*)
+  (incf (game-object-y go) *dy*))
+
+;; Check active status and draw
+(dolist (go *game-objects*)
+  (when (game-object-active go)
+    (draw-object go)))
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following Muddle features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (open, read-line, write-string, close)
+@item Graphics commands (draw-point, draw-line, draw-circle, fill-polygon)
+@item Hardware-specific features (mouse, keyboard beyond basic keys)
+@item Extended memory handling (unless emulated)
+@item Multithreading or concurrent execution
+@item Exception handling (unless via external interface)
+@item Pointer arithmetic and manual memory management
+@item Preprocessor directives (#define, #ifdef)
+@item Object-oriented multiple inheritance (unless using external library)
+@end table
+
+@node Objective-C

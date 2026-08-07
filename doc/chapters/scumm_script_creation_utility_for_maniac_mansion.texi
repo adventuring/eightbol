@@ -1,0 +1,514 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In SCUMM, variable names use @code{case-insensitive} naming (conventionally @code{lower_case_with_underscores}).
+All keywords are case-insensitive but conventionally written in lowercase.
+
+@table @asis
+@item Keywords: if, else, endif, while, endwhile, for, endfor, break, continue, return, define, set, get, put, call, exit, goto, label, assert, wait, stop, start, fade, restore, save, restart, version
+@item Operators: +, -, *, /, %, =, ==, !=, <, >, <=, >=, &&, ||, !
+@item String delimiters: Double quotes (@code{"..."}) for strings
+@item Comments: Two slashes (//) to end of line
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+A SCUMM script consists of statements and function definitions that are executed sequentially unless altered by control flow.
+
+@example
+// Initialize game
+set score 0
+set lives-left 3
+set current-room 1
+
+initialize-game()
+while (not game-over) {
+    process-input()
+    update-game()
+    render-display()
+}
+
+// Function definitions
+to initialize-game
+    set score 0
+    set lives-left 3
+    set current-room 1
+end
+
+to process-input
+    // Simulate input handling
+    if (get-key "right") then
+        set current-room (current-room + 10)
+    endif
+end
+
+to update-game
+    // Game logic updates
+end
+
+to render-display
+    // Rendering code
+end
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+SCUMM supports object-oriented programming through objects and methods (similar to actor-based programming).
+
+@example
+// Define an actor (object)
+actor player
+    properties
+        x 100
+        y 100
+        sprite 5
+    methods
+        method move dx dy
+            set x (x + dx)
+            set y (y + dy)
+        end
+    end
+end
+
+// Create instance (implicitly done by the actor definition)
+// Access via the actor name
+end
+@end example
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a function that takes no arguments:
+
+@example
+initialize-graphics()
+clear-screen()
+play-startup-music()
+some-procedure()
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To call a function that returns a single value:
+
+@example
+set score (calculate-bonus level time-left)
+set bonus-factor (get-input-factor)
+set volume (get-master-volume)
+some-function()
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in SCUMM's standard calling convention.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To call a function with parameters:
+
+@example
+draw-sprite sprite-id x-pos y-pos
+play-sound sound-id volume loop-flag
+check-collision obj1 obj2 result-var
+some-procedure param1 param2
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+SCUMM accesses library routines through standard function calls or object methods:
+
+@example
+load-level level-number          @r{Direct call}
+far-proc library-address         @r{Far call}
+set result (library-function input)  @r{Library function}
+object#method param1 param2      @r{Object method call}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: FunctionName(...)
+@item Far: AbsoluteAddress(...) (via external interface)
+@item Library: LibraryEntry(...) or FunctionName(...)
+@item Object: OBJECT#MethodName(...)
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far procedures in SCUMM are called using absolute addresses or through
+the external function interface:
+
+@example
+// Declare far procedure
+extern void farLoadLibrary(uint32_t addr);
+
+// Call far routine
+farLoadLibrary(0x8000);   @r{Call routine in bank 1}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: External function call
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in SCUMM uses the hash notation:
+
+@example
+player#move 5 10
+score-display#update score
+game-state#is-game-over
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties via property assignment
+@item Far: Not applicable for methods (objects typically in same memory)
+@item Library: Method may call library routines internally
+@item Object: OBJECT#MethodName(...) invocation
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using the set command:
+
+@example
+set score 0                     @r{Explicit assignment}
+set lives-left 3                @r{Implicit assignment}
+set counter (counter + 1)       @r{Increment}
+set lives-left (lives-left - 1) @r{Decrement}
+set score (score + 10)          @r{Arithmetic assignment}
+set message "Hello, World!"     @r{String assignment}
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots (properties) are assigned using set with dot notation:
+
+@example
+set player.x 160                @r{Set object's x coordinate}
+set player.y 100                @r{Set object's y coordinate}
+set player.sprite 5             @r{Set sprite number}
+set player.visible true         @r{Set visibility flag}
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+SCUMM uses lists and arrays. Elements are assigned using set with indexing:
+
+@example
+set score-list [0 0 0 0 0 0 0 0 0 0]
+set initials-list ["" "" "" "" "" "" "" "" "" ""]
+set board [[0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0]]
+
+set (score-list 0) 100
+set (initials-list 0) "ALI"
+set (board 2 3) 1
+@end example
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses the + and - operators:
+
+@example
+set score (score + 10)                  @r{Addition}
+set lives-left (lives-left - 1)         @r{Subtraction}
+set total (width + height)              @r{Add two variables}
+set final-price (price - discount)      @r{Subtraction}
+set delta (new-value - old-value)       @r{Subtraction}
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting for multiplication/division by powers of two uses the << and >> operators (if available) or multiplication/division:
+
+@example
+set result (value << 2)                 @r{Left shift 2 bits (multiply by 4)}
+set result (value >> 1)                 @r{Right shift 1 bit (divide by 2)}
+set result (value * 4)                  @r{Multiply by 4}
+set result (value / 2)                  @r{Divide by 2}
+set result (value * 8)                  @r{Multiply by 8}
+set result (value / 16)                 @r{Divide by 16}
+@end example
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions follow standard precedence rules:
+
+@example
+set total ((base-salary * 12) + bonus - deductions)
+set average ((sum1 + sum2 + sum3) / 3.0)
+set distance (sqrt ((x2 - x1)^2 + (y2 - y1)^2))
+@end example
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use logical operators and comparison operators:
+
+@example
+if (score > 1000) then ...              @r{Greater than}
+if (score < 50) then ...                @r{Less than}
+if (score == 100) then ...              @r{Equality}
+if (score != 0) then ...                @r{Inequality}
+if ((x >= 0) && (x < MAX_X)) then ...   @r{Combined conditions}
+if ((button == BUTTON_A) || (button == BUTTON_B)) then ... @r{Alternative conditions}
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses if/then/else/endif blocks:
+
+@example
+if (temperature > THOT) then
+    set status "HOT"
+elseif (temperature > TCOLD) then
+    set status "WARM"
+else
+    set status "COLD"
+endif
+
+switch (answer) {
+    case "Y":
+    case "y":
+        set response "YES"
+        break
+    case "N":
+    case "n":
+        set response "NO"
+        break
+    default:
+        set response "INVALID"
+        break
+}
+@end example
+
+SCUMM does not have an EXAMINE/COND structure; switch statement serves
+a similar purpose for multi-way branching.
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using while/endwhile and for/endfor loops:
+
+@example
+// while/endwhile loop equivalent (pre-test)
+set i 1
+while (i <= 10) {
+    print "Count: " i
+    set i (i + 1)
+}
+
+// for/endfor loop equivalent (known iterations)
+for (set i 1; i <= 10; set i (i + 1)) {
+    print "Count: " i
+}
+
+// Loop with break and continue
+set i 1
+while (i <= 100) {
+    if (score-list i == TARGET_VALUE) then
+        print "Found at index: " i
+        break                    @r{Exit loop immediately}
+    endif
+    if (score-list i < 0) then
+        continue                 @r{Skip to next iteration}
+    endif
+    // Process positive values
+    set i (i + 1)
+}
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using break and continue statements:
+
+@example
+Exit while/endwhile loop early
+set i 1
+while (i <= 100) {
+    if (score-list i == TARGET_VALUE) then
+        print "Found at index: " i
+        break                    @r{Exit loop immediately}
+    endif
+    set i (i + 1)
+}
+
+// Skip current iteration
+set i 1
+while (i <= 100) {
+    if (score-list i < 0) then
+        continue                 @r{Skip to next iteration}
+    endif
+    // Process non-negative values
+    set i (i + 1)
+}
+
+// Nested loop control
+set i 1
+while (i <= 10) {
+    set j 1
+    while (j <= 10) {
+        if (board i j == 0) then
+            break                @r{Exit inner loop only}
+        endif
+        // Process non-zero elements
+        set j (j + 1)
+    endwhile
+    set i (i + 1)
+}
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+SCUMM does not directly call Forth dialogue scripts. Instead, it uses
+its own functions. However, through the semantic-sugar
+layer, SCUMM commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+// Original SCUMM code
+if ((x > 100) && (x < 200)) then
+    show-message MSG-WELCOME
+endif
+
+// Desugared via semantic-sugar layer
+if ((x > 100) && (x < 200)) then
+    (:call-acc :target "ShowWelcomeMessage" :using nil)
+endif
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+// Direct memory access (mode-dependent)
+// Assuming direct memory access via pointer
+set video-memory #xb8000
+set offset (* (+ (* row 80) col) 2)
+set (peek video-memory offset) tile-num
+set (peek video-memory (+ offset 1)) attribute
+
+// Library routine approach
+load-tile-set TILESET-ID
+place-tile LAYER X Y TILE-INDEX
+scroll-background DX DY
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+// Hardware sprite approach (if available)
+init-sprites
+set-sprite-position SPRITE-ID X Y
+set-sprite-image SPRITE-ID IMAGE-ID
+show-sprite SPRITE-ID -1   @r{-1 = visible}
+
+// Software sprite approach
+set sprite-x 100
+set sprite-y 50
+set sprite-frame 0
+
+set sprite-x 100
+set sprite-y 50
+set sprite-frame ((sprite-frame + 1) mod 4)
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+// Using actors (objects)
+actor game-object
+    properties
+        x 0
+        y 0
+        width 0
+        height 0
+        active true
+    methods
+        method move dx dy
+            set x (x + dx)
+            set y (y + dy)
+        end
+    end
+end
+
+// Create instances (implicitly by defining multiple actors or using factory)
+// For simplicity, assume we have a way to create multiple instances
+// In SCUMM, actors are typically defined in the script and accessed by name
+
+// Update object position (example for one object)
+game-object#move DX DY
+
+// Check active status and draw
+if (game-object active) then
+    draw-object game-object
+endif
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following SCUMM features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (open, read, write, close)
+@item Graphics commands (draw-line, draw-circle, fill-polygon, blit)
+@item Hardware-specific features (joystick, mouse, keyboard beyond basic)
+@item Extended memory handling (unless emulated)
+@item Multithreading or concurrent execution
+@item Exception handling (try, catch, finally, throw)
+@item Pointer arithmetic and manual memory management
+@item Preprocessor directives (#define, #ifdef)
+@item Object-oriented multiple inheritance (unless using external library)
+@item Sound and music commands (unless using external library)
+@end table
+
+@node SmallTalk

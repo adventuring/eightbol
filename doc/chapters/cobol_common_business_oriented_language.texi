@@ -1,0 +1,522 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In COBOL, user-defined words (variables, procedure names, etc.) use @code{case-insensitive} naming (conventionally @code{UPPER_CASE} or @code{mixed-case} with hyphens).
+All keywords are case-insensitive but conventionally written in uppercase.
+
+@table @asis
+@item Keywords: ACCEPT, ADD, CALL, CANCEL, COMPUTE, DELETE, DISPLAY, DIVIDE, ENTRY, EVALUATE, IF, MOVE, MULTIPLY, OPEN, PERFORM, READ, RETURN, REWRITE, SEARCH, SET, SORT, START, STOP, STRING, SUBTRACT, UNSTRING, WRITE
+@item Operators: +, -, *, /, **, =, >, <, >=, <=, <> (or NOT=), AND, OR, NOT
+@item String delimiters: Quotation marks (@code{"..."}) or apostrophes (@code{'...'}) for non-numeric literals
+@item Comment lines: Indicated by an asterisk (*) in the indicator column (column 7) or @code{*>} anywhere after column 7
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+A COBOL program consists of four divisions: Identification, Environment, Data, and Procedure.
+The Procedure division contains the executable statements.
+
+@example
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. GAMELOGIC.
+
+       ENVIRONMENT DIVISION.
+       CONFIGURATION SECTION.
+       SOURCE-COMPUTER. RICOH-RP2A03.
+       OBJECT-COMPUTER. RICOH-RP2A03.
+
+       DATA DIVISION.
+       FILE SECTION.
+       WORKING-STORAGE SECTION.
+       01  GAME-STATE.
+           05  SCORE            PIC 9(6) VALUE 0.
+           05  LIVES-LEFT       PIC 9    VALUE 3.
+           05  CURRENT-ROOM     PIC 9(2) VALUE 1.
+
+       PROCEDURE DIVISION.
+       MAIN-PROGRAM.
+           PERFORM INITIALIZE-GAME
+           PERFORM MAIN-LOOP UNTIL GAME-OVER
+           STOP RUN.
+
+       INITIALIZE-GAME.
+           MOVE 0 TO SCORE
+           MOVE 3 TO LIVES-LEFT
+           MOVE 1 TO CURRENT-ROOM.
+
+       MAIN-LOOP.
+           PERFORM PROCESS-INPUT
+           PERFORM UPDATE-GAME
+           PERFORM RENDER-DISPLAY
+           IF LIVES-LEFT = 0
+               SET GAME-OVER TO TRUE
+           END-IF.
+
+       PROCESS-INPUT.
+           ACCEPT PLAYER-INPUT
+           IF PLAYER-INPUT = "MOVE NORTH"
+               ADD 10 TO CURRENT-ROOM
+           END-IF.
+
+       UPDATE-GAME.
+           @r{Game logic updates}
+
+       RENDER-DISPLAY.
+           @r{Rendering code}
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+COBOL supports object-oriented programming through factory and instance methods defined in the CLASS division.
+
+@example
+       CLASS-ID. PLAYER-GAME.
+       INHERITS BASIC-OBJECT.
+
+       FACTORY.
+       METHOD-ID. CREATE-INSTANCE.
+           PROCEDURE DIVISION USING RETURNING OBJ AS OBJECT REFERENCE.
+           SET OBJ TO SELF
+           EXIT METHOD.
+       END METHOD.
+
+       OBJECT.
+       METHOD-ID. MOVE-PLAYER.
+           PROCEDURE DIVISION USING DX AS INTEGER DY AS INTEGER.
+           COMPUTE SELF/X = SELF/X + DX
+           COMPUTE SELF/Y = SELF/Y + DY
+           EXIT METHOD.
+       END METHOD.
+       END CLASS.
+@end example
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a procedure that takes no arguments, use the CALL statement or PERFORM for internal procedures:
+
+@example
+       CALL "INITIALIZE-GRAPHICS"
+       CALL "CLEAR-SCREEN"
+       CALL "PLAY-STARTUP-MUSIC"
+       PERFORM INITIALIZE-GAME
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To call a function that returns a single value (using RETURNING):
+
+@example
+       MOVE FUNCTION NUMVAL(FUNCTION ACCEPT()) TO SCORE
+       COMPUTE BONUS = FUNCTION CALCULATE-BONUS(LEVEL, TIME-LEFT)
+       COMPpute VOLUME = FUNCTION GET-MASTER-VOLUME()
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in standard COBOL; use RETURNING in the called procedure.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To call a procedure with parameters:
+
+@example
+       CALL "DRAW-SPRITE" USING SPRITE-ID XPOS YPOS
+       CALL "PLAY-SOUND" USING SOUND-ID VOLUME LOOP-FLAG
+       CALL "CHECK-COLLISION" USING OBJ1 OBJ2 GIVING RESULT-VAR
+       PERFORM UPDATE-PLAYER USING PLAYER-X PLAYER-Y
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+COBOL accesses library routines through CALL statements or intrinsic functions:
+
+@example
+       CALL "LOADLEVEL" USING LEVEL-NUMBER          @r{Direct call}
+       CALL "FARPROC" USING LIBRARY-ADDRESS         @r{Far call}
+       COMPUTE RESULT = FUNCTION LIBRARY-FUNCTION(INPUT)  @r{Library function}
+       INVOKE OBJECT "DISPLAY" METHOD "SHOW-MESSAGE" USING MESSAGE-ID  @r{Object method call}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: CALL "ProcedureName"(...) or PERFORM ProcedureName
+@item Far: CALL "AbsoluteAddress"(...) (requires linker support)
+@item Library: CALL "LibraryEntry"(...) or FunctionName(...)
+@item Object: INVOKE OBJECT ... METHOD ... USING ...
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far procedures in COBOL are called using absolute addresses or through
+the linkage configuration for inter-bank calls:
+
+@example
+       CALL "FAR-LOAD-LIBRARY" USING &H8000         @r{Call routine in bank 1}
+       CALL "EXT-PROC" USING SEGMENT-VALUE OFFSET   @r{Call procedure in another segment}
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: CALL with segment:offset or far pointer
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in COBOL uses the INVOKE statement:
+
+@example
+       INVOKE OBJECT "PLAYER" METHOD "MOVE-PLAYER" USING 5 10
+       INVOKE OBJECT "SCORE-DISPLAY" METHOD "UPDATE" USING SCORE
+       INVOKE OBJECT "GAME-STATE" METHOD "IS-GAME-OVER" RETURNING GAME-OVER-FLAG
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties via MOVE or COMPUTE
+@item Far: Not applicable for methods (objects typically in same bank)
+@item Library: Method may call library routines internally
+@item Object: METHOD invocation on object instance
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using MOVE or COMPUTE statements:
+
+@example
+       MOVE 0 TO SCORE                           @r{Explicit assignment}
+       MOVE 3 TO LIVES-LEFT                      @r{Implicit assignment}
+       ADD 1 TO COUNTER                          @r{Increment}
+       SUBTRACT 1 FROM LIVES                     @r{Decrement}
+       COMPUTE SCORE = SCORE + 10                @r{Arithmetic assignment}
+       MOVE "Hello, World!" TO MESSAGE           @r{String assignment}
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots are assigned using MODIFY or INVOKE with SET property:
+
+@example
+       MODIFY SELF/X = 160                       @r{Set object's x coordinate}
+       MODIFY SELF/Y = 100                       @r{Set object's y coordinate}
+       MOVE 5 TO SELF/SPRITE                     @r{Set sprite number}
+       INVOKE OBJECT "PLAYER" METHOD "SET-VISIBLE" USING TRUE
+       @r{Set visibility flag}
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+Array elements are assigned using indexing with parentheses or INDEXED BY:
+
+@example
+       01  SCORE-TABLE.
+           05  SCORE-ENTRY OCCURS 10 TIMES.
+               10  INITIALS  PIC XXX.
+               10  POINTS    PIC 9(6).
+
+       01  BOARD.
+           05  ROW OCCURS 8 TIMES INDEXED BY ROW-IDX.
+               10  COL OCCURS 8 TIMES INDEXED BY COL-IDX.
+                   15  CELL PIC 9.
+
+       MOVE "ALI" TO INITIALS OF SCORE-ENTRY OF SCORE-TABLE(1)
+       MOVE 100 TO POINTS OF SCORE-ENTRY OF SCORE-TABLE(1)
+       MOVE 1 TO CELL OF ROW(3) OF COL(4) OF BOARD
+@end example
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses ADD, SUBTRACT, or COMPUTE statements:
+
+@example
+       ADD 10 TO SCORE                           @r{Addition}
+       SUBTRACT 1 FROM LIVES-LEFT                @r{Subtraction}
+       ADD WIDTH HEIGHT GIVING TOTAL             @r{Add two variables}
+       SUBTRACT DISCOUNT FROM PRICE GIVING FINAL-PRICE  @r{Subtraction}
+       COMPUTE DELTA = NEW-VALUE - OLD-VALUE     @r{Subtraction}
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting for multiplication/division by powers of two is not directly supported.
+Use COMPUTE with multiplication/division or implement via loops:
+
+@example
+       COMPUTE RESULT = VALUE * 4                @r{Multiply by 2^2}
+       COMPUTE RESULT = VALUE / 2                @r{Divide by 2^1}
+       COMPUTE RESULT = VALUE * 8                @r{Multiply by 2^3}
+       COMPUTE RESULT = VALUE / 16               @r{Divide by 2^4}
+@end example
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions use COMPUTE with operator precedence:
+
+@example
+       COMPUTE TOTAL = (BASE-SALARY * 12) + BONUS - DEDUCTIONS
+       COMPUTE AVERAGE = (SUM1 + SUM2 + SUM3) / 3
+       COMPUTE DISTANCE = FUNCTION SQRT(
+                         (X2 - X1) ** 2 + (Y2 - Y1) ** 2)
+@end example
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use relation conditions in IF, EVALUATE, and PERFORM:
+
+@example
+       IF SCORE > 1000 THEN ...                  @r{Greater than}
+       IF SCORE < 50 THEN ...                    @r{Less than}
+       IF SCORE = 100 THEN ...                   @r{Equality}
+       IF SCORE NOT = 0 THEN ...                 @r{Inequality}
+       IF X >= 0 AND X < MAX-X THEN ...          @r{Combined conditions}
+       IF BUTTON = BUTTON-A OR BUTTON = BUTTON-B THEN ... @r{Alternative conditions}
+       EVALUATE TRUE ALSO
+           WHEN SCORE > 1000 ALSO BUTTON = FIRE
+               PERFORM FIRE-WEAPON
+           WHEN SCORE < 50 ALSO BUTTON = LEFT
+               PERFORM MOVE-LEFT
+       END-EVALUATE
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses IF/THEN/ELSE/END-IF or EVALUATE statements:
+
+@example
+       IF TEMPERATURE > THOT THEN
+           MOVE "HOT" TO STATUS
+       ELSE IF TEMPERATURE > TCOLD THEN
+           MOVE "WARM" TO STATUS
+       ELSE
+           MOVE "COLD" TO STATUS
+       END-IF
+
+       EVALUATE ANSWER
+           WHEN "Y" OR "y"
+               MOVE "YES" TO RESPONSE
+           WHEN "N" OR "n"
+               MOVE "NO" TO RESPONSE
+           WHEN OTHER
+               MOVE "INVALID" TO RESPONSE
+       END-EVALUATE
+@end example
+
+COBOL does not have an EXAMINE/COND structure; EVALUATE serves
+a similar purpose for multi-way branching.
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using PERFORM with TEST BEFORE/AFTER or inline PERFORM:
+
+@example
+       *> FOR/NEXT loop equivalent (known iterations)
+       PERFORM VARYING I FROM 1 BY 1 UNTIL I > 10
+           DISPLAY "Count: " I
+       END-PERFORM
+
+       *> WHILE/WEND loop equivalent (pre-test)
+       PERFORM WITH TEST BEFORE UNTIL END-OF-FILE = TRUE
+           READ TRANSACTION-FILE
+               AT END SET END-OF-FILE TO TRUE
+           NOT AT END
+               PROCESS-TRANSACTION
+       END-PERFORM
+
+       *> DO/LOOP UNTIL equivalent (post-test)
+       PERFORM WITH TEST AFTER UNTIL USER-RESPONSE = "Y"
+           ACCEPT USER-RESPONSE
+       END-PERFORM
+
+       *> Inline PERFORM…END-PERFORM (structured block)
+       PERFORM
+           MOVE 0 TO COUNTER
+           ADD 1 TO COUNTER
+           IF COUNTER > 5 THEN EXIT PERFORM END-IF
+       END-PERFORM
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using EXIT PERFORM or EXIT DO variants:
+
+@example
+       *> Exit PERFORM loop early
+       PERFORM VARYING I FROM 1 BY 1 UNTIL I > 100
+           IF ARRAY(I) = TARGET-VALUE THEN
+               DISPLAY "Found at index: " I
+               EXIT PERFORM                    @r{Exit loop immediately}
+           END-IF
+       END-PERFORM
+
+       *> Exit DO loop equivalent early
+       PERFORM WITH TEST AFTER
+           ACCEPT "Command> " COMMAND
+           IF COMMAND = "QUIT" THEN
+               EXIT PERFORM                    @r{Exit loop immediately}
+           END-IF
+           CALL PROCESS-COMMAND(COMMAND)
+       END-PERFORM
+
+       *> Nested loop control
+       PERFORM VARYING OUTER-IDX FROM 1 BY 1 UNTIL OUTER-IDX > 10
+           PERFORM VARYING INNER-IDX FROM 1 BY 1 UNTIL INNER-IDX > 10
+               IF MATRIX(OUTER-IDX INNER-IDX) = 0 THEN
+                   EXIT PERFORM INNER          @r{Exit inner loop only}
+               END-IF
+           END-PERFORM
+       END-PERFORM
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+COBOL does not directly call Forth dialogue scripts. Instead, it uses
+its own procedures. However, through the semantic-sugar
+layer, COBOL commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+       *> Original COBOL code
+       IF (X > 100) AND (X < 200) THEN
+           CALL "SHOW-MESSAGE" USING MSG-WELCOME
+       END-IF
+
+       *> Desugared via semantic-sugar layer
+       IF ((X > 100) AND (X < 200)) THEN
+           (:call-acc :target "ShowWelcomeMessage" :using nil)
+       END-IF
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+       *> Direct memory access (mode-dependent)
+       MOVE &HB800 TO VIDEO-SEGMENT
+       MOVE (OFFSET * 2) TO VIDEO-OFFSET
+       MOVE TILE-NUM TO VIDEO-MEMORY(VIDEO-OFFSET)
+       MOVE ATTRIBUTE TO VIDEO-MEMORY(VIDEO-OFFSET + 1)
+
+       *> Library routine approach
+       CALL "LOAD-TILESET" USING TILESET-ID
+       CALL "PLACE-TILE" USING LAYER X Y TILE-INDEX
+       CALL "SCROLL-BACKGROUND" USING DX DY
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+       *> Hardware sprite approach (if available)
+       CALL "INIT-SPRITES"
+       CALL "SET-SPRITE-POSITION" USING SPRITE-ID X Y
+       CALL "SET-SPRITE-IMAGE" USING SPRITE-ID IMAGE-ID
+       CALL "SHOW-SPRITE" USING SPRITE-ID -1   @r{-1 = visible}
+
+       *> Software sprite approach
+       01  SPRITE-TABLE.
+           05  SPRITE-ENTRY OCCURS 10 TIMES.
+               10  X-COORD PIC S9(3).
+               10  Y-COORD PIC S9(3).
+               10  FRAME   PIC 9.
+
+       MOVE 100 TO X-COORD OF SPRITE-ENTRY(I)
+       MOVE 50  TO Y-COORD OF SPRITE-ENTRY(I)
+       COMPUTE FRAME OF SPRITE-ENTRY(I) = 
+           (FRAME OF SPRITE-ENTRY(I) + 1) REM 4
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+       *> Using user-defined types (OBJECT COBOL)
+       01  GAME-OBJECT.
+           05  X                 PIC S9(3).
+           05  Y                 PIC S9(3).
+           05  WIDTH             PIC 9(2).
+           05  HEIGHT            PIC 9(2).
+           05  ACTIVE            PIC 9   VALUE 1.
+
+       *> Initialize object
+       MOVE 100 TO X OF GAME-OBJECT(I)
+       MOVE 100 TO Y OF GAME-OBJECT(I)
+       MOVE 16 TO WIDTH OF GAME-OBJECT(I)
+       MOVE 16 TO HEIGHT OF GAME-OBJECT(I)
+       MOVE 1   TO ACTIVE OF GAME-OBJECT(I)
+
+       *> Update object position
+       COMPUTE X OF GAME-OBJECT(I) = X OF GAME-OBJECT(I) + DX
+       COMPUTE Y OF GAME-OBJECT(I) = Y OF GAME-OBJECT(I) + DY
+
+       *> Check active status
+       IF ACTIVE OF GAME-OBJECT(I) NOT = 0 THEN
+           CALL "DRAW-OBJECT" USING GAME-OBJECT(I)
+       END-IF
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following COBOL features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (OPEN, CLOSE, READ, WRITE, REWRITE, START)
+@item Screen Section and ACCEPT/DISPLAY for formatted screens
+@item Sorting and merging (SORT, MERGE)
+@item Report Writer (RD, REPORT, INITIATE, GENERATE, TERMINATE)
+@item Inter-program communication (COMMUNICATION, MESSAGE)
+@item Object-oriented features beyond basic classes and instances
+@item Pointer data types and procedure pointers
+@item Floating-point arithmetic (unless emulated via library)
+@item Intrinsic functions beyond basic math and string operations
+@item Debugging and declaratives (USE FOR DEBUGGING, DECLARATIVES)
+@end table
+
+@node FORTRAN

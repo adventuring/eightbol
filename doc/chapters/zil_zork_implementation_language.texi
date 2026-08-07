@@ -1,0 +1,534 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In ZIL, variable names use @code{case-insensitive} naming (conventionally @code{lower-case-with-hyphens}).
+All keywords are case-insensitive but conventionally written in uppercase.
+
+@table @asis
+@item Keywords: <IF>, <ELSE>, <THEN>, <WHILE>, <FOR>, <BREAK>, <CONTINUE>, <RETURN>, <DEFINE>, <SET>, <SETG>, <GET>, <PUT>, <CALL>, <GO>, <EXIT>, <LABEL>, < ASSERT>, <WAIT>, <STOP>, <START>, <FADE>, <RESTORE>, <SAVE>, <RESTART>, <VERSION>, <OBJECT>, <PROPERTY>, <GLOBAL>, <LOCAL>
+@item Operators: +, -, *, /, =, <>, <, >, <=, >=, AND, OR, NOT
+@item String delimiters: Double quotes (@code{"..."}) for strings, single quotes (@code{'...'}) for atoms or characters
+@item Comments: Semicolon (;) to end of line
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+A ZIL program consists of routines (functions) and object definitions, and is executed by the Z-machine interpreter.
+
+@example
+; Initialize game
+<SETG SCORE 0>
+<SETG LIVES-LEFT 3>
+<SETG CURRENT-ROOM 1>
+
+<ROUTINE INITIALIZE-GAME>
+    <SETG SCORE 0>
+    <SETG LIVES-LEFT 3>
+    <SETG CURRENT-ROOM 1>
+</ROUTINE>
+
+<ROUTINE PROCESS-INPUT>
+    ; Simulate input handling
+    <IF> <AND> <GTEQ> <INPUT> "move" <EQUAL> <INPUT> "north">
+        <SETG CURRENT-ROOM> <ADD> <GSET CURRENT-ROOM> 10
+    </IF>
+</ROUTINE>
+
+<ROUTINE UPDATE-GAME>
+    ; Game logic updates
+</ROUTINE>
+
+<ROUTINE RENDER-DISPLAY>
+    ; Rendering code
+</ROUTINE>
+
+<ROUTINE MAIN>
+    <INITIALIZE-GAME>
+    <WHILE> <NOT> <GAME-OVER>
+        <PROCESS-INPUT>
+        <UPDATE-GAME>
+        <RENDER-DISPLAY>
+    </WHILE>
+</ROUTINE>
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+ZIL supports object-oriented programming through objects and properties, with routines that operate on objects.
+
+@example
+; Define an object (e.g., a player)
+<OBJECT PLAYER
+    <PROPERTY X 0>
+    <PROPERTY Y 0>
+    <PROPERTY SPRITE 0>
+    <DEFAULT>
+>
+
+; Define a routine to move the player
+<ROUTINE MOVE-PLAYER <OBJ> <DX> <DY>>
+    <SET> <P> <OBJ> <X>> <ADD> <GET> <P> <OBJ> <X>> <DX>
+    <SET> <P> <OBJ> <Y>> <ADD> <GET> <P> <OBJ> <Y>> <DY>
+</ROUTINE>
+
+; Create instance (implicitly by defining the object)
+; Access via the object name
+</example>
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a routine that takes no arguments:
+
+@example
+<INITIALIZE-GRAPHICS>
+<CLEAR-SCREEN>
+<PLAY-STARTUP-MUSIC>
+<SOME-ROUTINE>
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To call a routine that returns a single value (in accumulator):
+
+@example
+<SETG SCORE> <CALCULATE-BONUS> <GSET LEVEL> <GSET TIME-LEFT>
+<SETG BONUS-FACTOR> <GET-INPUT-FACTOR>
+<SETG VOLUME> <GET-MASTER-VOLUME>
+<SOME-FUNCTION>
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in ZIL's standard calling convention.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To call a routine with parameters:
+
+@example
+<DRAW-SPRITE> <GSET SPRITE-ID> <GSET X-POS> <GSET Y-POS>
+<PLAY-SOUND> <GSET SOUND-ID> <GSET VOLUME> <GSET LOOP-FLAG>
+<CHECK-COLLISION> <GSET OBJ1> <GSET OBJ2> <GSET RESULT-VAR>
+<SOME-ROUTINE> <PARAM1> <PARAM2>
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+ZIL accesses library routines through standard routine calls or object property manipulation:
+
+@example
+<LOAD-LEVEL> <GSET LEVEL-NUMBER>          @r{Direct call}
+<FAR-PROC> <GSET LIBRARY-ADDRESS>         @r{Far call>
+<SETG RESULT> <LIBRARY-FUNCTION> <GSET INPUT>  @r{Library function>
+; Object method call: manipulate object properties directly or via routines
+</example>
+
+These correspond to:
+@table @asis
+@item Direct: RoutineName(...)
+@item Far: AbsoluteAddress(...) (via external interface)
+@item Library: LibraryEntry(...) or FunctionName(...)
+@item Object: Direct property manipulation or specialized routines
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far routines in ZIL are called using absolute addresses or through
+the Z-machine's call/vcall mechanism for far routines:
+
+@example
+; Assume a far routine at address 0x8000
+<FAR> <CALL> <ADDRESS> #x8000 <ARGUMENTS>
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: FAR CALL to absolute address
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in ZIL is done by manipulating object properties
+or calling routines that take the object as an argument:
+
+@example
+<SET> <P> <PLAYER> <X>> 10
+<SET> <P> <PLAYER> <Y>> 10
+<MOVE-PLAYER> <PLAYER> 5 10
+<SET> <GAME-OVER> <IS-GAME-OVER> <GAME-STATE>
+</example>
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties via <SET> and <P>
+@item Far: Not applicable for methods (objects typically in same memory)
+@item Library: Method may call library routines internally
+@item Object: Routine invocation with object as argument
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using <SET> for local variables or <SETG> for global variables:
+
+@example
+<SETG SCORE 0>                     @r{Explicit global assignment}
+<SETG LIVES-LEFT 3>                @r{Implicit global assignment}
+<SET COUNTER> <ADD> <GET COUNTER> 1> @r{Increment local}
+<SET LIVES-LEFT> <SUB> <GET LIVES-LEFT> 1> @r{Decrement local}
+<SETG SCORE> <ADD> <GSET SCORE> 10> @r{Arithmetic assignment global}
+<SETG MESSAGE> "Hello, World!"     @r{String assignment global}
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots (properties) are assigned using <SET> with <P> (property) and the object:
+
+@example
+<SET> <P> <PLAYER> <X>> 160        @r{Set object's x coordinate}
+<SET> <P> <PLAYER> <Y>> 100        @r{Set object's y coordinate}
+<SET> <P> <PLAYER> <SPRITE>> 5     @r{Set sprite number}
+<SET> <P> <PLAYER> <VISIBLE>> #t   @r{Set visibility flag}
+</example>
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+ZIL uses tables (arrays) and lists. Elements are assigned using <SET> with <T> (table) or <L> (list):
+
+@example
+<SET> <T> <SCORE-LIST> (MAKE-TABLE 10 0)>
+<SET> <T> <INITIALS-LIST> (MAKE-TABLE 10 "">
+<SET> <T> <BOARD> (MAKE-TABLE 8 8 0)>
+
+<SET> <T> <SCORE-LIST> 0> 100
+<SET> <T> <INITIALS-LIST> 0> "ALI"
+<SET> <T> <BOARD> 2 3> 1
+</example>
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses the + and - operators (via <ADD> and <SUB>):
+
+@example
+<SETG SCORE> <ADD> <GSET SCORE> 10>                  @r{Addition}
+<SETG LIVES-LEFT> <SUB> <GSET LIVES-LEFT> 1>         @r{Subtraction}
+<SETG TOTAL> <ADD> <GSET WIDTH> <GSET HEIGHT>        @r{Add two variables}
+<SETG FINAL-PRICE> <SUB> <GSET PRICE> <GSET DISCOUNT> @r{Subtraction}
+<SETG DELTA> <SUB> <GSET NEW-VALUE> <GSET OLD-VALUE> @r{Subtraction>
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting for multiplication/division by powers of two is not directly supported.
+Use multiplication/division or external routines:
+
+@example
+<SETG RESULT> <MULT> <GSET VALUE> 4>                 @r{Left shift 2 bits (multiply by 4)}
+<SETG RESULT> <DIV> <GSET VALUE> 2>                  @r{Right shift 1 bit (divide by 2)}
+<SETG RESULT> <MULT> <GSET VALUE> 8>                 @r{Multiply by 8}
+<SETG RESULT> <DIV> <GSET VALUE> 16>                 @r{Divide by 16}
+</example>
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions follow standard precedence rules:
+
+@example
+<SETG TOTAL> <ADD> <MULT> <GSET BASE-SALARY> 12> <ADD> <GSET BONUS> <SUB> <GSET DEDUCTIONS>>
+<SETG AVERAGE> <DIV> <ADD> <ADD> <GSET SUM1> <GSET SUM2> <GSET SUM3> 3.0>
+<SETG DISTANCE> <SQRT> <ADD> <SQUARE> <SUB> <GSET X2> <GSET X1> <SQUARE> <SUB> <GSET Y2> <GSET Y1>>
+</example>
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use logical operators and comparison operators:
+
+@example
+<IF> <G> <GSET SCORE> 1000> ... </IF>                  @r{Greater than}
+<IF> <L> <GSET SCORE> 50> ... </IF>                    @r{Less than}
+<IF> <E> <GSET SCORE> 100> ... </IF>                   @r{Equality}
+<IF> <NE> <GSET SCORE> 0> ... </IF>                    @r{Inequality}
+<IF> <AND> <GE> <GSET X> 0> <LT> <GSET X> <GSET MAX-X> ... </IF> @r{Combined conditions}
+<IF> <OR> <E> <GSET BUTTON> <GSET BUTTON-A> <E> <GSET BUTTON> <GSET BUTTON-B> ... </IF> @r{Alternative conditions}
+</example>
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses <IF>/<THEN>/<ELSE>/<IF> blocks:
+
+@example
+<IF> <G> <GSET TEMPERATURE> <GSET THOT>
+    <THEN>
+        <SETG STATUS> "HOT"
+    <ELSE>
+        <IF> <G> <GSET TEMPERATURE> <GSET TCOLD>
+            <THEN>
+                <SETG STATUS> "WARM"
+            <ELSE>
+                <SETG STATUS> "COLD"
+            </IF>
+        </IF>
+    </IF>
+</example>
+
+; ZIL does not have a built-in CASE statement, but we can use nested IF/THEN/ELSE/IF
+<IF> <OR> <E> <GSET ANSWER> "Y" <E> <GSET ANSWER> "y">
+    <THEN>
+        <SETG RESPONSE> "YES"
+    <ELSE>
+        <IF> <OR> <E> <GSET ANSWER> "N" <E> <GSET ANSWER> "n">
+            <THEN>
+                <SETG RESPONSE> "NO"
+            <ELSE>
+                <SETG RESPONSE> "INVALID"
+            </IF>
+        </IF>
+    </IF>
+</example>
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using <WHILE> and <FOR> loops:
+
+@example
+; <WHILE> loop equivalent (pre-test)
+<SET> <I> 1>
+<WHILE> <L> <GET I> 10>
+    <PRINT> "Count: " <GET I>
+    <SET> <I> <ADD> <GET I> 1>
+</WHILE>
+
+; <FOR> loop equivalent (known iterations)
+<FOR> <I> 1 10
+    <PRINT> "Count: " <GET I>
+</FOR>
+
+; Loop with BREAK and CONTINUE
+<SET> <I> 1
+<WHILE> <L> <GET I> 100
+    <IF> <E> <GET> <T> <SCORE-LIST> <GET I>> <GSET TARGET-VALUE>
+        <THEN>
+            <PRINT> "Found at index: " <GET I>
+            <BREAK>   @r{Exit loop immediately}
+        </IF>
+    <IF> <L> <GET> <T> <SCORE-LIST> <GET I>> 0
+        <THEN>
+            <CONTINUE>   @r{Skip to next iteration}
+        </IF>
+    ; Process positive values
+    <SET> <I> <ADD> <GET I> 1
+</WHILE>
+</example>
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using <BREAK> and <CONTINUE> statements:
+
+@example
+Exit <WHILE> loop early
+<SET> <I> 1
+<WHILE> <L> <GET I> 100
+    <IF> <E> <GET> <T> <SCORE-LIST> <GET I>> <GSET TARGET-VALUE>
+        <THEN>
+            <PRINT> "Found at index: " <GET I>
+            <BREAK>   @r{Exit loop immediately}
+        </IF>
+    <SET> <I> <ADD> <GET I> 1
+</WHILE>
+
+; Skip current iteration
+<SET> <I> 1
+<WHILE> <L> <GET I> 100
+    <IF> <L> <GET> <T> <SCORE-LIST> <GET I>> 0
+        <THEN>
+            <CONTINUE>   @r{Skip to next iteration}
+        </IF>
+    <SET> <I> <ADD> <GET I> 1
+</WHILE>
+
+; Nested loop control
+<SET> <I> 1
+<WHILE> <L> <GET I> 10
+    <SET> <J> 1
+    <WHILE> <L> <GET J> 10
+        <IF> <E> <GET> <T> <GET> <T> <MATRIX> <GET I>> <GET J>> 0
+            <THEN>
+                <BREAK>   @r{Exit inner loop only}
+            </IF>
+        <SET> <J> <ADD> <GET J> 1
+    </WHILE>
+    <SET> <I> <ADD> <GET I> 1
+</WHILE>
+</example>
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+ZIL does not directly call Forth dialogue scripts. Instead, it uses
+its own routines. However, through the semantic-sugar
+layer, ZIL commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+; Original ZIL code
+<IF> <AND> <G> <GSET X> 100 <L> <GSET X> 200>
+    <THEN>
+        <SHOW-MESSAGE> <GSET MSG-WELCOME>
+    </IF>
+</example>
+
+; Desugared via semantic-sugar layer
+<IF> <AND> <G> <GSET X> 100 <L> <GSET X> 200>
+    <THEN>
+        <:call-acc :target "ShowWelcomeMessage" :using nil>
+    </IF>
+</example>
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+; Direct memory access (mode-dependent)
+; Assuming direct memory access via pointer
+<SET> <VIDEO-MEMORY> #xB8000
+<SET> <OFFSET> <MULT> <ADD> <MULT> <GSET ROW> 80> <GSET COL> 2>
+<SET> <TILE-NUM> 42>
+<SET> <ATTRIBUTE> 7>
+<SET> <BYTE> <VIDEO-MEMORY> <OFFSET>> <TILE-NUM>
+<SET> <BYTE> <VIDEO-MEMORY> <ADD> <OFFSET> 1> <ATTRIBUTE>
+
+; Library routine approach
+<LOAD-TILE-SET> <GSET TILESET-ID>
+<PLACE-TILE> <GSET LAYER> <GSET X> <GSET Y> <GSET TILE-INDEX>
+<SCROLL-BACKGROUND> <GSET DX> <GSET DY>
+</example>
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+; Hardware sprite approach (if available)
+<INIT-SPRITES>
+<SET-SPRITE-POSITION> <GSET SPRITE-ID> <GSET X> <GSET Y>
+<SET-SPRITE-IMAGE> <GSET SPRITE-ID> <GSET IMAGE-ID>
+<SHOW-SPRITE> <GSET SPRITE-ID> -1   @r{-1 = visible}
+
+; Software sprite approach
+; Define a sprite structure (as a table or object)
+<SET> <SPRITE> (MAKE-OBJECT)
+<SET> <P> <SPRITE> <X>> 100
+<SET> <P> <SPRITE> <Y>> 50
+<SET> <P> <SPRITE> <FRAME>> 0
+
+; Update
+<SET> <P> <SPRITE> <X>> 100
+<SET> <P> <SPRITE> <Y>> 50
+<SET> <P> <SPRITE> <FRAME>> <MOD> <ADD> <GET> <P> <SPRITE> <FRAME>> 1> 4
+</example>
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+; Define a game object class (as a template object)
+<OBJECT GAME-OBJECT
+    <PROPERTY X 0>
+    <PROPERTY Y 0>
+    <PROPERTY WIDTH 0>
+    <PROPERTY HEIGHT 0>
+    <PROPERTY ACTIVE #t>
+    <DEFAULT>
+>
+
+; Create instances
+<SET> <GAME-OBJECTS> (MAKE-LIST 20)
+<FOR> <I> 0 19
+    <SET> <OBJ> (MAKE-OBJECT <GAME-OBJECT>)
+    <SET> <P> <OBJ> <X>> 100
+    <SET> <P> <OBJ> <Y>> 100
+    <SET> <P> <OBJ> <WIDTH>> 16
+    <SET> <P> <OBJ> <HEIGHT>> 16
+    <SET> <T> <GAME-OBJECTS> <I>> <OBJ>
+</FOR>
+
+; Update object position
+<FOR> <I> 0 19
+    <SET> <OBJ> <T> <GAME-OBJECTS> <I>>
+    <SET> <P> <OBJ> <X>> <ADD> <GET> <P> <OBJ> <X>> <GSET DX>
+    <SET> <P> <OBJ> <Y>> <ADD> <GET> <P> <OBJ> <Y>> <GSET DY>
+</FOR>
+
+; Check active status and draw
+<FOR> <I> 0 19
+    <SET> <OBJ> <T> <GAME-OBJECTS> <I>>
+    <IF> <GET> <P> <OBJ> <ACTIVE>>
+        <THEN>
+            <DRAW-OBJECT> <OBJ>
+        </IF>
+</FOR>
+</example>
+
+@node Unsupported
+@section Unsupported language features
+
+The following ZIL features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (OPEN, READ, WRITE, CLOSE)
+@item Graphics commands (DRAW-LINE, DRAW-CIRCLE, FILL-POLYGON, BLIT)
+@item Hardware-specific features (JOYSTICK, MOUSE, KEYBOARD beyond basic)
+@item Extended memory handling (unless emulated)
+@item Multithreading or concurrent execution
+@item Exception handling (TRY, CATCH, FINALLY, THROW)
+@item Pointer arithmetic and manual memory management
+@item Preprocessor directives (#DEFINE, #IFDEF)
+@item Object-oriented multiple inheritance (unless using external library)
+@item Sound and music commands (unless using external library)
+@end table
+

@@ -1,0 +1,534 @@
+@menu
+* Naming system::
+* Basic structure::
+* Calling routines::
+* Assignment::
+* Arithmetic::
+* Complex arithmetic::
+* Boolean expressions::
+* Control structures::
+* Loops::
+* Breaking loops::
+* Dialogue scripts::
+* Tile manipulation::
+* Decal manipulation::
+* Object manipulation::
+* Unsupported features::
+@end menu
+
+@node Naming system
+@section Naming system
+
+In Lingo, variable names use @code{case-insensitive} naming (conventionally @code{lowerCase} or @code{camelCase}).
+All keywords are case-insensitive but conventionally written in lowercase.
+
+@table @asis
+@item Keywords: if, else, then, end if, repeat, while, for, to, step, end repeat, exit, return, on, end, global, property, set, get, put, putprop, getprop, delete, send, call, invoke, new, free, copy, rename, lock, unlock, member, sprite, frame, movie, sound, keyboard, mouse, rect, point
+@item Operators: +, -, *, /, ^, =, <>, <, >, <=, >=, and, or, not, &&, ||
+@item String delimiters: Double quotes (@code{"..."}) or single quotes (@code{'...'})
+@item Comments: Two hyphens (@code{--}) to end of line, or (@code{(* ... *)}) for block comments
+@end table
+
+@node Basic structure
+@section Basic structure for a stand-alone routine or program
+
+A Lingo script consists of handlers (functions and procedures) that are called by events or other handlers.
+
+@example
+-- Initialize game
+global gScore, gLivesLeft, gCurrentRoom
+
+on startMovie
+    gScore = 0
+    gLivesLeft = 3
+    gCurrentRoom = 1
+    initializeGame()
+    repeat while not gGameOver
+        processInput()
+        updateGame()
+        renderDisplay()
+    end repeat
+end
+
+on initializeGame
+    gScore = 0
+    gLivesLeft = 3
+    gCurrentRoom = 1
+end
+
+on processInput
+    put the keys into keysPressed
+    if "space" is in keysPressed then
+        gCurrentRoom = gCurrentRoom + 10
+    end if
+end
+
+on updateGame
+    -- Game logic updates
+end
+
+on renderDisplay
+    -- Rendering code
+end
+@end example
+
+@node Basic structure object
+@section Basic structure for an object method
+
+Lingo supports object-oriented programming through parent scripts (classes) and child objects (instances).
+
+@example
+-- Parent script: ScriptObject
+property pX
+property pY
+property pSprite
+
+on new (me, x, y, sprite)
+    me.pX = x
+    me.pY = y
+    me.pSprite = sprite
+end
+
+on movePlayer (me, dx, dy)
+    me.pX = me.pX + dx
+    me.pY = me.pY + dy
+end
+
+-- Create instance
+set player = new(ScriptObject, 100, 100, 5)
+end
+@end example
+
+@node Calling routines
+@section Calling a routine (nullary)
+
+To call a handler that takes no arguments:
+
+@example
+initializeGraphics()
+clearScreen()
+playStartupMusic()
+end
+@end example
+
+@node Calling routines value
+@section Calling a routine with a value (in accumulator)
+
+To call a function that returns a single value:
+
+@example
+gScore = calculateBonus(gLevel, gTimeLeft)
+bonusFactor = getInputFactor()
+volume = getMasterVolume()
+end
+@end example
+
+@node Calling routines giving
+@section Calling a routine giving a value (in accumulator)
+
+Not applicable in Lingo's standard calling convention.
+
+@node Calling routines values
+@section Calling a routine with values in and out (in accumulator)
+
+To call a handler with parameters:
+
+@example
+drawSprite(spriteId, xPos, yPos)
+playSound(soundId, volume, loopFlag)
+checkCollision(obj1, obj2, resultVar)
+end
+@end example
+
+@node Calling library
+@section Calling a library routine (all 4 styles)
+
+Lingo accesses library routines through standard handler calls or object methods:
+
+@example
+call "loadLevel"(gLevelNum)          @r{Direct call}
+call "farProc"(libraryAddress)       @r{Far call}
+result = libraryFunction(input)      @r{Library function}
+object#method(param1, param2)        @r{Object method call}
+end
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: HandlerName(...)
+@item Far: AbsoluteAddress(...) (via external interface)
+@item Library: LibraryEntry(...) or FunctionName(...)
+@item Object: Object#MethodName(...)
+@end table
+
+@node Calling far bank
+@section Calling a far bank Service (all 4 styles)
+
+Far procedures in Lingo are called using external interfaces or through
+the DXN (Director Extension) mechanism:
+
+@example
+-- Define external interface
+external farLoadLibrary
+on farLoadLibrary (addr)
+    -- Implementation in external code
+end
+
+-- Call far routine
+farLoadLibrary(&H8000)   @r{Call routine in bank 1}
+end
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Not used for far calls
+@item Far: External interface call
+@item Library: Not applicable
+@item Object: Not applicable
+@end table
+
+@node Invoking object
+@section Invoking a method on an object (all 4 styles)
+
+Object method invocation in Lingo uses the dot notation or send command:
+
+@example
+player.movePlayer(5, 10)
+send player #movePlayer 5 10
+scoreDisplay#update(gScore)
+gameState#isGameOver()
+end
+@end example
+
+These correspond to:
+@table @asis
+@item Direct: Setting object properties via property assignment
+@item Far: Not applicable for methods (objects typically in same memory)
+@item Library: Method may call library routines internally
+@item Object: METHOD invocation on object instance
+@end table
+
+@node Assignment
+@section Assigning to a variable
+
+Variables are assigned using the assignment operator (=) or the set command:
+
+@example
+set gScore = 0                        @r{Explicit assignment}
+gLivesLeft = 3                        @r{Implicit assignment}
+gCounter = gCounter + 1               @r{Increment}
+gLivesLeft = gLivesLeft - 1           @r{Decrement}
+gScore = gScore + 10                  @r{Arithmetic assignment}
+gMessage = "Hello, World!"            @r{String assignment}
+end
+@end example
+
+@node Assignment object
+@section Assigning to an object slot
+
+Object slots (properties) are assigned using dot notation or setprop:
+
+@example
+set the pX of player = 160            @r{Set object's x coordinate}
+set the pY of player = 100            @r{Set object's y coordinate}
+set the pSprite of player = 5         @r{Set sprite number}
+set the visible of player to true     @r{Set visibility flag}
+end
+@end example
+
+@node Assignment array
+@section Assigning to an array member with a subscript
+
+Lingo uses lists for arrays. Elements are assigned using setItem or direct assignment:
+
+@example
+set scoreList = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+set initialsList = ["", "", "", "", "", "", "", "", "", ""]
+set board = [[0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0], _
+             [0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0], _
+             [0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0]]
+
+set item 1 of scoreList to 100
+set item 1 of initialsList to "ALI"
+set item 3 of item 4 of board to 1
+end
+@end example
+
+@node Arithmetic
+@section Basic arithmetic: addition and subtraction
+
+Basic arithmetic uses the + and - operators:
+
+@example
+gScore = gScore + 10                    @r{Addition}
+gLivesLeft = gLivesLeft - 1             @r{Subtraction}
+gTotal = gWidth + gHeight               @r{Add two variables}
+gFinalPrice = gPrice - gDiscount        @r{Subtraction}
+gDelta = gNewValue - gOldValue          @r{Subtraction}
+end
+@end example
+
+@node Arithmetic bit
+@section Basic arithmetic: bit-shifting for mutiplication or division
+
+Bit-shifting for multiplication/division by powers of two is not directly supported.
+Use multiplication/division or the bitAnd, bitOr, bitXor, bitNot, bitShift, etc. functions:
+
+@example
+gResult = bitShift(gValue, 2)           @r{Left shift 2 bits (multiply by 4)}
+gResult = bitShift(gValue, -1)          @r{Right shift 1 bit (divide by 2)}
+gResult = gValue * 4                    @r{Multiply by 4}
+gResult = gValue / 2                    @r{Divide by 2}
+gResult = gValue * 8                    @r{Multiply by 8}
+gResult = gValue / 16                   @r{Divide by 16}
+end
+@end example
+
+@node Complex arithmetic
+@section Complex arithmetic: multiple expressions
+
+Complex arithmetic expressions follow standard precedence rules:
+
+@example
+gTotal = (gBaseSalary * 12) + gBonus - gDeductions
+gAverage = (gSum1 + gSum2 + gSum3) / 3.0
+gDistance = sqrt((gX2 - gX1)^2 + (gY2 - gY1)^2)
+end
+@end example
+
+@node Boolean
+@section Boolean expressions: equality and inequalities
+
+Boolean expressions use logical operators and comparison operators:
+
+@example
+if (gScore > 1000) then ...             @r{Greater than}
+if (gScore < 50) then ...               @r{Less than}
+if (gScore = 100) then ...              @r{Equality}
+if (gScore <> 0) then ...               @r{Inequality}
+if (gX >= 0 and gX < gMAX_X) then ...   @r{Combined conditions}
+if (gButton = gBUTTON_A or gButton = gBUTTON_B) then ... @r{Alternative conditions}
+end if
+@end example
+
+@node If then else
+@section Using if/then/else structures and examine/cond structures
+
+Conditional execution uses if/then/else/end if blocks:
+
+@example
+if gTemperature > gTHOT then
+    gStatus = "HOT"
+else if gTemperature > gTCOLD then
+    gStatus = "WARM"
+else
+    gStatus = "COLD"
+end if
+
+case gAnswer of
+    "Y", "y": put "YES"
+    "N", "n": put "NO"
+    otherwise: put "INVALID"
+end case
+end
+@end example
+
+Lingo does not have an EXAMINE/COND structure; the case statement serves
+a similar purpose for multi-way branching.
+
+@node Performing
+@section Performing loops
+
+Loops are implemented using repeat loops with various forms:
+
+@example
+! repeat loop equivalent (known iterations)
+repeat with i = 1 to 10
+    put "Count: " && i
+end repeat
+
+! repeat while loop equivalent (pre-test)
+i = 1
+repeat while i <= 10
+    put "Count: " && i
+    i = i + 1
+end repeat
+
+! repeat forever loop with exit
+repeat forever
+    get the keys
+    if it contains "quit" then exit repeat
+    processCommand(it)
+end repeat
+
+! repeat loop with exit and next
+repeat with i = 1 to 100
+    if item i of gArray = gTARGET_VALUE then
+        put "Found at index: " && i
+        exit repeat
+    end if
+    if item i of gArray < 0 then
+        next repeat
+    end if
+    ! Process positive values
+end repeat
+@end example
+
+@node Breaking loops
+@section Breaking out of loops safely
+
+Early loop exit is achieved using exit repeat or next repeat statements:
+
+@example
+! Exit repeat loop early
+repeat with i = 1 to 100
+    if item i of gArray = gTARGET_VALUE then
+        put "Found at index: " && i
+        exit repeat                    @r{Exit loop immediately}
+    end if
+end repeat
+
+! Skip current iteration
+repeat with i = 1 to 100
+    if item i of gArray < 0 then
+        next repeat                    @r{Skip to next iteration}
+    end if
+    ! Process non-negative values
+end repeat
+
+! Nested loop control
+repeat with i = 1 to 10
+    repeat with j = 1 to 10
+        if item j of item i of gMatrix = 0 then
+            exit repeat                @r{Exit inner loop only}
+        end if
+        ! Process non-zero elements
+    end repeat
+end repeat
+@end example
+
+@node Dialogue
+@section Calling a dialogue script (Forth scripts)
+
+Lingo does not directly call Forth dialogue scripts. Instead, it uses
+its own handlers. However, through the semantic-sugar
+layer, Lingo commands can be mapped to calls of the shared Fountain/Forth
+runtime library:
+
+@example
+! Original Lingo code
+if ((gX > 100) and (gX < 200)) then
+    call "showMessage"(gMSG_WELCOME)
+end if
+
+! Desugared via semantic-sugar layer
+if ((gX > 100) and (gX < 200)) then
+    (:call-acc :target "ShowWelcomeMessage" :using nil)
+end if
+@end example
+
+@node Tiles
+@section Manipulating tiles
+
+Tile manipulation is performed through direct video memory access
+or through library routines for tiled backgrounds:
+
+@example
+! Direct memory access (mode-dependent)
+set the rect of member 1 to rect(0,0,640,480)
+set the image of member 1 to image("tileset")
+set the location of member 1 to point(gX * 16, gY * 16)
+set the member of sprite 1 to 1
+
+! Library routine approach
+call "loadTileSet"(gTILESET_ID)
+call "placeTile"(gLAYER, gX, gY, gTILE_INDEX)
+call "scrollBackground"(gDX, gDY)
+end
+@end example
+
+@node Decals
+@section Manipulating decals
+
+Decals (sprites or movable objects) are manipulated using:
+
+@example
+! Hardware sprite approach (if available)
+call "initSprites"
+call "setSpritePosition"(gSPRITE_ID, gX, gY)
+call "setSpriteImage"(gSPRITE_ID, gIMAGE_ID)
+call "showSprite"(gSPRITE_ID, -1)   @r{-1 = visible}
+
+! Software sprite approach
+set the loc of sprite gSPRITE_ID = point(gX, gY)
+set the member of sprite gSPRITE_ID = gMEMBER_ID
+set the rotation of sprite gSPRITE_ID = gROTATION
+end
+@end example
+
+@node Objects
+@section Manipulating objects
+
+Object manipulation depends on the implementation approach:
+
+@example
+! Using parent scripts (classes)
+-- Parent script: GameObject
+property pX
+property pY
+property pWidth
+property pHeight
+property pActive
+
+on new (me, x, y, width, height)
+    me.pX = x
+    me.pY = y
+    me.pWidth = width
+    me.pHeight = height
+    me.pActive = TRUE
+end
+
+on move (me, dx, dy)
+    me.pX = me.pX + dx
+    me.pY = me.pY + dy
+end
+
+! Create instances
+set gameObjects = []
+repeat with i = 1 to 20
+    append gameObjects new(GameObject, 100, 100, 16, 16)
+end repeat
+
+! Update object position
+repeat with i = 1 to count(gameObjects)
+    set gameObjects[i].pX = gameObjects[i].pX + dx
+    set gameObjects[i].pY = gameObjects[i].pY + dy
+end repeat
+
+! Check active status and draw
+repeat with i = 1 to count(gameObjects)
+    if gameObjects[i].pActive then
+        call "drawObject"(gameObjects[i])
+    end if
+end repeat
+end
+@end example
+
+@node Unsupported
+@section Unsupported language features
+
+The following Lingo features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O operations (open, read, write, close)
+@item Graphics commands (drawRect, drawOval, drawPoly, drawLine)
+@item Hardware-specific features (joystick, keyboard beyond basic keys)
+@item Extended memory handling (unless emulated)
+@item Multithreading or concurrent execution
+@item Exception handling (try, catch, finally)
+@item Pointer arithmetic and manual memory management
+@item Preprocessor directives (#define, #ifdef)
+@item 3D language features (unless using external 3D engine)
+@end table
+
+@node Lua
