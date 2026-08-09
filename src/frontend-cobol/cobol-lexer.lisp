@@ -25,9 +25,25 @@
   (digit-char-p char 36))
 
 (defun parse-eightbol-number (number-string)
-  "Parse number token. Supports: x'9'|x'99'|x'9999'|x'9999,9999', o'...', d'...',
-b'...', plain decimal. w'XXXX'|w\"XXXX\" produces string token for assembler.
-Signals error on invalid digit sequences."
+  "Parse number token with support for multiple formats.
+
+INPUTS: NUMBER-STRING — a quoted numeric literal or plain decimal.
+
+SUPPORTED FORMATS:
+- Decimal: plain digits (123) or d'123' (explicit decimal)
+- Hexadecimal: x'9F' or x'9999' or x'1234,5678' (dword with optional comma separator)
+- Octal: o'77' or o'377'
+- Binary: b'101010' or b'1010,1010' (dword with optional comma separator)
+- String formats (returned as-is to assembler):
+  - w'XXXX' or w\"XXXX\" (minifont string for assembler)
+  - z'...' or z\"...\" (zero-terminated string, unimplemented)
+  - u'...' or u\"...\" (unicode string, unimplemented)
+  - p'...' or p\"...\" (pascal string, unimplemented)
+
+OUTPUTS: integer value for numeric formats, or signals error on invalid input.
+
+SIDE EFFECTS: String-format prefixes (w, z, u, p) are handled by lexer before
+this function is called; they produce :string tokens, not :number tokens."
   (flet ((parse (string radix)
            (handler-case
                (parse-integer string :radix radix)
@@ -37,22 +53,45 @@ Signals error on invalid digit sequences."
     (cond
       ((< (length number-string) 1)
        (error "Empty number string"))
+      ;; Decimal: d'123' or plain decimal digits
       ((and (char-equal (char number-string 0) #\d)
             (> (length number-string) 3))
        (parse (subseq number-string 2 (1- (length number-string))) 10))
+      ;; Hexadecimal: x'1234' or x'1234,5678' (dword format with comma separator)
       ((and (char-equal (char number-string 0) #\x)
             (> (length number-string) 3))
        (let ((digits (remove #\, (subseq number-string 2 (1- (length number-string))))))
          (parse digits 16)))
+      ;; Octal: o'377'
       ((and (char-equal (char number-string 0) #\o)
             (> (length number-string) 3))
        (parse (subseq number-string 2 (1- (length number-string))) 8))
+      ;; Binary: b'1010' or b'1010,1010' (dword format with comma separator)
       ((and (char-equal (char number-string 0) #\b)
             (> (length number-string) 3))
-       (parse (subseq number-string 2 (1- (length number-string))) 2))
-      ;; w'XXXX'|w"XXXX" — minifont string; assembler performs encoding. Not handled here.
-      ;; Lexer produces (string "XXXX") for w format so backend emits .LogFault "XXXX".
+       (let ((digits (remove #\, (subseq number-string 2 (1- (length number-string))))))
+         (parse digits 2)))
+      ;; Plain decimal (no prefix): 123, 0, 255, etc.
       (t (parse number-string 10)))))
+
+(defun normalize-identifier (identifier)
+  "Normalize IDENTIFIER to Header-Case-With-Hyphens form.
+
+COBOL identifiers contain alphanumerics and hyphens. This function:
+- Converts to Header-Case (uppercase first letter of each word)
+- Replaces underscores with hyphens for consistency
+- Ensures the result conforms to eightbol naming conventions
+
+INPUTS: IDENTIFIER — a string or symbol
+
+OUTPUTS: normalized string suitable for use in AST nodes
+
+EXAMPLE: normalize-identifier \"my_variable\" → \"My-Variable\""
+  (let* ((str (if (symbolp identifier) (string identifier) identifier))
+         ;; Replace underscores with hyphens
+         (with-hyphens (substitute #\- #\_ str :test #'char-equal)))
+    ;; Apply Header-Case from cl-change-case
+    (header-case with-hyphens)))
 
 (defun parse-string (token)
   "Parse string token"
@@ -270,7 +309,7 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
                                                          (subseq token 1)))
                                              (list 'number (parse-integer (subseq token 1) :radix 16)))
                                             ((every #'constituent-char-p token)
-                                            (list 'symbol (coerce token 'string)))
+                                            (list 'symbol (normalize-identifier (coerce token 'string))))
                                            (t (list 'bareword token)))
                                          meta))))
           #+() (format *trace-output* "~& // ~s" token)
