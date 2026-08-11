@@ -556,8 +556,8 @@ treat as bare NAME (immediate lda #), not an instance slot."
 	 (with-accumulator-value (expression)
 	   (format out "~%~10Tlda ~a" (to-identifier expression)))))
 
-      (t
-       (with-accumulator-value (expression)
-         (format out "~%~10Tlda ~a" (emit-6502-value expression)))))))
+       (t
+        (with-accumulator-value (expression)
+          (format out "~%~10Tlda ~a" (emit-6502-value expression)))))))
 
 

@@ -14,7 +14,9 @@
               define set get put call exit goto label
               assert wait stop start fade restore save restart
               version to end
-              number string ident))))
+              dialogue print input
+              number hex-number octal-number binary-number dword-number
+              string ident))))
 
 ;;; Parser action functions for SCUMM
 
@@ -55,6 +57,37 @@
   "goto label"
   (make-goto-node label))
 
+(defun scumm-parse-print (msg &optional args)
+  "print msg [, args...]
+   Produces a :print AST node for output statements."
+  (make-print-node (cons msg (or args '()))))
+
+(defun scumm-parse-input (prompt var)
+  "input prompt var
+   Produces an :input AST node for reading user input."
+  (make-input-node (make-identifier var) :prompt prompt))
+
+(defun scumm-parse-dialogue (npc msg &optional responses)
+  "dialogue npc says msg [with responses]
+   Produces a :dialogue AST node for NPC dialogue."
+  (make-dialogue-node npc :statements (cons msg (or responses '()))))
+
+(defun scumm-parse-number (token-value token-type)
+  "Parse number literals based on token type.
+   
+   Handles:
+   - :number (decimal)
+   - :hex-number (0x prefix)
+   - :octal-number (0o prefix)
+   - :binary-number (0b prefix)
+   - :dword-number (0d\"WORD\" format)"
+  (case token-type
+    (:hex-number (parse-hex-literal token-value))
+    (:octal-number (parse-octal-literal token-value))
+    (:binary-number (parse-binary-literal token-value))
+    (:dword-number (parse-dword-literal token-value))
+    (t (parse-integer token-value))))
+
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)
   (eval
@@ -69,7 +102,9 @@
                    define set get put call exit goto label
                    assert wait stop start fade restore save restart
                    version to end
-                   number string ident))
+                   dialogue print input
+                   number hex-number octal-number binary-number dword-number
+                   string ident))
       
       (program
        (statement
@@ -94,6 +129,12 @@
         (lambda (r) r))
        (goto-stmt
         (lambda (g) g))
+       (print-stmt
+        (lambda (p) p))
+       (input-stmt
+        (lambda (i) i))
+       (dialogue-stmt
+        (lambda (d) d))
        (expr-stmt
         (lambda (e) e)))
       
@@ -135,6 +176,22 @@
        (goto label semicolon
         (lambda (lbl) (scumm-parse-goto lbl))))
       
+      (print-stmt
+       (print string semicolon
+        (lambda (msg) (scumm-parse-print msg)))
+       (print string comma expr-list semicolon
+        (lambda (msg args) (scumm-parse-print msg args))))
+      
+      (input-stmt
+       (input string ident semicolon
+        (lambda (prompt var) (scumm-parse-input prompt var))))
+      
+      (dialogue-stmt
+       (dialogue ident string semicolon
+        (lambda (npc msg) (scumm-parse-dialogue npc msg)))
+       (dialogue ident string comma expr-list semicolon
+        (lambda (npc msg responses) (scumm-parse-dialogue npc msg responses))))
+      
       (expr-stmt
        (expression semicolon
         (lambda (e) e)))
@@ -142,50 +199,61 @@
       (expression
        (ident
         (lambda (id) (make-identifier id)))
-        (number
-         (lambda (n) (parse-integer n)))
-        (string
-         (lambda (s) s))
-        (expression plus expression
-         (lambda (l r) (make-expression-add l r)))
-        (expression minus expression
-         (lambda (l r) (make-expression-subtract l r)))
-        (expression times expression
-         (lambda (l r) (make-expression-multiply l r)))
-        (expression divide expression
-         (lambda (l r) (make-expression-divide l r)))
-        (expression mod expression
-         (lambda (l r) (list :mod l r)))
-        (expression equal expression
-         (lambda (l r) (make-conditional-eq l r)))
-        (expression ne expression
-         (lambda (l r) (make-conditional-ne l r)))
-        (expression lt expression
-         (lambda (l r) (make-conditional-lt l r)))
-        (expression gt expression
-         (lambda (l r) (make-conditional-gt l r)))
-        (expression le expression
-         (lambda (l r) (make-conditional-le l r)))
-        (expression ge expression
-         (lambda (l r) (make-conditional-ge l r)))
-        (expression and expression
-         (lambda (l r) (make-conditional-and l r)))
-        (expression or expression
-         (lambda (l r) (make-conditional-or l r)))
-        (not expression
-         (lambda (e) (make-conditional-not e)))
+       (number-literal
+        (lambda (n) n))
+       (string
+        (lambda (s) s))
+       (expression plus expression
+        (lambda (l r) (make-expression-add l r)))
+       (expression minus expression
+        (lambda (l r) (make-expression-subtract l r)))
+       (expression times expression
+        (lambda (l r) (make-expression-multiply l r)))
+       (expression divide expression
+        (lambda (l r) (make-expression-divide l r)))
+       (expression mod expression
+        (lambda (l r) (list :mod l r)))
+       (expression equal expression
+        (lambda (l r) (make-conditional-eq l r)))
+       (expression ne expression
+        (lambda (l r) (make-conditional-ne l r)))
+       (expression lt expression
+        (lambda (l r) (make-conditional-lt l r)))
+       (expression gt expression
+        (lambda (l r) (make-conditional-gt l r)))
+       (expression le expression
+        (lambda (l r) (make-conditional-le l r)))
+       (expression ge expression
+        (lambda (l r) (make-conditional-ge l r)))
+       (expression and expression
+        (lambda (l r) (make-conditional-and l r)))
+       (expression or expression
+        (lambda (l r) (make-conditional-or l r)))
+       (not expression
+        (lambda (e) (make-conditional-not e)))
        (lparen expression rparen
         (lambda (e) e))
        (ident lbracket expression rbracket
         (lambda (id e) (list :subscript id e))))
       
-       (expr-list
-        (expression
-         (lambda (e) (list e)))
-        (expr-list comma expression
-         (lambda (el e) (nconc el (list e))))))))
+      (number-literal
+       (number
+        (lambda (n) (parse-integer n)))
+       (hex-number
+        (lambda (n) (scumm-parse-number n :hex-number)))
+       (octal-number
+        (lambda (n) (scumm-parse-number n :octal-number)))
+       (binary-number
+        (lambda (n) (scumm-parse-number n :binary-number)))
+       (dword-number
+        (lambda (n) (scumm-parse-number n :dword-number))))
+      
+      (expr-list
+       (expression
+        (lambda (e) (list e)))
+       (expr-list comma expression
+        (lambda (el e) (nconc el (list e))))))))
 
 (defun scumm-parser ()
   "Return the SCUMM YACC parser function."
   *scumm-parser*)
-

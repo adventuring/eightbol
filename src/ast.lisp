@@ -42,15 +42,18 @@
 ;;   (:refmod :base name :start expr :length expr)  — reference modification name(start:length)
 ;;   (:subscript name index)  — subscripted identifier name(index)
 ;;   :self / :null        — SELF / NULL
-;;
+;; ;;
 ;; FORTRAN-inspired node shapes (explicit typing, no implicit numeric):
 ;;   (:fortran-move       :from expr :to identifier :target-type type-keyword)
 ;;   (:fortran-compute    :target identifier :expression expr :result-type type-keyword)
-;;   (:fortran-declare    :name identifier :type type-keyword [:init expr])
 ;;   (:fortran-do         :var identifier :from expr :to expr [:by expr] :stmts stmts)
 ;;   (:fortran-if         :condition expr :then stmts :else stmts)
 ;;   (:fortran-logical-op :op keyword :left expr :right expr)
 ;;   (:fortran-arith-op   :op keyword :left expr :right expr :result-type type-keyword)
+;;   (:fortran-print      :arguments exprs :format format-spec :unit unit-expr)
+;;   (:fortran-read       :variables vars :format format-spec :unit unit-expr)
+;;   (:fortran-write      :arguments exprs :format format-spec :unit unit-expr)
+;;   (:fortran-dialogue   :type keyword :arguments exprs :format format-spec)
 
 (in-package :eightbol)
 
@@ -75,7 +78,35 @@
         :method-id  method-id
         :statements (or statements '())))
 
-;;; FORTRAN Constructors with explicit typing (no implicit numeric)
+;;; FORTRAN I/O and dialogue node constructors
+
+(defun make-fortran-print (arguments &key format unit)
+  "Build a :fortran-print AST node for PRINT statements.
+   ARGUMENTS — list of expressions to output
+   FORMAT — optional format specification
+   UNIT — optional output unit (default: standard output)"
+  (list :fortran-print :arguments arguments :format format :unit unit))
+
+(defun make-fortran-read (variables &key format unit)
+  "Build a :fortran-read AST node for READ statements.
+   VARIABLES — list of variables to read into
+   FORMAT — optional format specification
+   UNIT — optional input unit (default: standard input)"
+  (list :fortran-read :variables variables :format format :unit unit))
+
+(defun make-fortran-write (arguments &key format unit)
+  "Build a :fortran-write AST node for WRITE statements.
+   ARGUMENTS — list of expressions to write
+   FORMAT — optional format specification
+   UNIT — output unit (required)"
+  (list :fortran-write :arguments arguments :format format :unit unit))
+
+(defun make-fortran-dialogue (dialogue-type arguments &key format)
+  "Build a :fortran-dialogue AST node for dialogue/input/output operations.
+   DIALOGUE-TYPE — keyword like :PRINT, :READ, :INPUT, :OUTPUT
+   ARGUMENTS — list of expressions or variables
+   FORMAT — optional format specification"
+  (list :fortran-dialogue :type dialogue-type :arguments arguments :format format))
 
 (defun make-fortran-move (from to &optional target-type)
   "Build a :fortran-move AST node with explicit typing."
@@ -104,6 +135,21 @@
 (defun make-fortran-type (name type &key fields)
   "Build a :fortran-type AST node for structured types."
   (list :fortran-type :name name :type type :fields fields))
+
+(defun make-print-node (expressions)
+  "Build a :print AST node for PRINT statements.
+EXPRESSIONS is a list of values/strings to print."
+  (list :print :expressions (or expressions '())))
+
+(defun make-input-node (variables)
+  "Build an :input AST node for INPUT statements.
+VARIABLES is a list of identifiers to read into."
+  (list :input :variables (or variables '())))
+
+(defun make-dialogue-node (character text)
+  "Build a :dialogue AST node for dialogue statements.
+CHARACTER is the character name, TEXT is the dialogue string."
+  (list :dialogue :character character :text text))
 
 ;;; Accessors
 
@@ -218,3 +264,26 @@ Used by termination validation: @code{:assembly-entry} is not executable code."
   "Return the canonical output directory component for a CPU keyword.
 Uses display names: cp1610, 65c02, RP2A03, m68k, i286, Z80, etc."
   (cpu-display-name cpu))
+
+;;; Validation
+
+(defun validate-ast-no-data-definitions (ast frontend-name)
+  "Validate that AST does not contain data definition nodes for non-COBOL frontends.
+Only COBOL frontend should emit :dd or :fortran-* data definition nodes.
+Returns NIL if valid, or error message if invalid."
+  (when (and frontend-name (not (string-equal frontend-name "COBOL")))
+    (labels
+        ((has-data-definitions (node)
+           (when (listp node)
+             (or (eq (first node) :dd)
+                 (eq (first node) :fortran-declare)
+                 (eq (first node) :fortran-class)
+                 (eq (first node) :fortran-method)
+                 (eq (first node) :fortran-new)
+                 (some #'has-data-definitions (rest node))))))
+      (when (has-data-definitions ast)
+        (format nil "Frontend ~A must not emit data definition nodes (~A)" frontend-name
+                (let ((node (find-if #'has-data-definitions ast)))
+                  (when node (first node))))))))
+
+;;; End of file

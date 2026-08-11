@@ -1,134 +1,291 @@
-;; src/lingo-parser.lisp -- YACC parser for Lingo source
+;;; src/frontend-lingo/lingo-parser.lisp — YACC parser for Lingo source
+;;;; Copyright © 2026 Interworldly Adventuring, LLC
 (in-package :eightbol)
 
-(defun collect-methods (modules)
-  "Collect method names from module list. Currently returns the modules list as-is.
-   Placeholder for future method collection logic."
-  modules)
+(defun lingo-parse-program (statements)
+  "Top-level program node from list of statement nodes."
+  (make-program-node
+   "LingoProgram"
+   :methods (remove nil statements)))
+
+(defun lingo-make-ident (name)
+  "Normalize identifier to Header-Case."
+  (if (stringp name)
+      (lingo-normalize-identifier name)
+      name))
+
+;;; Token list for Lingo YACC parser
+(eval-when (:compile-toplevel :execute :load-toplevel)
+  (defun lingo-token-list ()
+    (mapcar (compose #'intern #'string)
+            '(|(| |)| |{| |}| |[| |]| |.| |,| |:| |::=|
+              + - * / = == <> != < > <= >=
+              on end if then else endif repeat with for in to step up down where
+              while until do loop exit next put get input print set call goto go
+              frame properties property tell endtell method procedure class return
+              play stop halt library service bank of the and or not true false null
+              self assembly entry copy as data
+              number string ident))))
 
 ;; Lingo YACC grammar with AST node construction
-
 (eval
  `(yacc:define-parser *lingo-parser*
     (:muffle-conflicts :some)
+    (:terminals (,@(lingo-token-list)))
     (:start-symbol program)
 
-  ;; Program Root
-  (program
-    (module-definition+
-      (lambda (modules)
-        (make-program-node :class-id "Lingo Program" :methods (collect-methods modules)))))
+    ;;  Program Root 
+    (program
+     ((constantly nil))
+     (definition-list (lambda (defs) defs)))
 
-  ;; Module/Function Definitions
-  (module-definition+
-    (module-definition)
-    (module-definition+ module-definition))
+    ;;  Definition List 
+    (definition-list
+     (definition (lambda (d) (list d)))
+     (definition-list definition
+                      (lambda (prev curr)
+                        (append prev (list curr)))))
 
-  ;; Method Definitions
-  (method-definition
-    (method-signature method-body
-      (lambda (name args body)
-        (make-method-node name :statements body))))
+    ;;  Definitions 
+    (definition
+     (method-def)
+     (procedure-def)
+     (class-def))
 
-  ;; Procedure Definitions
-  (procedure-definition
-    (procedure-signature procedure-body
-      (lambda (name body)
-        (make-procedure-node name :statements body))))
+    ;;  Method Definition 
+    (method-def
+     (method ident |(| param-list |)| statement-list end
+             (lambda (name params body)
+               (make-method-node (lingo-make-ident name) :statements body))))
 
-  ;; Statement List
-  (statement-list
-    ((constantly nil))
-    (statement (lambda (s) (list s)))
-    (statement-list statement
-                   (lambda (prefix suffix) (append prefix (list suffix)))))
+    ;;  Procedure Definition 
+    (procedure-def
+     (procedure ident |(| param-list |)| statement-list end
+                (lambda (name params body)
+                  (make-procedure-node (lingo-make-ident name) :statements body))))
 
-  ;; Statements
-  (statement
-    (assignment)
-    (call-stmt)
-    (loop-stmt)
-    (if-stmt)
-    (return-stmt)
-    (goto-stmt)
-    (expression))
+    ;;  Class Definition 
+    (class-def
+     (class ident statement-list end
+            (lambda (name body)
+              (list :class :name (lingo-make-ident name) :body body))))
 
-  ;; Assignments
-  (assignment
-    (set-stmt)
-    (move-stmt)
-    (property-stmt))
+    ;;  Parameter List 
+    (param-list
+     ((constantly nil))
+     (param-item-list (lambda (p) p)))
 
-  ;; Set Statement
-  (set-stmt
-    (SET ident :TO expression
-      (lambda (target value)
-        (make-move-node target value))))
+    (param-item-list
+     (ident (lambda (i) (list (lingo-make-ident i))))
+     (param-item-list |,| ident
+                      (lambda (prev i)
+                        (append prev (list (lingo-make-ident i))))))
 
-  ;; Move Statement
-  (move-stmt
-    (MOVE expression :TO ident
-      (lambda (value target)
-        (make-move-node value target))))
+    ;;  Statement List 
+    (statement-list
+     ((constantly nil))
+     (statement (lambda (s) (list s)))
+     (statement-list statement
+                     (lambda (prefix suffix)
+                       (append prefix (list suffix)))))
 
-  ;; Property Statement (Lingo specific)
-  (property-stmt
-    (PROPERTY identifiers
-      (lambda (idents)
-        (make-move-node (make-literal-string "properties") (make-qualified-identifier (first idents) "self")))))
+    ;;  Statements 
+    (statement
+     (assignment)
+     (call-stmt)
+     (copy-stmt)
+     (loop-stmt)
+     (if-stmt)
+     (return-stmt)
+     (goto-stmt)
+     (io-stmt)
+     (expression))
 
-  ;; Call Statement
-  (call-stmt
-    (CALL expression LPAREN arg-list? RPAREN
-      (lambda (target args)
-        (if (assoc "library" args)
-            (make-call-node target :bank nil :library t)
-            (make-call-node target :args (or args nil))))))
+    ;;  I/O Statements 
+    (io-stmt
+     (put expression
+          (lambda (val)
+            (list :put :value val)))
+     (get ident
+          (lambda (var)
+            (list :get :target (lingo-make-ident var))))
+     (input ident
+            (lambda (var)
+              (list :input :target (lingo-make-ident var))))
+     (print expression
+            (lambda (val)
+              (list :print :value val))))
 
-  ;; Loop Statements
-  (loop-stmt
-    (FOR ident :IN expression :TO expression :STEP expression DO statement-list END
-      (lambda (var start end step stmts)
-        (make-perform-node "LOOP-WITH"
-                          :varying var :from start :to end :by step :then stmts)))
-    (WHILE expression DO statement-list END
-      (lambda (cond stmts)
-        (make-perform-node "LOOP-WHILE"
-                          :until (make-conditional-not cond) :then stmts))))
+    ;;  Assignments 
+    (assignment
+     (set-stmt)
+     (move-stmt)
+     (property-stmt))
 
-  ;; Conditional Statements
-  (if-stmt
-    (IF expression THEN statement-list ELSE statement-list? END IF
-      (lambda (cond then-stmts else-stmts _end)
-        (make-if-node cond then-stmts (or else-stmts '())))))
+    ;;  Set Statement 
+    (set-stmt
+     (set ident to expression
+          (lambda (target value)
+            (make-move-node (lingo-make-ident target) value))))
 
-  ;; Return Statement
-  (return-stmt
-    (RETURN expression?
-      (lambda (expr)
-        (if expr (make-move-node expr "RESULT") (make-goback-node)))))
+    ;;  Move Statement 
+    (move-stmt
+     (on expression to ident
+         (lambda (value target)
+           (make-move-node value (lingo-make-ident target)))))
 
-  ;; Goto Statement
-  (goto-stmt
-    (GOTO ident
-      (lambda (label)
-        (make-goto-node label))))
+    ;;  Property Statement 
+    (property-stmt
+     (property ident-list
+               (lambda (idents)
+                 (list :property-decl :identifiers idents))))
 
-  ;; Expression Parsing
-  (expression
-    (primary))
+    ;;  Call Statement 
+    (call-stmt
+     (call expression |(| arg-list |)|
+           (lambda (target args)
+             (make-invoke-node target)))
+     (call ident
+           (lambda (target)
+             (make-invoke-node (lingo-make-ident target)))))
 
-  (primary
-    (identifier COLON ident arg-list?
-      (lambda (obj method args)
-        (make-invoke-node obj method :args args)))
-    (identifier DOT ident arg-list?
-      (lambda (obj method args)
-        (make-invoke-node obj method :args args))))
+    ;;  Copy Statement 
+    (copy-stmt
+     (copy string
+           (lambda (filename)
+             (list :copy :name filename))))
 
-  (identifier
-    (string (lambda (s) s)))
+    ;;  Loop Statements 
+    (loop-stmt
+     (for ident in expression to expression step expression do statement-list end
+       (lambda (var start end step body)
+         (make-perform-node (lingo-make-ident var)
+                            :from start :to end :by step
+                            :body body)))
+     (while expression do statement-list end
+       (lambda (cond body)
+         body))
+     (repeat statement-list until expression end
+       (lambda (body cond)
+         body)))
+    
+    ;;  Conditional Statements 
+    (if-stmt
+     (if expression then statement-list endif
+         (lambda (cond then-stmts)
+           (make-if-node cond then-stmts nil)))
+     (if expression then statement-list else statement-list endif
+         (lambda (cond then-stmts else-stmts)
+           (make-if-node cond then-stmts else-stmts))))
 
-  (arg-list?
-    ((constantly nil))
-    (|,| arg-list (lambda (args) args)))))
+    ;;  Return Statement 
+    (return-stmt
+     (return
+       (lambda () (make-goback-node)))
+     (return expression
+             (lambda (val)
+               (make-move-node val "RESULT"))))
+
+    ;;  Goto Statement 
+    (goto-stmt
+     (goto ident
+           (lambda (target)
+             (make-goto-node (lingo-make-ident target)))))
+
+    ;;  Expression Parsing 
+    (expression
+     (or-expr))
+
+    (or-expr
+     (and-expr)
+     (or-expr or and-expr
+              (lambda (l r) (make-conditional-or l r))))
+
+    (and-expr
+     (not-expr)
+     (and-expr and not-expr
+               (lambda (l r) (make-conditional-and l r))))
+
+    (not-expr
+     (comparison)
+     (not not-expr
+          (lambda (e) (make-conditional-not e))))
+
+    (comparison
+     (add-expr)
+     (comparison = add-expr
+                 (lambda (l r) (make-conditional-eq l r)))
+     (comparison <> add-expr
+                 (lambda (l r) (make-conditional-ne l r)))
+     (comparison != add-expr
+                 (lambda (l r) (make-conditional-ne l r)))
+     (comparison < add-expr
+                 (lambda (l r) (make-conditional-lt l r)))
+     (comparison > add-expr
+                 (lambda (l r) (make-conditional-gt l r)))
+     (comparison <= add-expr
+                 (lambda (l r) (make-conditional-le l r)))
+     (comparison >= add-expr
+                 (lambda (l r) (make-conditional-ge l r))))
+
+    (add-expr
+     (mult-expr)
+     (add-expr + mult-expr
+               (lambda (l r) (make-expression-add l r)))
+     (add-expr - mult-expr
+               (lambda (l r) (make-expression-subtract l r))))
+
+    (mult-expr
+     (primary-expr)
+     (mult-expr * primary-expr
+                (lambda (l r) (make-expression-multiply l r)))
+     (mult-expr / primary-expr
+                (lambda (l r) (make-expression-divide l r))))
+
+    ;;  Primary Expressions 
+    (primary-expr
+     (literal)
+     (ident)
+     (|(| expression |)|
+          (lambda (e) e))
+     (primary-expr |.| ident
+                   (lambda (obj prop)
+                     (make-qualified-identifier (lingo-make-ident prop) obj)))
+     (primary-expr |:| ident |(| arg-list |)|
+                   (lambda (obj method args)
+                     (list :method-call :object obj :method (lingo-make-ident method))))
+     (ident |(| arg-list |)|
+            (lambda (func args)
+              (list :function-call :name (lingo-make-ident func)))))
+
+    ;;  Literals 
+    (literal
+     (number (lambda (n) (string-to-number n)))
+     (string (lambda (s) s))
+     (true (lambda () :true))
+     (false (lambda () :false))
+     (null (lambda () :null))
+     (self (lambda () :self)))
+
+    ;;  Identifier List 
+    (ident-list
+     (ident (lambda (i) (list (lingo-make-ident i))))
+     (ident-list ident
+                 (lambda (prev i)
+                   (append prev (list (lingo-make-ident i))))))
+
+    ;;  Argument List
+    
+    (arg-list
+     ((constantly nil))
+     (expression (lambda (e) (list e)))
+     (arg-list |,| expression
+               (lambda (_comma args)
+                 args)))))
+
+(defun string-to-number (s)
+  "Convert string literal to numeric value, supporting all number formats."
+  (when (stringp s)
+    (multiple-value-bind (val _base)
+        (lingo-parse-number s)
+      (or val (parse-integer s :radix 10 :junk-allowed t)))))

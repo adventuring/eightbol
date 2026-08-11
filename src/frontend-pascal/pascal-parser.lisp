@@ -19,42 +19,50 @@
                   parse/binary-op
                   parse/unary-op)))
 
-(defparameter *pascal-keyword-alist*
-  '(("PROCEDURE" . :procedure)
-    ("VAR" . :var)
-    ("BEGIN" . :begin)
-    ("END" . :end)
-    ("CALL" . :call)
-    ("LABEL" . :label)
-    ("GOTO" . :goto)
-    ("GO" . :go)
-    ("TO" . :to)
-    ("METHOD" . :method)
-    ("LIBRARY" . :library)
-    ("IN" . :in)
-    ("ON" . :on)
-    ("PROTOCOL" . :protocol)
-    ("AND" . :and)
-    ("OR" . :or)
-    ("NOT" . :not)
-    ("IF" . :if)
-    ("THEN" . :then)
-    ("ELSE" . :else)
-    ("WHILE" . :while)
-    ("UNTIL" . :until)
-    ("DO" . :do)
-    ("NEXT" . :next)
-    ("STEP" . :step)
-    ("FOR" . :for)
-    ("EXIT" . :exit)
-    ("GOBACK" . :goback)
-    ("LOG" . :log)
-    ("FAULT" . :fault)
-    ("STOP" . :stop)
-    ("COPY" . :copy)
-    ("AS" . :as)
-    ("RETURNING" . :returning))
-  "Association list of Pascal keywords to token symbols.")
+   (defparameter *pascal-keyword-symbols*
+   '((:procedure . |PROCEDURE|)
+     (:var . |VAR|)
+     (:begin . |BEGIN|)
+     (:end . |END|)
+     (:call . |CALL|)
+     (:label . |LABEL|)
+     (:goto . |GOTO|)
+     (:go . |GO|)
+     (:to . |TO|)
+     (:method . |METHOD|)
+     (:library . |LIBRARY|)
+     (:in . |IN|)
+     (:on . |ON|)
+     (:protocol . |PROTOCOL|)
+     (:and . |AND|)
+     (:or . |OR|)
+     (:not . |NOT|)
+     (:if . |IF|)
+     (:then . |THEN|)
+     (:else . |ELSE|)
+     (:while . |WHILE|)
+     (:until . |UNTIL|)
+     (:do . |DO|)
+     (:next . |NEXT|)
+     (:step . |STEP|)
+     (:for . |FOR|)
+     (:exit . |EXIT|)
+     (:goback . |GOBACK|)
+     (:log . |LOG|)
+     (:fault . |FAULT|)
+     (:stop . |STOP|)
+     (:copy . |COPY|)
+     (:as . |AS|)
+     (:returning . |RETURNING|)
+     (:print . |PRINT|)
+     (:input . |INPUT|)
+     (:read . |READ|)
+     (:write . |WRITE|)
+     (:dialogue . |DIALOGUE|)
+     (:case . |CASE|)
+     (:of . |OF|)
+     (:endcase . |ENDCASE|))
+   "Map keyword symbols to their yacc parser terminal forms.")
 
 (defparameter *pascal-operators-alist*
   '(("+" . :plus)
@@ -75,24 +83,120 @@
     ("." . :dot))
   "Association list of Pascal operators to token symbols.")
 
+   (defparameter *pascal-keyword-alist*
+   '(("PROCEDURE" . :procedure)
+     ("VAR" . :var)
+     ("BEGIN" . :begin)
+     ("END" . :end)
+     ("CALL" . :call)
+     ("LABEL" . :label)
+     ("GOTO" . :goto)
+     ("GO" . :go)
+     ("TO" . :to)
+     ("METHOD" . :method)
+     ("LIBRARY" . :library)
+     ("IN" . :in)
+     ("ON" . :on)
+     ("PROTOCOL" . :protocol)
+     ("AND" . :and)
+     ("OR" . :or)
+     ("NOT" . :not)
+     ("IF" . :if)
+     ("THEN" . :then)
+     ("ELSE" . :else)
+     ("WHILE" . :while)
+     ("UNTIL" . :until)
+     ("DO" . :do)
+     ("NEXT" . :next)
+     ("STEP" . :step)
+     ("FOR" . :for)
+     ("EXIT" . :exit)
+     ("GOBACK" . :goback)
+     ("LOG" . :log)
+     ("FAULT" . :fault)
+     ("STOP" . :stop)
+     ("COPY" . :copy)
+     ("AS" . :as)
+     ("RETURNING" . :returning)
+     ("PRINT" . :print)
+     ("INPUT" . :input)
+     ("READ" . :read)
+     ("WRITE" . :write)
+     ("DIALOGUE" . :dialogue)
+     ("CASE" . :case)
+     ("OF" . :of)
+     ("ENDCASE" . :endcase))
+   "Association list of Pascal keywords to token symbols.")
+
 (defun pascal-tokenize (input)
-  "Tokenize Pascal INPUT string into a stream of tokens."
-  (pascal-lex-source input))
+  "Tokenize Pascal INPUT string into a stream of (token-type . value) pairs for YACC.
+Keywords are mapped to their symbol forms matching terminal declarations."
+  (let ((raw-tokens (pascal-lex-source input))
+        (result '()))
+    (dolist (tok raw-tokens)
+      (let ((type (first tok))
+            (value (second tok)))
+        (cond
+          ;; Keywords: return as keywords using symbol lookup
+          ((eq type :keyword)
+           (let ((upper-kw (string-upcase value))
+                 (kw-entry (find-if (lambda (entry)
+                                      (string-equal upper-kw (symbol-name (car entry))))
+                                    *pascal-keyword-alist*)))
+             (if kw-entry
+                 (push (cons (cdr kw-entry) value) result)
+                 ;; Fallback: create symbol from upcase
+                 (push (cons (intern upper-kw :keyword) value) result))))
+          ;; Operators: map to corresponding operators
+          ((eq type :op)
+           (let ((op-entry (assoc value *pascal-operators-alist* :test #'string-equal)))
+             (if op-entry
+                 (push (cons (cdr op-entry) value) result)
+                 (push (cons :op value) result))))
+          ;; Numbers: convert to symbol number
+          ((eq type :number)
+           (push (cons 'number value) result))
+          ;; Strings: convert to symbol string
+          ((eq type :string)
+           (push (cons 'string value) result))
+          ;; Identifiers: convert to symbol ident
+          ((eq type :ident)
+           (push (cons 'ident value) result))
+          ;; Punctuation: return as lowercase symbols
+          ((eq type :colon)
+           (push (cons :colon nil) result))
+          ((eq type :semicolon)
+           (push (cons :semicolon nil) result))
+          ((eq type :comma)
+           (push (cons :comma nil) result))
+          ((eq type :lparen)
+           (push (cons :lparen nil) result))
+          ((eq type :rparen)
+           (push (cons :rparen nil) result))
+          ((eq type :dot)
+           (push (cons :dot nil) result))
+          ;; Labels: special handling
+          ((eq type :label)
+           (push (cons :label value) result))
+          (t
+           (push (cons :unknown value) result)))))
+    (nreverse result)))
 
 (defun pascal-parse (tokens)
   "Parse TOKENS into an EIGHTBOL AST program node."
   (funcall *pascal-parser* tokens))
 
-(yacc:define-parser *pascal-parser*
-  (:start-symbol pascal-program)
-  (:terminals
-   (:number :string :ident
-            :procedure :var :begin :end :call :label :method :on :protocol
-            :library :in :and :or :not
-    :if :then :else :while :until :do :next :step :for
-            :exit :goback :log :fault :stop :copy :as :returning
-            :colon :semicolon :comma :lparen :rparen :dot
-            :plus :minus :times :divide :equals :lt :gt :le :ge :ne))
+  (yacc:define-parser *pascal-parser*
+   (:start-symbol pascal-program)
+   (:terminals
+    (:number :string :ident
+             :procedure :var :begin :end :call :label :method :on :protocol
+             :library :in :and :or :not
+             :if :then :else :while :until :do :next :step :for
+             :exit :goback :log :fault :stop :copy :as :returning
+             :print :input :read :write :dialogue :case :of :endcase
+             :colon :semicolon :comma :lparen :rparen :dot :lbracket :rbracket
+             :plus :minus :times :divide :equals :lt :gt :le :ge :ne))
 
   (:precedence ((:left :plus :minus)
                 (:left :times :divide)
@@ -142,15 +246,19 @@
    (statement-list statement
                    (lambda (ss s) (append ss (list s)))))
   
-  (statement
-   label-statement
-   assignment
-   calls
-   conditional
-   perform-loop
-   exit
-   error-statement
-   copy-statement)
+    (statement
+     label-statement
+     assignment
+     calls
+     conditional
+     case-statement
+     perform-loop
+     exit
+     error-statement
+     copy-statement
+     print-statement
+     input-statement
+     dialogue-statement)
   
   (label-statement
    (NUMBER COLON
@@ -190,15 +298,45 @@
             (declare (ignore _call _in _library))
             (list :call :target routine-name :bank nil :library t))))
   
-  (conditional
-   (IF expression THEN statement-list ELSE statement-list
-       (lambda (ignore1 cond ignore2 then-stmts ignore3 else-stmts)
-         (declare (ignore ignore1 ignore2 ignore3))
-         (make-if-node cond then-stmts else-stmts)))
-   (IF expression THEN statement-list
-       (lambda (ignore1 cond ignore2 stmts)
-         (declare (ignore ignore1 ignore2))
-         (make-if-node cond stmts))))
+   (conditional
+    (IF expression THEN statement-list ELSE statement-list
+        (lambda (ignore1 cond ignore2 then-stmts ignore3 else-stmts)
+          (declare (ignore ignore1 ignore2 ignore3))
+          (make-if-node cond then-stmts else-stmts)))
+    (IF expression THEN statement-list
+        (lambda (ignore1 cond ignore2 stmts)
+          (declare (ignore ignore1 ignore2))
+          (make-if-node cond stmts))))
+   
+   (case-statement
+    (CASE expression OF case-clauses ENDCASE
+     (lambda (_case subject _of clauses _end)
+       (declare (ignore _case _of _end))
+       (list :evaluate :subject subject :when-clauses clauses))))
+   
+   (case-clauses
+    (case-clause
+     (lambda (clause) (list clause)))
+    (case-clauses case-clause
+     (lambda (clauses clause) (append clauses (list clause)))))
+   
+   (case-clause
+    (NUMBER COLON statement-list SEMICOLON
+     (lambda (value _colon stmts _semi)
+       (declare (ignore _colon _semi))
+       (list :when (list :equals value) stmts)))
+    (NUMBER COLON statement-list
+     (lambda (value _colon stmts)
+       (declare (ignore _colon))
+       (list :when (list :equals value) stmts)))
+    (ELSE COLON statement-list SEMICOLON
+     (lambda (_else _colon stmts _semi)
+       (declare (ignore _else _colon _semi))
+       (list :when-other stmts)))
+    (ELSE COLON statement-list
+     (lambda (_else _colon stmts)
+       (declare (ignore _else _colon))
+       (list :when-other stmts))))
   
   (perform-loop
    (WHILE expression NEXT statement-list
@@ -240,28 +378,74 @@
            (declare (ignore _))
            (make-debug-break-node code))))
   
-  (copy-statement
-   (COPY STRING
-         (lambda (_ name)
-           (declare (ignore _))
-           (make-copy-node name))))
-  
-  (expression
-   (primary)
-   (expression binary-op expression
-               (lambda (left op right)
-                 (pascal-binary-operator op left right)))
-   (unary-op expression
-             (lambda (op expr)
-               (pascal-unary-operator op expr))))
-  
-  (primary
-   (IDENT (lambda (id) (cadr id)))
-   (NUMBER (lambda (num) num))
-   (STRING (lambda (str) str))
-   (LPAREN expression RPAREN (lambda (lpar expr rpar)
-                               (declare (ignore lpar rpar))
-                               expr)))
+    (copy-statement
+     (COPY STRING SEMICOLON
+           (lambda (_ name _semi)
+             (declare (ignore _ _semi))
+             (make-copy-node name)))
+     (COPY STRING
+           (lambda (_ name)
+             (declare (ignore _))
+             (make-copy-node name))))
+
+   (print-statement
+    (PRINT expression
+           (lambda (_ expr)
+             (declare (ignore _))
+             (pascal-make-print-node expr)))
+    (PRINT STRING
+           (lambda (_ str)
+             (declare (ignore _))
+             (pascal-make-print-node str)))
+    (WRITE expression
+           (lambda (_ expr)
+             (declare (ignore _))
+             (pascal-make-print-node expr)))
+    (WRITE STRING
+           (lambda (_ str)
+             (declare (ignore _))
+             (pascal-make-print-node str))))
+
+   (input-statement
+    (INPUT IDENTIFIER
+           (lambda (_ var)
+             (declare (ignore _))
+             (pascal-make-input-node var)))
+    (READ IDENTIFIER
+          (lambda (_ var)
+            (declare (ignore _))
+            (pascal-make-input-node var))))
+
+   (dialogue-statement
+    (DIALOGUE STRING
+              (lambda (_ text)
+                (declare (ignore _))
+                (pascal-make-dialogue-node text))))
+   
+   (expression
+    (primary)
+    (expression binary-op expression
+                (lambda (left op right)
+                  (pascal-binary-operator op left right)))
+    (unary-op expression
+              (lambda (op expr)
+                (pascal-unary-operator op expr))))
+   
+   (primary
+    (IDENT (lambda (id) (cadr id)))
+    (NUMBER (lambda (num) num))
+    (STRING (lambda (str) str))
+    (LPAREN expression RPAREN (lambda (lpar expr rpar)
+                                (declare (ignore lpar rpar))
+                                expr))
+    (primary DOT IDENT
+             (lambda (base _dot slot)
+               (declare (ignore _dot))
+               (list :of "slot" base (cadr slot))))
+    (primary LBRACKET expression RBRACKET
+             (lambda (base _lbracket idx _rbracket)
+               (declare (ignore _lbracket _rbracket))
+               (list :subscript base idx))))
   
   (binary-op
    (PLUS
@@ -320,3 +504,22 @@
 (defun make-debug-break-node (code)
   "Create a :debug-break AST node."
   (list :debug-break :code code))
+
+(defun pascal-make-print-node (expr)
+  "Create a :print AST node for output statements (PRINT or WRITE).
+Calls the canonical make-print-node from grammar-build.lisp."
+  (make-print-node expr))
+
+(defun pascal-make-input-node (var &optional prompt)
+  "Create an :input AST node for input statements (INPUT or READ).
+Calls the canonical make-input-node from grammar-build.lisp."
+  (make-input-node var :prompt prompt))
+
+(defun pascal-make-dialogue-node (name)
+  "Create a :dialogue AST node for dialogue/narrative text.
+Calls the canonical make-dialogue-node from grammar-build.lisp."
+  (make-dialogue-node name :statements '() :goals '()))
+
+(defun make-assembly-entry-node (label)
+  "Create an :assembly-entry AST node for label definitions."
+  (list :assembly-entry :label label))

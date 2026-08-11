@@ -36,21 +36,21 @@
   "Integers tokenize as :number tokens."
   (let ((source "local x = 42"))
     (let ((tokens (eightbol::tokenize-lua source)))
-      (let ((num-tokens (remove-if-not (lambda (t) (eq :number (first t))) tokens)))
+      (let ((num-tokens (remove-if-not (lambda (tok) (eq :number (first tok))) tokens)))
         (is (>= (length num-tokens) 1) "Should have at least one number token")))))
 
 (test lua-lexer/tokenizes-strings
   "Strings tokenize with correct content."
   (let ((source "local s = 'hello'"))
     (let ((tokens (eightbol::tokenize-lua source)))
-      (let ((str-tokens (remove-if-not (lambda (t) (eq :string (first t))) tokens)))
+      (let ((str-tokens (remove-if-not (lambda (tok) (eq :string (first tok))) tokens)))
         (is (>= (length str-tokens) 1) "Should have at least one string token")))))
 
 (test lua-lexer/skip-comments
   "Comments are skipped and produce no tokens."
   (let ((source "-- this is a comment\nlocal x = 1"))
     (let ((tokens (eightbol::tokenize-lua source)))
-      (is (null (some (lambda (t) (string= "-- this is a comment" (getf t :value))) tokens))))))
+      (is (null (some (lambda (tok) (string= "-- this is a comment" (getf tok :value))) tokens))))))
 
 ;;; ===== Parser Precedence Tests =====
 

@@ -13,6 +13,7 @@
               sub end function call return gosub
               and or not
               dim as integer string boolean double
+              dialogue print input with when
               number string ident))))
 
 ;;; Parser action functions for Burgermistress
@@ -81,6 +82,24 @@
    "EXIT"
    (make-exit-method-node))
 
+;;; Dialogue, Print, Input handlers
+
+(defun burgermistress-parse-dialogue (name goals)
+  "DIALOGUE name : goals"
+  (make-dialogue-node name :goals (ensure-list goals)))
+
+(defun burgermistress-parse-print (expressions)
+  "PRINT expr [, expr, …]"
+  (make-print-node (ensure-list expressions)))
+
+(defun burgermistress-parse-input (variables &optional prompt)
+  "INPUT var [, var, …] [WITH prompt]"
+  (make-input-node (ensure-list variables) :prompt prompt))
+
+(defun burgermistress-parse-prolog-goal (functor args)
+  "Prolog-like goal: functor(arg1, arg2, …)"
+  (apply #'make-prolog-goal (cons functor (ensure-list args))))
+
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)
   (eval
@@ -94,6 +113,7 @@
                    sub end function call return gosub
                    and or not
                    dim as integer string boolean double
+                   dialogue print input with when
                    number string ident))
       
       (program
@@ -113,7 +133,10 @@
         (call-stmt)
         (return-stmt)
         (gosub-stmt)
-        (exit-stmt))
+        (exit-stmt)
+        (dialogue-stmt)
+        (print-stmt)
+        (input-stmt))
       
       (if-statement
        (if expression then statement
@@ -161,44 +184,85 @@
        (exit
         (lambda () (burgermistress-parse-exit))))
       
+      ;; Dialogue statement with Prolog-like goals
+      (dialogue-stmt
+       (dialogue ident colon goal-list
+        (lambda (name goals) (burgermistress-parse-dialogue name goals))))
+      
+      ;; Goal list for Prolog-like structure
+      (goal-list
+       (goal)
+       (goal-list comma goal
+        (lambda (goals g) (nconc goals (list g)))))
+      
+      ;; Prolog-like goal
+      (goal
+       (ident lparen expression-list rparen
+        (lambda (functor args) (burgermistress-parse-prolog-goal functor args)))
+       (ident
+        (lambda (functor) (burgermistress-parse-prolog-goal functor nil))))
+      
+      ;; Expression list for goals
+      (expression-list
+       (expression)
+       (expression-list comma expression
+        (lambda (exprs e) (nconc exprs (list e)))))
+      
+      ;; Print statement
+      (print-stmt
+       (print expression-list
+        (lambda (exprs) (burgermistress-parse-print exprs))))
+      
+      ;; Input statement
+      (input-stmt
+       (input ident-list
+        (lambda (vars) (burgermistress-parse-input vars)))
+       (input ident-list with string
+        (lambda (vars prompt) (burgermistress-parse-input vars prompt))))
+      
+      ;; Identifier list for input
+      (ident-list
+       (ident
+        (lambda (id) (list (make-identifier id))))
+       (ident-list comma ident
+        (lambda (ids id) (nconc ids (list (make-identifier id))))))
+      
       (expression
        (ident
         (lambda (id) (make-identifier id)))
-        (number
-         (lambda (n) (parse-integer n)))
-        (string
-         (lambda (s) s))
-        (expression plus expression
-         (lambda (l r) (make-expression-add l r)))
-        (expression minus expression
-         (lambda (l r) (make-expression-subtract l r)))
-        (expression times expression
-         (lambda (l r) (make-expression-multiply l r)))
-        (expression divide expression
-         (lambda (l r) (make-expression-divide l r)))
-        (expression equal expression
-         (lambda (l r) (make-conditional-eq l r)))
-        (expression ne expression
-         (lambda (l r) (make-conditional-ne l r)))
-        (expression lt expression
-         (lambda (l r) (make-conditional-lt l r)))
-        (expression gt expression
-         (lambda (l r) (make-conditional-gt l r)))
-        (expression le expression
-         (lambda (l r) (make-conditional-le l r)))
-        (expression ge expression
-         (lambda (l r) (make-conditional-ge l r)))
-        (expression and expression
-         (lambda (l r) (make-conditional-and l r)))
-        (expression or expression
-         (lambda (l r) (make-conditional-or l r)))
-        (not expression
-         (lambda (e) (make-conditional-not e)))
-        (lparen expression rparen
-         (lambda (e) e))))))
+       (number
+        (lambda (n) (parse-integer n)))
+       (string
+        (lambda (s) s))
+       (expression plus expression
+        (lambda (l r) (make-expression-add l r)))
+       (expression minus expression
+        (lambda (l r) (make-expression-subtract l r)))
+       (expression times expression
+        (lambda (l r) (make-expression-multiply l r)))
+       (expression divide expression
+        (lambda (l r) (make-expression-divide l r)))
+       (expression equal expression
+        (lambda (l r) (make-conditional-eq l r)))
+       (expression ne expression
+        (lambda (l r) (make-conditional-ne l r)))
+       (expression lt expression
+        (lambda (l r) (make-conditional-lt l r)))
+       (expression gt expression
+        (lambda (l r) (make-conditional-gt l r)))
+       (expression le expression
+        (lambda (l r) (make-conditional-le l r)))
+       (expression ge expression
+        (lambda (l r) (make-conditional-ge l r)))
+       (expression and expression
+        (lambda (l r) (make-conditional-and l r)))
+       (expression or expression
+        (lambda (l r) (make-conditional-or l r)))
+       (not expression
+        (lambda (e) (make-conditional-not e)))
+       (lparen expression rparen
+        (lambda (e) e))))))
 
 (defun burgermistress-parser ()
   "Return the Burgermistress YACC parser function."
   *burgermistress-parser*)
-
-

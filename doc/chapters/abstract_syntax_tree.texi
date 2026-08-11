@@ -1,0 +1,300 @@
+@node Abstract Syntax Tree
+@section Abstract Syntax Tree
+
+This chapter describes the internal Abstract Syntax Tree (AST) used by EIGHTBOL as its intermediate representation. All front-end languages (AGI, BASIC, Burgermistress, COBOL, FORTRAN, Lingo, Lua, Muddle, Objective-C, Pascal, SCI, SCUMM, SmallTalk, and ZIL) are parsed into this common AST structure before being processed by the code generation backends.
+
+@menu
+* Program Structure::
+* Method Structure::
+* Statement Nodes::
+* Expression/Operand Values::
+* FORTRAN-inspired Nodes::
+* Constructors::
+* Accessors::
+* S-expression I/O::
+@end menu
+
+@node Program Structure
+@section Program Structure
+
+The @code{:program} node represents a complete program or class definition.
+
+@example
+(:program  :class-id "Character" :data (...) :methods (...))
+@end example
+
+@table @asis
+@item @code{:class-id}
+The class identifier string (e.g., "Character", "PlayerClass").
+
+@item @code{:data}
+A list of data slot declarations. Each slot declaration follows the format defined in the Data Slots section below.
+
+@item @code{:methods}
+A list of method definitions. Each method follows the Method Structure format below.
+@end table
+
+Data slots are represented as property lists with the following possible keys:
+@table @asis
+@item @code{name}
+The slot name (string or symbol).
+
+@item @code{type}
+The slot type keyword (e.g., :binary, :decimal, :object).
+
+@item @code{size}
+For binary slots: the size in bytes (1, 2, or 4).
+
+@item @code{initial-value}
+An optional initial value expression.
+@end table
+
+@node Method Structure
+@section Method Structure
+
+The @code{:method} node represents a method or procedure within a class.
+
+@example
+(:method   :method-id "Think" :statements (...))
+@end example
+
+@table @asis
+@item @code{:method-id}
+The method identifier string (e.g., "Think", "UpdatePosition").
+
+@item @code{:statements}
+A list of statement nodes. The first statement may optionally be an @code{:assembly-entry} node to specify the assembly entry label for this method.
+
+Optional first statement:
+@example
+(:assembly-entry :label "MyRoutine")
+@end example
+This names the assembly entry symbol for this method body (see Programmers Reference).
+@end table
+
+@node Statement Nodes
+@section Statement Nodes
+
+This section describes all possible statement node types in the EIGHTBOL AST.
+
+@table @asis
+@item @code{(:move       :from expr :to identifier)}
+Move data from source expression to target identifier.
+
+@item @code{(:invoke     :object expr :method "Kill" [:returning identifier] [:using expr])}
+Invoke a method on an object. Optional @code{:returning} specifies where to store the return value. Optional @code{:using} specifies parameters for the invocation.
+
+@item @code{(:call-acc :target name :bank bank-or-nil)}
+Call an accumulator-based subroutine or library routine. @code{:bank} is nil for local calls or a bank number/far call specification for cross-bank calls.
+
+@item @code{(:if         :condition cond :then stmts :else stmts)}
+Conditional execution. If @code{:condition} evaluates to true (non-zero), execute @code{:then} statements; otherwise execute @code{:else} statements.
+
+@item @code{(:goto       :target identifier)}
+Unconditional jump to target identifier (GOTO/GO TO). Equivalent to GOBACK when used appropriately.
+
+@item @code{(:goback)}
+Return from the current method or program (GOBACK/RETURN).
+
+@item @code{(:exit-method)}
+Exit the current method early.
+
+@item @code{(:exit-program)}
+Exit the entire program.
+
+@item @code{(:exit)}
+Generic exit (context-dependent).
+
+@item @code{(:stop-run)}
+Halt program execution with optional fault code.
+
+@item @code{(:add        :from expr :to identifier)}
+Add source expression to target identifier and store result in target.
+
+@item @code{(:add        :from expr :to expr :giving identifier)}
+Add two expressions and store result in a third identifier.
+
+@item @code{(:subtract   :from expr :from-target identifier)}
+Subtract source expression from target identifier and store result in target.
+
+@item @code{(:subtract   :from expr :from-target expr :giving identifier)}
+Subtract second expression from first and store result in third identifier.
+
+@item @code{(:compute    :target identifier :expression expr)}
+Compute expression and store result in target identifier.
+
+@item @code{(:perform    :procedure name [:times expr] [:until cond] [:varying ...] [:body stmts])}
+Perform a loop or call a procedure multiple times.
+@table @asis
+@item @code{:procedure}
+Name of the procedure to perform.
+@item @code{:times}
+Exact number of iterations (optional).
+@item @code{:until}
+Continue until condition is true (optional).
+@item @code{:varying}
+Specify varying variables for counted loops (optional).
+@item @code{:body}
+Statements to execute in each iteration (optional).
+@end table
+
+@item @code{(:set        :target identifier :value expr)}
+Set target identifier to value of expression.
+
+@item @code{(:log-fault  :code dword-expr)}
+Log a fault code for debugging purposes.
+
+@item @code{(:debug-break :code expr)}
+Trigger a debugger breakpoint with optional code.
+
+@item @code{(:copy       :name "CopybookName")}
+Residual node after failed copybook expansion.
+
+@item @code{(:string-blt :source operand :dest operand [:length expr])}
+Block transfer of string data (STRING DELIMITED BY SIZE).
+
+@item @code{(:assembly-entry :label "Symbol")}
+Must be first executable-area statement if present. Names the assembly entry symbol.
+@end table
+
+@node Expression/Operand Values
+@section Expression/Operand Values
+
+This section describes the possible values for expression operands in AST nodes.
+
+@table @asis
+@item literal number or string
+Direct numeric or string literal values.
+
+@item symbol (identifier reference)
+Reference to an identifier by name.
+
+@item (:of slot obj)
+Qualified identifier (slot OF obj) for accessing object slots.
+
+@item (:address-of id)
+ADDRESS OF id - returns the memory address of identifier.
+
+@item (:refmod :base name :start expr :length expr)
+Reference modification name(start:length) for substring operations.
+
+@item (:subscript name index)
+Subscripted identifier name(index) for array access.
+
+@item :self / :null
+SELF / NULL object references.
+@end table
+
+@node FORTRAN-inspired Nodes
+@section FORTRAN-inspired Node Shapes
+
+These nodes are used by the FORTRAN frontend and feature explicit typing with no implicit numeric conversions.
+
+@table @asis
+@item @code{(:fortran-move       :from expr :to identifier :target-type type-keyword)}
+Move with explicit target type specification.
+
+@item @code{(:fortran-compute    :target identifier :expression expr :result-type type-keyword)}
+Compute with explicit result type specification.
+
+@item @code{(:fortran-declare    :name identifier :type type-keyword [:init expr])}
+Variable declaration with optional initialization.
+
+@item @code{(:fortran-do         :var identifier :from expr :to expr [:by expr] :stmts stmts)}
+DO loop with explicit iteration variables.
+
+@item @code{(:fortran-if         :condition expr :then stmts :else stmts)}
+Conditional execution.
+
+@item @code{(:fortran-logical-op :op keyword :left expr :right expr)}
+Logical operation (AND, OR, etc.).
+
+@item @code{(:fortran-arith-op   :op keyword :left expr :right expr :result-type type-keyword)}
+Arithmetic operation with explicit result type.
+@end table
+
+@node Constructors
+@section Constructors
+
+This section lists the constructor functions available for building AST nodes programmatically.
+
+@table @asis
+@item @code{make-goto-node (target)}
+Build a :goto AST node for GOTO/GO TO statements.
+
+@item @code{make-program-node (class-id &key data methods identification environment)}
+Build a :program AST node.
+
+@item @code{make-method-node (method-id &key statements)}
+Build a :method AST node.
+
+@item @code{make-fortran-move (from to &optional target-type)}
+Build a :fortran-move AST node with explicit typing.
+
+@item @code{make-fortran-compute (target expression &optional result-type)}
+Build a :fortran-compute AST node with explicit result typing.
+
+@item @code{make-fortran-declare (name &key type init)}
+Build a :fortran-declare AST node for variable declarations.
+
+@item @code{make-fortran-do (var from to &key by stmts)}
+Build a :fortran-do AST node for DO loops.
+
+@item @code{make-fortran-if (condition then else)}
+Build a :fortran-if AST node.
+
+@item @code{make-fortran-type (name type &key fields)}
+Build a :fortran-type AST node for structured types.
+@end table
+
+@node Accessors
+@section Accessors
+
+This section lists the accessor functions available for extracting information from AST nodes.
+
+@table @asis
+@item @code{ast-node-type (node)}
+Return the node type keyword (:program, :method, :move, …).
+
+@item @code{ast-class-id (program-node)}
+Extract the class identifier from a program node.
+
+@item @code{ast-program-id (program-node)}
+Extract the program identifier from a program node.
+
+@item @code{ast-methods (program-node)}
+Extract the methods list from a program node.
+
+@item @code{ast-data (program-node)}
+Extract the data slots list from a program node.
+
+@item @code{ast-method-name (method-node)}
+Extract the method identifier from a method node.
+
+@item @code{ast-method-statements (method-node)}
+Extract the statements list from a method node.
+
+@item @code{split-method-leading-assembly-entry (statements)}
+Return (values entry-label-string-or-nil body-statements).
+If the first non-NIL item in STATEMENTS is @code{(:assembly-entry :label …)},
+return that label (as a string) and the remaining statements (NIL entries
+removed from the head only). Otherwise return @code{(values nil cleaned)}
+where @code{cleaned} is @code{(remove nil (ensure-list statements))}.
+
+@item @code{ast-method-statements-for-validation (method-node)}
+Return METHOD's statements with an optional leading @code{:assembly-entry} removed.
+Used by termination validation: @code{:assembly-entry} is not executable code.
+@end table
+
+@node S-expression I/O
+@section S-expression I/O
+
+This section describes functions for reading and writing ASTs as S-expressions.
+
+@table @asis
+@item @code{write-ast (ast output-stream)}
+Write AST to OUTPUT-STREAM as a readable S-expression.
+
+@item @code{read-ast (input-stream)}
+Read and return an AST S-expression from INPUT-STREAM.
+@end table

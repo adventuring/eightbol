@@ -31,7 +31,10 @@
     ("restart" . :RESTART)
     ("version" . :VERSION)
     ("to" . :TO)
-    ("end" . :END))
+    ("end" . :END)
+    ("dialogue" . :DIALOGUE)
+    ("print" . :PRINT)
+    ("input" . :INPUT))
   "Association list of SCUMM keywords to token symbols.")
 
 (defparameter *scumm-operators-alist*
@@ -52,6 +55,51 @@
     ("!" . :NOT))
   "Association list of SCUMM operators to token symbols.")
 
+(defun normalize-identifier-to-camel-case (s)
+  "Convert snake_case or mixed-case identifier S to camelCase.
+
+   Examples:
+   - 'my_variable' → 'myVariable'
+   - 'MyVariable' → 'myVariable'
+   - 'x' → 'x'"
+  (let* ((lower-s (string-downcase s))
+         (parts (split-sequence:split-sequence #\_ lower-s))
+         (first-part (first parts))
+         (rest-parts (rest parts)))
+    (concatenate 'string
+                 first-part
+                 (apply #'concatenate 'string
+                        (mapcar (lambda (part)
+                                  (when (> (length part) 0)
+                                    (concatenate 'string
+                                                 (string-upcase (string (char part 0)))
+                                                 (subseq part 1))))
+                                rest-parts)))))
+
+(defun parse-hex-literal (s)
+  "Parse hexadecimal literal '0x' prefix (e.g., '0xFF' → 255)."
+  (parse-integer (subseq s 2) :radix 16))
+
+(defun parse-octal-literal (s)
+  "Parse octal literal '0o' prefix (e.g., '0o77' → 63)."
+  (parse-integer (subseq s 2) :radix 8))
+
+(defun parse-binary-literal (s)
+  "Parse binary literal '0b' prefix (e.g., '0b1010' → 10)."
+  (parse-integer (subseq s 2) :radix 2))
+
+(defun parse-dword-literal (s)
+  "Parse DWORD literal '0d\"WORD\"' format (returns the 4-character string as-is).
+
+   Example: 0d\"SCUM\" returns the string \"SCUM\"."
+  (let ((start (position #\" s)))
+    (if start
+        (let ((end (position #\" s :start (1+ start))))
+          (if end
+              (subseq s (1+ start) end)
+              s))
+        s)))
+
 (defun scumm-valid-identifier-p (s)
   "Check if S is a valid SCUMM identifier."
   (and (stringp s)
@@ -63,11 +111,16 @@
               s)))
 
 (defun scumm-lex-line (line)
-  "Split LINE into token list of (type value) pairs."
+  "Split LINE into token list of (type value) pairs.
+
+   Supports:
+   - Identifiers with automatic camelCase normalization
+   - Number literals: decimal, hex (0x), octal (0o), binary (0b), dword (0d\"WORD\")"
   (let ((tokens '())
         (chars (coerce line 'list))
         (i 0))
     (labels ((peek () (nth i chars))
+             (peek-ahead (n) (nth (+ i n) chars))
              (next-char () (prog1 (nth i chars) (incf i)))
              (eof? () (>= i (length chars)))
              (skip-whitespace ()
@@ -78,25 +131,61 @@
                  (unless (zerop (length text))
                    (push (cons type text) tokens))))
              (scan-number (start)
-               (loop while (and (not (eof?)) (digit-char-p (peek)))
-                     do (next-char))
-               (flush-token start i :number))
+               ;; Check for special number formats
+               (cond
+                 ;; Hexadecimal: 0x...
+                 ((and (char= (peek) #\0) (peek-ahead 1)
+                       (char= (peek-ahead 1) #\x))
+                  (next-char) (next-char)
+                  (loop while (and (not (eof?)) (or (digit-char-p (peek))
+                                                     (find (peek) '(#\a #\b #\c #\d #\e #\f
+                                                                    #\A #\B #\C #\D #\E #\F))))
+                        do (next-char))
+                  (flush-token start i :hex-number))
+                 ;; Octal: 0o...
+                 ((and (char= (peek) #\0) (peek-ahead 1)
+                       (char= (peek-ahead 1) #\o))
+                  (next-char) (next-char)
+                  (loop while (and (not (eof?)) (find (peek) '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7)))
+                        do (next-char))
+                  (flush-token start i :octal-number))
+                 ;; Binary: 0b...
+                 ((and (char= (peek) #\0) (peek-ahead 1)
+                       (char= (peek-ahead 1) #\b))
+                  (next-char) (next-char)
+                  (loop while (and (not (eof?)) (find (peek) '(#\0 #\1)))
+                        do (next-char))
+                  (flush-token start i :binary-number))
+                 ;; DWORD: 0d"WORD"
+                 ((and (char= (peek) #\0) (peek-ahead 1)
+                       (char= (peek-ahead 1) #\d) (peek-ahead 2)
+                       (char= (peek-ahead 2) #\"))
+                  (next-char) (next-char) (next-char)
+                  (loop while (and (not (eof?)) (char/= (peek) #\"))
+                        do (next-char))
+                  (when (not (eof?)) (next-char))
+                  (flush-token start i :dword-number))
+                 ;; Default: decimal
+                 (t
+                  (loop while (and (not (eof?)) (digit-char-p (peek)))
+                        do (next-char))
+                  (flush-token start i :number))))
              (scan-string (start)
                (next-char)
                (loop while (and (not (eof?)) (char/= (peek) #\"))
                      do (next-char))
                (when (not (eof?)) (next-char))
                (flush-token (1+ start) (1- i) :string))
-              (scan-identifier (start)
-                (loop while (and (not (eof?))
-                                 (or (alphanumericp (peek))
-                                     (char= (peek) #\_)))
-                      do (next-char))
-                (let ((text (coerce (subseq chars start i) 'string)))
-                  (push (cons (or (cdr (assoc text *scumm-keyword-alist* :test #'string-equal))
-                                  :ident)
-                              text)
-                        tokens))))
+             (scan-identifier (start)
+               (loop while (and (not (eof?))
+                                (or (alphanumericp (peek))
+                                    (char= (peek) #\_)))
+                     do (next-char))
+               (let ((text (coerce (subseq chars start i) 'string)))
+                 (push (cons (or (cdr (assoc text *scumm-keyword-alist* :test #'string-equal))
+                                 :ident)
+                             (normalize-identifier-to-camel-case text))
+                       tokens))))
       (loop until (eof?)
             do (skip-whitespace)
                (cond
@@ -109,7 +198,7 @@
                  ((char= (peek) #\[) (push (cons :lbracket "[") tokens) (next-char))
                  ((char= (peek) #\]) (push (cons :rbracket "]") tokens) (next-char))
                  ((char= (peek) #\;) (push (cons :semicolon ";") tokens) (next-char))
-                 ((char= (peek) #\,) (push (cons :comma ",") tokens) (next-char))
+                 ((char= (peek) #\Comma) (push (cons :comma ",") tokens) (next-char))
                  (t (next-char))))
       (nreverse tokens))))
 

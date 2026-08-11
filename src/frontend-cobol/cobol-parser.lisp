@@ -50,10 +50,10 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
         method method-id minifont
         move multiply native negative next not null nulls numeric
         object object-computer occurs of offset on or other outdent
-         packed-decimal perform petscii pic picture pointer positive process
+        packed-decimal perform petscii pic picture pointer positive process
         procedure procedure-pointer program program-id
         read redefines reference remainder renames replacing returning right run
-        search section security self sentence sentences service set
+        says search section security self sentence sentences service set
         shift-left shift-right sign signed size subtract
         source-computer special-names stop string super symbol
         tallying test than the then through thru times title to trailing true
@@ -495,6 +495,16 @@ Extract statements from PROCEDURE DIVISION and build a :program AST node."
   (declare (ignore _call _returning))
   (list :call :target target :bank nil :returning variable))
 
+(defun parse/call-using (_call target _using expression)
+  "CALL target USING expression. — call with accumulator argument."
+  (declare (ignore _call _using))
+  (list :call-acc :target target :using expression :bank nil))
+
+(defun parse/call-using-returning (_call target _using expression _returning variable)
+  "CALL target USING expression RETURNING variable. — call with accumulator argument and result."
+  (declare (ignore _call _using _returning))
+  (list :call-acc :target target :using expression :returning variable :bank nil))
+
 (defun parse/call-service (_call _service target)
   "CALL SERVICE target. — service-dispatch call; bank must be specified at link time."
   (declare (ignore _call _service))
@@ -596,11 +606,11 @@ OUTPUT: perform AST plist."
 ;;; INTO id, INTO expression GIVING id, BY expression GIVING id. Remainder forms unsupported.
 (defun parse/divide-into-id (_div expression _into id)
   (declare (ignore _div _into))
-  (list :divide :denominator id :numerator expression))
+  (list :divide :numerator expression :denominator id))
 
 (defun parse/divide-into-giving (_div divisor _into dividend _giving id)
   (declare (ignore _div _into _giving))
-  (list :divide :denominator dividend :giving id :numerator divisor))
+  (list :divide :numerator divisor :denominator dividend :giving id))
 
 (defun parse/divide-by-giving (_div divisor _by dividend _giving id)
   (declare (ignore _div _by _giving))
@@ -668,15 +678,40 @@ OUTPUT: perform AST plist."
   (declare (ignore _accept _into _identifier _from _file))
   (unsupported-statement "ACCEPT is not supported"))
 
-;;; Display — not supported
-(defun parse/display-statement-unsupported (_display _identifier &optional _from _file)
-  (declare (ignore _display _identifier _from _file))
-  (unsupported-statement "DISPLAY is not supported"))
+;;; Display/Print/Dialogue — supported as dialogue statements
+(defun parse/display-character-says (_display character-name _says message)
+  "DISPLAY character-name SAYS message — dialogue output statement.
+FORMAT: 'CharacterName' SAYS 'Message text'.
+Emits (:display :character character-name :says message) AST node."
+  (declare (ignore _display _says))
+  (list :display :character character-name :says message :type :dialogue))
 
-;;; Read — not supported
-(defun parse/read-statement-unsupported (_read _identifier &optional _into)
-  (declare (ignore _read _identifier _into))
-  (unsupported-statement "READ is not supported"))
+(defun parse/display-message (_display message)
+  "DISPLAY message — simple output statement (no character).
+Emits (:display :message message) AST node."
+  (declare (ignore _display))
+  (list :display :message message))
+
+(defun parse/display-identifier (_display identifier)
+  "DISPLAY identifier — output variable value.
+Emits (:display :value identifier) AST node."
+  (declare (ignore _display))
+  (list :display :value identifier))
+
+;;; Read/Input — supported as input statements
+(defun parse/read-input (_read _from identifier)
+  "READ FROM identifier — input statement.
+FORMAT: READ FROM input-identifier.
+Emits (:read :from identifier) AST node."
+  (declare (ignore _read _from))
+  (list :read :from identifier))
+
+(defun parse/read-into (_read _into identifier)
+  "READ INTO identifier — alternative input syntax.
+FORMAT: READ INTO identifier.
+Emits (:read :into identifier) AST node."
+  (declare (ignore _read _into))
+  (list :read :into identifier))
 
 ;;; Write — not supported
 (defun parse/write-statement-unsupported (_write _identifier &optional _from)
@@ -1361,35 +1396,64 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (add expression to expression giving identifier #'parse/add-giving)
           (add expression to identifier #'parse/add-to))
 
-         (call-statement
-          ;; CALL SERVICE Target. — service dispatch, bank resolved at link time
-          (call service identifier #'parse/call-service)
-          ;; CALL Target IN LIBRARY. — near jsr (LastBank is always resident)
-          (call identifier in library
-                (lambda (_call identifier _in _lib)
-                  (declare (ignore _call _in _lib))
-                  (list :call :target identifier :bank nil :library t :returning nil :using nil)))
-          (call identifier in library returning identifier
-                (lambda (_call identifier _in _lib _returning return)
-                  (declare (ignore _call _in _lib _returning))
-                  (list :call :target identifier :bank nil :library t :returning return :using nil)))
-          (call identifier in library using expression
-                (lambda (_call identifier _in _lib _using using)
-                  (declare (ignore _call _in _lib _using))
-                  (list :call :target identifier :bank nil :library t :returning nil :using using)))
-          (call identifier in library using expression returning identifier
-                (lambda (_call identifier _in _lib _using using _returning return)
-                  (declare (ignore _call _in _lib _using _returning))
-                  (list :call :target identifier :bank nil :library t :returning return :using using)))
-          ;; CALL Target IN BANK bank-id. — far dispatch with explicit bank symbol
-          (call identifier in bank identifier
-                (lambda (_call identifier _in _bank bank-id)
-                  (declare (ignore _call _in _bank))
-                  (list :call :target identifier :bank bank-id :library nil
-                              :returning nil :using nil)))
-          ;; CALL Target. — local jsr
-          (call identifier #'parse/call)
-          (call identifier returning identifier #'parse/call-returning))
+          (call-statement
+           ;; CALL SERVICE Target. — service dispatch, bank resolved at link time
+           (call service identifier #'parse/call-service)
+           ;; CALL Target IN LIBRARY. — near jsr (LastBank is always resident)
+           (call identifier in library
+                 (lambda (_call identifier _in _lib)
+                   (declare (ignore _call _in _lib))
+                   (list :call :target identifier :bank nil :library t :returning nil :using nil)))
+           (call identifier in library returning identifier
+                 (lambda (_call identifier _in _lib _returning return)
+                   (declare (ignore _call _in _lib _returning))
+                   (list :call :target identifier :bank nil :library t :returning return :using nil)))
+           (call identifier in library using expression
+                 (lambda (_call identifier _in _lib _using using)
+                   (declare (ignore _call _in _lib _using))
+                   (list :call-acc :target identifier :bank nil :library t :returning nil :using using)))
+           (call identifier in library using expression returning identifier
+                 (lambda (_call identifier _in _lib _using using _returning return)
+                   (declare (ignore _call _in _lib _using _returning))
+                   (list :call-acc :target identifier :bank nil :library t :returning return :using using)))
+           ;; CALL Target IN BANK bank-id. — far dispatch with explicit bank symbol
+           (call identifier in bank identifier
+                 (lambda (_call identifier _in _bank bank-id)
+                   (declare (ignore _call _in _bank))
+                   (list :call :target identifier :bank bank-id :library nil
+                               :returning nil :using nil)))
+           (call identifier in bank identifier using expression
+                 (lambda (_call identifier _in _bank bank-id _using using)
+                   (declare (ignore _call _in _bank _using))
+                   (list :call-acc :target identifier :bank bank-id :library nil
+                               :returning nil :using using)))
+           (call identifier in bank identifier using expression returning identifier
+                 (lambda (_call identifier _in _bank bank-id _using using _returning return)
+                   (declare (ignore _call _in _bank _using _returning))
+                   (list :call-acc :target identifier :bank bank-id :library nil
+                               :returning return :using using)))
+           ;; CALL Target ON obj — object method dispatch
+           (call identifier on identifier
+                 (lambda (_call identifier _on obj)
+                   (declare (ignore _call _on))
+                   (list :invoke :object obj :method identifier)))
+           (call identifier on identifier using expression
+                 (lambda (_call identifier _on obj _using using)
+                   (declare (ignore _call _on _using))
+                   (list :invoke :object obj :method identifier :using using)))
+           (call identifier on identifier using expression returning identifier
+                 (lambda (_call identifier _on obj _using using _returning return)
+                   (declare (ignore _call _on _using _returning))
+                   (list :invoke :object obj :method identifier :using using :returning return)))
+           (call identifier on identifier returning identifier
+                 (lambda (_call identifier _on obj _returning return)
+                   (declare (ignore _call _on _returning))
+                   (list :invoke :object obj :method identifier :returning return)))
+           ;; CALL Target. — local jsr
+           (call identifier using expression #'parse/call-using)
+           (call identifier using expression returning identifier #'parse/call-using-returning)
+           (call identifier #'parse/call)
+           (call identifier returning identifier #'parse/call-returning))
          
          (cancel-statement (cancel identifier) (cancel literal))
          
@@ -1419,11 +1483,11 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
          ;; subject = ((:OF "State" "Self")) and break backends that expect a
          ;; bare expression.  Use #'identity so the backend receives the raw
          ;; expression / keyword.
-         (eval-subject
-          (expression #'identity)
-          (true (constantly :true))
-          (false (constantly :false))
-          (eval-subject also eval-subject #'identity))
+          (eval-subject
+           (expression #'identity)
+           (true (constantly :true))
+           (false (constantly :false))
+           (eval-subject also eval-subject (lambda (a _also b) (list :and a b))))
 
          (when-clauses
           (when-clauses when-clause (lambda (cs c) (append cs (list c)) ))
@@ -1554,11 +1618,44 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (subtract expression from expression giving identifier #'parse/subtract-giving)
           (subtract expression from identifier #'parse/subtract-from))
          
-         (unstring-statement
-          (unstring identifier delimited by expression
-                    into identifier #'parse/unstring-unsupported))))
-
-;;; Lexer → token stream adapter
+          (unstring-statement
+           (unstring identifier delimited by expression
+                     into identifier #'parse/unstring-unsupported))
+          
+          ;;; Accept — accepted syntax; may signal error at runtime or compile-time
+          (accept-statement
+           (accept into identifier from literal #'parse/accept-statement-unsupported)
+           (accept into identifier from symbol #'parse/accept-statement-unsupported)
+           (accept into identifier #'parse/accept-statement-unsupported)
+           (accept identifier #'parse/accept-statement-unsupported))
+          
+          ;;; Display/Print/Dialogue statements — implemented
+          (display-statement
+           (display string says literal #'parse/display-character-says)
+           (display string says string #'parse/display-character-says)
+           (display string says identifier #'parse/display-character-says)
+           (display string #'parse/display-message)
+           (display literal #'parse/display-message)
+           (display identifier #'parse/display-identifier))
+          
+          ;;; Read/Input statements — implemented
+          (read-statement
+           (read from identifier #'parse/read-input)
+           (read into identifier #'parse/read-into)
+           (read identifier #'parse/read-input))
+          
+          ;;; Write — accepted syntax; signals error at compile-time
+          (write-statement
+           (write identifier from identifier #'parse/write-statement-unsupported)
+           (write identifier #'parse/write-statement-unsupported))
+          
+          ;;; Open — accepted syntax; signals error at compile-time
+          (open-statement
+           (open identifier (lambda (_open _id) (parse/open-statement-unsupported _open _id nil))))
+          
+          ;;; Close — accepted syntax; signals error at compile-time
+          (close-statement
+           (close identifier #'parse/close-statement-unsupported))))
       (defun stream-code (lexer-tokens)
         "Return a YACC lexer thunk that pops tokens from LEXER-TOKENS list.
 The lexval passed to parser action functions is (second token), i.e. the raw

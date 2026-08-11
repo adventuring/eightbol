@@ -83,6 +83,86 @@
   (let ((tokens (eightbol::agi-lex-line "IF v1")))
     (is (> (length tokens) 0))))
 
+;;; AGI Number Format Tests
+(test agi-lexer-decimal-number
+  "Test AGI lexer handles decimal numbers (bare digits)."
+  (let ((tokens (eightbol::agi-lex-line "100")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "100" (cdr (first tokens))))))
+
+(test agi-lexer-decimal-format
+  "Test AGI lexer handles d'...' decimal format."
+  (let ((tokens (eightbol::agi-lex-line "d'255'")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "255" (cdr (first tokens))))))
+
+(test agi-lexer-hex-format
+  "Test AGI lexer handles x'...' hexadecimal format."
+  (let ((tokens (eightbol::agi-lex-line "x'FF'")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "255" (cdr (first tokens))))))
+
+(test agi-lexer-hex-format-with-comma
+  "Test AGI lexer handles x'...' with commas."
+  (let ((tokens (eightbol::agi-lex-line "x'1A,2B'")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "6699" (cdr (first tokens))))))
+
+(test agi-lexer-octal-format
+  "Test AGI lexer handles o'...' octal format."
+  (let ((tokens (eightbol::agi-lex-line "o'77'")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "63" (cdr (first tokens))))))
+
+(test agi-lexer-binary-format
+  "Test AGI lexer handles b'...' binary format."
+  (let ((tokens (eightbol::agi-lex-line "b'1010'")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "10" (cdr (first tokens))))))
+
+(test agi-lexer-dword-format-quote
+  "Test AGI lexer handles w'...' dword format with apostrophe."
+  (let ((tokens (eightbol::agi-lex-line "w'TEST'")))
+    (is (eq :string (car (first tokens))))
+    (is (string= "TEST" (cdr (first tokens))))))
+
+(test agi-lexer-dword-format-doublequote
+  "Test AGI lexer handles w\"...\" dword format with double quote."
+  (let ((tokens (eightbol::agi-lex-line "w\"DATA\"")))
+    (is (eq :string (car (first tokens))))
+    (is (string= "DATA" (cdr (first tokens))))))
+
+;;; AGI Identifier Normalization Tests
+(test agi-lexer-identifier-normalization-underscore
+  "Test AGI lexer normalizes identifiers with underscores to Header.Case."
+  (let ((tokens (eightbol::agi-lex-line "player_score")))
+    (is (eq :ident (car (first tokens))))
+    (is (string= "Player.Score" (cdr (first tokens))))))
+
+(test agi-lexer-identifier-normalization-hyphen
+  "Test AGI lexer normalizes identifiers with hyphens to Header.Case."
+  (let ((tokens (eightbol::agi-lex-line "get-item-count")))
+    (is (eq :ident (car (first tokens))))
+    (is (string= "Get.Item.Count" (cdr (first tokens))))))
+
+(test agi-lexer-identifier-normalization-single-word
+  "Test AGI lexer handles single-word identifiers."
+  (let ((tokens (eightbol::agi-lex-line "score")))
+    (is (eq :ident (car (first tokens))))
+    (is (string= "Score" (cdr (first tokens))))))
+
+(test agi-lexer-identifier-normalization-mixed-case
+  "Test AGI lexer normalizes mixed-case identifiers."
+  (let ((tokens (eightbol::agi-lex-line "PlayerName")))
+    (is (eq :ident (car (first tokens))))
+    (is (string= "Playername" (cdr (first tokens))))))
+
+(test agi-lexer-identifier-normalization-all-uppercase
+  "Test AGI lexer normalizes all-uppercase identifiers."
+  (let ((tokens (eightbol::agi-lex-line "DEBUG_MODE")))
+    (is (eq :ident (car (first tokens))))
+    (is (string= "Debug.Mode" (cdr (first tokens))))))
+
 ;;;; Lingo Lexer Tests
 (fiveam:def-suite :lingo-lexer
   :in :frontend-lexers
@@ -272,3 +352,101 @@
                     eightbol::lingo-token-list))
     (is (fboundp tok-fn)
         (format nil "Token list function ~A should be defined" tok-fn))))
+
+;;;; ZIL Lexer Tests
+(fiveam:def-suite :zil-lexer
+  :in :frontend-lexers
+  :description "ZIL lexer tests")
+(in-suite :zil-lexer)
+
+(test zil-lexer-callable
+  "Test ZIL lexer is callable."
+  (is (fboundp 'eightbol::zil-lex-line)))
+
+(test zil-lexer-produces-tokens
+  "Test ZIL lexer produces tokens for non-empty input."
+  (let ((tokens (eightbol::zil-lex-line "42")))
+    (is (> (length tokens) 0))))
+
+(test zil-lexer-decimal-number
+  "Test ZIL lexer handles decimal numbers."
+  (let ((tokens (eightbol::zil-lex-line "42")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "42" (cdr (first tokens))))))
+
+(test zil-lexer-hexadecimal-number-hash-prefix
+  "Test ZIL lexer handles hexadecimal with #x prefix."
+  (let ((tokens (eightbol::zil-lex-line "#xFF")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "255" (cdr (first tokens))))))
+
+(test zil-lexer-hexadecimal-number-zero-prefix
+  "Test ZIL lexer handles hexadecimal with 0x prefix."
+  (let ((tokens (eightbol::zil-lex-line "0x10")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "16" (cdr (first tokens))))))
+
+(test zil-lexer-octal-number-hash-prefix
+  "Test ZIL lexer handles octal with #o prefix."
+  (let ((tokens (eightbol::zil-lex-line "#o77")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "63" (cdr (first tokens))))))
+
+(test zil-lexer-binary-number-hash-prefix
+  "Test ZIL lexer handles binary with #b prefix."
+  (let ((tokens (eightbol::zil-lex-line "#b1010")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "10" (cdr (first tokens))))))
+
+(test zil-lexer-binary-number-zero-prefix
+  "Test ZIL lexer handles binary with 0b prefix."
+  (let ((tokens (eightbol::zil-lex-line "0b11")))
+    (is (eq :number (car (first tokens))))
+    (is (string= "3" (cdr (first tokens))))))
+
+(test zil-lexer-keyword-if
+  "Test ZIL lexer recognizes <IF> keyword."
+  (let ((tokens (eightbol::zil-lex-line "<IF>")))
+    (is (eq :IF (car (first tokens))))))
+
+(test zil-lexer-identifier-normalized
+  "Test ZIL lexer normalizes identifiers to uppercase."
+  (let ((tokens (eightbol::zil-lex-line "hello-world")))
+    (is (eq :atom (car (first tokens))))
+    (is (string= "HELLO-WORLD" (cdr (first tokens))))))
+
+(test zil-lexer-string-literal
+  "Test ZIL lexer handles string literals."
+  (let ((tokens (eightbol::zil-lex-line "\"hello world\"")))
+    (is (eq :string (car (first tokens))))
+    (is (string= "hello world" (cdr (first tokens))))))
+
+(test zil-lexer-print-keyword
+  "Test ZIL lexer recognizes <PRINT> keyword."
+  (let ((tokens (eightbol::zil-lex-line "<PRINT>")))
+    (is (eq :PRINT (car (first tokens))))))
+
+(test zil-lexer-input-keyword
+  "Test ZIL lexer recognizes <INPUT> keyword."
+  (let ((tokens (eightbol::zil-lex-line "<INPUT>")))
+    (is (eq :INPUT (car (first tokens))))))
+
+(test zil-lexer-dialogue-keyword
+  "Test ZIL lexer recognizes <DIALOGUE> keyword."
+  (let ((tokens (eightbol::zil-lex-line "<DIALOGUE>")))
+    (is (eq :DIALOGUE (car (first tokens))))))
+
+;;;; ZIL Parser Tests
+(fiveam:def-suite :zil-parser
+  :in :frontend-parsers
+  :description "ZIL parser tests")
+(in-suite :zil-parser)
+
+(test zil-parser-token-list-exists
+  "Test ZIL parser token-list function exists."
+  (is (fboundp 'eightbol::zil-token-list)))
+
+(test zil-parser-parser-function-exists
+  "Test ZIL parser parser function exists."
+  (is (fboundp 'eightbol::zil-parser)))
+

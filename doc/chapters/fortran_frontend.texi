@@ -1,0 +1,440 @@
+@chapter Fortran Frontend
+
+This chapter describes the Fortran frontend of the EightBol compiler, covering its lexical analysis (tokenization) and syntax analysis (parsing). The frontend translates Fortran source code into an abstract syntax tree (AST) that is subsequently processed by the code generation backends.
+
+@section Lexical Analysis
+
+The lexical analyzer (lexer) converts the input character stream into a sequence of tokens. It recognizes keywords, operators, literals, and identifiers.
+
+@subsection Keywords
+
+The lexer reserves specific sequences of alphabetic characters as keywords. Each keyword maps to a unique token symbol.
+
+@subheading Inputs
+A string of characters (lexeme) from the source code.
+
+@subheading Outputs
+A token symbol (e.g., @code{:PROGRAM}) or @code{:IDENT} for non-reserved identifiers.
+
+@subheading Processing
+The lexer compares the lexeme against two association lists:
+@itemize @bullet
+@item @code{*fortran-keyword-alist*}: Maps exact uppercase strings (e.g., @code{"PROGRAM"}) to token symbols.
+@item @code{*fortran-operators-alist*}: Maps operator strings (e.g., @code{"+"}) to token symbols.
+@end itemize
+If the lexeme begins with a digit, it is tokenized as @code{:NUMBER}. If it begins with a double quote, it is tokenized as @code{:STRING}. Otherwise, if it is a valid Fortran identifier (alphanumeric characters and underscores), it is tokenized as @code{:IDENT}. Unrecognized lexemes yield @code{:UNKNOWN}.
+
+@subheading Side-Effects
+None. The lexer is a pure function.
+
+@subsubsection Keyword Listing
+The following keywords are recognized:
+@table @asis
+@item PROGRAM
+@item SUBROUTINE
+@item FUNCTION
+@item END
+@item RETURN
+@item STOP
+@item CALL
+@item GOTO
+@item IF
+@item THEN
+@item ELSE
+@item DO
+@item READ
+@item WRITE
+@item PRINT
+@item OPEN
+@item CLOSE
+@item REAL
+@item INTEGER
+@item LOGICAL
+@item CHARACTER
+@item COMPLEX
+@item TYPE
+@item CLASS
+@item METHOD
+@item INSTANCE
+@item NEW
+@item DELETE
+@item INVOKE
+@item SUPER
+@item SELF
+@item PROCEDURE
+@item DATA
+@item PARAMETER
+@item DIMENSION
+@item COMMON
+@item EQUIVALENCE
+@item INCLUDE
+@item WHILE
+@item UNTIL
+@item AND
+@item OR
+@item NOT
+@item TRUE
+@item FALSE
+@end table
+
+@subsection Operators
+
+The lexer recognizes sequences of characters as operators.
+
+@subheading Inputs
+A string of one or two characters from the source code.
+
+@subheading Outputs
+A token symbol representing the operator (e.g., @code{:PLUS} for @code{+}).
+
+@subheading Processing
+The lexer checks the lexeme against @code{*fortran-operators-alist*}. For two-character operators (e.g., @code{==}, @code{/=}), it employs lookahead to combine characters. Single-character operators are matched directly.
+
+@subheading Side-Effects
+None.
+
+@subsubsection Operator Listing
+The following operators are recognized:
+@table @asis
+@item @code{+} (addition)
+@item @code{-} (subtraction)
+@item @code{*} (multiplication)
+@item @code{/} (division)
+@item @code{**} (exponentiation)
+@item @code{=} (assignment or equality)
+@item @code{==} (equality)
+@item @code{/=} (inequality)
+@item @code{<>} (inequality)
+@item @code{<} (less than)
+@item @code{>} (greater than)
+@item @code{<=} (less than or equal)
+@item @code{>=} (greater than or equal)
+@item @code{(} (left parenthesis)
+@item @code{)} (right parenthesis)
+@item @code{,} (comma)
+@item @code{:} (colon)
+@item @code{.} (period)
+@end table
+
+@subsection Other Tokens
+
+@subsubsection Numbers
+@table @asis
+@item Inputs: A sequence of one or more decimal digits, or a prefixed number literal.
+@item Outputs: @code{:NUMBER} token with value converted from the appropriate base.
+@item Processing: The lexer recognizes the following formats:
+@itemize @bullet
+@item Decimal: @code{123} — standard decimal integer
+@item Hexadecimal: @code{0XABC} — prefix @code{0X} followed by hex digits (0-9, A-F)
+@item Binary: @code{0B1010} — prefix @code{0B} followed by binary digits (0-1)
+@item Octal: @code{0O755} — prefix @code{0O} followed by octal digits (0-7)
+@item Dword: @code{DWORD65536} — prefix @code{DWORD} followed by a decimal integer representing a 32-bit value
+@end itemize
+Number parsing is case-insensitive for prefixes; hex digits are normalized to uppercase.
+@item Side-Effects: None.
+@end table
+
+@subsubsection Supported Number Literal Formats
+
+The following number literal formats are @emph{required} and must be supported by any FORTRAN frontend implementation:
+
+@table @asis
+@item Octal (0O prefix): Required for bit-level operations and low-level I/O
+@item Hexadecimal (0X prefix): Required for memory addresses and machine code constants
+@item Binary (0B prefix): Required for flag manipulation and bit patterns
+@item Dword (DWORD prefix): Required for 32-bit constant initialization
+@end table
+
+Failure to support these formats in the lexer and parser is a critical deficiency and must be addressed immediately.
+
+@subsubsection Strings
+@table @asis
+@item Inputs: A double-quoted sequence of characters (excluding double quote).
+@item Outputs: @code{:STRING} token.
+@item Processing: The lexer consumes characters until a closing double quote is found.
+@item Side-Effects: None.
+@end table
+
+@subsubsection Identifiers
+@table @asis
+@item Inputs: A sequence of alphanumeric characters and underscores, not beginning with a digit.
+@item Outputs: @code{:IDENT} token.
+@item Processing: The lexer consumes consecutive valid identifier characters.
+@item Side-Effects: None.
+@end table
+
+@section Syntax Analysis
+
+The parser (implemented using YACC) processes the token stream according to a context-free grammar, invoking semantic actions to construct AST nodes.
+
+@subsection Program Structure
+
+A Fortran program consists of a @code{PROGRAM} block containing statements.
+
+@subsubsection fortran-parse-program
+@table @asis
+@item Inputs: The program name (string) and a list of statement AST nodes.
+@item Outputs: A program node with an embedded main method.
+@item Processing: Wraps the statements in a method node named @code{"MAIN"} and creates a program node.
+@item Side-Effects: None.
+@end table
+
+@subsection Subroutines and Functions
+
+@subsubsection fortran-parse-subroutine
+@table @asis
+@item Inputs: Subroutine name (string), argument list (ignored), and statement list.
+@item Outputs: A method node.
+@item Processing: Creates a method node with the given name and statements. The argument list is ignored for simplicity.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-parse-function
+@table @asis
+@item Inputs: Function name (string), argument list (ignored), return type (ignored), and statement list.
+*item Outputs: A method node.
+*item Processing: Creates a method node with the given name and statements. Argument list and return type are ignored.
+*item Side-Effects: None.
+@end table
+
+@subsection Statements
+
+@subsubsection fortran-parse-assignment
+@table @asis
+@item Inputs: Target variable (identifier) and expression value.
+@item Outputs: A move node (@code{:move}) assigning the expression to the target.
+@item Processing: Constructs a move node with the expression as source and target as destination.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-parse-call
+@table @asis
+@item Inputs: Subroutine or function name (identifier) and argument list (ignored).
+@item Outputs: A call node.
+@item Processing: Creates a call node targeting the given identifier. Arguments are ignored.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-parse-goto
+@table @asis
+@item Inputs: Label (identifier).
+@item Outputs: A goto node (@code{:goto}) targeting the label.
+@item Processing: Creates a goto node with the label as target.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-parse-return
+@table @asis
+@item Inputs: None.
+@item Outputs: A goback node (return from subroutine).
+@item Processing: Creates a goback node.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-parse-stop
+@table @asis
+@item Inputs: None.
+@item Outputs: A stop-run node (terminate program).
+@item Processing: Creates a stop-run node.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-parse-if-then
+@table @asis
+@item Inputs: Condition expression and list of then-statements.
+@item Outputs: An if node with then-statements and empty else-statements.
+@item Processing: Creates an if node; the else branch is empty.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-parse-if-then-else
+@table @asis
+@item Inputs: Condition expression, then-statements list, and else-statements list.
+@item Outputs: An if node with both branches.
+@item Processing: Creates an if node with the provided then and else statements.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-parse-do-loop
+@table @asis
+@item Inputs: Loop variable (identifier), initial value, final value, optional step value, and statement list.
+@item Outputs: A perform node (loop) with varying condition.
+@item Processing: Transforms the DO loop into a PERFORM statement with an UNTIL condition based on the loop variable exceeding the final value. The step defaults to 1 if omitted.
+@item Side-Effects: None.
+@end table
+
+@subsubsection Unsupported Statements
+The following statements are recognized by the lexer but are not implemented in the parser; they trigger a compile-time error:
+@table @asis
+@item READ
+@item WRITE
+@item PRINT
+@item OPEN
+@item CLOSE
+@item DATA
+@item PARAMETER
+@item TYPE (declaration)
+@item COMMON
+@item DIMENSION
+@item EQUIVALENCE
+@item INCLUDE
+@end table
+Each unsupported statement invokes @code{fortran-unsupported}, which raises a source-error with an appropriate message.
+
+@subsection Expressions
+
+Expressions are parsed into AST nodes representing values and computations.
+
+@subsubsection fortran-build-literal
+@table @asis
+@item Inputs: A number token value in any supported format (decimal, hexadecimal, binary, octal, or dword).
+@item Outputs: The parsed integer value.
+@item Processing: Detects the number format from prefix and parses accordingly:
+@itemize @bullet
+@item Hexadecimal (@code{0X} prefix): parsed as base-16 integer
+@item Binary (@code{0B} prefix): parsed as base-2 integer
+@item Octal (@code{0O} prefix): parsed as base-8 integer
+@item Dword (@code{DWORD} prefix): parsed as base-10 32-bit integer
+@item Default (no prefix): parsed as base-10 integer
+@end itemize
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-build-string
+@table @asis
+@item Inputs: A string token value.
+@item Outputs: The string value unchanged.
+@item Processing: Returns the string as-is.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-build-identifier
+@table @asis
+@item Inputs: An identifier token string.
+@item Outputs: The identifier string converted to uppercase.
+@item Processing: Applies @code{string-upcase} to the identifier.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-build-parenthesized
+@table @asis
+@item Inputs: An expression node.
+@item Outputs: The same expression node.
+@item Processing: Returns the expression unchanged (parentheses affect precedence only).
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-build-arithmetic
+@table @asis
+@item Inputs: An operator symbol (@code{:PLUS}, @code{:MINUS}, @code{:TIMES}, @code{:DIVIDE}, @code{:POWER}) and left/right expression nodes.
+@item Outputs: An arithmetic operation node (e.g., @code{(:add ...)} for addition).
+@item Processing: Maps the operator to the corresponding EightBol arithmetic verb (@code{:add}, @code{:subtract}, etc.) and builds a node with @code{:from}, @code{:to}, and @code{:giving} slots (the latter @code{nil} indicating the result is stored in a temporary).
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-build-relational
+@table @asis
+@item Inputs: A relational operator symbol (@code{:EQUAL}, @code{:NOT-EQUAL}, etc.) and left/right expression nodes.
+@item Outputs: A relational node (e.g., @code{'(= left right)} for equality).
+@item Processing: Maps the operator to the corresponding EightBol comparison operator (@code{=}, @code{/=}, etc.) and builds a list with the operator and operands.
+@item Side-Effects: None.
+@end table
+
+@subsubsection fortran-build-logical
+@table @asis
+@item Inputs: A logical operator symbol (@code{:AND}, @code{:OR}, @code{:NOT}) and one or two expression nodes.
+@item Outputs: A logical node (e.g., @code'{(:and left right)} for AND).
+@item Processing: Maps the operator to the corresponding EightBol logical verb and builds a node. For @code{:NOT}, only one operand is used.
+@item Side-Effects: None.
+@end table
+
+@subsection Object-Oriented Extensions
+
+The Fortran frontend includes extensions for object-oriented programming, inspired by the EightBol OOP system.
+
+@subsubsection CLASS Definition
+@table @asis
+@item Inputs: Class name (identifier).
+@item Outputs: A fortran-class node (@code'{:fortran-class :name name}).
+@item Processing: Creates a node representing a class definition.
+@item Side-Effects: None.
+@end table
+
+@subsubsection METHOD Definition
+@table @asis
+@item Inputs: Method name (identifier), parameter list (ignored), and statement list (body).
+@item Outputs: A fortran-method node (@code'{:fortran-method :method-name name}).
+@item Processing: Creates a node representing a method definition. Parameters and body are ignored for simplicity.
+@item Side-Effects: None.
+@end table
+
+@subsubsection INSTANCE Creation
+@table @asis
+@item Inputs: Class name (identifier) and argument list (ignored).
+@item Outputs: A fortran-new node (@code'{:fortran-new :target class-name :args init-args}).
+@item Processing: Creates a node representing an instance creation (equivalent to NEW). Arguments are ignored.
+@item Side-Effects: None.
+@end table
+
+@subsubsection INVOKE Method Call
+@table @asis
+@item Inputs: Target object (identifier), method name (identifier), and argument list (ignored).
+@item Outputs: An invoke node (@code'{:invoke :target obj :method method}).
+@item Processing: Creates a node representing a method call on an object. Arguments are ignored.
+@item Side-Effects: None.
+@end table
+
+@subsubsection SUPER Call
+@table @asis
+@item Inputs: Method name (identifier).
+@item Outputs: A super-call node (@code'{:sup-call :method method}).
+@item Processing: Creates a node representing a call to the superclass method.
+@item Side-Effects: None.
+@end table
+
+@subsubsection Analogies to Reader Macros
+
+Unlike Lisp reader macros, the Fortran frontend does not employ user-definable syntax extensions. However, certain notations analogous to reader macros are present:
+@table @asis
+@item Hexadecimal Notation: Supported via @code{0X} prefix (e.g., @code{0XDEADBEEF}).
+@item Octal Notation: Supported via @code{0O} prefix (e.g., @code{0O755}).
+@item Binary Notation: Supported via @code{0B} prefix (e.g., @code{0B11110000}).
+@item Dword Notation: Supported via @code{DWORD} prefix (e.g., @code{DWORD65536}).
+@item Scientific Notation: Not supported in literals; real numbers must be expressed as fixed-point or via multiplication.
+@item String Escape Sequences: Not supported; strings are literal sequences of characters between double quotes.
+@end table
+The lexer treats all input as literal character sequences, with no macro-like expansion phase.
+
+@subsection Summary
+
+The Fortran frontend provides a minimal but functional subset of Fortran VII, extended with object-oriented capabilities. It lexes source code into tokens, parses statements and expressions into an AST, and delegates code generation to language-independent backends. Unsupported features are explicitly flagged with compile-time errors.
+
+@subsection Identifier Normalization
+
+The frontend converts identifiers to PascalCase form before AST production. This normalization process:
+
+@itemize @bullet
+@item Converts all lowercase letters to uppercase
+@item Treats underscores as word separators
+@item Capitalizes the first character of each word (separated by underscores)
+@item Removes underscores from the final identifier
+@end itemize
+
+@subsubsection Examples
+
+@table @asis
+@item Input: @code{my_variable}
+@item Output: @code{MyVariable}
+@end table
+
+@table @asis
+@item Input: @code{COUNTER}
+@item Output: @code{Counter}
+@end table
+
+@table @asis
+@item Input: @code{x_coord_value}
+@item Output: @code{XCoordValue}
+@end table
+
+This normalization ensures consistent naming across AST nodes and improves compatibility with downstream code generation backends that may expect PascalCase identifiers.

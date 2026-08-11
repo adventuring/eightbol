@@ -1,0 +1,260 @@
+@c src/frontend-forth/lexer.texf — Forth Lexer documentation fragment
+@c Regenerate with: (regenerate-documentation-for-module "forth-lexer")
+
+@section FORTH Lexer
+
+The FORTH lexer tokenizes Forth stack-based source code. It supports:
+@itemize @bullet
+@item Forth stack manipulation and arithmetic words
+@item Multiple number literal formats: decimal, hexadecimal, octal, binary, dword
+@item String literals with proper quote handling
+@item Comments (backslash-to-end-of-line and parenthetical)
+@item Identifier normalization to SHOUT-CASE
+@item Dialogue and narrative extension words
+@end itemize
+
+@subsection forth-normalize-identifier
+
+@deffn {Function} forth-normalize-identifier S
+Normalize FORTH identifier to SHOUT-CASE (uppercase).
+Converts hyphens and underscores for consistent symbol representation.
+
+@table @asis
+@item Input @var{S}
+String identifier, possibly with hyphens, underscores, or mixed case
+@item Return value
+Uppercase normalized identifier (e.g., @samp{my-var} @result{} @samp{MY_VAR})
+@end table
+
+@subsection Example
+@example
+(forth-normalize-identifier "my-word") @result{} "MY_WORD"
+(forth-normalize-identifier "DUP") @result{} "DUP"
+(forth-normalize-identifier "over") @result{} "OVER"
+@end example
+
+@end deffn
+
+@subsection forth-valid-identifier-p
+
+@deffn {Function} forth-valid-identifier-p S
+Check if @var{S} is a valid Forth identifier.
+Valid identifiers contain alphanumeric characters, hyphens, underscores, and apostrophes
+(for dword literals). Must not start with a digit.
+
+@table @asis
+@item Input @var{S}
+String to validate
+@item Return value
+@code{t} if valid Forth identifier, @code{nil} otherwise
+@end table
+
+@subsection Validity Rules
+@itemize @bullet
+@item Must be a non-empty string
+@item First character must be alphabetic or @code{#}
+@item Subsequent characters: alphanumeric, @code{-}, @code{_}, or @code{'}
+@end itemize
+
+@end deffn
+
+@subsection forth-lex-number
+
+@deffn {Function} forth-lex-number CHARS POS
+Lex a number literal starting at position @var{POS} in @var{CHARS}.
+Supports: decimal, hex (@code{$xxxx} or @code{0x}), octal (@code{0o}),
+binary (@code{%xxxx} or @code{0b}), dword (@code{d'WORD'}).
+
+@table @asis
+@item Input @var{CHARS}
+Character array or string
+@item Input @var{POS}
+Starting position (0-based index)
+@item Return type
+(values token-type token-value new-pos)
+@item Token type
+@code{:number}, @code{:hex-number}, @code{:octal-number}, @code{:binary-number},
+@code{:dword-literal}, or @code{nil} if not a valid number
+@item Token value
+Parsed numeric value (integer) or string (dword)
+@item New pos
+Position after the number literal
+@end table
+
+@subsection Number Format Examples
+@itemize @bullet
+@item Decimal: @code{42}, @code{100}
+@item Hex: @code{$1F00}, @code{0xFF}
+@item Octal: @code{0o777}
+@item Binary: @code{%1010}, @code{0b11110000}
+@item Dword: @code{d'CHAR'} (4-character word literal)
+@end itemize
+
+@end deffn
+
+@subsection forth-lex-line
+
+@deffn {Function} forth-lex-line LINE
+Tokenize a single line of Forth source code.
+Handles quoted strings, operators, comments, and identifiers.
+
+@table @asis
+@item Input @var{LINE}
+String representing one line of Forth code
+@item Return value
+List of @code{(type . value)} token pairs
+@item Token types
+@code{:word}, @code{:number}, @code{:hex-number}, @code{:octal-number},
+@code{:binary-number}, @code{:dword-literal}, @code{:string}, @code{:lparen}, @code{:rparen}
+@end table
+
+@subsection Line Format
+@itemize @bullet
+@item Tokens separated by whitespace (space, tab)
+@item Comments: @code{\} to end of line or @code{( ... )}
+@item Strings: @code{"..."} or @code{'...'}
+@item Parentheses: grouping or comments
+@end itemize
+
+@subsection Faults
+@table @asis
+@item Unterminated string literal
+Position error: string must close with matching quote
+@end table
+
+@end deffn
+
+@subsection forth-tokenize-source
+
+@deffn {Function} forth-tokenize-source SOURCE-STRING
+Tokenize a complete Forth source file.
+
+@table @asis
+@item Input @var{SOURCE-STRING}
+Entire Forth source code as a single string
+@item Return value
+List of token lists, one per line. Each token is @code{(type . value)}.
+Empty lines are skipped.
+@end table
+
+@subsection Behavior
+Splits @var{SOURCE-STRING} on newlines and calls @code{forth-lex-line} on each.
+Returns nested structure suitable for @code{forth-parse-tokens}.
+
+@subsection Example
+@example
+(forth-tokenize-source "DUP SWAP +")
+@result{} (((:word . "DUP") (:word . "SWAP") (:word . "+")))
+@end example
+
+@end deffn
+
+@subsection forth-token-type
+
+@deffn {Function} forth-token-type LEXEME
+Determine the token type (classification) for a lexeme string.
+
+@table @asis
+@item Input @var{LEXEME}
+String token from lexer
+@item Return value
+@code{:keyword} (Forth core word), @code{:dialogue-word}, @code{:ident} (user-defined),
+or @code{:unknown}
+@end table
+
+@end deffn
+
+@subsection forth-get-keyword-token
+
+@deffn {Function} forth-get-keyword-token LEXEME
+Get the keyword token symbol for a Forth core word.
+
+@table @asis
+@item Input @var{LEXEME}
+Word name string
+@item Return value
+Token symbol (e.g., @code{:DUP}), or @code{nil} if not a core word
+@end table
+
+@end deffn
+
+@subsection forth-get-dialogue-token
+
+@deffn {Function} forth-get-dialogue-token LEXEME
+Get the dialogue word token symbol.
+
+@table @asis
+@item Input @var{LEXEME}
+Word name string
+@item Return value
+Token symbol (e.g., @code{:SAY}), or @code{nil} if not a dialogue word
+@end table
+
+@end deffn
+
+@c Supported core words (non-exhaustive reference)
+@subsection Supported Core Words
+
+@strong{Stack Operations}
+@table @code
+@item DUP
+Duplicate top of stack
+@item SWAP
+Exchange top two items
+@item DROP
+Discard top item
+@item OVER
+Copy second item to top
+@item ROT
+Rotate top three items
+@item TWODUP, TWOSWAP, TWODROP
+2-cell variants of above
+@end table
+
+@strong{Arithmetic & Logic}
+@table @code
+@item +, -, *, /, MOD
+Arithmetic operations
+@item AND, OR, XOR, NOT
+Bitwise operations
+@item <<, >>
+Shift operations
+@item ABS, NEGATE
+Unary operations
+@end table
+
+@strong{Comparison}
+@table @code
+@item =, <, >, <=, >=, <>
+Relational operators
+@item 0=, 0<, 0>
+Zero comparisons
+@end table
+
+@strong{I/O & Dialogue}
+@table @code
+@item ., ."
+Print value or string
+@item EMIT, CR, SPACE, SPACES, PAGE
+Character and line output
+@item KEY, ACCEPT
+Single key or line input
+@item SAY, NARRATE, CHOICE, SHOW, HIDE, FADE
+Dialogue extensions
+@end table
+
+@strong{Memory}
+@table @code
+@item @, !, +!, C@, C!
+Memory fetch/store operations
+@item VARIABLE, CONSTANT
+Variable and constant definitions
+@end table
+
+@subsection Bugs
+@table @asis
+@item XXX
+String escapes (e.g., @code{\n}, @code{\t}) not yet implemented; use as-is
+@item TODO
+Support for @code{[CHAR]} and @code{CHAR} parsing not yet added
+@end table

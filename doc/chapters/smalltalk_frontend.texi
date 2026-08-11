@@ -1,0 +1,714 @@
+@chapter{SmallTalk Frontend}
+
+This chapter describes the SmallTalk frontend language syntax as implemented in the EightBol compiler.
+The SmallTalk frontend provides a subset of Smalltalk-80 syntax suitable for educational and
+retrocomputing purposes.
+
+@section{Lexical Elements}
+
+The SmallTalk lexer converts input text into a stream of tokens. Each token has a type and
+a value. The following token types are recognized:
+
+@section{Identifier}
+An identifier consists of letters, digits, and underscores, starting with a letter.
+Identifiers are used for variable names, method names, and class names.
+
+The frontend automatically normalizes identifiers to camelCase (first letter lowercase,
+remaining letters unchanged) for consistent AST representation and code generation across
+platforms. This normalization occurs during lexical analysis and is transparent to the
+source code author.
+
+@example
+x                @code{;; remains 'x'}
+myVariable       @code{;; remains 'myVariable'}
+PrivateData123   @code{;; normalized to 'privateData123'}
+MyMethod         @code{;; normalized to 'myMethod'}
+CONSTANT_VALUE   @code{;; normalized to 'cONSTANT_VALUE'}
+@end example
+
+@subsection{Inputs}
+A string of characters forming a valid identifier (letter followed by alphanumerics and underscores).
+
+@subsection{Outputs}
+Token of type :IDENT with the identifier string normalized to camelCase.
+
+@subsection{Processing}
+The lexer scans consecutive alphanumeric characters and underscores, ensuring the first
+character is a letter. Upon recognition, the identifier is converted to camelCase by
+lowercasing the first character while preserving the rest of the string.
+
+@subsection{Side-Effects}
+Identifiers in generated AST nodes reflect the normalized camelCase form. This ensures
+consistent symbol naming across different source code styles.
+
+@section{Number Literals}
+Numeric literals support multiple formats for expressing integer and floating-point values:
+decimal (base 10), octal (base 8), hexadecimal (base 16), binary (base 2), and dword (16-bit hex).
+
+@subsection{Decimal Numbers}
+Standard decimal integers and floating-point numbers, including scientific notation.
+
+@example
+42
+3.14
+1e5
+-2.5
+0.001
+1.23e-4
+@end example
+
+@subsection{Hexadecimal Numbers}
+Prefixed with @code{0x} (case-insensitive for hex digits).
+
+@example
+0x10        @code{;; = 16 decimal}
+0xFF        @code{;; = 255 decimal}
+0xDEADBEEF  @code{;; = 3735928559 decimal}
+@end example
+
+@subsection{Octal Numbers}
+Prefixed with @code{0o} (zero followed by lowercase 'o').
+
+@example
+0o10        @code{;; = 8 decimal}
+0o77        @code{;; = 63 decimal}
+0o755       @code{;; = 493 decimal}
+@end example
+
+@subsection{Binary Numbers}
+Prefixed with @code{0b} (zero followed by lowercase 'b').
+
+@example
+0b1010      @code{;; = 10 decimal}
+0b11111111  @code{;; = 255 decimal}
+0b1         @code{;; = 1 decimal}
+@end example
+
+@subsection{Dword Format (16-bit Hexadecimal)}
+Prefixed with @code{16r} for explicit 16-bit hex constants, common in Atari platforms.
+
+@example
+16r00       @code{;; = 0 decimal}
+16rFFFF     @code{;; = 65535 decimal}
+16rDEAD     @code{;; = 57005 decimal}
+@end example
+
+@subsection{Inputs}
+A string representing a valid numeric literal in one of the supported formats.
+
+@subsection{Outputs}
+Token of type :NUMBER with the parsed numeric value. Format information is retained for
+code generation if needed (e.g., to emit platform-specific constants).
+
+@subsection{Processing}
+The lexer recognizes format prefixes (@code{0x}, @code{0o}, @code{0b}, @code{16r}) and
+scans appropriate digit characters for each base. Decimal numbers may contain digits,
+optional decimal point, and optional exponent notation (@code{e} or @code{E}).
+
+@subsection{Side-Effects}
+None.
+
+@section{String Literal}
+String literals are enclosed in single quotes.
+
+@example
+'hello world'
+'Phantasia'
+''  ;; empty string
+@end example
+
+@subsection{Inputs}
+A sequence of characters enclosed in single quotes.
+
+@subsection{Outputs}
+Token of type :STRING with the string content (excluding quotes).
+
+@subsection{Processing}
+The lexer scans from the opening quote to the closing quote, handling the quote characters
+themselves as delimiters.
+
+@subsection{Side-Effects}
+None.
+
+@section{Symbol Literal}
+Symbol literals are prefixed with a hash mark.
+
+@example
+#selector
+#at:put:
+#nil
+@end example
+
+@subsection{Inputs}
+A hash mark followed by a valid identifier.
+
+@subsection{Outputs}
+Token of type :SYMBOL with the symbol string (including the hash).
+
+@subsection{Processing}
+The lexer scans the hash mark and subsequent identifier characters.
+
+@subsection{Side-Effects}
+None.
+
+@section{Assignment Operator}
+The assignment operator is denoted by :=.
+
+@example
+x := 5
+collection := Array new
+@end example
+
+@subsection{Inputs}
+The character sequence :=.
+
+@subsection{Outputs}
+Token of type :ASSIGN.
+
+@subsection{Processing}
+Exact match of the two-character sequence.
+
+@subsection{Side-Effects}
+None.
+
+@section{Period}
+The period is used to terminate statements.
+
+@example
+x := 1.
+Transcript show: 'hello'.
+@end example
+
+@subsection{Inputs}
+The character . (period).
+
+@subsection{Outputs}
+Token of type :PERIOD.
+
+@subsection{Processing}
+Exact match of the period character.
+
+@subsection{Side-Effects}
+None.
+
+@section{Semicolon}
+The semicolon enables cascading of messages to the same receiver.
+
+@example
+Transcript
+    show: 'hello';
+    show: 'world';
+    cr.
+@end example
+
+@subsection{Inputs}
+The character ; (semicolon).
+
+@subsection{Outputs}
+Token of type :SEMICOLON.
+
+@subsection{Processing}
+Exact match of the semicolon character.
+
+@subsection{Side-Effects}
+None.
+
+@section{Colon}
+The colon is used in keyword message selectors.
+
+@example
+dict at: key put: value
+rectangle width: 10 height: 20
+@end example
+
+@subsection{Inputs}
+The character : (colon).
+
+@subsection{Outputs}
+Token of type :COLON.
+
+@subsection{Processing}
+Exact match of the colon character.
+
+@subsection{Side-Effects}
+None.
+
+@section{Vertical Bar}
+The vertical bar is used to declare temporary variables in blocks and to separate block
+elements.
+
+@example
+[:x | x + 1]
+| temp1 temp2 |
+temp1 := 1.
+temp2 := temp1 * 2.
+^[x | x > 10]  ;; block with parameter
+@end example
+
+@subsection{Inputs}
+The character | (vertical bar).
+
+@subsection{Outputs}
+Token of type :VBAR.
+
+@subsection{Processing}
+Exact match of the vertical bar character.
+
+@subsection{Side-Effects}
+None.
+
+@section{Left Bracket}
+The left bracket begins a block literal.
+
+@example
+[:n | n factorial]
+[Transcript show: 'Hello']
+#endif  ;; conditional block
+@end example
+
+@subsection{Inputs}
+The character [ (left bracket).
+
+@subsection{Outputs}
+Token of type :LBRACKET.
+
+@subsection{Processing}
+Exact match of the left bracket character.
+
+@subsection{Side-Effects}
+None.
+
+@section{Right Bracket}
+The right bracket ends a block literal.
+
+@example
+[:n | n factorial]
+[Transcript show: 'Hello']
+#endif
+@end example
+
+@subsection{Inputs}
+The character ] (right bracket).
+
+@subsection{Outputs}
+Token of type :RBRACKET.
+
+@subsection{Processing}
+Exact match of the right bracket character.
+
+@subsection{Side-Effects}
+None.
+
+@section{Left Parenthesis}
+The left parenthesis is used for grouping expressions and parameter lists.
+
+@example
+(x + y) * z
+Array new: (10 * 5)
+(obj isNil) ifTrue: [^nil]
+@end example
+
+@subsection{Inputs}
+The character ( (left parenthesis).
+
+@subsection{Outputs}
+Token of type :LPAREN.
+
+@subsection{Processing}
+Exact match of the left parenthesis character.
+
+@subsection{Side-Effects}
+None.
+
+@section{Right Parenthesis}
+The right parenthesis closes grouping expressions and parameter lists.
+
+@example
+(x + y) * z
+Array new: (10 * 5)
+(obj isNil) ifTrue: [^nil]
+@end example
+
+@subsection{Inputs}
+The character ) (right parenthesis).
+
+@subsection{Outputs}
+Token of type :RPAREN.
+
+@subsection{Processing}
+Exact match of the right parenthesis character.
+
+@subsection{Side-Effects}
+None.
+
+@section{Operators}
+Various operators are available for arithmetic, comparison, and logical operations.
+
+@example
++  ;; addition
+-  ;; subtraction
+*  ;; multiplication
+/  ;; division
+=  ;; equivalence
+== ;; identity
+~= ;; difference
+>  ;; greater than
+<  ;; less than
+>= ;; greater than or equal
+<= ;; less than or equal
+@  ;; array creation point
+@end example
+
+@subsection{Inputs}
+Single or double character sequences representing operators.
+
+@subsection{Outputs}
+Token types corresponding to each operator (e.g., :PLUS for +, :TIMES for *, etc.).
+
+@subsection{Processing}
+Exact match of operator character sequences.
+
+@subsection{Side-Effects}
+None.
+
+@section{Number Format Reference}
+The SmallTalk frontend supports multiple number literal formats for convenience across
+different programming contexts. All formats parse to their integer or floating-point
+values for use in expressions and assignments.
+
+@subsection{Decimal Format}
+Standard base-10 integers and floating-point numbers.
+
+@example
+@code{42} — forty-two
+@code{3.14} — pi approximation
+@code{1e5} — 100,000 in scientific notation
+@code{-2.5} — negative decimal
+@end example
+
+@subsection{Hexadecimal Format (0x prefix)}
+Base-16 numbers for bitwise operations and memory addresses (common in assembly contexts).
+
+@example
+@code{0x10} — sixteen
+@code{0xFF} — 255 (maximum unsigned byte)
+@code{0xDEADBEEF} — valid 32-bit hex constant
+@end example
+
+@subsection{Octal Format (0o prefix)}
+Base-8 numbers (legacy Unix file permissions, Atari display lists).
+
+@example
+@code{0o10} — eight
+@code{0o77} — sixty-three
+@code{0o755} — file permissions rwxr-xr-x
+@end example
+
+@subsection{Binary Format (0b prefix)}
+Base-2 numbers for bit manipulation and flag definitions.
+
+@example
+@code{0b1010} — ten (0b patterns)
+@code{0b11111111} — 255 (all bits set)
+@code{0b1} — one
+@end example
+
+@subsection{Dword Format (16r prefix)}
+Explicit 16-bit hexadecimal constant (Atari platform convention).
+
+@example
+@code{16r00} — zero
+@code{16rFFFF} — 65,535 (16-bit maximum)
+@code{16rDEAD} — 57,005 (test value)
+@end example
+
+@subsection{Inputs}
+Any numeric literal in one of the supported formats.
+
+@subsection{Outputs}
+Token of type :NUMBER with the parsed numeric value.
+
+@subsection{Processing}
+The lexer identifies format prefixes and dispatches to appropriate radix parsers.
+Prefix detection happens before general number scanning, allowing format-specific
+digit validation (e.g., binary only accepts 0 and 1).
+
+@subsection{Side-Effects}
+None.
+
+@section{Whitespace}
+Spaces, tabs, and newlines are ignored except to separate tokens.
+
+@example
+x:=1  ;; equivalent to x := 1
+ifTrue[
+    x := 2
+]     ;; whitespace around brackets is ignored
+@end example
+
+@subsection{Inputs}
+Whitespace characters (space, tab, newline).
+
+@subsection{Outputs}
+No tokens produced.
+
+@subsection{Processing}
+Whitespace is skipped between tokens.
+
+@subsection{Side-Effects}
+None.
+
+@section{Comments}
+Comments are not supported in the SmallTalk frontend.
+
+@section{Syntax Elements}
+
+Building upon the lexical elements, the SmallTalk frontend supports the following
+syntactic constructs.
+
+@section{Assignment Statement}
+Assigns a value to a variable.
+
+@example
+x := 5
+obj := Sprite new
+count := count + 1
+@end example
+
+@subsection{Inputs}
+Variable identifier, assignment operator (:=), and an expression.
+
+@subsection{Outputs}
+AST node representing the assignment operation.
+
+@subsection{Processing}
+The parser recognizes the pattern: variable := expression
+
+@subsection{Side-Effects}
+The variable is bound to the result of evaluating the expression.
+
+@section{Message Send Expression}
+Sends a message to an object (receiver) with optional arguments.
+
+@example
+Transcript show: 'hello'  ;; keyword message
+x + y                     ;; binary message
+obj size                  ;; unary message
+dict at: key put: value   ;; multiple keywords
+@end example
+
+@subsection{Inputs}
+A receiver expression followed by a message selector and optional arguments.
+
+@subsection{Outputs}
+AST node representing the message send operation.
+
+@subsection{Processing}
+The parser recognizes three message patterns:
+- Unary: receiver messageSelector (e.g., obj size)
+- Binary: receiver operator argument (e.g., x + y)
+- Keyword: receiver keyword1: arg1 keyword2: arg2 ... (e.g., dict at: key put: value)
+
+@subsection{Side-Effects}
+The message is looked up in the receiver's class and the corresponding method is executed
+with the provided arguments.
+
+@section{Block Literal}
+A block literal represents an anonymous function that can be executed later.
+
+@example
+[:x | x * x]                     ;; block with parameter
+[Transcript show: 'Hello']       ;; block with no parameters
+[:a :b | a > b]                  ;; block with multiple parameters
+[ | temp | temp := 10 ]          ;; block with temporary variables
+@end example
+
+@subsection{Inputs}
+An opening bracket, optional parameter list (identifiers separated by spaces, each
+prefixed with colon), optional vertical bar and temporary variable declarations,
+and a sequence of expressions, ending with a closing bracket.
+
+@subsection{Outputs}
+AST node representing the block literal.
+
+@subsection{Processing}
+The parser recognizes the pattern: [ [:param1 :param2...] [| temp1 temp2...] | expressions ]
+
+@subsection{Side-Effects}
+When the block is executed via value or related messages, the enclosed expressions are
+evaluated in the context of the block's parameters and temporaries.
+
+@section{Expression}
+An expression represents a computation that produces a value.
+
+@example
+42
+x
+x + y
+[ :n | n factorial ] value
+obj perform: #selector
+@end example
+
+@subsection{Inputs}
+Any valid combination of literals, variables, message sends, and blocks according to
+SmallTalk precedence rules.
+
+@subsection{Outputs}
+Value resulting from the expression evaluation.
+
+@subsection{Processing}
+Expressions are parsed according to operator precedence:
+1. Unary messages
+2. Binary messages (left to right)
+3. Keyword messages
+4. Literals, variables, blocks, and parenthesized expressions (highest precedence)
+
+@subsection{Side-Effects}
+Expression evaluation may have side effects depending on the operations performed
+(message sends, assignments within blocks, etc.).
+
+@section{Cascade}
+The semicolon allows sending multiple messages to the same receiver without
+repeating the receiver.
+
+@example
+Transcript
+    show: 'hello';
+    show: 'world';
+    cr.
+    
+obj
+    color: Color red;
+    borderWidth: 2;
+    drawRect: (0 @ 0 extent: 100 @ 100).
+@end example
+
+@subsection{Inputs}
+A receiver expression followed by a message, then zero or more occurrences of:
+semicolon followed by a message.
+
+@subsection{Outputs}
+AST nodes for each message send in the cascade.
+
+@subsection{Processing}
+The parser transforms a cascade into individual message sends to the same receiver.
+
+@subsection{Side-Effects}
+Each message in the cascade is executed sequentially, with the receiver being the
+same object for all messages.
+
+@section{Method Definition}
+Method definitions appear in class definitions and specify the behavior of objects.
+
+@example
+drawOn: aCanvas
+    aCanvas
+        fillRect: self bounds
+        borderWidth: self borderWidth
+        drawRect: self bounds.
+        
+initialize
+    super initialize.
+    color: Color blue.
+    borderWidth: 1.
+@end example
+
+@subsection{Inputs}
+A message selector (with optional parameters) followed by a sequence of expressions
+ending with a period.
+
+@subsection{Outputs}
+AST node representing the method definition.
+
+@subsection{Processing}
+The parser recognizes method definition syntax within class contexts.
+
+@subsection{Side-Effects}
+When the method is compiled, it becomes part of the class's method dictionary and
+can be invoked via message sends.
+
+@section{Control Structures}
+Control structures are implemented as messages sent to Boolean objects or blocks.
+
+@example
+(x > 0) ifTrue: [^x] ifFalse: [^-x]
+ SmallTalk does not have dedicated syntax for control structures; they are
+ implemented via the standard message sending mechanism.
+ 
+Common control patterns include:
+- ifTrue:ifFalse: - conditional execution
+- whileTrue: - repeated execution while condition holds
+- to:do: - counting loop
+- do: - execute block with each collection element
+@end example
+
+@subsection{Inputs}
+Boolean expressions and block literals as arguments to control messages.
+
+@subsection{Outputs}
+Depends on the specific control message.
+
+@subsection{Processing}
+Control messages evaluate their block arguments conditionally or repeatedly.
+
+@subsection{Side-Effects}
+Depends on the controlled execution of block arguments.
+
+@section{Reader Macro Analogies}
+
+While SmallTalk does not have reader macros like Lisp, certain lexical elements
+serve similar purposes by providing alternate representations for common constructs:
+
+@table @asis
+@item Symbol Literals (#symbol)
+Provide a concise way to reference unique identifiers, similar to how reader macros
+might provide shorthand for complex forms.
+
+@item Array Literals (#(1 2 3))
+Though not fully implemented in this frontend, the # syntax serves as a reader-like
+construct for literal data structures.
+
+@item Block Literals ([ ... ])
+Provide a literal representation of executable code, analogous to how reader macros
+might quote or delay evaluation of forms.
+@end table
+
+These constructs enable metaprogramming techniques by treating code as data and
+vice versa, fulfilling a similar role to reader macros in other languages.
+
+@section{AST Node Processing}
+
+@subsection{Identifier Normalization}
+
+The SmallTalk frontend converts all identifiers to camelCase canonical form during AST production.
+This normalization is applied consistently to variable names, method selectors, and block parameters.
+The transformation is transparent to source code but ensures consistent handling across all code generation
+backends (6502, Z80, m68k, etc.).
+
+@subsubsection{camelCase Transformation Rules}
+
+@enumerate
+@item The first character of the identifier is converted to lowercase.
+@item All subsequent characters are preserved as-is (maintaining case from source).
+@item This transformation is applied during lexical analysis before parsing.
+@item AST nodes contain the normalized identifier, not the original source text.
+@end enumerate
+
+@subsubsection{Examples}
+
+@table @asis
+@item MyClass
+becomes @code{myClass}
+
+@item initialize
+remains @code{initialize}
+
+@item CONSTANT_NAME
+becomes @code{cONSTANT_NAME}
+
+@item atKeyPutValue
+remains @code{atKeyPutValue}
+
+@item DoSomething
+becomes @code{doSomething}
+@end table

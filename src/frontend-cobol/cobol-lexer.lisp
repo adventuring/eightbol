@@ -75,22 +75,24 @@ this function is called; they produce :string tokens, not :number tokens."
       (t (parse number-string 10)))))
 
 (defun normalize-identifier (identifier)
-  "Normalize IDENTIFIER to Header-Case-With-Hyphens form.
+  "Normalize IDENTIFIER to Header-Case-With-Hyphens form per eightbol conventions.
 
 COBOL identifiers contain alphanumerics and hyphens. This function:
 - Converts to Header-Case (uppercase first letter of each word)
-- Replaces underscores with hyphens for consistency
-- Ensures the result conforms to eightbol naming conventions
+- Replaces underscores with hyphens for consistency  
+- Ensures the result conforms to eightbol naming conventions (Header-Case-Capitalized)
 
 INPUTS: IDENTIFIER — a string or symbol
 
 OUTPUTS: normalized string suitable for use in AST nodes
 
-EXAMPLE: normalize-identifier \"my_variable\" → \"My-Variable\""
+EXAMPLE: normalize-identifier \"my_variable\" → \"My-Variable\"
+EXAMPLE: normalize-identifier \"CHARACTER-NAME\" → \"Character-Name\"
+EXAMPLE: normalize-identifier \"myMethod\" → \"My-Method\""
   (let* ((str (if (symbolp identifier) (string identifier) identifier))
-         ;; Replace underscores with hyphens
+         ;; Replace underscores with hyphens for consistency
          (with-hyphens (substitute #\- #\_ str :test #'char-equal)))
-    ;; Apply Header-Case from cl-change-case
+    ;; Apply Header-Case from cl-change-case to produce Header-Case-With-Hyphens
     (header-case with-hyphens)))
 
 (defun parse-string (token)
@@ -182,7 +184,7 @@ Used when after PIC/PICTURE: treat as picture-sequence instead of expanding as s
                 (= 1 (length token))
                 (prefixed-literal-prefix-p (char token 0))
                 (>= (length nxt) 2)
-                (member (char nxt 0) '(#\' #\") :test #'char=)
+                (member (char nxt 0) '(#\apostrophe #\") :test #'char=)
                 (char= (char nxt 0) (char nxt (1- (length nxt)))))
            (push (concatenate 'string token nxt) result)
            (setf tokens (cddr tokens)))

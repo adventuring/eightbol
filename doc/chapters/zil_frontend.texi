@@ -1,0 +1,280 @@
+@chapter ZIL Frontend Language
+This chapter describes the ZIL frontend language as implemented in the Eightbol compiler. The ZIL frontend is a subset of the ZIL language, focusing on core programming constructs that are translated into EIGHTBOL AST nodes.
+
+@section Lexical Elements
+The ZIL frontend tokenizer recognizes keywords, operators, literals, and delimiters.
+
+@subsection Keywords
+The following keywords are recognized by the tokenizer. Those marked with an asterisk (*) have special meaning in the parser grammar; others are treated as atoms when encountered in expressions.
+
+@table @asis
+@item IF* @tab Conditional statement
+@item ELSE @tab Optional else clause in IF (treated as atom)
+@item THEN @tab Optional then keyword in IF (treated as atom)
+@item WHILE* @tab While loop
+@item FOR* @tab For loop
+@item BREAK @tab Break statement (treated as atom)
+@item CONTINUE @tab Continue statement (treated as atom)
+@item RETURN* @tab Return from subroutine
+@item DEFINE* @tab Define a subroutine
+@item SET* @tab Assign to a local variable
+@item SETG* @tab Assign to a global variable
+@item GET @tab Get object property (treated as atom)
+@item PUT @tab Put object property (treated as atom)
+@item CALL* @tab Call a subroutine
+@item GO @tab Go to label (treated as atom)
+@item EXIT @tab Exit program (treated as atom)
+@item LABEL @tab Define label (treated as atom)
+@item ASSERT @tab Assert condition (treated as atom)
+@item WAIT @tab Wait for condition (treated as atom)
+@item STOP @tab Stop execution (treated as atom)
+@item START @tab Start execution (treated as atom)
+@item FADE @tab Fade effect (treated as atom)
+@item RESTORE @tab Restore game state (treated as atom)
+@item SAVE @tab Save game state (treated as atom)
+@item RESTART @tab Restart game (treated as atom)
+@item VERSION @tab Version directive (treated as atom)
+@item OBJECT @tab Object definition (treated as atom)
+@item PROPERTY @tab Property definition (treated as atom)
+@item GLOBAL @tab Global variable declaration (treated as atom)
+@item LOCAL @tab Local variable declaration (treated as atom)
+@item P @tab Property access (treated as atom)
+@end table
+
+@subsection Operators
+The following operators are recognized and have meaning in expressions.
+
+@table @asis
+@item + @tab Addition
+@item - @tab Subtraction
+@item * @tab Multiplication
+@item / @tab Division
+@item = @tab Equality
+@item <> @tab Inequality
+@item < @tab Less than
+@item > @tab Greater than
+@item <= @tab Less than or equal
+@item >= @tab Greater than or equal
+@item AND @tab Logical conjunction
+@item OR @tab Logical disjunction
+@item NOT @tab Logical negation
+@end table
+
+@subsection Literals
+ZIL supports multiple number literal formats in addition to decimal numbers, strings, and atoms.
+
+@subsubheading Number Literals
+@table @asis
+@item Decimal @tab Standard base-10 integers: @code{42}, @code{1024}, @code{0}
+@example
+(<SET> <VALUE> 42)
+@end example
+
+@item Hexadecimal @tab Base-16 integers prefixed with @code{#x}: @code{#xFF}, @code{#x10}, @code{#x0}
+@example
+(<SET> <COLOR> #xFF)    ;;; Bright white in 8-bit color
+@end example
+
+@item Octal @tab Base-8 integers prefixed with @code{#o}: @code{#o77}, @code{#o100}, @code{#o755}
+@example
+(<SET> <PERMISSIONS> #o755)
+@end example
+
+@item Binary @tab Base-2 integers prefixed with @code{#b}: @code{#b1010}, @code{#b11111111}, @code{#b0}
+@example
+(<SET> <FLAGS> #b1010)
+@end example
+
+@item Dword @tab 32-bit decimal integers prefixed with @code{#d}: @code{#d65536}, @code{#d2147483647}
+@example
+(<SET> <LargeValue> #d65536)   ;;; 16-bit maximum value
+@end example
+@end table
+
+@item Strings @tab Text enclosed in double quotes (@code{"..."}). Escape sequences are not supported.
+@item Atoms @tab Identifiers consisting of letters, digits, hyphens, underscores, and question marks, not starting with a digit. Keywords used outside their grammatical context are treated as atoms.
+@end table
+
+@subsection Delimiters
+@table @asis
+@item Parentheses @tab (@code{(} and @code{)} ) group expressions and delimit subroutine argument lists.
+@item Comma @tab (@code{,}) separates items in lists.
+@item Quote @tab (@code{'}) denotes an atomic literal (used internally).
+@end table
+
+@section Expressions
+Expressions in the ZIL frontend are built from literals, variables, and operators, following standard precedence rules.
+
+@subsection Arithmetic Expressions
+@table @asis
+@item Addition (@code{+}) @tab Produces the sum of two operands.
+@example
+(<SET> <RESULT> <ADD> <OP1> <OP2>)
+@end example
+@item Subtraction (@code{-}) @tab Produces the difference of two operands.
+@example
+(<SET> <RESULT> <SUB> <OP1> <OP2>)
+@end example
+@item Multiplication (@code{*}) @tab Produces the product of two operands.
+@example
+(<SET> <RESULT> <MULT> <OP1> <OP2>)
+@end example
+@item Division (@code{/}) @tab Produces the quotient of two operands (integer division).
+@example
+(<SET> <RESULT> <DIV> <OP1> <OP2>)
+@end example
+@end table
+
+@subsection Comparison Expressions
+@table @asis
+@item Equality (@code{=}) @tab Tests if two operands are equal.
+@example
+(<IF> <EQUAL> <VAR> <VALUE>) ... </IF>
+@end example
+@item Inequality (@code{<>}) @tab Tests if two operands are not equal.
+@example
+(<IF> <NE> <VAR> <VALUE>) ... </IF>
+@end example
+@item Less than (@code{<}) @tab Tests if left operand is less than right.
+@example
+(<IF> <LT> <VAR> <LIMIT>) ... </IF>
+@end example
+@item Greater than (@code{>}) @tab Tests if left operand is greater than right.
+@example
+(<IF> <GT> <VAR> <LIMIT>) ... </IF>
+@end example
+@item Less than or equal (@code{<=}) @tab Tests if left operand is less than or equal to right.
+@example
+(<IF> <LE> <VAR> <LIMIT>) ... </IF>
+@end example
+@item Greater than or equal (@code{>=}) @tab Tests if left operand is greater than or equal to right.
+@example
+(<IF> <GE> <VAR> <LIMIT>) ... </IF>
+@end example
+@end table
+
+@subsection Logical Expressions
+@table @asis
+@item Logical AND (@code{AND}) @tab Combines two conditions; true if both are true.
+@example
+(<IF> <AND> <COND1> <COND2>) ... </IF>
+@end example
+@item Logical OR (@code{OR}) @tab Combines two conditions; true if either is true.
+@example
+(<IF> <OR> <COND1> <COND2>) ... </IF>
+@end example
+@item Logical NOT (@code{NOT}) @tab Negates a condition.
+@example
+(<IF> <NOT> <COND>) ... </IF>
+@end example
+@end table
+
+@section Statements
+Statements perform actions and may alter program flow.
+
+@subsection Variable Assignment
+@table @asis
+@item SET @tab Assigns a value to a local variable.
+@example
+(<SET> <VARIABLE> <VALUE>)
+@end example
+@item SETG @tab Assigns a value to a global variable.
+@example
+(<SETG> <VARIABLE> <VALUE>)
+@end example
+@end table
+
+@subsection Subroutine Definition
+@table @asis
+@item DEFINE @tab Defines a subroutine with optional parameters.
+@example
+(<DEFINE> <NAME> [<PARAM1> <PARAM2> ...] <BODY>)
+@end example
+The body is a sequence of statements. Parameters are treated as local variables within the subroutine.
+@end table
+
+@subsection Subroutine Call
+@table @asis
+@item CALL @tab Invokes a subroutine.
+@example
+(<CALL> <NAME> [<ARG1> <ARG2> ...])
+@end example
+Arguments are passed by value and matched to parameters by position.
+@end table
+
+@subsection Return Statement
+@table @asis
+@item RETURN @tab Returns from the current subroutine. An optional value may be specified.
+@example
+(<RETURN>) @tab Returns without a value.
+(<RETURN> <VALUE>) @tab Returns the specified value.
+@end example
+@end table
+
+@section Control Structures
+Control structures alter the flow of execution based on conditions or loops.
+
+@subsection Conditional Statement
+@table @asis
+@item IF @tab Executes a block if a condition is true, optionally with an else block.
+@example
+(<IF> <CONDITION>
+   <THEN>
+      <TRUE-BLOCK>
+   <ELSE>
+      <FALSE-BLOCK>
+   </IF>
+@end example
+The THEN and ELSE keywords are optional and serve only as visual markers; the structure is determined by position. The condition is an expression that evaluates to true (non-zero) or false (zero).
+@end table
+
+@subsection Loops
+@table @asis
+@item WHILE @tab Repeats a block while a condition remains true.
+@example
+(<SET> <COUNTER> 0)
+(<WHILE> <LT> <COUNTER> <LIMIT>
+   <SET> <COUNTER> <ADD> <COUNTER> 1
+)
+@end example
+@item FOR @tab Repeats a block with a variable iterating over a range.
+@example
+(<FOR> <VAR> <START> <END>
+   <SET> <RESULT> <ADD> <RESULT> <VAR>
+)
+@end example
+The variable is initialized to START, incremented by 1 each iteration, and the loop continues while the variable is less than or equal to END.
+@end table
+
+@subsection Flow Control Statements
+@table @asis
+@item BREAK @tab Exits the innermost enclosing loop immediately.
+@item CONTINUE @tab Skips the remainder of the current loop iteration and proceeds to the next.
+@end table
+These statements are treated as atoms in the parser and have no special meaning in the frontend grammar. They are reserved for future implementation or may be handled by external preprocessors.
+
+@section Identifier Normalization
+
+Identifiers in the ZIL frontend are normalized to kebab-case (lowercase with hyphens) when converted to AST nodes. This ensures consistent representation regardless of the input format.
+
+@subsection Normalization Rules
+@table @asis
+@item Uppercase letters @tab Converted to lowercase (e.g., @code{MyVar} becomes @code{my-var})
+@item Underscores @tab Converted to hyphens (e.g., @code{my_var} becomes @code{my-var})
+@item Mixed case @tab Fully lowercased with underscores converted (e.g., @code{My_Var} becomes @code{my-var})
+@end table
+
+@subsection Examples
+@table @asis
+@item Input @tab Output in AST
+@item @code{myVariable} @tab @code{my-variable}
+@item @code{MY_FUNCTION} @tab @code{my-function}
+@item @code{GetValue?} @tab @code{get-value?}
+@item @code{local_counter} @tab @code{local-counter}
+@item @code{CallBack-Handler} @tab @code{call-back-handler}
+@end table
+
+This normalization allows seamless interoperability between different naming conventions while maintaining a consistent internal representation in the AST.
+
+@section Notes
+The ZIL frontend does not implement the full ZIL language. Features such as object manipulation (<OBJECT>, <PROPERTY>, <P>), goto (<GO>, <LABEL>), and various system calls (<GET>, <PUT>, <WAIT>, etc.) are recognized as tokens but lack grammatical definition in this frontend. They may be used as atoms in expressions or processed by external tools preceding the Eightbol compiler.

@@ -1,0 +1,179 @@
+@chapter GOAL Frontend Language
+@menu
+* Overview::
+* Number Formats::
+* Identifiers::
+* Operators::
+* Expressions::
+* Special Forms::
+@end menu
+
+@node Overview
+@section Overview
+The GOAL frontend language is a Lisp-like language for the Eightbol compiler targeting 8-bit and 16-bit retro platforms. This chapter documents the lexical and syntactic features of GOAL, including number literals, identifier normalization, operators, and expressions.
+
+@node Number Formats
+@section Number Formats
+
+GOAL supports multiple number literal formats for convenient expression of values across different bases:
+
+@subsection Decimal Literals
+Plain sequences of digits represent decimal (base-10) numbers.
+
+@example
+42
+1000
+0
+@end example
+
+@subsection Hexadecimal Literals
+Hexadecimal numbers are prefixed with @code{#x} and may contain digits 0–9 and letters A–F (case-insensitive).
+
+@example
+#xFF
+#x1000
+#xDEADBEEF
+#x0
+@end example
+
+@subsection Octal Literals
+Octal numbers are prefixed with @code{#o} and may contain digits 0–7.
+
+@example
+#o777
+#o1000
+#o0
+@end example
+
+@subsection Binary Literals
+Binary numbers are prefixed with @code{#b} and may contain digits 0–1.
+
+@example
+#b1111
+#b10101010
+#b0
+@end example
+
+@subsection Dword (String) Literals
+Dword or string literals for memory access are prefixed with @code{#d} followed by a quoted string. These are intended for low-level memory operations and platform-specific constant values.
+
+@example
+#d"WORD"
+#d"DATA"
+@end example
+
+@node Identifiers
+@section Identifiers
+
+Identifiers in GOAL are sequences of alphanumeric characters, hyphens, underscores, and exclamation marks. The lexer normalizes all identifiers to kebab-case (lowercase with hyphens replacing spaces and underscores) in AST nodes. This normalization ensures consistent representation regardless of input style.
+
+@subsection Identifier Normalization
+
+The front-end converts identifiers to kebab-case form before AST production. This allows flexibility in source code while maintaining consistency in internal representation.
+
+@table @asis
+@item @code{PlayerName}
+Normalized to @code{player-name}
+
+@item @code{player_score}
+Normalized to @code{player-score}
+
+@item @code{PLAYER_HEALTH}
+Normalized to @code{player-health}
+
+@item @code{playerId}
+Normalized to @code{player-id}
+@end table
+
+@node Operators
+@section Operators
+
+GOAL supports standard arithmetic, comparison, and bitwise operators:
+
+@table @asis
+@item Arithmetic
+@code{+} (addition), @code{-} (subtraction), @code{*} (multiplication), @code{/} (division), @code{%} (modulo)
+
+@item Comparison
+@code{=} (numeric equal), @code{==} (identity equal), @code{!=} (not equal), @code{<} (less than), @code{>} (greater than), @code{<=} (less than or equal), @code{>=} (greater than or equal)
+
+@item Bitwise
+@code{&} (bitwise and), @code{|} (bitwise or), @code{^} (bitwise xor), @code{~} (bitwise not), @code{<<} (left shift), @code{>>} (right shift)
+
+@item Logical
+@code{and}, @code{or}, @code{not}
+
+@item Access
+@code{.} (member access), @code{->} (pointer dereference)
+@end table
+
+@node Expressions
+@section Expressions
+
+GOAL supports several forms of expressions:
+
+@subsection S-Expressions (Lists)
+
+S-expressions are enclosed in parentheses and represent function calls or special forms:
+
+@example
+(+ 1 2 3)
+(defun add (x y) (+ x y))
+@end example
+
+@subsection Quoted Expressions
+
+Expressions prefixed with a single quote @code{'} are not evaluated:
+
+@example
+'(a b c)
+'symbol
+@end example
+
+@subsection Conditionals
+
+The @code{if} special form evaluates a test expression and executes one of two branches:
+
+@example
+(if (> x 10) (large-operation) (small-operation))
+@end example
+
+@node Special Forms
+@section Special Forms
+
+GOAL provides the following special forms for control flow and binding:
+
+@table @asis
+@item @code{defun}
+Defines a named function
+
+@item @code{defmethod}
+Defines a method on a class
+
+@item @code{deftype}
+Defines a type
+
+@item @code{let}, @code{let*}
+Local variable binding
+
+@item @code{if}
+Conditional evaluation
+
+@item @code{when}, @code{unless}
+One-branch conditionals
+
+@item @code{cond}
+Multi-branch conditional
+
+@item @code{case}
+Case expression dispatch
+
+@item @code{loop}
+Iterative loop
+
+@item @code{quote}
+Quote expression (prevent evaluation)
+
+@item @code{lambda}
+Anonymous function
+@end table

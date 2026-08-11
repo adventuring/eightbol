@@ -33,7 +33,7 @@
       (let ((trimmed (string-trim '(#\Space #\Tab) line)))
         (unless (or (zerop (length trimmed))
                     (char= #\; (char trimmed 0))
-                    (char= #\' (char trimmed 0))) ; REM in BASIC
+                    (char= #\apostrophe (char trimmed 0))) ; REM in BASIC
           (multiple-value-bind (whole groups)
               (cl-ppcre:scan-to-strings rx trimmed)
             (declare (ignore whole))

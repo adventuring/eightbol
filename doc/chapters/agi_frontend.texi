@@ -1,0 +1,424 @@
+@chapter AGI Frontend Language
+@cindex AGI frontend language
+
+This chapter describes the AGI frontend language as implemented in the EightBol compiler.
+The language is defined by its lexer (@file{agi-lexer.lisp}) and parser (@file{agi-parser.lisp}).
+Only the constructs defined in these files are part of the language; any other AGI-like
+constructs are not supported by this frontend.
+
+@section Lexical Elements
+
+The AGI frontend lexer tokenizes input into the following categories:
+
+@table @asis
+@item Keywords
+Reserved words that have special meaning in the language.
+@item Operators
+Symbols representing arithmetic, logical, and comparison operations.
+@item Delimiters
+Punctuation used for grouping and separation.
+@item Literals
+Numeric and string constants.
+@item Identifiers
+User-defined names for variables and routines.
+@end table
+
+@subsection Keywords
+
+The following keywords are recognized (case-insensitive):
+@table @asis
+@item IF
+Starts a conditional statement.
+@item ELSE
+Specifies the false branch of an IF statement.
+@item THEN
+Separates the condition from the true branch in an IF statement.
+@item GOSUB
+Calls a subroutine.
+@item GOTO
+Jumps to a labeled statement.
+@item NEWROOM
+(Reserved for future use; not implemented in the parser.)
+@item LOADLOGICS
+(Reserved for future use; not implemented in the parser.)
+@item RETURN
+Returns from a subroutine.
+@item QUIT
+(Reserved for future use; not implemented in the parser.)
+@item ASSIGN
+(Reserved for future use; not implemented in the parser. Assignment is done via the @code{=} operator.)
+@item INCREMENT
+Increments a variable by 1.
+@item DECREMENT
+Decrements a variable by 1.
+@item SET
+Sets a variable to 1.
+@item RESET
+Sets a variable to 0.
+@item SAID
+(Reserved for future use; not implemented in the parser.)
+@item TEST
+(Reserved for future use; not implemented in the parser.)
+@item POSN
+(Reserved for future use; not implemented in the parser.)
+@item CONTROLLER
+(Reserved for future use; not implemented in the parser.)
+@item HAVEKEY
+(Reserved for future use; not implemented in the parser.)
+@item AND
+Logical conjunction operator.
+@item OR
+Logical disjunction operator.
+@end table
+
+@subsection Operators
+
+The following operators are supported:
+@table @asis
+@item @code{+}
+Addition.
+@item @code{-}
+Subtraction.
+@item @code{*}
+Multiplication.
+@item @code{/}
+Division.
+@item @code{=}
+Assignment and equality comparison.
+@item @code{<}
+Less than comparison.
+@item @code{>}
+Greater than comparison.
+@item @code{<=}
+Less than or equal comparison.
+@item @code{>=}
+Greater than or equal comparison.
+@item @code{<>}
+Not equal comparison.
+@item @code{<<}
+Left bit shift.
+@item @code{>>}
+Right bit shift.
+@item @code{.}
+(Reserved for future use; not implemented in the parser.)
+@end table
+
+@subsection Delimiters
+
+The following delimiters are used:
+@table @asis
+@item @code{(}
+Left parenthesis for grouping expressions.
+@item @code{)}
+Right parenthesis for grouping expressions.
+@item @code{,}
+Comma for separating items (reserved for future use).
+@item @code{:}
+Colon for separating items (reserved for future use).
+@end table
+
+@subsection Literals
+
+@table @asis
+@item Numeric literals
+Integer constants in one of the following formats:
+@table @asis
+@item Decimal
+Bare digits (@code{42}, @code{0}, @code{123}) or @code{d'@var{digits}'} format.
+Examples: @code{100}, @code{d'255'}
+@item Hexadecimal
+@code{x'@var{hex-digits}'} format with optional commas for readability.
+Examples: @code{x'FF'}, @code{x'1A,2B'}
+@item Octal
+@code{o'@var{octal-digits}'} format.
+Examples: @code{o'777'}, @code{o'42'}
+@item Binary
+@code{b'@var{binary-digits}'} format.
+Examples: @code{b'1010'}, @code{b'11111111'}
+@item Word/Dword (String)
+@code{w'@var{data}'} or @code{w"@var{data}"} format.
+Used for assembler word data.
+Examples: @code{w'ABCD'}, @code{w"test"}
+@end table
+All numeric formats are internally converted to their decimal integer value
+for AST representation.
+
+@item String literals
+Text enclosed in double quotes (@code{"..."}). 
+Examples: @code{"Hello, world!"}, @code{"player_name"}
+@end table
+
+@subsection Identifiers
+
+Identifiers consist of letters, digits, underscores (@code{_}), and hyphens (@code{-}).
+They must begin with a letter or underscore.
+Identifiers are case-insensitive and normalized to @code{Header.Case} format in the AST.
+
+@subsubsection Identifier Normalization
+
+All identifiers are automatically normalized to the @code{Header.Case} format with dots 
+as segment separators:
+
+@table @asis
+@item Input format
+Identifiers with hyphens or underscores as separators (e.g., @code{player-name}, @code{player_name}).
+@item Output format (AST)
+Header.Case with dots (e.g., @code{Player.Name}).
+@end table
+
+@table @asis
+@item Example 1
+@code{player_score} → @code{Player.Score}
+@item Example 2
+@code{get-item-count} → @code{Get.Item.Count}
+@item Example 3
+@code{my_var_name} → @code{My.Var.Name}
+@item Example 4
+@code{X} → @code{X} (unchanged if no separators)
+@end table
+
+This normalization ensures consistent, language-appropriate naming conventions in the generated AST.
+
+@section Statements
+
+An AGI program is a sequence of statements, each executed in order unless modified by
+control flow statements.
+
+@subsection Conditional Statement: IF-THEN-ELSE
+
+@defsyn
+IF @var{condition} THEN @var{true-statement} [ELSE @var{false-statement}]
+@end defsyn
+
+Executes @var{true-statement} if @var{condition} evaluates to true (non-zero);
+otherwise, executes @var{false-statement} if present.
+The @var{condition} is an expression (see @ref{Expressions}).
+
+@example
+IF (score > 100) THEN
+    SET difficulty 1
+ELSE
+    SET difficulty 0
+END-IF
+@end example
+
+Note: The @code{END-IF} keyword is not part of the language syntax; it is used in examples
+for clarity but is not required by the parser. The parser accepts a single statement after
+THEN and ELSE; to create a block, use multiple statements in sequence (though the current
+parser only allows one statement per branch—see @ref{Limitations}).
+
+@subsection Subroutine Call: GOSUB
+
+@defsyn
+GOSUB @var{routine-name}
+@end defsyn
+
+Calls the subroutine named @var{routine-name}. Execution continues after the GOSUB
+statement when a RETURN is encountered in the subroutine.
+
+@example
+GOSUB InitializeGame
+@end example
+
+@subsection Unconditional Jump: GOTO
+
+@defsyn
+GOTO @var{label}
+@end defsyn
+
+Transfers control to the statement labeled @var{label}. Labels are identifiers.
+
+@example
+GOTO StartLoop
+@end example
+
+@subsection Subroutine Return: RETURN
+
+@defsyn
+RETURN
+@end defsyn
+
+Returns from the current subroutine to the statement following the most recent GOSUB.
+
+@example
+RETURN
+@end example
+
+@subsection Assignment: @var{variable} = @var{expression}
+
+@defsyn
+@var{variable} = @var{expression}
+@end defsyn
+
+Evaluates @var{expression} and stores the result in @var{variable}.
+
+@example
+player_score = 0
+x = (y + 10)
+@end example
+
+@subsection Increment: INCREMENT @var{variable}
+
+@defsyn
+INCREMENT @var{variable}
+@end defsyn
+
+Adds 1 to @var{variable}.
+
+@example
+INCREMENT lives
+@end example
+
+@subsection Decrement: DECREMENT @var{variable}
+
+@defsyn
+DECREMENT @var{variable}
+@end defsyn
+
+Subtracts 1 from @var{variable}.
+
+@example
+DECREMENT lives
+@end example
+
+@subsection Set to One: SET @var{variable}
+
+@defsyn
+SET @var{variable}
+@end defsyn
+
+Sets @var{variable} to 1.
+
+@example
+SET flag
+@end example
+
+@subsection Reset to Zero: RESET @var{variable}
+
+@defsyn
+RESET @var{variable}
+@end defsyn
+
+Sets @var{variable} to 0.
+
+@example
+RESET flag
+@end example
+
+@section Expressions
+
+Expressions compute values and can consist of literals, identifiers, operators, and
+parentheses for grouping.
+
+@subsection Arithmetic Expressions
+
+Arithmetic expressions use the operators @code{+}, @code{-}, @code{*}, @code{/},
+@code{<<}, and @code{>>} to combine numeric values.
+
+@example
+score + 10
+(x * y) / 2
+value << 2
+@end example
+
+@subsection Comparison Expressions
+
+Comparison expressions evaluate to 1 (true) or 0 (false) and use the operators
+@code{=}, @code{<}, @code{>}, @code{<=}, @code{>=}, @code{<>}.
+
+@example
+(score = 100)
+(x < y)
+(flag <> 0)
+@end example
+
+@subsection Logical Expressions
+
+Logical expressions combine boolean values using @code{AND} and @code{OR}.
+The @code{NOT} operator negates a boolean expression.
+
+@example
+(score > 0) AND (lives > 0)
+(NOT flag)
+(score < 10) OR (time > 100)
+@end example
+
+@subsection Operator Precedence
+
+Operators have the following precedence (highest first):
+@enumerate
+@item Parentheses @code{( @var{expression} @code{)}}
+@item Multiplication, division, and shifts: @code{*}, @code{/}, @code{<<}, @code{>>}
+@item Addition and subtraction: @code{+}, @code{-}
+@item Comparisons: @code{=}, @code{<}, @code{>}, @code{<=}, @code{>=}, @code{<>}
+@item Logical NOT: @code{NOT}
+@item Logical AND: @code{AND}
+@item Logical OR: @code{OR}
+@end enumerate
+
+@subsection Primary Expressions
+
+Primary expressions are:
+@table @asis
+@item Numeric literals: @code{42}, @code{0}, @code{x'FF'}, @code{o'77'}, @code{b'1010'}
+@item String literals: @code{"Hello, world!"}
+@item Identifiers: @code{score}, @code{player_x}, @code{Player.Score}
+@end table
+
+@subsection Numeric Literal Examples
+
+Examples of numeric literals using different formats:
+@table @asis
+@item Decimal
+@code{100}, @code{d'255'} (both equivalent; evaluates to 100 or 255)
+@item Hexadecimal
+@code{x'FF'} (255 in decimal), @code{x'1A'} (26 in decimal), @code{x'100'} (256 in decimal)
+@item Octal
+@code{o'77'} (63 in decimal), @code{o'10'} (8 in decimal), @code{o'777'} (511 in decimal)
+@item Binary
+@code{b'1010'} (10 in decimal), @code{b'11111111'} (255 in decimal), @code{b'1'} (1 in decimal)
+@item Word/Dword (String)
+@code{w'ABCD'} (string for assembler), @code{w"test"} (string for assembler)
+@end table
+
+All numeric formats are converted to their decimal integer equivalents when parsed
+and stored in the AST. This allows the rest of the compiler to work uniformly with
+integers regardless of the input representation.
+
+@section Limitations
+
+The current AGI frontend implementation has the following limitations:
+
+@itemize @bullet
+@item Only one statement is allowed in the THEN and ELSE branches of an IF statement.
+  To execute multiple statements, use subroutines (GOSUB/RETURN).
+@item The keywords NEWROOM, LOADLOGICS, QUIT, ASSIGN, SAID, TEST, POSN, CONTROLLER,
+  HAVEKEY, and the operator @code{.} are reserved for future use and have no effect.
+@item String literals are supported but cannot be used in expressions (they are only
+  allowed as literals; no string operations are defined).
+@end itemize
+
+@section Example Program
+
+@example
+REM This program demonstrates basic AGI frontend constructs
+SET score 0
+SET lives 3
+
+MAIN_LOOP:
+IF (lives = 0) THEN
+    GOTO GAME_OVER
+ELSE
+    INCREMENT score
+END-IF
+
+IF (score > 1000) THEN
+    SET lives (lives - 1)
+    SET score 0
+END-IF
+
+GOTO MAIN_LOOP
+
+GAME_OVER:
+RETURN
+@end example

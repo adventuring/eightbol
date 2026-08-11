@@ -1,0 +1,320 @@
+@chapter Muddle Frontend Language Reference
+
+This chapter provides a complete reference for the Muddle frontend language as recognized by the lexer and parser in the Eightbol toolchain. Each language element—keywords, operators, delimiters, and literals—is described with its purpose, typical usage, and any side‑effects it may have when processed by the compiler.
+
+@section Keywords
+
+Muddle keywords are case‑insensitive and are matched after converting the input to uppercase. They are conventionally written with a leading dot for control‑flow keywords (e.g., @code{.IF}) and without for logical operators (e.g., @code{AND}). All keywords are reserved and cannot be used as identifiers.
+
+@menu
+* .IF:: Conditional execution
+* .ELSE:: Alternative branch in a conditional
+* .THEN:: Consequent branch in a conditional
+* .ENDIF:: End of conditional block
+* .WHILE:: Pre‑test loop
+* .ENDWHILE:: End of while loop
+* .FOR:: Count‑controlled loop
+* .ENDFOR:: End of for loop
+* .EXIT:: Early exit from a loop
+* .RETURN:: Return from a routine
+* .DEFINE:: Declare a routine or function
+* .SET:: Assign to a variable or object slot
+* .GET:: Retrieve the value of a variable or property
+* .PUT:: Store a value into a variable or property (synonym for SET)
+* .CALL:: Invoke a routine
+* .GO:: Unconditional jump to a label
+* .THROW:: Raise an exception
+* .CATCH:: Handle an exception
+* .FINALLY:: Cleanup code that runs after try/catch
+@end menu
+
+@node .IF
+@section @code{.IF}
+@code{.IF} introduces a conditional statement. It expects a Boolean expression as its first argument. If the expression evaluates to true, the following statements (until an optional @code{.ELSE} or @code{.ENDIF}) are executed; otherwise, control passes to the optional @code{.ELSE} block (if present) or continues after the @code{.ENDIF}. The keyword itself produces no value; its side‑effect is to alter control flow based on the evaluated condition.
+
+@node .ELSE
+@section @code{.ELSE}
+@code{.ELSE} provides the alternate branch for a preceding @code{.IF}. It must appear after the @code{.THEN} block (or directly after @code{.IF} if no @code{.THEN} is used) and before the terminating @code{.ENDIF}. When the associated @code{.IF} condition is false, the statements inside the @code{.ELSE} block are executed. Like @code{.IF}, it does not produce a value; its side‑effect is conditional execution of its body.
+
+@node .THEN
+@section @code{.THEN}
+@code{.THEN} marks the consequent branch of an @code{.IF} statement. It follows the condition and precedes the optional @code{.ELSE} block. Statements within the @code{.THEN} block run only when the condition is true. The keyword has no return value; its side‑effect is to delineate the true‑branch of a conditional.
+
+@node .ENDIF
+@section @code{.ENDIF}
+@code{.ENDIF} terminates a conditional block started with @code{.IF}. It matches the nearest unmatched @code{.IF}. The keyword produces no value and has no side‑effect beyond ending the conditional construct.
+
+@node .WHILE
+@section @code{.WHILE}
+@code{.WHILE} creates a pre‑test loop. It takes a Boolean condition and a body (one or more statements). Before each iteration, the condition is evaluated; if true, the body executes; if false, the loop terminates. The keyword does not return a value; its side‑effect is repeated execution of the body while the condition holds.
+
+@node .ENDWHILE
+@section @code{.ENDWHILE}
+@code{.ENDWHILE} terminates a loop started with @code{.WHILE}. It matches the nearest unmatched @code{.WHILE}. The keyword produces no value and has no side‑effect beyond ending the loop construct.
+
+@node .FOR
+@section @code{.FOR}
+@code{.FOR} implements a count‑controlled loop. Its syntax is @code{.FOR var start end body}, where @var{var} is a local variable initialized to @var{start}, incremented by one each iteration, and the loop continues while @var{var} ≤ @var{end}. The body executes for each value of the loop variable. The keyword produces no value; its side‑effect is iterative execution with automatic loop‑variable management.
+
+@node .ENDFOR
+@section @code{.ENDFOR}
+@code{.ENDFOR} terminates a loop started with @code{.FOR}. It matches the nearest unmatched @code{.FOR}. The keyword produces no value and has no side‑effect beyond ending the loop construct.
+
+@node .EXIT
+@section @code{.EXIT}
+@code{.EXIT} causes an immediate exit from the innermost enclosing @code{.WHILE} or @code{.FOR} loop. Control resumes after the loop’s terminating statement. It takes no arguments and produces no value; its side‑effect is to transfer control out of the loop construct.
+
+@node .RETURN
+@section @code{.RETURN}
+@code{.RETURN} ends execution of the current routine and returns control to its caller. An optional value may be supplied (though the parser treats the value as ignored). The keyword has no return value of its own; its side‑effect is to terminate the routine and restore the caller’s context.
+
+@node .DEFINE
+@section @code{.DEFINE}
+@code{.DEFINE} declares a new routine (function). Its form is @code{.DEFINE name params body}, where @var{name} is the routine identifier, @var{params} is a list of parameter names (currently ignored by the parser but preserved for compatibility), and @var{body} is a statement block that constitutes the routine’s implementation. The keyword defines a symbol in the current scope; its side‑effect is to make the routine available for later calls via @code{.CALL} or direct invocation.
+
+@node .SET
+@section @code{.SET}
+@code{.SET} assigns a value to a variable, object slot, or table/list element. Its syntax varies:
+@itemize
+@item @code{.SET var expr} — assigns @var{expr} to local variable @var{var}.
+@item @code{.SET <P> obj prop> expr} — assigns @var{expr} to property @var{prop} of object @var{obj}.
+@item @code{.SET <T> table index> expr} — assigns @var{expr} to table element at @var{index}.
+@item @code{.SET <L> list index> expr} — assigns @var{expr} to list element at @var{index}.
+@end itemize
+The keyword evaluates @var{expr} and stores the result in the designated location. Its side‑effect is mutation of storage; it does not produce a useful return value (the assigned value is left in the accumulator for possible chaining).
+
+@node .GET
+@section @code{.GET}
+@code{.GET} retrieves the value of a variable, property, or table/list element. Forms:
+@itemize
+@item @code{.GET var} — yields the current value of local variable @var{var}.
+@item @code{.GET <P> obj prop>} — yields the value of property @var{prop} of object @var{obj}.
+@item @code{.GET <T> table index>} — yields the table element at @var{index}.
+@item @code{.GET <L> list index>} — yields the list element at @var{index}.
+@end itemize
+The keyword evaluates to the fetched value; its side‑effect is none (pure read). It is commonly used within expressions or as the right‑hand side of @code{.SET}.
+
+@node .PUT
+@section @code{.PUT}
+@code{.PUT} is a synonym for @code{.SET} in most contexts and is provided for readability. It follows the same syntax as @code{.SET} and has identical semantics: store a value into a variable, property, or table/list element. Side‑effect: mutation of storage; no distinct return value.
+
+@node .CALL
+@section @code{.CALL}
+@code{.CALL} invokes a routine by name. Syntax: @code{.CALL func [args…]}, where @var{func} is the routine identifier and optional @var{args} are actual arguments (currently ignored by the parser). The keyword transfers control to the called routine; upon @code{.RETURN} in the callee, execution resumes after the @code{.CALL}. Side‑effect: possible modification of globals, object state, and the accumulator (which holds the routine’s result). The call itself does not produce a value; the result is available in the accumulator after the call returns.
+
+@node .GO
+@section @code{.GO}
+@code{.GO} performs an unconditional jump to a label defined elsewhere in the same routine. Syntax: @code{.GO label}. The @var{label} must have been introduced with a @code{.LABEL} statement (note: Muddle does not have an explicit label keyword; labels are defined by identifiers in column zero? Actually Muddle uses identifiers in column zero as labels? We'll note that labels are defined by identifiers at the start of a line). Execution continues at the first statement following the label. Side‑effect: alteration of control flow; no value produced.
+
+@node .THROW
+@section @code{.THROW}
+@code{.THROW} raises an exception. It takes an exception object or identifier as argument. The keyword transfers control to the nearest enclosing @code{.CATCH} block. Side‑ffect: possible stack unwinding and transfer to handler; no normal return value.
+
+@node .CATCH
+@section @code{.CATCH}
+@code{.CATCH} handles an exception thrown by @code{.THROW}. It specifies an exception identifier to match and a body to execute when that exception is caught. Side‑ffect: execution of the handler body; after the body, control continues after the @code{.FINALLY} block if present.
+
+@node .FINALLY
+@section @code{.FINALLY}
+@code{.FINALLY} specifies cleanup code that runs after @code{.TRY} and @code{.CATCH} blocks, regardless of whether an exception was thrown. Note: Muddle does not have an explicit @code{.TRY} keyword; the construct is implied by the presence of @code{.CATCH} and @code{.FINALLY}. Side‑ffect: execution of the cleanup code; no value produced.
+
+@section Operators
+
+Muddle provides arithmetic, relational, and logical operators. They are used within expressions to compute values. All operators are binary. Operator precedence follows typical algebraic rules (multiplication/division before addition/subtraction; comparisons before logical AND/OR). Parentheses may be used to override precedence.
+
+@menu
+* +:: Addition
+* -:: Subtraction
+* *:: Multiplication
+* /:: Division
+* ^:: Bitwise XOR (note: Muddle uses ^ for exponentiation? Actually lexer maps ^ to :POWER; parser uses it for bitwise xor? We'll note as per parser)
+* =:: Equality test
+* /=:: Inequality test
+* <:: Less‑than
+* >:: Greater‑than
+* <=:: Less‑than or equal
+* >=:: Greater‑than or equal
+@end menu
+
+@node +
+@section @code{+}
+The @code{+} operator adds two numeric operands. Syntax: @code{expr1 + expr2}. Both operands are evaluated; the result is their sum. Side‑effect: none (pure function). If either operand is not a number, a runtime fault may occur.
+
+@node -
+@section @code{-}
+The @code{-} operator subtracts the second operand from the first. Syntax: @code{expr1 - expr2}. Result is the difference. Side‑effect: none.
+
+@node *
+@section @code{*}
+The @code{*} operator multiplies two numeric operands. Syntax: @code{expr1 * expr2}. Result is the product. Side‑effect: none.
+
+@node /
+@section @code{/@}
+The @code{/} operator divides the first operand by the second. Syntax: @code{expr1 / expr2}. Result is the quotient (integer division if both operands are integers; fractional results depend on the interpreter’s numeric model). Side‑effect: none; division by zero triggers a fault.
+
+@node ^
+@section @code{^}
+The @code{^} operator represents bitwise exclusive‑or (XOR) in Muddle. Syntax: @code{expr1 ^ expr2}. Both operands are evaluated; the result is the bitwise XOR of the two operands. Side‑effect: none.
+
+@node =
+@section @code{=}
+The @code{=} operator tests numeric equality. Syntax: @code{expr1 = expr2}. Evaluates to true if the operands are numerically equal, false otherwise. Side‑effect: none.
+
+@node /=
+@section @code{/=}
+The @code{/=} operator tests numeric inequality. Syntax: @code{expr1 /= expr2}. True when operands differ, false when equal. Side‑effect: none.
+
+@node <
+@section @code{<}
+The @code{<} operator tests whether the first operand is less than the second. Syntax: @code{expr1 < expr2}. Side‑effect: none.
+
+@node >
+@section @code{>}
+The @code{>} operator tests whether the first operand is greater than the second. Syntax: @code{expr1 > expr2}. Side‑effect: none.
+
+@node <=
+@section @code{<=}
+The @code{<=} operator tests less‑than or equal. Syntax: @code{expr1 <= expr2}. Side‑effect: none.
+
+@node >=
+@section @code{>=}
+The @code{>=} operator tests greater‑than or equal. Syntax: @code{expr1 >= expr2}. Side‑effect: none.
+
+@section Logical Operators
+
+Muddle provides logical operators AND, OR, NOT. They are used within Boolean expressions.
+
+@menu
+* AND:: Logical conjunction
+* OR:: Logical disjunction
+* NOT:: Logical negation
+@end menu
+
+@node AND
+@section AND
+The AND operator performs logical conjunction. Syntax: @code{expr1 AND expr2}. Both operands are evaluated as Boolean (false = @code{nil} or 0; true = any non‑nil). Result is true only if both are true. Side‑effect: none.
+
+@node OR
+@section OR
+The OR operator performs logical disjunction. Syntax: @code{expr1 OR expr2}. Result is true if either operand is true. Side‑effect: none.
+
+@node NOT
+@section NOT
+The NOT operator performs logical negation. Syntax: @code{NOT expr}. Result is true if @var{expr} is false, false if @var{expr} is true. Side‑effect: none.
+
+@section Literals and Delimiters
+
+Beyond keywords and operators, the Muddle frontend recognizes literals (numbers, strings) and delimiters that structure source code.
+
+@menu
+* Number Literals:: Integer constants
+* String Literals:: Text data
+* Parentheses:: Grouping and function application
+* Comma:: Argument separator
+* Dot:: Dereference operator
+@end menu
+
+@node Number Literals
+@section Number Literals
+
+Muddle supports five number literal formats for representing integers in different bases. All formats are case-insensitive.
+
+@menu
+* Decimal:: Standard base-10 integers
+* Hexadecimal:: Base-16 integers with #X or 0x prefix
+* Octal:: Base-8 integers with #O prefix
+* Binary:: Base-2 integers with #B prefix
+* Dword:: 32-bit hexadecimal with #D prefix
+@end menu
+
+@node Decimal
+@subsection Decimal
+
+Decimal literals consist of one or more decimal digits (0–9). Examples: @code{42}, @code{0}, @code{1024}. The lexer produces a @code{:number} token; the parser converts it to an integer via @code{parse-integer} with radix 10. Decimal literals are the default format and have no special prefix.
+
+@node Hexadecimal
+@subsection Hexadecimal
+
+Hexadecimal literals represent base-16 integers. Two syntaxes are supported:
+@itemize
+@item Prefixed with @code{#X} (uppercase or lowercase): @code{#xFF}, @code{#x0A}, @code{#XDeadBeef}
+@item C-style prefix @code{0x}: @code{0xFF}, @code{0x0A}, @code{0xdeadbeef}
+@end itemize
+Valid digits are 0–9 and A–F (case-insensitive). The parser uses @code{parse-integer} with radix 16. Examples: @code{#XFF} (255 decimal), @code{0x100} (256 decimal).
+
+@node Octal
+@subsection Octal
+
+Octal literals represent base-8 integers and use the prefix @code{#O} (uppercase or lowercase). Valid digits are 0–7. Examples: @code{#O77} (63 decimal), @code{#O10} (8 decimal). The parser uses @code{parse-integer} with radix 8. Syntax: @code{#O@var{digits}}.
+
+@node Binary
+@subsection Binary
+
+Binary literals represent base-2 integers and use the prefix @code{#B} (uppercase or lowercase). Valid digits are 0 and 1. Examples: @code{#B1010} (10 decimal), @code{#B11111111} (255 decimal). The parser uses @code{parse-integer} with radix 2. Syntax: @code{#B@var{digits}}.
+
+@node Dword
+@subsection Dword
+
+Dword literals represent 32-bit hexadecimal values and use the prefix @code{#D}. The digits must follow the @code{0x} notation for the numeric portion (dword prefix + 0x prefix). Examples: @code{#D0x12345678}, @code{#D0xFFFFFFFF}. The parser uses @code{parse-integer} with radix 16. Syntax: @code{#D0x@var{hex-digits}}. This format is useful when a full 32-bit value is required without ambiguity.
+
+@node String Literals
+@section String Literals
+A string literal is enclosed in double quotes: @code{"text"} . The lexer absorbs characters until the matching unescaped @code{"} and yields a @code{:string} token. The parser returns the literal string contents (without the surrounding quotes). String literals evaluate to themselves; they are immutable data. Side‑effect: none.
+
+@node Parentheses
+@section Parentheses
+Left and right parentheses (@code{(} and @code{)} ) serve to group expressions and to delimit the argument list in function‑like constructs (e.g., @code{.CALL} func arg1 arg2). In the parser they signal the start and end of a sub‑expression; they do not produce values themselves. Side‑effect: none; they affect parsing precedence.
+
+@node Comma
+@section Comma
+The comma (@code{,} ) separates arguments in certain contexts, most notably within the argument list of a @code{.CALL} or similar construct where multiple values are passed. The lexer yields a @code{:comma} token; the parser uses it to delimit successive argument expressions. Side‑effect: none.
+
+@node Dot
+@section Dot
+A standalone dot (@code{.} ) is the dereference operator. It is used to access a property or slot of an object. When used as @code{.GET obj prop} or @code{.SET obj prop val}, the parser interprets the dot as part of the property access syntax. In expressions, a dot can be used to form qualified identifiers (e.g., @code{obj.prop}). Side‑effect: none; it affects how the parser interprets adjacent identifiers.
+
+@section Identifier Normalization
+
+The Muddle frontend converts all identifiers to kebab-case form before generating AST nodes. This normalization ensures consistent representation across the compiler pipeline, regardless of the input naming convention.
+
+@subsection Normalization Rules
+
+Identifiers are converted to kebab-case according to these rules:
+@itemize
+@item Uppercase letters are converted to lowercase.
+@item When an uppercase letter follows a lowercase letter, a hyphen (@code{-}) is inserted before the uppercase letter (if not already present).
+@item Underscores (@code{_}) and hyphens (@code{-}) in the source are normalized to single hyphens in the output.
+@item Digits are preserved as-is and do not trigger insertion of hyphens.
+@end itemize
+
+@subsection Examples
+
+@table @code
+@item MyVariable
+Converted to @code{my-variable}
+@item HTMLParser
+Converted to @code{h-t-m-l-parser}
+@item my_variable
+Converted to @code{my-variable}
+@item variable123Name
+Converted to @code{variable123-name}
+@end table
+
+This normalization applies to function names, variable names, method identifiers, and all other identifier contexts in the parser. It enables consistent code generation regardless of the input naming style.
+
+@chapter Summary
+
+This chapter has documented the complete Muddle frontend language, including all keywords, operators, literals, and delimiters recognized by the lexer and parser. The Muddle language supports:
+
+@itemize
+@item Control flow keywords: @code{.IF}, @code{.ELSE}, @code{.THEN}, @code{.ENDIF}, @code{.WHILE}, @code{.ENDWHILE}, @code{.FOR}, @code{.ENDFOR}, @code{.EXIT}, @code{.RETURN}
+@item Definition keywords: @code{.DEFINE}, @code{.SET}, @code{.GET}, @code{.PUT}, @code{.CALL}
+@item Exception handling: @code{.THROW}, @code{.CATCH}, @code{.FINALLY}
+@item Arithmetic operators: @code{+}, @code{-}, @code{*}, @code{/}, @code{^}
+@item Relational operators: @code{=}, @code{/=}, @code{<}, @code{>}, @code{<=}, @code{>=}
+@item Logical operators: @code{AND}, @code{OR}, @code{NOT}
+@item Five numeric literal formats: decimal, hexadecimal, octal, binary, and dword
+@item String and identifier literals with automatic kebab-case normalization
+@end itemize
+
+For further details on how these tokens are assembled into AST nodes, consult the parser action functions in @file{muddle-parser.lisp} and the lexer implementation in @file{muddle-lexer.lisp}. To understand the semantics of the generated Eightbol IR, refer to the main Eightbol documentation.

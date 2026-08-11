@@ -1,0 +1,341 @@
+@chapter Pascal Frontend Language
+@menu
+* Lexical Elements::
+* Labels::
+* Constants::
+* Identifiers::
+* Operators::
+* Separators::
+* Routine Declarations::
+* Statements::
+* Expressions::
+* Functions::
+@end menu
+
+@node Lexical Elements
+@section Lexical Elements
+The Pascal frontend recognizes the following lexical tokens: numbers, string literals, identifiers, operators, separators, and label definitions. Whitespace (spaces, tabs, carriage returns, line feeds) is ignored except to separate tokens. Comments are not supported in this frontend.
+
+@node Labels
+@section Labels
+Labels are defined by an identifier or a number followed by a colon (@code{:}). They are used to mark positions in the generated assembly code for branching or subroutine calls. The lexer converts patterns like @code{Identifier:} or @code{Number:} into special @code{:label} tokens, which the parser translates into assembly entry nodes. Labels have no runtime value; they solely affect the placement of generated code.
+
+Example:
+@example
+Start:
+   MOVE 5 Counter
+   Goto Start
+@end example
+
+@node Constants
+@section Constants
+Constants include numeric literals and string literals. Numeric literals support multiple formats:
+
+@table @asis
+@item Decimal
+Standard base-10 integers (e.g., @code{42}, @code{0}).
+
+@item Hexadecimal
+Prefixed with @code{0x} or @code{0X} (e.g., @code{0xFF}, @code{0xDEADBEEF}). Values are case-insensitive for hex digits.
+
+@item Octal
+Prefixed with @code{0o} or @code{0O} (e.g., @code{0o755}, @code{0o17}). Digits must be in range 0–7.
+
+@item Binary
+Prefixed with @code{0b} or @code{0B} (e.g., @code{0b1101}, @code{0b11110000}). Digits must be 0 or 1.
+
+@item DWORD (Pascal-style)
+Two formats:
+@itemize @bullet
+@item @code{D'value'} (e.g., @code{D'255'}) — decimal value between quotes.
+@item @code{&Hvalue} (e.g., @code{&HFF}) — hexadecimal value with &H prefix.
+@end itemize
+
+All numeric literals are internally converted to their decimal equivalents during lexical analysis.
+@end table
+
+String literals are enclosed in double quotes (@code{"..."}) and may contain any characters except the quote itself; the quotes are not part of the string value. There is no support for escape sequences within strings.
+
+Examples:
+@example
+Counter := 42              ; Decimal literal
+RegValue := 0xFF           ; Hexadecimal (255 decimal)
+Permission := 0o644        ; Octal (420 decimal)
+Mask := 0b11110000        ; Binary (240 decimal)
+Size := D'512'             ; DWORD decimal format
+Color := &HFF0000          ; DWORD hex format
+Message := "Hello, world!"
+@end example
+
+@node Identifiers
+@section Identifiers
+Identifiers are sequences of letters, digits, and underscores, beginning with a letter or underscore. They are case-insensitive: the lexer normalizes all identifiers to @strong{PascalCase} (first letter uppercase, remaining letters lowercase) before producing AST nodes. This ensures that @code{myVariable}, @code{MYVARIABLE}, and @code{MyVariable} all refer to the same identifier @code{Myvariable} in the generated code.
+
+Examples:
+@example
+playerScore     → Playerscore
+PLAYER_SCORE    → Player_score
+PlayerScore     → Playerscore
+_internalFlag   → _internalflag
+@end example
+
+This normalization simplifies code generation and avoids subtle bugs caused by case mismatches while allowing programmers to write identifiers in their preferred style.
+
+@node Operators
+@section Operators
+The frontend supports arithmetic, relational, logical, and unary operators. Arithmetic operators: @code{+} (addition), @code{-} (subtraction), @code{*} (multiplication), @code{/} (division). Relational operators: @code{=} (equality), @code{<>} (inequality), @code{<} (less than), @code{>} (greater than), @code{<=} (less than or equal), @code{>=} (greater than or equal). Logical operators: @code{AND} (conjunction), @code{OR} (disjunction), @code{NOT} (negation). The unary minus operator (@code{-}) negates an expression.
+
+@example
+Total := Price * Quantity
+Discount := Total * 0.1
+if Price > 100 and not Special then ...
+@end example
+
+@node Separators
+@section Separators
+Separators structure the program: semicolon (@code{;}) terminates statements, comma (@code{,}) separates argument lists, colon (@code{:}) defines labels, parentheses (@code{( } and @code{ )}) group expressions and delimit parameter lists, and dot (@code{.}) appears in the grammar but has no specific meaning in this frontend.
+
+@example
+Procedure Foo;
+   Move 1 X, 2 Y;
+end
+@end example
+
+@node Routine Declarations
+@section Routine Declarations
+Routines are declared using the @code{PROCEDURE} keyword. A procedure may be standalone or associated with a class via the @code{ON} keyword. The procedure header is followed by a @code{BEGIN}...@code{END} block containing statements. An empty procedure body is allowed.
+
+Example of a standalone procedure:
+@example
+PROCEDURE Initialize
+   MOVE 0 Score
+end
+@end example
+
+Example of a class method:
+@example
+PROCEDURE PlayerClass.Move
+   MOVE X + DX FX
+end
+@end example
+
+@node Statements
+@section Statements
+Statements perform actions and are terminated by semicolons. The frontend supports label statements, assignments, routine calls, conditionals, loops, exit statements, error reporting, and copy directives.
+
+@node Label Statements
+@subsection Label Statements
+A label statement consists of a label identifier or number followed by a colon. It serves only as a target for jumps and does not affect program state.
+
+@example
+LoopStart:
+   ...
+   IF Condition GOTO LoopStart
+@end example
+
+@node Assignment Statements
+@subsection Assignment Statements
+Assignments store the result of an expression into a variable. Two syntaxes are supported: the traditional @code{Variable := Expression} and the @code{MOVE Expression Variable} form (reminiscent of COBOL). Both are semantically identical.
+
+@example
+Counter := Counter + 1
+MOVE Total Price
+@end example
+
+@node Call Statements
+@subsection Call Statements
+Routines are invoked with the @code{CALL} keyword. Variations include:
+@itemize @bullet
+@item @code{CALL RoutineName} — direct call to a standalone routine or class method.
+@item @code{CALL MethodName ON ObjectName} — invoke a method on an object instance.
+@item @code{CALL RoutineName IN BankNumber} — call a routine located in a specific memory bank.
+@item @code{CALL RoutineName IN LIBRARY} — call a library routine (bank ignored).
+@end itemize
+
+Examples:
+@example
+CALL Initialize
+CALL DrawSprite ON Player
+CALL LoadLevel IN 3
+CALL SaveGame IN LIBRARY
+@end example
+
+@node Conditional Statements
+@subsection Conditional Statements
+The @code{IF}@code{THEN}@code{ELSE} construct enables conditional execution. The @code{ELSE} clause is optional. The condition is an expression that evaluates to a boolean value (true/false). Execution proceeds to the @code{THEN} block if true, otherwise to the @code{ELSE} block (if present).
+
+@example
+IF Score > 1000 THEN
+   Status := "HIGH SCORE"
+ELSE
+   Status := "PLAYING"
+END IF
+@end example
+
+@node Loop Statements
+@subsection Loop Statements
+Loops repeat a block of statements while a condition holds. Five forms are supported:
+@itemize @bullet
+@item @code{WHILE Condition NEXT StatementList} — pre-test loop.
+@item @code{UNTIL Condition NEXT StatementList} — post‑test loop (loop until condition true).
+@item @code{DO NEXT WHILE Condition StatementList} — equivalent to WHILE.
+@item @code{DO NEXT UNTIL Condition StatementList} — equivalent to UNTIL.
+@item @code{FOR Variable FROM Start TO End STEP Step NEXT StatementList} — numeric loop with explicit increment.
+@end itemize
+
+Examples:
+@example
+WHILE Lives > 0 NEXT
+   CALL ProcessInput
+END WHILE
+
+UNTIL GameOver NEXT
+   CALL UpdateGame
+END UNTIL
+
+FOR I FROM 1 TO 10 STEP 1 NEXT
+   MOVE I Score
+END FOR
+@end example
+
+@node Exit Statements
+@subsection Exit Statements
+The @code{EXIT} statement terminates the current method and returns control to its caller. The @code{GOBACK} statement is synonymous with @code{EXIT} in this frontend.
+
+@example
+EXIT
+GOBACK
+@end example
+
+@node Error Statements
+@subsection Error Statements
+Error reporting is performed with @code{LOG FAULT Code}, which logs a numeric fault code for debugging. The @code{STOP Code} statement triggers a debugger break with the given code.
+
+@example
+LOG FAULT 1000
+STOP $FF
+@end example
+
+@node Copy Statements
+@subsection Copy Statements
+The @code{COPY} directive includes external source files during compilation. It takes a string literal naming the file to copy.
+
+@example
+COPY "utils.inc"
+@end example
+
+@node Expressions
+@section Expressions
+Expressions compute values from identifiers, constants, and operators. They obey standard precedence: unary minus highest, then multiplication and division, then addition and subtraction, then relational operators, then logical AND, finally logical OR. Parentheses may override precedence.
+
+An expression is either a primary (identifier, number, string, or parenthesized expression), a unary operator applied to an expression, or a binary operator combining two expressions.
+
+@example
+(FX + DX) * 2
+NOT (Flag AND Active)
+Price < 100 OR Discount > 0
+@end example
+
+@node Functions
+@section Functions
+The Pascal frontend itself provides several functions for lexical analysis and parsing, usable only within the compiler internals.
+
+@node process-labels
+@subsection process-labels
+Converts sequences of tokens where an identifier or number is followed by a colon into explicit label tokens. Input: a list of raw tokens from the lexer. Output: a new token list with label tokens substituted. Side‑effect: none; the function is purely functional.
+
+@node pascal-lex-line
+@subsection pascal-lex-line
+Lexes a single line of source text into a list of (type, value) token pairs. Handles numbers, strings, identifiers, operators, separators, and begins label processing. Input: a string line. Output: token list for that line. Side‑effect: none.
+
+@node pascal-lex-source
+@subsection pascal-lex-source
+Lexes an entire source string by concatenating the results of @code{pascal-lex-line} for each non‑empty, non‑comment line. Input: complete source string. Output: flat token list for the whole source. Side‑effect: none.
+
+@node pascal-tokenize
+@subsection pascal-tokenize
+Alias for @code{pascal-lex-source}; provided for interface compatibility. Input: source string. Output: token list. Side‑effect: none.
+
+@node pascal-parse
+@subsection pascal-parse
+Parses a token list into an abstract syntax tree (AST) representing the program. Input: token list from the lexer. Output: AST node tree (typically a program node). Side‑effect: builds AST structures via internal constructor functions.
+
+@node pascal-binary-operator
+@subsection pascal-binary-operator
+Maps a binary operator token (e.g., @code{:plus}) and two sub‑expressions into a standard EIGHTBOL expression node (addition, subtraction, etc.). Input: operator keyword, left expression, right expression. Output: expression node. Side‑effect: none.
+
+@node pascal-unary-operator
+@subsection pascal-unary-operator
+Maps a unary operator token (@code{:not} or @code{:unary-minus}) and an operand expression into a standard EIGHTBOL expression node (logical negation or arithmetic negation). Input: operator keyword, operand expression. Output: expression node. Side‑effect: none.
+
+@node make-debug-break-node
+@subsection make-debug-break-node
+Creates a debug‑break AST node used by the @code{STOP} statement. Input: numeric code value. Output: AST node representing a debug break. Side‑effect: none.
+
+@node normalize-identifier
+@subsection normalize-identifier
+Normalizes an identifier NAME to PascalCase (first letter uppercase, remaining letters lowercase). All identifiers are normalized during lexical analysis to ensure case-insensitive matching and consistent code generation. Input: identifier string (any case). Output: PascalCase string. Side‑effect: none.
+
+Examples:
+@example
+(normalize-identifier "myVariable") → "Myvariable"
+(normalize-identifier "MYVAR") → "Myvar"
+(normalize-identifier "MyVar") → "Myvar"
+@end example
+
+@node pascal-token-type
+@subsection pascal-token-type
+Classifies a lexeme string as @code{:number}, @code{:string}, or @code{:ident}. Recognizes all number literal formats including decimal, hexadecimal (0x), octal (0o), binary (0b), and DWORD formats (D'...' and &H). Input: string lexeme. Output: token type keyword. Side‑effect: none.
+
+Examples:
+@example
+(pascal-token-type "42") → :number
+(pascal-token-type "0xFF") → :number
+(pascal-token-type "0o755") → :number
+(pascal-token-type "MyVar") → :ident
+(pascal-token-type "\"text\"") → :string
+@end example
+
+@node parse-pascal-number
+@subsection parse-pascal-number
+Parses a numeric lexeme with various bases and formats, returning the decimal equivalent. Supports decimal, hexadecimal (0x), octal (0o), binary (0b), and DWORD formats (D'...' and &H). Invalid formats fallback to decimal parsing. Input: numeric string lexeme. Output: integer value in decimal. Side‑effect: none.
+
+Examples:
+@example
+(parse-pascal-number "0xFF") → 255
+(parse-pascal-number "0o755") → 493
+(parse-pascal-number "0b11010110") → 214
+(parse-pascal-number "D'255'") → 255
+(parse-pascal-number "&HFF") → 255
+@end example
+
+@node pascal-convert-lexer-tokens
+@subsection pascal-convert-lexer-tokens
+Transforms lexer output tokens into YACC-compatible format. Maps keyword identifiers to their corresponding token types and passes through numeric, string, and operator tokens. Input: list of lexer tokens (pairs of type and value). Output: list of YACC-compatible token tuples. Side‑effect: none.
+
+@node Analogies to Reader Macros
+@section Number Literal Parsing
+The Pascal frontend supports multiple number literal formats to enhance code readability and compatibility:
+
+@itemize @bullet
+@item Hexadecimal notation (@code{0xFF}, @code{0x1A2B}) is useful for bit patterns and memory addresses.
+@item Octal notation (@code{0o755}) suits Unix file permissions and traditional octal constants.
+@item Binary notation (@code{0b11010110}) is ideal for bit-field and flag definitions.
+@item DWORD formats (@code{D'255'}, @code{&HFF}) provide compatibility with legacy Pascal code.
+@end itemize
+
+All number formats are parsed during lexical analysis and converted to their decimal equivalents before AST production. This means that @code{0xFF}, @code{255}, and @code{D'255'} all represent the same value in the generated code.
+
+@example
+; Hexadecimal $FF is written as 0xFF
+MOVE 0xFF Register
+
+; Binary masks for clarity
+Flag1 := 0b00000001
+Flag2 := 0b00000010
+Mask := Flag1 OR Flag2
+
+; Octal for Unix permissions
+FileMode := 0o755
+@end example
+

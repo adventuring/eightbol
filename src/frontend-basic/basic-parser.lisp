@@ -11,7 +11,8 @@
               log fault stop method on class procedure end
               while until do library service
               and or not
-              number string ident)))
+              print input dialogue $
+              number string ident))))
 
 ;;; Parser action functions for BASIC
 
@@ -219,8 +220,20 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
   (defun basic-parse-assembly-entry (label)
     (make-assembly-entry-node label))
 
-  (defun basic-parse-copy (name)
-    (make-copy-node name)))
+   (defun basic-parse-copy (name)
+     (make-copy-node name))
+
+   (defun basic-parse-print (expressions)
+     "PRINT expr1, expr2, ..."
+     (make-print-node expressions))
+
+   (defun basic-parse-input (variables)
+     "INPUT var1, var2, ..."
+     (make-input-node variables))
+
+   (defun basic-parse-dialogue (character text)
+     "DIALOGUE $(Character)\"text\""
+     (make-dialogue-node character text))
 
 ;;; YACC grammar definition for BASIC
 (eval-when (:execute :load-toplevel)
@@ -266,30 +279,33 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
       (colon
        :COLON)
 
-      (stmt
-       (let-stmt)
-       (if-stmt)
-       (for-stmt)
-       (next-stmt)
-       (while-stmt)
-       (until-stmt)
-       (do-stmt)
-       (log-fault-stmt)
-       (stop-stmt)
-       (goto-stmt)
-       (gosub-stmt)
-       (return-stmt)
-       (method-def)
-       (procedure-def)
-       (class-def)
-       (end-stmt)
-       (invoke-stmt)
-       (call-stmt)
-       (move-stmt)
-       (set-stmt)
-       (assembly-entry-stmt)
-       (copy-stmt)
-       (expression-stmt))
+       (stmt
+        (let-stmt)
+        (if-stmt)
+        (for-stmt)
+        (next-stmt)
+        (while-stmt)
+        (until-stmt)
+        (do-stmt)
+        (log-fault-stmt)
+        (stop-stmt)
+        (goto-stmt)
+        (gosub-stmt)
+        (return-stmt)
+        (method-def)
+        (procedure-def)
+        (class-def)
+        (end-stmt)
+        (invoke-stmt)
+        (call-stmt)
+        (move-stmt)
+        (set-stmt)
+        (print-stmt)
+        (input-stmt)
+        (dialogue-stmt)
+        (assembly-entry-stmt)
+        (copy-stmt)
+        (expression-stmt))
 
       ;; LET target = expression
       (let-stmt
@@ -424,14 +440,45 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
        (:ASSEMBLY :ENTRY string
                   #'basic-parse-assembly-entry))
 
-      ;; COPY "name"
-      (copy-stmt
-       (:COPY string
-              #'basic-parse-copy))
+       ;; COPY "name"
+       (copy-stmt
+        (:COPY string
+               #'basic-parse-copy))
 
-      ;; expression statement (standalone expression)
-      (expression-stmt
-       (expression))
+       ;; PRINT expr1, expr2, ...
+       (print-stmt
+        (:PRINT expr-list
+                #'basic-parse-print)
+        (:PRINT
+         (lambda () (basic-parse-print '()))))
+
+       ;; INPUT var1, var2, ...
+       (input-stmt
+        (:INPUT ident-list
+                #'basic-parse-input))
+
+       ;; DIALOGUE $(Character)"text"
+       (dialogue-stmt
+        (:DIALOGUE :DOLLAR ident string
+                   #'basic-parse-dialogue))
+
+       ;; expression list for PRINT
+       (expr-list
+        (expression
+         (lambda (e) (list e)))
+        (expr-list :COMMA expression
+                   (lambda (list _ e) (append list (list e)))))
+
+       ;; identifier list for INPUT
+       (ident-list
+        (ident
+         (lambda (i) (list i)))
+        (ident-list :COMMA ident
+                    (lambda (list _ i) (append list (list i)))))
+
+       ;; expression statement (standalone expression)
+       (expression-stmt
+        (expression))
 
       ;; Conditions and expressions
       (condition

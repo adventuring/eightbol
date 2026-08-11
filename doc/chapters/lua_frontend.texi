@@ -1,0 +1,243 @@
+@chapter Lua Frontend Language
+
+This chapter documents the Lua frontend language as implemented in the EightBol compiler's Lua lexer and parser. The Lua frontend is a subset of standard Lua, designed for use in the Phantasia game project. It includes a limited set of statements, expressions, operators, and declarations suitable for game scripting.
+
+@section if Statement
+@subsection Syntax
+@code{if @var{condition} then @var{then-block} [else @var{else-block}] end}
+
+@subsection Description
+The @code{if} statement provides conditional branching. The @var{condition} is an expression that evaluates to a boolean value. If the condition is true, the @var{then-block} is executed; otherwise, if an @code{else} clause is present, the @var{else-block} is executed. Processing involves evaluating the condition and then executing the appropriate block. There are no side-effects beyond those caused by the executed block.
+
+@section while Statement
+@subsection Syntax
+@code{while @var{condition} do @var{block} end}
+
+@subsection Description
+The @code{while} statement creates a loop that continues executing @var{block} as long as @var{condition} remains true. The condition is evaluated before each iteration. Processing involves repeated evaluation of the condition and execution of the block. Side-effects depend on the statements within the block.
+
+@section for Statement
+@subsection Syntax
+@code{for @var{var} = @var{start} to @var{end} do @var{block} end}
+
+@subsection Description
+The @code{for} statement iterates over a range of numeric values. The variable @var{var} takes on each integer value from @var{start} to @var{end} inclusive. The @var{block} is executed for each value. Processing involves initializing the variable, checking the loop condition, executing the block, and incrementing the variable after each iteration. The loop variable is local to the loop body. Side-effects depend on the statements within the block.
+
+@section return Statement
+@subsection Syntax
+@code{return [@var{expression}]}
+
+@subsection Description
+The @code{return} statement exits the current function and optionally returns a value. If an @var{expression} is provided, its value is returned to the caller; otherwise, @code{nil} is returned. Processing involves evaluating the expression (if present) and transferring control back to the caller. The side-effect is terminating the current function's execution.
+
+@section call Statement
+@subsection Syntax
+@code{@var{function-name}([@var{arg1}, @var{arg2}, ...])}
+
+@subsection Description
+The @code{call} statement invokes a function. The @var{function-name} is an identifier referring to a function, and the parenthesized list contains zero or more arguments separated by commas. Processing involves evaluating each argument expression, transferring control to the function, and upon return, discarding any return value (as this is a statement, not an expression). Side-effects depend on the called function.
+
+@section method Statement
+@subsection Syntax
+@code{@var{object}:@var{method-name}([@var{arg1}, @var{arg2}, ...])}
+
+@subsection Description
+The @code{method} statement invokes a method on an object. The @var{object} is an expression evaluating to an object, @var{method-name} is an identifier naming the method, and the parenthesized list contains arguments. Processing involves evaluating the object and argument expressions, looking up the method in the object's class, and invoking it with the object as the implicit first argument (@code{self}). Side-effects depend on the method.
+
+@section set Statement
+@subsection Syntax
+@code{@var{variable} = @var{expression}}
+
+@subsection Description
+The @code{set} statement assigns the value of an expression to a variable. The @var{variable} is an identifier, and @var{expression} is any valid expression. Processing involves evaluating the expression and storing its value in the variable. The side-effect is modifying the variable's value.
+
+@section variable Declaration
+@subsection Syntax
+@code{local @var{identifier} = @var{number}}
+
+@subsection Description
+The @code{local} declaration creates a new variable with an initial value. The @var{identifier} is the variable name, and @var{number} is a numeric literal. Processing involves allocating storage for the variable and initializing it with the given number. The variable's scope is limited to the enclosing block. Side-effects include allocating memory for the variable.
+
+@section array Declaration
+@subsection Syntax
+@code{local @var{identifier} = {@var{number-list}}}
+
+@subsection Description
+The @code{local} declaration can also create an array (table) initialized with a list of numbers. The @var{number-list} is a comma-separated sequence of numeric literals enclosed in braces. Processing involves allocating storage for the array and initializing its elements with the provided numbers in order. The array is zero-indexed in the generated code, but Lua idiomatically uses one-based indexing; however, this frontend treats the array as a sequence for initialization purposes. Side-effects include allocating memory for the array and its elements.
+
+@section Addition Operator
+@subsection Syntax
+@code{@var{expr1} + @var{expr2}}
+
+@subsection Description
+The addition operator computes the sum of two numeric expressions. Both expressions must evaluate to numbers. Processing involves evaluating both expressions and adding their values. The result is a number. There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Subtraction Operator
+@subsection Syntax
+@code{@var{expr1} - @var{expr2}}
+
+@subsection Description
+The subtraction operator computes the difference between two numeric expressions. Both expressions must evaluate to numbers. Processing involves evaluating both expressions and subtracting the second from the first. The result is a number. There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Multiplication Operator
+@subsection Syntax
+@code{@var{expr1} * @var{expr2}}
+
+@subsection Description
+The multiplication operator computes the product of two numeric expressions. Both expressions must evaluate to numbers. Processing involves evaluating both expressions and multiplying their values. The result is a number. There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Division Operator
+@subsection Syntax
+@code{@var{expr1} / @var{expr2}}
+
+@subsection Description
+The division operator computes the quotient of two numeric expressions. Both expressions must evaluate to numbers, and the second expression must not be zero. Processing involves evaluating both expressions and dividing the first by the second. The result is a number. There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Equality Operator
+@subsection Syntax
+@code{@var{expr1} == @var{expr2}}
+
+@subsection Description
+The equality operator tests whether two expressions are equal. The expressions must be of the same type (both numbers, both strings, or both nil). Processing involves evaluating both expressions and comparing their values. The result is a boolean (@code{true} if equal, @code{false} otherwise). There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Inequality Operator
+@subsection Syntax
+@code{@var{expr1} ~= @var{expr2}}
+
+@subsection Description
+The inequality operator tests whether two expressions are not equal. The expressions must be of the same type. Processing involves evaluating both expressions and comparing their values. The result is a boolean (@code{true} if not equal, @code{false} otherwise). There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Less Than Operator
+@subsection Syntax
+@code{@var{expr1} < @var{expr2}}
+
+@subsection Description
+The less than operator tests whether the first expression is less than the second. Both expressions must evaluate to numbers. Processing involves evaluating both expressions and comparing their values. The result is a boolean (@code{true} if the first is less than the second, @code{false} otherwise). There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Less Than or Equal Operator
+@subsection Syntax
+@code{@var{expr1} <= @var{expr2}}
+
+@subsection Description
+The less than or equal operator tests whether the first expression is less than or equal to the second. Both expressions must evaluate to numbers. Processing involves evaluating both expressions and comparing their values. The result is a boolean (@code{true} if the first is less than or equal to the second, @code{false} otherwise). There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Greater Than Operator
+@subsection Syntax
+@code{@var{expr1} > @var{expr2}}
+
+@subsection Description
+The greater than operator tests whether the first expression is greater than the second. Both expressions must evaluate to numbers. Processing involves evaluating both expressions and comparing their values. The result is a boolean (@code{true} if the first is greater than the second, @code{false} otherwise). There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Greater Than or Equal Operator
+@subsection Syntax
+@code{@var{expr1} >= @var{expr2}}
+
+@subsection Description
+The greater than or equal operator tests whether the first expression is greater than or equal to the second. Both expressions must evaluate to numbers. Processing involves evaluating both expressions and comparing their values. The result is a boolean (@code{true} if the first is greater than or equal to the second, @code{false} otherwise). There are no side-effects beyond the evaluation of the sub-expressions.
+
+@section Number Literal
+@subsection Syntax
+@var{numeral}
+
+@subsection Description
+A number literal represents a numeric value. The lexer accepts multiple number formats:
+@itemize
+@item @strong{Decimal}: standard base-10 numbers with optional fractional part (e.g., @code{123}, @code{3.14}, @code{0})
+@item @strong{Hexadecimal}: prefixed with @code{0x} for base-16 numbers (e.g., @code{0xFF}, @code{0x1A2B})
+@item @strong{Octal}: prefixed with @code{0o} for base-8 numbers (e.g., @code{0o77}, @code{0o644})
+@item @strong{Binary}: prefixed with @code{0b} for base-2 numbers (e.g., @code{0b1010}, @code{0b11111111})
+@item @strong{Dword}: consecutive decimal digits without prefix, treated as decimal (e.g., @code{65535})
+@end itemize
+
+@subsection Examples
+@table @code
+@item 123
+Decimal integer
+@item 3.14
+Decimal with fractional part
+@item 0xFF
+Hexadecimal (255 in decimal)
+@item 0o377
+Octal (255 in decimal)
+@item 0b11111111
+Binary (255 in decimal)
+@item 0xDEAD
+Hexadecimal constant (57005 in decimal)
+@item 0o755
+Octal file permission (493 in decimal)
+@item 0b10101010
+Binary pattern (170 in decimal)
+@end table
+
+@subsection Processing
+Number literals are converted during lexical analysis. The prefix determines the radix:
+@itemize
+@item Decimal numbers are parsed directly as base-10
+@item Hex numbers have the @code{0x} prefix stripped and are parsed as base-16
+@item Octal numbers have the @code{0o} prefix stripped and are parsed as base-8
+@item Binary numbers have the @code{0b} prefix stripped and are parsed as base-2
+@end itemize
+
+All number formats result in an integer value. Processing involves converting the literal string to its numeric value according to the specified radix. The literal itself produces a number when evaluated. There are no side-effects.
+
+
+@section String Literal
+@subsection Syntax
+@code{"@var{characters}"} or @code{'@var{characters}'}
+
+@subsection Description
+A string literal represents a sequence of characters. The lexer accepts both double-quoted and single-quoted strings. Escape sequences are not processed in this subset. Processing involves storing the character sequence as a string value. The literal itself produces a string when evaluated. There are no side-effects.
+
+@section Identifier
+@subsection Syntax
+@var{letter} [@var{letter} | @var{digit} | @var{underscore}]*
+
+@subsection Description
+An identifier names a variable, function, or method. It consists of letters, digits, and underscores, and must not begin with a digit. Identifiers are automatically normalized to snake_case format during lexical analysis, ensuring consistent naming conventions in the generated AST.
+
+@subsection Normalization
+@strong{Non-keyword identifiers} are normalized to snake_case by the lexer:
+@itemize
+@item PascalCase identifiers (e.g., @code{MyVariable}) are converted to @code{my_variable}
+@item camelCase identifiers (e.g., @code{myVariable}) are converted to @code{my_variable}
+@item Existing snake_case identifiers (e.g., @code{my_variable}) are preserved
+@item SCREAMING_SNAKE_CASE identifiers are converted to @code{screaming_snake_case}
+@end itemize
+
+Keywords (e.g., @code{if}, @code{while}, @code{return}) are @strong{not} normalized and remain in their original form.
+
+@subsection Examples
+@table @code
+@item playerHealth
+Normalized to @code{player_health}
+@item PlayerMaxHealth
+Normalized to @code{player_max_health}
+@item enemy_speed
+Preserved as @code{enemy_speed}
+@item GetPlayerPosition
+Normalized to @code{get_player_position}
+@item if
+Keyword, not normalized
+@item while
+Keyword, not normalized
+@end table
+
+@subsection Processing
+Processing involves looking up the identifier in the current scope to obtain its associated value or function. Keywords are recognized before normalization. Non-keyword identifiers are passed through the snake_case normalization function before being stored in the AST. The identifier evaluates to the value of the variable or the function object. There are no side-effects beyond the lookup.
+
+@section Comments
+@subsection Syntax
+@code{-- @var{text}} to end of line
+
+@subsection Description
+Comments are ignored by the lexer and parser. They serve only to document the code for human readers. Processing involves skipping the comment text during tokenization. There are no side-effects.
+
+@section Analogies to Reader Macros
+The Lua frontend does not support reader macros like those found in some Lisp dialects. However, the number literal syntax is analogous to a reader macro for numeric constants, as it is transformed directly into a numeric value during lexing. Similarly, string literals are analogous to reader macros for string constants.
+
+The frontend supports hexadecimal, octal, and binary number literals (using @code{0x}, @code{0o}, and @code{0b} prefixes respectively), allowing compact representation of constants commonly used in low-level programming for game systems.
+
+@subsection Identifier Normalization
+
+All non-keyword identifiers are normalized to snake_case format during lexical analysis. This ensures consistent naming conventions throughout the generated AST and in the compiled output, regardless of whether the source code uses PascalCase, camelCase, or any other convention. Keywords are not affected by this normalization and retain their original form.
+

@@ -65,14 +65,20 @@
      ;; SmallTalk frontend
      :smalltalk-make-parser
      
-     ;; Muddle frontend
-     :muddle-lex-line
-     :muddle-lex-source
+      ;; Muddle frontend
+      :muddle-lex-line
+      :muddle-lex-source
+      :muddle-parse-number
+      :muddle-normalize-identifier
+      :muddle-parser
      
      ;; SCI frontend
      :sci-lex-line
      :sci-lex-source
      :sci-parse-program
+     :sci-parser
+     :sci-parse-number
+     :sci-normalize-identifier
      
      ;; SCUMM frontend
      :scumm-lex-line
@@ -83,14 +89,64 @@
      :zil-lex-line
      :zil-lex-source
      
-     ;; Burgermistress frontend
-     :burgermistress-lex-line
-     :burgermistress-lex-source
-     
-     ;; End-to-end compilation helpers (externally invoked)
-      :compile-basic-from-path
-      ;; Conditions
-      :source-error
-      :copybook-not-found
-      ;; Include path support
-      :include-path))
+      ;; Burgermistress frontend
+      :burgermistress-lex-line
+      :burgermistress-lex-source
+
+       ;; GOAL frontend
+       :goal-lex-line
+       :goal-lex-source
+       :goal-parse-source
+       :goal-normalize-identifier
+       :parse-goal-number
+       
+       ;; Forth frontend
+       :forth-normalize-identifier
+       :forth-valid-identifier-p
+       :forth-lex-number
+       :forth-lex-line
+       :forth-tokenize-source
+       :forth-token-type
+       :forth-get-keyword-token
+       :forth-get-dialogue-token
+       :forth-parse-tokens
+       :forth-parse-token
+       :forth-parse-line
+       :forth-compile-source
+       :forth-compile-file
+       :forth-parse-context
+       :forth-parse-context-tokens-per-line
+       :forth-parse-context-current-line-idx
+       :forth-parse-context-current-token-idx
+       :forth-parse-context-word-definitions
+       :forth-parse-context-stack-depth
+       ;; AST node constructors
+       :make-forth-push-literal
+       :make-forth-push-identifier
+       :make-forth-stack-op
+       :make-forth-arithmetic
+       :make-forth-comparison
+       :make-forth-conditional
+       :make-forth-loop
+       :make-forth-variable-def
+       :make-forth-fetch
+       :make-forth-store
+       :make-forth-print-value
+       :make-forth-print-string
+       :make-forth-print-char
+       :make-forth-print-cr
+       :make-forth-print-space
+       :make-forth-input-key
+       :make-forth-input-line
+       :make-forth-dialogue
+       :make-forth-word-def
+       :make-forth-constant-def
+       :make-forth-program
+       
+       ;; End-to-end compilation helpers (externally invoked)
+       :compile-basic-from-path
+       ;; Conditions
+       :source-error
+       :copybook-not-found
+       ;; Include path support
+       :include-path))

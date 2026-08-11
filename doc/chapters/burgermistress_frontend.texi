@@ -1,0 +1,395 @@
+@chapter Burgermistress Frontend Language Reference
+
+This chapter provides a complete reference for the Burgermistress frontend language as recognized by the lexer and parser in the Eightbol toolchain. Burgermistress is a Prolog‑like logic programming language used for scripting game events, dialogues, and AI behaviors. Each language element—keywords, operators, delimiters, and literals—is described with its purpose, typical usage, and any side‑effects it may have when processed by the compiler.
+
+@section Lexical Elements
+
+Burgermistress source code consists of terms that can be atoms, numbers, strings, variables, or compound terms. Whitespace (spaces, tabs, newlines) is insignificant except to separate tokens.
+
+@menu
+* Atoms:: Constants and function/predicate names
+* Numbers:: Integer and floating‑point literals
+* Strings:: Text literals
+* Variables:: Placeholders for unification
+* Compound Terms:: Structured data and function calls
+* Operators:: Infix and prefix operators
+* Delimiters:: Punctuation that separates clauses and arguments
+@end menu
+
+@node Atoms
+@section Atoms
+An atom is a symbolic constant that begins with a lowercase letter (a–z) or an underscore, followed by any sequence of letters, digits, and underscores. Atoms are used to represent fixed values, predicate names, and function names. Examples: @code{hello}, @code{_private}, @code{item_sword}. Atoms are case‑sensitive; @code{Hello} and @code{hello} are distinct atoms. In the Eightbol AST, atoms are represented as literals; when interfacing with Phantasia’s canonical PascalCase labels (e.g., @code{CharacterThink}), the programmer should write the atom in lowercase and the toolchain will map it internally as needed—however, the Burgermistress frontend itself does not perform case conversion; it is the programmer’s responsibility to match the required external label casing.
+
+@node Numbers
+@section Numbers
+
+Number literals in Burgermistress support multiple formats for convenience:
+
+@subsection Decimal Numbers
+A decimal number literal is a sequence of digits optionally containing a decimal point. Examples: @code{42}, @code{3.14}, @code{0}. The lexer produces a @code{:number} token; the parser converts it to a Lisp integer via @code{parse-integer}.
+
+@subsection Hexadecimal Numbers
+A hexadecimal number literal is prefixed with @code{0x} (or @code{0X}), followed by hex digits (0–9, a–f, A–F). Examples: @code{0xFF}, @code{0x1A2B}, @code{0xDEADBEEF}. The lexer produces a @code{:hex-number} token; the parser converts it to a decimal integer. Hexadecimal literals are useful for specifying color values, bit patterns, and other hardware-related constants.
+
+@subsection Octal Numbers
+An octal number literal is prefixed with @code{0o} (or @code{0O}), followed by octal digits (0–7). Examples: @code{0o755}, @code{0o17}, @code{0o400}. The lexer produces a @code{:octal-number} token; the parser converts it to a decimal integer. Octal literals are traditionally used for file permissions and addressing in retro systems.
+
+@subsection Binary Numbers
+A binary number literal is prefixed with @code{0b} (or @code{0B}), followed by binary digits (0–1). Examples: @code{0b1010}, @code{0b11110000}, @code{0b1}. The lexer produces a @code{:binary-number} token; the parser converts it to a decimal integer. Binary literals are useful for specifying bit masks and flag combinations.
+
+@subsection DWORD Numbers
+A DWORD (double word) number literal is prefixed with @code{0d} (or @code{0D}), followed by decimal digits. Examples: @code{0d65536}, @code{0d1000000}, @code{0d42}. The lexer produces a @code{:dword-number} token; the parser converts it to a decimal integer. DWORD literals are used for 32-bit constants and large values.
+
+@subsection Number Parsing
+All number formats are normalized to decimal integers in the AST. Examples in equivalent forms:
+@example
+255        @; Decimal
+0xFF       @; Hexadecimal
+0o377      @; Octal
+0b11111111 @; Binary
+0d255      @; DWORD (also decimal)
+@end example
+Number literals evaluate to their numeric value; they have no side-effects.
+
+@node Strings
+@section String Literals
+A string literal is enclosed in single quotes: @code{'text'} . The lexer absorbs characters until the matching unescaped @code{'} and yields a @code{:string} token. The parser returns the literal string contents (without the surrounding quotes). String literals evaluate to themselves; they are immutable data. Side‑effect: none. To include a single quote inside a string, escape it with a backslash: @code{'It\'s cold'}.
+
+@node Variables
+@section Variables
+A variable is a placeholder that unifies with a value during execution. Variables begin with an uppercase letter (A–Z) or an underscore. Examples: @code{X}, @code{_Temp}, @code{Item}. Each occurrence of a variable in a clause can unify with a different value unless the same variable name appears multiple times, in which case all occurrences must unify to the same value. The anonymous variable @code{_} matches any value but does not retain it for later use.
+
+@node Compound Terms
+@section Compound Terms
+A compound term consists of a functor (an atom) followed by a parenthesized, comma‑separated list of arguments (terms). Examples: @code{parent(john, mary)}, @code{weapon(sword, enchanted, +5)}. Compound terms are used to represent structured data and to invoke predicates. The functor and arity (number of arguments) together identify a predicate.
+
+@node Operators
+@section Operators
+Burgermistress provides a set of infix and prefix operators for constructing terms and expressing control flow. Operators are written as atoms with predefined fixity and precedence.
+
+@menu
+* :-:: Neck of a rule (if‑then)
+* ,:: Conjunction (and)
+* ;:: Disjunction (or)
+* ::=:: Exact unification (is)
+* =\=:\,:=:: Arithmetic comparison
+* >, >=, <, =:=:: Arithmetic comparison (numeric)
+* =:: Unification (structural)
+* \=:: Non‑unification
+* +, -, *, /, //, mod:: Arithmetic
+\end menu
+
+@node :-
+@section @code{:-}
+The @code{:-} operator separates the head (consequent) of a rule from its body (antecedent). Syntax: @code{head :- body}. The head is an atom or compound term; the body is a comma‑separated list of goals. If the body succeeds (all goals unify or execute successfully), the head is considered true. The operator itself produces no value; its side‑effect is to define a rule that can be used in queries.
+
+@node ,
+@section @code{,}
+The @code{,} operator denotes logical conjunction (and). In a rule body or a query, @code{goal1 , goal2} means both @code{goal1} and @code{goal2} must succeed. As an infix operator between terms, it constructs a pair‑like structure but is primarily used in goals. Side‑effect: none; it controls whether the subsequent goal is attempted.
+
+@node ;
+@section @code{;}
+The @code{;} operator denotes logical disjunction (or). Syntax: @code{goal1 ; goal2}. The disjunction succeeds if either @code{goal1} or @code{goal2} succeeds. Side‑effect: none; it provides alternative paths for unification.
+
+@node ::=
+@section @code{::=}
+The @code{::=} operator (pronounced “is”) is used for arithmetic assignment. Syntax: @code{variable ::= expression}. The expression is evaluated arithmetically, and the result is unified with the variable. This operator is distinct from unification @code{=}; it forces arithmetic evaluation. Side‑effect: binds the variable to the computed value.
+
+@node Arithmetic Comparison
+@section Arithmetic Comparison Operators
+The operators @code{=\:=}, @code{>\=}, @code{<\=}, @code{>}, @code{<}, and @code{=\:!=} (not equal) compare the arithmetic values of their operands. Both operands must be arithmetic expressions (numbers or variables bound to numbers). Examples: @code{X =\:= Y + 1}, @code{Price > 100}. Side‑effect: none; they succeed or fail based on the comparison.
+
+@node Structural Unification
+@section @code{=} and @code{\=}
+The @code{=} operator succeeds if its two operands can be made identical by binding variables (unification). Example: @code{X = f(Y, 2)} binds @code{X} to the term @code{f(Y,2)}. The @code{\=} operator succeeds if the operands cannot be unified. Side‑effect: binds variables as a side‑effect of successful unification.
+
+@node Arithmetic Operators
+@section Arithmetic Operators: @code{+}, @code{-}, @code{*}, @code{/}, @code{//}, @code{mod}
+These operators perform integer (or floating‑point) arithmetic on their operands. @code{+} addition, @code{-} subtraction, @code{*} multiplication, @code{/} division (floating‑point or rational depending on implementation), @code{//} integer division, @code{mod} modulus (remainder). Side‑effect: none; they produce a numeric result.
+
+@node Delimiters
+@section Delimiters
+The following punctuation symbols have special meaning:
+
+@menu
+* ( ):: Grouping arguments and enclosing lists
+* [ ]:: List constructor
+* { }:: Block delimiter (used in some control constructs)
+* .:: Terminates a clause or query
+* |:: List constructor (head | tail)
+\end menu
+
+@node Parentheses
+@section Parentheses
+Left and right parentheses (@code{(} and @code{)} ) are used to group the arguments of a compound term and to enforce precedence in expressions. They do not produce values themselves; their side‑effect is to control parsing.
+
+@node Brackets
+@section Square Brackets
+Square brackets (@code{[} and @code{]} ) denote a list literal. A list is either empty (@code{[]}) or consists of a head and a tail: @code{[Head|Tail]}. Elements are separated by commas: @code{[a, b, c]} is syntactic sugar for @code{[a|[b|[c|[]]]]}. Side‑effect: none; they create a structured term representing a list.
+
+@node Curly Brackets
+@section Curly Brackets
+Curly brackets (@code{\{} and @code{\}} ) are used to group a sequence of goals as a single block, primarily within @code{if-then-else} constructs (see below). They do not alter semantics beyond grouping.
+
+@node Period
+@section Period (Dot)
+A period @code{.} terminates a clause (fact or rule) or a query. In source files, each fact or rule must end with a period. In interactive queries, the period signals the end of the query. Side‑effect: none; it is a syntactic delimiter.
+
+@node Vertical Bar
+@section Vertical Bar
+The vertical bar @code{|} is used in list notation to separate the head from the tail: @code{[Head|Tail]}. It can also appear as a standalone infix operator in some contexts, but its primary use is in lists. Side‑effect: none.
+
+@section Clauses: Facts and Rules
+
+A Burgermistress program consists of a sequence of clauses. Each clause ends with a period. There are two kinds of clauses: facts and rules.
+
+@menu
+* Facts:: Unconditional truths
+* Rules:: Conditional truths
+\end menu
+
+@node Facts
+@section Facts
+A fact is a predicate that is unconditionally true. It has the form @code{head.} where @code{head} is an atom or compound term with no @code{:-} body. Examples:
+@example
+parent(peter, lois).
+male(peter).
+female(lois).
+weapon(sword, enchanted, +5).
+@end example
+When the program loads, these facts are added to the database. A query that unifies with a fact succeeds.
+
+@node Rules
+@section Rules
+A rule defines a predicate that is true if its body succeeds. Syntax: @code{head :- body.} where @code{body} is a comma‑separated list of goals (each goal is a predicate call). Example:
+@example
+grandparent(X, Z) :- parent(X, Y), parent(Y, Z).
+can_carry(X, Item) :- strong(X), weapon(Item, _, Weight), Weight =< MaxLoad(X).
+@end example
+When a rule is invoked, the interpreter attempts to unify the head with the caller’s goal; if successful, it proceeds to solve each goal in the body from left to right. If any goal fails, the rule fails and backtracking occurs.
+
+@section Queries
+
+A query is a goal (or a comma‑separated list of goals) submitted to the interpreter to determine whether it can be proven true given the facts and rules. Queries are terminated by a period. Example:
+@example
+?- parent(peter, X).
+?- male(X), female(Y), married(X, Y).
+?- weapon(Name, enchant, Plus), Plus > 3.
+@end example
+The interpreter attempts to satisfy the query by searching the database and applying rules, performing unification and backtracking as needed. For each solution found, it prints the bindings of any variables in the query.
+
+@section Built‑In Predicates
+
+Burgermistress provides a set of built‑in predicates for common operations. These are not user‑definable and are always available.
+
+@menu
+* unification/2:: Unify two terms
+* equality/2:: Arithmetic equality
+* comparison/4:: Arithmetic comparison (>, >=, <, =:=)
+* arithmetic/6:: Arithmetic operations (+, -, *, /, //, mod)
+* cut/0:: Commit to current choice point
+* fail/0:: Always fail
+* true/0:: Always succeed
+* repeat/0:: Succeed infinitely
+* call/1:: Invoke a goal dynamically
+* findall/3:: Collect all solutions to a template
+* bagof/3:: Collect solutions with grouping
+* setof/3:: Collect sorted unique solutions
+* assert/1:: Add a clause to the database
+* retract/1:: Remove a clause from the database
+* consulta/1:: Retrieve and execute a clause
+\end menu
+
+@node unification/2
+@section unification/2
+@code{unification(Term1, Term2)} succeeds if @code{Term1} and @code{Term2} can be unified, binding variables as necessary. It is synonymous with the infix @code{=} operator but can be used as a goal in a rule body.
+
+@node equality/2
+@section equality/2
+@code{equality(Expr1, Expr2)} succeeds if the arithmetic values of @code{Expr1} and @code{Expr2} are equal. It corresponds to the infix @code{=:} operator.
+
+@node comparison/4
+@section comparison/4
+The comparison predicates are @code{greater_than/2}, @code{greater_equal/2}, @code{less_than/2}, @code{less_equal/2}, @code{equal/2}, and @code{not_equal/2}. Each succeeds if the corresponding arithmetic relation holds between its two arguments.
+
+@node arithmetic/6
+@section arithmetic/6
+The arithmetic predicates are @code{plus/3}, @code{minus/3}, @code{times/3}, @code{div/3}, @code{idiv/3} (integer division), and @code{mod/3}. Each succeeds if the third argument is the result of applying the operation to the first two arguments.
+
+@node cut/0
+@section cut/0
+@code{cut} (written as @code{!}) commits the interpreter to the choices made since the parent goal was invoked. It prevents backtracking past the cut for the current predicate call. Example:
+@example
+max(X, Y, X) :- X >= Y, !.
+max(X, Y, Y) :- X < Y.
+@end example
+Once the first clause succeeds and the cut is encountered, the second clause is not tried even if the first clause later fails on backtracking from elsewhere.
+
+@node fail/0
+@section fail/0
+@code{fail} always causes the current goal to fail, triggering backtracking to find alternative solutions.
+
+@node true/0
+@section true/0
+@code{true} always succeeds without performing any action.
+
+@node repeat/0
+@section repeat/0
+@code{repeat} succeeds indefinitely, leaving a choice point on each success. It is used to generate infinite loops when combined with other goals that eventually fail or are cut.
+
+@node call/1
+@section call/1
+@code{call(Goal)} dynamically invokes the goal represented by @code{Goal}. @code{Goal} must be an atom or compound term (with variables bound appropriately). This enables higher‑order programming.
+
+@node findall/3
+@section findall/3
+@code{findall(Template, Goal, List)} succeeds if @code{List} is a list of all instances of @code{Template} that satisfy @code{Goal}. Duplicates are preserved; the order corresponds to the proof search order.
+
+@node bagof/3
+@section bagof/3
+@code{bagof(Template, Goal, List)} succeeds if @code{List} is a list of all instances of @code{Template} that satisfy @code{Goal} for particular values of the free variables in @code{Goal} (those not appearing in @code{Template}). It produces one list per distinct set of bindings for the free variables.
+
+@node setof/3
+@section setof/3
+@code{setof(Template, Goal, List)} succeeds if @code{List} is a sorted list of the unique instances of @code{Template} that satisfy @code{Goal} for particular values of the free variables in @code{Goal}. The list is sorted according to the standard term order.
+
+@node assert/1
+@section assert/1
+@code{assert(Clause)} adds @code{Clause} (a fact or rule) to the database. The clause must be a valid Burgermistress term ending implicitly with a period. Asserted clauses can be used in subsequent queries.
+
+@node retract/1
+@section retract/1
+@code{retract(Clause)} removes the first matching clause from the database. If @code{Clause} is uninstantiated, it retracts the first clause that unifies with it.
+
+@node consulta/1
+@section consulta/1
+@code{consulta(Clause)} retrieves a clause from the database that unifies with @code{Clause} and executes it as a goal. It combines @code{retract/1} and @code{call/1} in a single step.
+
+@section Control Structures
+
+Beyond pure Horn clauses, Burgermistress provides several control‑flow constructs that can appear in rule bodies.
+
+@menu
+* if‑then‐else:: Conditional execution of goals
+* once/0:: Execute a goal exactly once
+* block/0:: Group goals without altering semantics
+\end menu
+
+@node if‑then‐else
+@section if‑then‐else
+The construct @code{->/2} (if‑then) and @code{;}/2 (else) together form an if‑then‐else. Syntax: @code{Cond -> Then ; Else}. If @code{Cond} succeeds (possibly binding variables), then @code{Then} is executed and @code{Else} is skipped; if @code{Cond} fails, @code{Then} is skipped and @code{Else} is executed. Only one of @code{Then} or @code{Else} is attempted. The cut‑like behavior of @code{->} prevents backtracking into @code{Cond} once it has succeeded.
+
+@example
+assign(X, Value) :- (nonvar(X) -> true ; X = Value).
+@end example
+
+@node once/0
+@section once/0
+@code{once} succeeds exactly once for the current goal, then fails on subsequent attempts within the same execution path. It is useful for ensuring that a initialization goal runs only once.
+
+@example
+initialize :- once(setup_database), process_data.
+@end example
+
+@node block/0
+@section block/0
+A block @code{\{ Goals \}} groups a sequence of goals for syntactic clarity, particularly when used with @code{->} or @code{;}. It does not alter semantics beyond grouping.
+
+@example
+handle_event :- { reset_timer(), update_state(), render_screen() }.
+@end example
+
+@section Arithmetic Expressions
+
+Arithmetic expressions can appear anywhere a term is expected. They are evaluated using the built‑in arithmetic predicates. The syntax follows conventional infix notation with operator precedence: @code{*} and @code{/} (including @code{//} and @code{mod}) bind tighter than @code{+} and @code{-}, which in turn bind tighter than comparisons.
+
+Examples:
+@example
+X is Y * 2 + 3.
+Price := Base * Quantity - Discount.
+Total := (Subtotal + Tax) * (1 + TipPercent/100).
+@end example
+Note: The @code{is}/2 predicate (@code{::=} in Burgermistress) is used to bind the result of an arithmetic expression to a variable.
+
+@section Lists
+
+Lists are a fundamental data structure in Burgermistress. They are either empty (@code{[]}) or consist of a head element and a tail list, written as @code{[Head|Tail]}. Syntactic sugar allows @code{[a, b, c]} for @code{[a|[b|[c|[]]]]}.
+
+Common list‑processing predicates include @code{append/3}, @code{member/2}, @code{length/2}, @code{sort/2}, etc. These are typically defined as user predicates using recursion and unification.
+
+@section Strings and Character Codes
+
+Strings are sequences of characters enclosed in single quotes. Individual characters can be represented as integers corresponding to their character code (e.g., ASCII or Unicode depending on the target platform). The built‑in predicate @code{char_code/2} converts between a one‑character string and its integer code.
+
+@example
+?- char_code('A', Code).
+Code = 65.
+?- char_code(0x41, Char).
+Char = 'A'.
+@end example
+
+@section Identifier Normalization
+
+The Burgermistress front-end automatically normalizes all identifiers to kebab-case (lowercase with hyphens replacing underscores and marking case transitions) in AST nodes. This ensures consistent identifier representation across the codebase.
+
+@subsection Normalization Rules
+
+Identifiers are converted from their source form to kebab-case using the following rules:
+
+@enumerate
+@item Underscores (@code{_}) are replaced with hyphens (@code{-}).
+@item Uppercase letters (except the first character) that follow lowercase letters are preceded by a hyphen and converted to lowercase. Example: @code{myVar} becomes @code{my-var}.
+@item The first character is always lowercase.
+@item Consecutive uppercase letters are treated as a single word block. Example: @code{HTTPServer} becomes @code{httpserver}.
+@end enumerate
+
+@subsection Examples
+
+The following table shows how identifiers are normalized:
+
+@multitable @columnfractions 0.3 0.3 0.3
+@headitem Source @tab Normalized @tab Purpose
+@item @code{myVariable} @tab @code{my-variable} @tab camelCase to kebab-case
+@item @code{MyFunction} @tab @code{my-function} @tab PascalCase to kebab-case
+@item @code{my_var} @tab @code{my-var} @tab Underscore to hyphen
+@item @code{HTTPServer} @tab @code{httpserver} @tab Acronym handling
+@item @code{ID_Value} @tab @code{id-value} @tab Mixed case with underscore
+@end multitable
+
+@subsection Impact on AST
+
+When identifiers appear in the AST (in @code{make-identifier} nodes, method names, variable names, etc.), they are represented in kebab-case. This normalization allows the Burgermistress frontend to work seamlessly with different naming conventions in source code while maintaining a canonical representation in the intermediate representation.
+
+@section File Extensions
+
+Burgermistress source files use the extension @code{.bmrs}. As an undocumented alternative, the extension @code{.rah} is also accepted (treated identically to @code{.bmrs}) but is not officially supported.
+
+@section Example Program
+
+The following example demonstrates a simple inventory system:
+@example
+% Facts
+has_item(hero, sword).
+has_item(hero, shield).
+has_item(enemy, dagger).
+weapon(sword, blade, +5).
+weapon(dagger, blade, +2).
+
+% Rules
+can_defeat(Hero, Enemy) :-
+    has_item(Hero, Weapon),
+    weapon(Weapon, _, Power),
+    has_item(Enemy, EnemyWeapon),
+    weapon(EnemyWeapon, _, EnemyPower),
+    Power > EnemyPower.
+
+% Query
+?- can_defeat(hero, Enemy).
+Enemy = enemy ;
+false.
+@end example
+When the query is executed, the interpreter finds that the hero’s sword (+5) is stronger than the enemy’s dagger (+2) and succeeds, binding @code{Enemy} to @code{enemy}.
+
+@section Conclusion
+
+This chapter has covered every statement, function, operator, and control structure present in the Burgermistress frontend as defined by its lexer and parser. For details on how these tokens are assembled into AST nodes, see the parser action functions in @file{burger-parser.lisp}. To understand the semantics of the generated Eightbol IR, refer to the Eightbol documentation.

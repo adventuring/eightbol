@@ -7,17 +7,15 @@
     (if dep
         ;; GO TO ... DEPENDING ON expression — trinary search tree (cmp/beq: equal, <, >)
         (let ((target-list (or targets (when target (list target)))))
-	  (emit-6502-load-expression *output-stream* dep *class-id*)
-	  (emit-6502-goto-tristree *output-stream* target-list 1 (length target-list)
-			       *class-id* *method-id*))
-        ;; Simple GOTO
-        (format *output-stream* "~%~10T~a ~a~%"
-                (6502-branch-always-mnemonic)
-                (para-label (format nil "~a" (or target (first targets))))))))
+	(emit-6502-load-expression *output-stream* dep *class-id*)
+	(emit-6502-goto-tristree *output-stream* target-list 1 (length target-list) *class-id* *method-id*))
+          ;; Simple GOTO
+           (format *output-stream* "~%~10T~a ~a~%"
+                   (6502-branch-always-mnemonic)
+                   (para-label (format nil "~a" (or target (first targets))))))))
 
 (defun emit-6502-goto-tristree (out targets low high class-id method-id)
-  "Emit trinary s
-earch: cmp #mid; beq target_mid; blt left; bge right.
+  "Emit trinary search: cmp #mid; beq target_mid; blt left; bge right.
 TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based inclusive."
   (when (or (null targets) (> low high)) (return-from emit-6502-goto-tristree))
   (let* ((mid (floor (+ low high) 2))
@@ -32,7 +30,7 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
 	  (if (and (numberp *6502-accumulator-expression*)
 		 (zerop *6502-accumulator-expression*))
                 (format out "~%~10Tjmp ~a~31T ; zero, always taken~%" label)
-                (format out "~%~10Tbeq ~a~%" label)))
+                 (format out "~%~10Tbeq ~a~%" label))
 	(let ((label-less (new-6502-label "GtLess"))
                 (label-more (new-6502-label "GtMore")))
 	  (unless (6502-zero-p mid)
@@ -48,8 +46,8 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
 	  (format out "~%~a:" label-more)
 	  (setf *6502-accumulator-expression* :trash/label-more
 	        *6502-x-index-expression* :trash/label-more)
-	  (when (<= (1+ mid) high)
-	    (emit-6502-goto-tristree out targets (1+ mid) high class-id method-id)))))))
+  (when (<= (1+ mid) high)
+    (emit-6502-goto-tristree out targets (1+ mid) high class-id method-id))))))))
 
 (defun 6502-zero-p (expression)
   (let ((n (cond ((numberp expression)
@@ -498,5 +496,5 @@ return (op lhs rhs). Otherwise return CONDITION unchanged."
                 (format out "~%~10Tbne ~a~%" label-some))
               (format out "~%~10T~a ~a~%" (6502-branch-always-mnemonic) branch-label)
               (format out "~%~a:" label-some)
-              (setf *6502-accumulator-expression* :trash/ifnz
-                    *6502-x-index-expression* :trash/ifnz)))))
+               (setf *6502-accumulator-expression* :trash/ifnz
+                     *6502-x-index-expression* :trash/ifnz)))))

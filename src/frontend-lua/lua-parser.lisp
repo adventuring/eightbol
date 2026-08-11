@@ -1,185 +1,371 @@
 ;;; lua-parser.lisp
 ;;; YACC parser for Lua subset
 ;;; Maps Lua tokens to EightBol AST nodes
+;;; Supports: dialogue, print, input, if/while/for, method calls, assignments
 
 (in-package :eightbol)
 
 (defun lua-token-list ()
+  "Define Lua token types compatible with EightBol lexer."
   (mapcar (compose #'intern #'string)
-          '(|(| |)| |:| |,| + - * / = == ~= < <= > >= 
+          '(|(| |)| |{| |}| |[| |]| |\:| :comma + - * / = == ~= < <= > >= 
             keyword symbol number string comment)))
 
-(eval-when (:execute :load-toplevel)
-  (eval
-   `(yacc:define-parser *lua-parser*
-      (:start-symbol lua-program)
-      (:terminals (,@(lua-token-list) number string ident))
-      (:precedence ((:left :or) (:left :and)
-                                (:left :eq :neq :lt :le :gt :ge)
-                                (:left :plus :minus)
-                                (:left :times :divide)
-                                (:right :power :not)))
-      (:muffle-conflicts :some)
+;;; Parser definition using YACC
+(yacc:define-parser *lua-parser*
+      (:start-symbol program)
+      (:terminals (number string ident :comma |=| |+| |-| |*| |/| |\|\|| |&| 
+                          |<| |>| |<=| |>=| |==| |~=| |(| |)| |{| |}| |[| |]| |\:|
+                          |\;| keyword))
+                          (:precedence ((:left :|or|) (:left :|and|)
+                                                      (:left :|==| :|~=| :|<| :|>| :|<=| :|>=|)
+                  (:left :|+| :|-| )
+                  (:left :|*| :|/| )
+                  (:right :|not|)))
+   (:muffle-conflicts t)
 
-      (lua-program
-       (comments* lua-chunk
-                  (lambda (_ignored-comments chunk)
-                    (declare (ignore _ignored-comments))
-                    chunk)))
+   ;; Top-level program: list of statements
+   (program
+    (statement-list
+     (lambda (stmts) (list :program :statements stmts)))
+    (nil
+     (lambda () (list :program :statements nil))))
 
-      (lua-chunk
-       (data-definition* lua-statement*
-                         (lambda (dd stmts)
-                           (append dd stmts))))
+   ;; Statement list
+   (statement-list
+    (statement
+     (lambda (stmt) (remove nil (list stmt))))
+    (statement-list statement
+                    (lambda (stmts stmt)
+                      (append stmts (remove nil (list stmt))))))
 
-      (data-definition
-       (lua-var-decl
-        (lambda (decl)
-          (list :dd :level 01 :label (getf decl :var)
-                    :attr (list :usage :binary :value (getf decl :value)))))
-       (lua-array-decl
-        (lambda (decl)
-          (list :dd :level 01 :label (getf decl :arr)
-                    :attr (list :usage :binary :occurs (list 'length (getf decl :elements)))))))
+   ;; Statements
+   (statement
+    (nil)
+    (local-declaration)
+    (if-statement)
+    (while-statement)
+    (for-statement)
+    (return-statement)
+    (expression-statement)
+    (dialogue-statement)
+    (print-statement)
+    (input-statement)
+    (copy-statement))
 
-      (lua-statement
-       (if-statement (lambda (s) (parse/lua-if s)))
-       (while-statement (lambda (s) (parse/lua-while s)))
-       (for-statement (lambda (s) (parse/lua-for s)))
-       (call-statement (lambda (s) (parse/lua-call s)))
-       (method-statement (lambda (s) (parse/lua-method s)))
-       (set-statement (lambda (s) (parse/lua-set s)))
-       (return-statement (lambda (s) (parse/lua-return s))))
+   ;; Local variable declaration
+   (local-declaration
+    (|local| ident |=| expression
+             (lambda (_local var _eq expr)
+               (declare (ignore _local _eq))
+               (list :set var expr))))
 
-      (comments* () ())
-      (comments* (comment comments* (lambda (c rest) (declare (ignore c rest)) nil)))
+   ;; If statement
+   (if-statement
+    (|if| expression |then| statement-list |end|
+          (lambda (_if cond _then body _end)
+            (declare (ignore _if _then _end))
+            (list :if :condition cond :then body)))
+    (|if| expression |then| statement-list |else| statement-list |end|
+          (lambda (_if cond _then then-body _else else-body _end)
+            (declare (ignore _if _then _else _end))
+            (list :if :condition cond :then then-body :else else-body)))
+    (|if| expression |then| statement-list |elseif| expression |then| statement-list |end|
+          (lambda (_if cond1 _then body1 _elseif cond2 _then2 body2 _end)
+            (declare (ignore _if _then _elseif _then2 _end))
+            (list :if :condition cond1 :then body1
+                      :else (list (list :if :condition cond2 :then body2))))))
 
-      (lua-var-decl
-       (keyword-local ident = number
-                      (lambda (_local var _eq val)
-                        (declare (ignore _local _eq))
-                        (list :var var :value val))))
+   ;; While statement
+   (while-statement
+    (|while| expression |do| statement-list |end|
+             (lambda (_while cond _do body _end)
+               (declare (ignore _while _do _end))
+               (list :perform :body body :until (list :not cond)))))
 
-      (lua-array-decl
-       (keyword-local ident = left-brace number-list right-brace
-                      (lambda (_local var _eq _lbrace vals _rbrace)
-                        (declare (ignore _local _eq _lbrace _rbrace))
-                        (list :arr var :elements vals))))
+   ;; For statement (simple numeric range)
+   (for-statement
+    (|for| ident |=| expression :comma expression |do| statement-list |end|
+           (lambda (_for var _eq from _comma to _do body _end)
+             (declare (ignore _for _eq _comma _do _end))
+             (list :perform :body body :varying var :from from :to to)))
+    (|for| ident |=| expression :comma expression :comma expression |do| statement-list |end|
+           (lambda (_for var _eq from _comma1 to _comma2 by _do body _end)
+             (declare (ignore _for _eq _comma1 _comma2 _do _end))
+             (list :perform :body body :varying var :from from :to to :by by))))
 
-      (if-statement
-       (keyword-if condition keyword-then block keyword-else else-block keyword-end
-                   (lambda (_if cond _then blk _else else_blk _end)
-                     (declare (ignore _if _then _else))
-                     (list :if cond :then blk :else else_blk))))
+   ;; Return statement
+   (return-statement
+    (|return|
+     (lambda (_ret)
+       (declare (ignore _ret))
+       (list :exit-method :value nil)))
+    (|return| expression
+              (lambda (_ret expr)
+                (declare (ignore _ret))
+                (list :exit-method :value expr))))
 
-      (block
-          (lua-statement*)
-        ((lambda (stmts) stmts)))
+   ;; Expression statement (e.g., function call, method call, assignment)
+   (expression-statement
+    (expression))
 
-      (while-statement
-       (keyword-while condition keyword-do block keyword-end
-                      (lambda (_while cond _do blk _end)
-                        (declare (ignore _while _do _end))
-                        (list :while cond :body blk))))
+   ;; Dialogue statement
+   (dialogue-statement
+    (|dialogue| string
+                (lambda (_dial msg)
+                  (declare (ignore _dial))
+                  (list :dialogue :text msg)))
+    (|dialog| string
+              (lambda (_dial msg)
+                (declare (ignore _dial))
+                (list :dialogue :text msg))))
 
-      (for-statement
-       (keyword-for ident = number keyword-to number keyword-do block keyword-end
-                    (lambda (_for _v start _to end _do blk _end)
-                      (declare (ignore _for _v _to _do _end))
-                      (list :perform :varying :from start :to end :with blk))))
+   ;; Print statement
+   (print-statement
+    (|print| expression
+             (lambda (_print expr)
+               (declare (ignore _print))
+               (list :call :target 'print :args (list expr))))
+    (|print| |\|\|| expression
+                          (lambda (_print _pipe expr)
+                            (declare (ignore _print _pipe))
+                            (list :call :target 'print :args (list expr))))
+      (|print| expression print-args
+               (lambda (_print expr rest)
+                 (declare (ignore _print))
+                 (list :call :target 'print :args (cons expr rest)))))
 
-      (call-statement
-       (ident left-paren args right-paren
-              (lambda (fn _lp args _rp)
-                (declare (ignore _lp _rp))
+      ;; Print arguments
+      
+      (print-args
+       (:comma expression
+               (lambda (_comma expr)
+                 (declare (ignore _comma))
+                 (list expr)))
+       (print-args :comma expression
+                  (lambda (prev _comma expr)
+                    (declare (ignore _comma))
+                     (append prev (list expr)))))
+
+      ;; Input statement
+      
+      (input-statement
+       (|input| ident
+                (lambda (_inp var)
+                  (declare (ignore _inp))
+                  (list :call :target 'input :args (list (list :address-of var)))))
+       (|input| ident input-args
+                (lambda (_inp var rest)
+                  (declare (ignore _inp))
+                  (list :call :target 'input :args (cons (list :address-of var) rest)))))
+
+      ;; Input arguments
+      
+      (input-args
+       (:comma ident
+               (lambda (_comma var)
+                 (declare (ignore _comma))
+                 (list (list :address-of var))))
+       (input-args :comma ident
+                   (lambda (prev _comma var)
+                     (declare (ignore _comma))
+                     (append prev (list (list :address-of var))))))
+
+      ;; Copy statement
+      
+      (copy-statement
+       (|copy| |(| string |)| |;|
+               (lambda (_copy _lp filename _rp _semi)
+                 (declare (ignore _copy _lp _rp _semi))
+                 (list :copy :name filename)))
+       (|copy| |(| string |)|
+               (lambda (_copy _lp filename _rp)
+                 (declare (ignore _copy _lp _rp))
+                 (list :copy :name filename))))
+
+      ;; Expressions
+      
+      (expression
+       (number)
+       (string)
+       (ident)
+       (|true|
+        (lambda (_true)
+          (declare (ignore _true))
+          1))
+       (|false|
+        (lambda (_false)
+          (declare (ignore _false))
+          0))
+       (|nil|
+        (lambda (_nil)
+          (declare (ignore _nil))
+          nil))
+       (|(| expression |)|
+            (lambda (_lp expr _rp)
+              (declare (ignore _lp _rp))
+              expr))
+       (expression |+| expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :add :from right :to left)))
+       (expression |-| expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :subtract :from right :from-target left)))
+       (expression |*| expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :compute :target 'result :expression (list :* left right))))
+       (expression |/| expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :compute :target 'result :expression (list :/ left right))))
+       (expression |== | expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :eq left right)))
+       (expression |~=| expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :neq left right)))
+       (expression |<| expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :lt left right)))
+       (expression |>| expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :gt left right)))
+       (expression |<= | expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :le left right)))
+       (expression |>= | expression
+                   (lambda (left _op right)
+                     (declare (ignore _op))
+                     (list :ge left right)))
+       (ident |=| expression
+              (lambda (var _eq expr)
+                (declare (ignore _eq))
+                (list :set var expr)))
+       (ident |:| ident function-args
+              (lambda (obj _colon method args)
+                (declare (ignore _colon args))
+                (list :invoke obj method)))
+       (ident function-args
+              (lambda (fn args)
                 (list :call :target fn :args args))))
 
-      (method-statement
-       (ident colon ident left-paren args right-paren
-              (lambda (obj _c method _lp args _rp)
-                (declare (ignore _c _lp _rp))
-                (list :method :object obj :target method :args args))))
-
-      (set-statement
-       (ident = expr
-              (lambda (lhs _e rhs)
-                (declare (ignore _e))
-                (list :set lhs rhs))))
-
-      (return-statement
-       (keyword-return expr?
-                       (lambda (_r expr)
-                         (declare (ignore _r))
-                         (list :return expr))))
-
-      (number-list
-       (number (lambda (n) (list n)))
-       (number |,| number-list
-               (lambda (n rest) (cons n rest))))
-
-      (args
-       ()
-       (expr args-rest
-             (lambda (e rest) (cons e rest))))
-
-      (args-rest
-       ()
-       (|,| args
-            (lambda (_c args)
-              (declare (ignore _c))
+      ;; Function arguments
+      
+      (function-args
+       (|(| (lambda (_lp)
+              (declare (ignore _lp))
+              nil))
+       (|(| |)|
+           (lambda (_lp _rp)
+             (declare (ignore _lp _rp))
+             nil))
+       (|(| arg-list |)|
+            (lambda (_lp args _rp)
+              (declare (ignore _lp _rp))
               args)))
 
-      (expr
-       (number)
-       (ident)
-       (string)
-       (expr :plus expr)
-       (expr :minus expr)
-       (expr :times expr)
-       (expr :divide expr)
-       (expr :eq expr)
-       (expr :neq expr)
-       (expr :lt expr)
-       (expr :le expr)
-       (expr :gt expr)
-       (expr :ge expr)))))
+      ;; Argument list
+      
+      (arg-list
+       (expression
+        (lambda (expr) (list expr)))
+       (arg-list :comma expression
+                 (lambda (prev _comma expr)
+                   (declare (ignore _comma))
+                   (append prev (list expr))))))
 
-(defun parse/lua-if (stmt)
-  (destructuring-bind (cond blk else) stmt
-    (declare (ignore else))
-    (list :if :condition cond :then blk)))
+;;; Helper functions to handle statement conversion
 
-(defun parse/lua-while (stmt)
-  (destructuring-bind (cond blk) stmt
-    (list :perform :until cond :with blk)))
+(defun parse/lua-if (cond then &optional else-part)
+  "Convert Lua if to EightBol :if node."
+  (let ((node (list :if :condition cond :then then)))
+    (when else-part
+      (setf node (append node (list :else else-part))))
+    node))
 
-(defun parse/lua-for (stmt)
-  (destructuring-bind (var start end blk) stmt
-    (declare (ignore var))
-    (list :perform :varying :from start :to end :with blk)))
+(defun parse/lua-while (cond body)
+  "Convert Lua while to EightBol :perform node."
+  (list :perform :body body :until (list :not cond)))
 
-(defun parse/lua-call (stmt)
-  (destructuring-bind (fn args) stmt
-    (list :call :target fn :args args)))
+(defun parse/lua-for (var from to &optional by body)
+  "Convert Lua for to EightBol :perform node."
+  (let ((stmt (list :perform :body body :varying var :from from :to to)))
+    (when by (setf stmt (append stmt (list :by by))))
+    stmt))
 
-(defun parse/lua-method (stmt)
-  (destructuring-bind (obj method args) stmt
-    (list :call :target method :object obj :args args)))
+(defun parse/lua-call (fn &optional args)
+  "Convert Lua function call to EightBol :call node."
+  (list :call :target fn :args (or args nil)))
 
-(defun parse/lua-set (stmt)
-  (destructuring-bind (lhs rhs) stmt
-    (list :set lhs rhs)))
+(defun parse/lua-method (obj method &optional args)
+  "Convert Lua method call to EightBol :invoke node."
+  (declare (ignore args))
+  (list :invoke obj method))
 
-(defun parse/lua-return (stmt)
-  (destructuring-bind (expr) stmt
-    (list :exit-method :value expr)))
+(defun parse/lua-set (target value)
+  "Convert Lua assignment to EightBol :set node."
+  (list :set target value))
+
+(defun parse/lua-return (&optional value)
+  "Convert Lua return to EightBol :exit-method node."
+  (list :exit-method :value value))
+
+(defun parse/lua-dialogue (text)
+  "Create a dialogue AST node."
+  (list :dialogue :text text))
+
+(defun parse/lua-print (&rest args)
+  "Create a print call AST node."
+  (list :call :target 'print :args args))
+
+(defun parse/lua-input (&rest vars)
+  "Create an input call AST node with address-of wrapped vars."
+  (list :call :target 'input :args (mapcar (lambda (v) (list :address-of v)) vars)))
+
+(defun parse/lua-copy (filename)
+  "Create a copy AST node."
+  (list :copy :name filename))
+
+;;; Main parser entry points
 
 (defun lua-lex (source)
-  "Simple Lua lexer returning tokens from SOURCE string."
-  (declare (ignore source))
-  nil)
+  "Tokenize Lua SOURCE string using tokenize-lua.
+Return a list of token plists."
+  (tokenize-lua source))
 
 (defun parse/lua-program (source)
-  "Parse Lua SOURCE to EIGHTBOL AST."
-  (declare (ignore source))
-  nil)
+  "Parse Lua SOURCE to EightBol AST.
+Returns a :program node with :statements containing all parsed statements."
+  (let ((tokens (lua-lex source)))
+    (when tokens
+      (yacc:parse-with-lexer
+        (lambda ()
+          (if tokens
+              (let ((tok (pop tokens)))
+                (list (intern (string (getf tok :type)))
+                      (getf tok :value)))
+              (list nil nil)))
+        *lua-parser*))))
+
+;;; Export for use by other modules
+(export '(parse/lua-program
+          lua-lex
+          parse/lua-if
+          parse/lua-while
+          parse/lua-for
+          parse/lua-call
+          parse/lua-method
+          parse/lua-set
+          parse/lua-return
+          parse/lua-dialogue
+          parse/lua-print
+          parse/lua-input
+          parse/lua-copy))

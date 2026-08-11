@@ -149,14 +149,23 @@
                                        (:file "lua-parser"
                                         :depends-on ("lua-lexer"))))
 
-                          ;; Objective-C frontend
-                          (:module "frontend-objective"
-                           :depends-on ("package" "ast" "grammar-build")
-                           :components ((:file "objective-lexer")
-                                        (:file "objective-parser"
-                                         :depends-on ("objective-lexer"))))
+                           ;; Objective-C frontend
+                           (:module "frontend-objective"
+                            :depends-on ("package" "ast" "grammar-build")
+                            :components ((:file "objective-lexer")
+                                         (:file "objective-parser"
+                                          :depends-on ("objective-lexer"))))
 
-                          ;; Backend modules
+                           ;; Forth frontend
+                           (:module "frontend-forth"
+                            :depends-on ("package" "ast")
+                            :components ((:file "forth-lexer")
+                                         (:file "forth-parser"
+                                          :depends-on ("forth-lexer"))
+                                         (:file "forth-tests"
+                                          :depends-on ("forth-lexer" "forth-parser"))))
+
+                           ;; Backend modules
                          (:module "backend-6502"
                           :components ((:file "backend-6502-part1")
                                        (:file "backend-6502-part2")
@@ -193,7 +202,7 @@
                          ;; Main entry point
                          (:file "main"
                           :depends-on ("package" "frontend-agi" "frontend-basic" "frontend-cobol"
-                                                 "frontend-burgermistress" "frontend-fortran"
+                                                 "frontend-burgermistress" "frontend-forth" "frontend-fortran"
                                                  "frontend-lingo" "frontend-lua"
                                                  "frontend-muddle" "frontend-objective"
                                                  "frontend-pascal" "frontend-sci"

@@ -1,0 +1,349 @@
+\chapter{Lingo Frontend Language}
+
+This chapter describes the Lingo frontend language as implemented in the EightBol compiler's Lingo lexer and parser. The language is a subset of Lingo tailored for retro game development on 8-bit and 16-bit platforms.
+
+@section Lexical Structure
+
+Lingo source code is composed of tokens derived from the character stream. The lexer recognizes whitespace, comments, identifiers, keywords, literals, and operators.
+
+@subsection Comments
+Comments begin with a semicolon (@code{;}) or an asterisk (@code{*}) at the start of a line (after trimming leading whitespace) and extend to the end of the line. Comments are ignored by the lexer.
+
+@subsection Identifiers
+Identifiers in Lingo follow PascalCase or camelCase conventions. The lexer accepts alphanumeric characters, underscores (@code{_}), dollar signs (@code{$}), and hyphens (@code{-}).
+
+All identifiers are normalized to Header-Case (Title-Case-With-Hyphens) form during AST generation. This ensures consistent naming across the compiled code regardless of the input source format.
+
+@example
+myVariable       @result My-Variable
+PlayerHealth     @result Player-Health
+_InternalName    @result Internal-Name
+HTTPServer       @result HTTP-Server
+@end example
+
+@subsection Keywords (Reserved Words)
+The following tokens are reserved as keywords and cannot be used as identifiers:
+
+@multitable {Column Fractions} .33 .33 .33
+@item ON @tab END @tab IF
+@item THEN @tab ELSE @tab "END IF"
+@item REPEAT @tab WITH @tab FOR
+@item IN @tab TO @tab STEP
+@item UP @tab DOWN @tab WHERE
+@item WHILE @tab UNTIL @tab DO
+@item LOOP @tab EXIT @tab NEXT
+@item PUT @tab GET @tab SET
+@item CALL @tab GOTO @tab GO
+@item FRAME @tab PROPERTIES @tab PROPERTY
+@item TELL @tab "END TELL" @tab METHOD
+@item PROCEDURE @tab CLASS @tab RETURN
+@item PLAY @tab STOP @tab HALT
+@item AND @tab OR @tab NOT
+@item TRUE @tab FALSE @tab NULL
+@item SELF @tab ASSEMBLY @tab ENTRY
+@item COPY @tab AS @tab DATA
+@end multitable
+
+Note: Multi-word keywords such as @code{END IF} and @code{END TELL} are recognized as single tokens during lexing.
+
+@subsection Literals
+Lingo supports numeric and string literals.
+
+@subsubsection Integer Literals
+Integer literals support multiple bases:
+
+@subsubsubsection Decimal Literals
+Decimal (base 10) literals consist of one or more decimal digits:
+
+@example
+42
+0
+123
+@end example
+
+@subsubsubsection Hexadecimal Literals
+Hexadecimal (base 16) literals are prefixed with @code{0x}, @code{0X}, or @code{$}:
+
+@example
+0x1A
+0xFF
+$1F2E
+@end example
+
+@subsubsubsection Octal Literals
+Octal (base 8) literals are prefixed with @code{0o} or @code{0O}:
+
+@example
+0o77
+0O755
+@end example
+
+@subsubsubsection Binary Literals
+Binary (base 2) literals are prefixed with @code{0b}, @code{0B}, or @code{%}:
+
+@example
+0b1010
+0B11110000
+%10101010
+@end example
+
+@subsubsubsection DWORD Literals
+DWORD (32-bit double-word) literals are prefixed with @code{0d}:
+
+@example
+0d12345678
+0d4294967295
+@end example
+
+@subsubsection String Literals
+String literals are enclosed in double quotes (@code{"}). They may contain any sequence of characters except the double quote itself. Escape sequences are not supported.
+
+@example
+"Hello, world!"
+""
+"Level 1"
+@end example
+
+@subsection Operators
+Lingo defines the following operators for use in expressions (though note: the current parser implementation does not fully support arithmetic or logical expressions in all contexts):
+
+@multitable {Column Fractions} .33 .33 .33
+@item + @tab - @tab *
+@item / @tab = @tab ==
+@item <> @tab != @tab <
+@item > @tab <= @tab >=
+@item : @tab , @tab (
+@item ) @tab { @tab }
+@item [ @tab ] @tab . 
+@item ::= 
+@end multitable
+
+@subsection Expressions
+Expressions combine literals, identifiers, and operators to produce values. However, the current frontend parser only supports a limited subset of expressions:
+
+@subsubsection Identifier Expressions
+A bare identifier evaluates to the value of the variable or property with that name.
+
+@example
+playerScore
+myObject
+@end example
+
+@subsubsection Method Call Expressions
+Objects can be invoked using the colon (@code{:}) or dot (@code{.}) syntax, followed by a method name and optional argument list.
+
+@example
+sprite:update()
+player.moveTo(100, 20)
+score.display()
+@end example
+
+@section Definitions
+Lingo programs are composed of definitions that declare methods, procedures, and classes.
+
+@subsection Method Definition
+A method definition declares a procedure that is associated with a class or object and can access instance state.
+
+@onsyntax
+METHOD ident LPAREN param-list? RPAREN statement-list END
+@offsyntax
+
+@example
+METHOD updatePlayer()
+  CALL move()
+  CALL animate()
+END
+@end example
+
+@subsection Procedure Definition
+A procedure definition declares a standalone routine that does not belong to any class.
+
+@onsyntax
+PROCEDURE ident LPAREN param-list? RPAREN statement-list END
+@offsyntax
+
+@example
+PROCEDURE main()
+  SET score :TO 0
+  WHILE playerLives > 0 DO
+    CALL updateGame()
+  END
+END
+@end example
+
+@subsection Class Definition
+A class definition declares a new object type with properties and methods.
+
+@onsyntax
+CLASS ident statement-list END
+@offsyntax
+
+@example
+CLASS Player
+  PROPERTY x y
+  METHOD init()
+    SET x :TO 0
+    SET y :TO 0
+  END
+END
+@end example
+
+Note: The exact syntax for parameter lists and the use of keywords like END may vary; consult the parser for details.
+@subsection Statements
+Lingo programs consist of a sequence of statements. Each statement performs an action such as assignment, control flow, or method invocation.
+
+@subsubsection Assignment Statements
+Assignment statements store values in variables or properties.
+
+@paragraph{SET Statement}
+The @code{SET} statement assigns the value of an expression to a target identifier.
+
+@onsyntax
+SET ident :TO expression
+@offsyntax
+
+@example
+SET score :TO 0
+SET playerName :TO "Hero"
+@end example
+
+@paragraph{MOVE Statement}
+The @code{MOVE} statement assigns the value of an expression to a target identifier, with the source and target reversed compared to @code{SET}.
+
+@onsyntax
+MOVE expression :TO ident
+@offsyntax
+
+@example
+MOVE 0 :TO score
+MOVE "Hero" :TO playerName
+@end example
+
+@subsubsection Property Statement
+The @code{PROPERTY} statement declares a list of identifiers as properties (though its current implementation is limited).
+
+@onsyntax
+PROPERTY identifiers
+@offsyntax
+
+@example
+PROPERTY x y z
+@end example
+
+@subsubsection Call Statement
+The @code{CALL} statement invokes a method or function identified by an expression, with optional arguments.
+
+@onsyntax
+CALL expression LPAREN arg-list? RPAREN
+@offsyntax
+
+@example
+CALL initialize()
+CALL sprite:draw(10, 20)
+CALL Math.max(a, b)
+@end example
+
+@subsubsection Loop Statements
+Lingo provides two loop constructs: @code{FOR} and @code{WHILE}.
+
+@paragraph{FOR Loop}
+The @code{FOR} loop iterates over a numeric range with an optional step size.
+
+@onsyntax
+FOR ident :IN expression :TO expression :STEP expression DO statement-list END
+@offsyntax
+
+@example
+FOR i :IN 1 :TO 10 :STEP 1 DO
+  PUT i
+END
+@end example
+
+@paragraph{WHILE Loop}
+The @code{WHILE} loop repeats as long as a condition expression evaluates to true.
+
+@onsyntax
+WHILE expression DO statement-list END
+@offsyntax
+
+@example
+WHILE player.isAlive DO
+  CALL updateGame()
+END
+@end example
+
+@subsubsection Conditional Statements
+The @code{IF} statement conditionally executes one of two statement lists.
+
+@onsyntax
+IF expression THEN statement-list ELSE statement-list? END IF
+@offsyntax
+
+@example
+IF playerScore > highScore THEN
+  SET highScore :TO playerScore
+ELSE
+  PUT "Try again!"
+END IF
+@end example
+
+@subsubsection Return Statement
+The @code{RETURN} statement exits the current method, optionally returning a value.
+
+@onsyntax
+RETURN expression?
+@offsyntax
+
+@examples
+RETURN
+RETURN playerScore
+@end examples
+
+@subsubsection Goto Statement
+The @code{GOTO} statement transfers control to a labeled position in the code.
+
+@onsyntax
+GOTO ident
+@offsyntax
+
+@example
+GOTO startLoop
+@end example
+
+@section Sample Program
+@example
+PROCEDURE main()
+  SET score :TO 0
+  SET playerLives :TO 3
+
+  WHILE playerLives > 0 DO
+    IF score >= 1000 THEN
+      CALL showMessage("Congratulations! You win!")
+      RETURN
+    END IF
+    
+    CALL updatePlayer()
+    CALL renderScene()
+    
+    IF player.isHit THEN
+      MOVE playerLives - 1 :TO playerLives
+    END IF
+  END
+
+  CALL showMessage("Game Over. Final score: ")
+  CALL showScore(score)
+END
+@end example
+
+@subsection Identifier Normalization
+
+All identifiers in Lingo programs are normalized to Header-Case (Title-Case-With-Hyphens) format when generating AST nodes. This normalization:
+
+@itemize
+@item Converts PascalCase (@code{PlayerHealth}) to Header-Case (@code{Player-Health})
+@item Converts camelCase (@code{playerHealth}) to Header-Case (@code{Player-Health})
+@item Preserves underscores where appropriate but capitalizes subsequent words
+@item Handles acronyms correctly (e.g., @code{HTTPServer} @result{} @code{HTTP-Server})
+@end itemize
+
+Normalization occurs consistently across method names, procedure names, variable names, parameters, and labels. This ensures the generated assembly code uses a canonical naming convention independent of how identifiers were written in the source Lingo code.

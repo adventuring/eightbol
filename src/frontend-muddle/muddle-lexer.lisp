@@ -2,6 +2,7 @@
 ;;; Copyright © 2026 Interworldly Adventuring, LLC
 (in-package :eightbol)
 
+;;; Keywords and operators
 (defparameter *muddle-keyword-alist*
   '((".IF" . :IF)
     (".ELSE" . :ELSE)
@@ -22,6 +23,11 @@
     (".THROW" . :THROW)
     (".CATCH" . :CATCH)
     (".FINALLY" . :FINALLY)
+    (".PRINT" . :PRINT)
+    (".DISPLAY" . :PRINT)
+    (".INPUT" . :INPUT)
+    (".ACCEPT" . :INPUT)
+    (".DIALOGUE" . :DIALOGUE)
     ("AND" . :AND)
     ("OR" . :OR)
     ("NOT" . :NOT))
@@ -51,55 +57,291 @@
                 (or (alphanumericp c) (char= c #\-) (char= c #\_)))
               s)))
 
+(defun muddle-normalize-identifier (s)
+  "Convert identifier S to kebab-case form (e.g., MyVariable -> my-variable).
+   
+   Follows Lisp hyphenated-names convention. Underscores are converted to hyphens."
+  (let ((result '())
+        (prev-lower nil)
+        (consecutive-hyphens 0))
+    (loop for c across s
+          do (cond
+               ((upper-case-p c)
+                (when (and prev-lower (not (zerop (length result))))
+                  (push #\- result)
+                  (setq consecutive-hyphens 0))
+                (push (char-downcase c) result)
+                (setq prev-lower nil))
+               ((lower-case-p c)
+                (push c result)
+                (setq prev-lower t)
+                (setq consecutive-hyphens 0))
+               ((digit-char-p c)
+                (push c result)
+                (setq prev-lower nil)
+                (setq consecutive-hyphens 0))
+               ((or (char= c #\-) (char= c #\_))
+                ;; Avoid double hyphens
+                (unless (plusp consecutive-hyphens)
+                  (push #\- result)
+                  (incf consecutive-hyphens))
+                (setq prev-lower nil))))
+    (coerce (nreverse result) 'string)))
+
+(defun muddle-parse-number (text)
+  "Parse number literal TEXT in all supported formats.
+   
+   Supports:
+   - Decimal: 42, -123
+   - Hex: 0xFF, 0xff, #XFF, h'FF', H'FF', x'FF', X'FF'
+   - Octal: 0o77, #O77, o'77', O'77', q'77', Q'77'
+   - Binary: 0b1010, #B1010, b'1010', B'1010'
+   - Dword: d'VALUE' (32-bit hex word)
+   
+   Returns integer value parsed from the appropriate radix."
+  (let ((upper (string-upcase text)))
+    (cond
+      ;; Dword format: d'VALUE' or D'VALUE'
+      ((and (>= (length upper) 3)
+            (char= (char upper 0) #\D)
+            (char= (char upper 1) #\apostrophe))
+       (let* ((content-end (1- (length upper)))
+              (content (subseq upper 2 content-end)))
+         (parse-integer content :radix 16)))
+      
+      ;; Hex format: 0x... or 0X...
+      ((and (>= (length upper) 3)
+            (char= (char upper 0) #\0)
+            (char-equal (char upper 1) #\x))
+       (parse-integer (subseq upper 2) :radix 16))
+      
+      ;; Hex format: #X...
+      ((and (>= (length upper) 3)
+            (char= (char upper 0) #\#)
+            (char= (char upper 1) #\X))
+       (parse-integer (subseq upper 2) :radix 16))
+      
+      ;; Hex format: h'...' or H'...' or x'...' or X'...'
+      ((and (>= (length upper) 3)
+            (char= (char upper 1) #\apostrophe)
+            (or (char= (char upper 0) #\H)
+                (char= (char upper 0) #\X)))
+       (let* ((content-end (1- (length upper)))
+              (content (subseq upper 2 content-end)))
+         (parse-integer content :radix 16)))
+      
+      ;; Octal format: 0o... or 0O...
+      ((and (>= (length upper) 3)
+            (char= (char upper 0) #\0)
+            (char-equal (char upper 1) #\o))
+       (parse-integer (subseq upper 2) :radix 8))
+      
+      ;; Octal format: #O...
+      ((and (>= (length upper) 3)
+            (char= (char upper 0) #\#)
+            (char= (char upper 1) #\O))
+       (parse-integer (subseq upper 2) :radix 8))
+      
+      ;; Octal format: o'...' or O'...' or q'...' or Q'...'
+      ((and (>= (length upper) 3)
+            (char= (char upper 1) #\apostrophe)
+            (or (char= (char upper 0) #\O)
+                (char= (char upper 0) #\Q)))
+       (let* ((content-end (1- (length upper)))
+              (content (subseq upper 2 content-end)))
+         (parse-integer content :radix 8)))
+      
+      ;; Binary format: 0b... or 0B...
+      ((and (>= (length upper) 3)
+            (char= (char upper 0) #\0)
+            (char-equal (char upper 1) #\b))
+       (parse-integer (subseq upper 2) :radix 2))
+      
+      ;; Binary format: #B...
+      ((and (>= (length upper) 3)
+            (char= (char upper 0) #\#)
+            (char= (char upper 1) #\B))
+       (parse-integer (subseq upper 2) :radix 2))
+      
+      ;; Binary format: b'...' or B'...'
+      ((and (>= (length upper) 3)
+            (char= (char upper 0) #\B)
+            (char= (char upper 1) #\apostrophe))
+       (let* ((content-end (1- (length upper)))
+              (content (subseq upper 2 content-end)))
+         (parse-integer content :radix 2)))
+      
+      ;; Decimal (default)
+      (t
+       (parse-integer text :radix 10)))))
+
 (defun muddle-lex-line (line)
   "Split LINE into token list of (type value) pairs."
   (let ((tokens '())
         (chars (coerce line 'list))
         (i 0))
-    (labels ((peek () (nth i chars))
+    (labels ((peek () (when (< i (length chars)) (nth i chars)))
+             (peek-ahead (n) (when (< (+ i n) (length chars)) (nth (+ i n) chars)))
              (next-char () (prog1 (nth i chars) (incf i)))
-             (eof? () (>= i (length chars)))
+             (end-of-file-p () (>= i (length chars)))
              (skip-whitespace ()
-               (loop while (and (not (eof?)) (find (peek) '(#\Space #\Tab #\Return #\Newline)))
+               (loop while (and (not (end-of-file-p))
+                                (find (peek) '(#\Space #\Tab #\Return #\Newline)))
                      do (next-char)))
              (flush-token (start end type)
                (let ((text (coerce (subseq chars start end) 'string)))
                  (unless (zerop (length text))
                    (push (cons type text) tokens))))
+             (is-hex-digit-p (c)
+               (or (digit-char-p c)
+                   (find (char-upcase c) '(#\A #\B #\C #\D #\E #\F))))
              (scan-number (start)
-               (loop while (and (not (eof?)) (digit-char-p (peek)))
-                     do (next-char))
+               "Scan all number literal formats: 0x, #X, h'...', hex; 0o, #O, o'...', octal;
+                 0b, #B, b'...', binary; d'WORD', dword; decimal."
+               (let ((prefix-start start))
+                 ;; Check for quoted radix prefix: h'XX', o'XX', b'XX', d'XX', etc.
+                 (when (and (>= (- (length chars) i) 3)
+                            (find (char-upcase (peek)) '(#\H #\O #\Q #\B #\D #\X))
+                            (char= (peek-ahead 1) #\apostrophe))
+                   (let ((radix-char (char-upcase (peek))))
+                     (next-char) ;; consume prefix letter
+                     (next-char) ;; consume '
+                     (cond
+                       ((or (char= radix-char #\H) (char= radix-char #\X))
+                        ;; Hex: h'...' or x'...'
+                        (loop while (and (peek) (char/= (peek) #\apostrophe))
+                              do (when (is-hex-digit-p (peek)) (next-char))))
+                       ((or (char= radix-char #\O) (char= radix-char #\Q))
+                        ;; Octal: o'...' or q'...'
+                        (loop while (and (peek) (char/= (peek) #\apostrophe))
+                              do (when (find (peek) '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7))
+                                   (next-char))))
+                       ((char= radix-char #\B)
+                        ;; Binary: b'...'
+                        (loop while (and (peek) (char/= (peek) #\apostrophe))
+                              do (when (find (peek) '(#\0 #\1)) (next-char))))
+                       ((char= radix-char #\D)
+                        ;; Dword: d'VALUE'
+                        (loop while (and (peek) (char/= (peek) #\apostrophe))
+                              do (when (is-hex-digit-p (peek)) (next-char)))))
+                     ;; Consume closing quote
+                     (when (and (peek) (char= (peek) #\apostrophe)) (next-char))))
+                 
+                 ;; Check for # prefix (#X, #O, #B, #D)
+                 (when (and (= i prefix-start) (peek) (char= (peek) #\#))
+                   (next-char)
+                   (when (peek)
+                     (let ((radix-char (char-upcase (peek))))
+                       (cond
+                         ((char= radix-char #\X)
+                          ;; Hex: #X...
+                          (next-char)
+                          (loop while (and (peek) (is-hex-digit-p (peek)))
+                                do (next-char)))
+                         ((char= radix-char #\O)
+                          ;; Octal: #O...
+                          (next-char)
+                          (loop while (and (peek) (find (peek) '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7)))
+                                do (next-char)))
+                         ((char= radix-char #\B)
+                          ;; Binary: #B...
+                          (next-char)
+                          (loop while (and (peek) (find (peek) '(#\0 #\1)))
+                                do (next-char)))
+                         (t
+                          ;; Unknown prefix, back up
+                          (setf i prefix-start))))))
+                 
+                 ;; Check for 0x/0X, 0o/0O, 0b/0B prefix
+                 (when (and (= i prefix-start) (peek) (char= (peek) #\0))
+                   (let ((next (peek-ahead 1)))
+                     (cond
+                       ;; Hex: 0x... or 0X...
+                       ((and next (char-equal next #\x))
+                        (next-char) ;; consume 0
+                        (next-char) ;; consume x
+                        (loop while (and (peek) (is-hex-digit-p (peek)))
+                              do (next-char)))
+                       ;; Octal: 0o... or 0O...
+                       ((and next (char-equal next #\o))
+                        (next-char) ;; consume 0
+                        (next-char) ;; consume o
+                        (loop while (and (peek) (find (peek) '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7)))
+                              do (next-char)))
+                       ;; Binary: 0b... or 0B...
+                       ((and next (char-equal next #\b))
+                        (next-char) ;; consume 0
+                        (next-char) ;; consume b
+                        (loop while (and (peek) (find (peek) '(#\0 #\1)))
+                              do (next-char)))
+                       (t
+                        ;; Could be octal without prefix, consume as decimal
+                        (loop while (and (peek) (digit-char-p (peek)))
+                              do (next-char))))))
+                 
+                 ;; Fallback: consume decimal digits (including sign for negative numbers)
+                 (when (and (= i prefix-start)
+                            (or (digit-char-p (peek))
+                                (and (or (char= (peek) #\-) (char= (peek) #\+))
+                                     (peek-ahead 1)
+                                     (digit-char-p (peek-ahead 1)))))
+                   (when (find (peek) '(#\+ #\-)) (next-char))
+                   (loop while (and (peek) (digit-char-p (peek)))
+                         do (next-char))))
                (flush-token start i :number))
              (scan-string (start)
                (next-char)
-               (loop while (and (not (eof?)) (char/= (peek) (char (coerce (subseq chars start (1+ start)) 'string) 0)))
+               (loop while (and (not (end-of-file-p)) 
+                                (char/= (peek) (char (coerce (subseq chars start (1+ start)) 'string) 0)))
                      do (next-char))
-               (when (not (eof?)) (next-char))
+               (when (not (end-of-file-p)) (next-char))
                (flush-token (1+ start) (1- i) :string))
-              (scan-identifier (start)
-                (loop while (and (not (eof?))
-                                 (or (alphanumericp (peek))
-                                     (char= (peek) #\-)
-                                     (char= (peek) #\_)))
-                      do (next-char))
-                (let ((text (coerce (subseq chars start i) 'string)))
-                  (push (cons (or (cdr (assoc text *muddle-keyword-alist* :test #'string-equal))
-                                  :ident)
-                              text)
-                        tokens))))
-      (loop until (eof?)
+             (scan-identifier (start)
+               (loop while (and (not (end-of-file-p))
+                                (or (alphanumericp (peek))
+                                    (char= (peek) #\-)
+                                    (char= (peek) #\_)
+                                    (char= (peek) #\.)))
+                     do (next-char))
+               (let* ((text (coerce (subseq chars start i) 'string))
+                      (upper-text (string-upcase text))
+                      (keyword (assoc upper-text *muddle-keyword-alist* :test #'string-equal)))
+                 (if keyword
+                     (push (cons (cdr keyword) text) tokens)
+                     ;; Normalize identifier to hyphenated-names
+                     (let ((normalized (muddle-normalize-identifier text)))
+                       (push (cons :ident normalized) tokens))))))
+      (loop until (end-of-file-p)
             do (skip-whitespace)
                (cond
-                 ((eof?) (return))
+                 ((end-of-file-p) (return))
                  ((char= (peek) #\") (scan-string i))
-                 ((char= (peek) #\|) (scan-string i))
+                 ((char= (peek) #\.) (push (cons :deref ".") tokens) (next-char))
+                 ;; Handle quoted numeric formats: h'XX', o'XX', b'XX', d'XX', etc.
+                 ((and (find (char-upcase (peek)) '(#\H #\O #\Q #\B #\D #\X))
+                       (peek-ahead 1)
+                       (char= (peek-ahead 1) #\apostrophe))
+                  (scan-number i))
+                 ;; Handle # prefix for #X, #O, #B, #D
+                 ((char= (peek) #\#) (scan-number i))
+                 ;; Handle 0x, 0o, 0b prefix
+                 ((and (digit-char-p (peek))
+                       (peek-ahead 1)
+                       (find (char-upcase (peek-ahead 1)) '(#\X #\O #\B)))
+                  (scan-number i))
+                 ;; Decimal numbers
                  ((digit-char-p (peek)) (scan-number i))
+                 ;; Identifiers, keywords, and signed numbers
                  ((or (alpha-char-p (peek))
                       (char= (peek) #\-)
                       (char= (peek) #\_)) (scan-identifier i))
+                 ;; Parentheses
+                 ((char= (peek) #\<) (push (cons :lparen "<") tokens) (next-char))
+                 ((char= (peek) #\>) (push (cons :rparen ">") tokens) (next-char))
+                 ;; Operators and delimiters
                  ((char= (peek) #\() (push (cons :lparen "(") tokens) (next-char))
                  ((char= (peek) #\)) (push (cons :rparen ")") tokens) (next-char))
-                 ((char= (peek) #\,) (push (cons :comma ",") tokens) (next-char))
+                 ((char= (peek) #\Comma) (push (cons :comma ",") tokens) (next-char))
                  (t (next-char))))
       (nreverse tokens))))
 

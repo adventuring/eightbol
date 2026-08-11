@@ -1,0 +1,104 @@
+@chapter Stack Backend
+@node Stack Backend
+@section Stack Backend
+
+The stack backend refers to the virtual machine used to execute Fountain scripts in the Phantasia game engine.
+This virtual machine is a 16-bit stack machine, similar to Forth, and is implemented in @file{Source/Code/7800/Routines/Forth.s}.
+
+The machine operates on a parameter stack that holds 16-bit values. The stack grows downward in memory, and the stack pointer points to the next free slot (i.e., the address where the next item will be stored).
+
+Below is a table of the opcodes (bytecodes) recognized by the stack backend, their mnemonic names, and their effect on the parameter stack.
+
+@table @asis
+@item ForthEOL (Done)
+Not a traditional opcode; signals the end of the script. No stack effect.
+
+@item ForthPushWord (PushWord)
+Pushes a 16-bit value from the instruction stream onto the stack.
+Stack effect: @dots{} @rightarrow @dots{}, @var{value}
+Description: Reads two bytes from the instruction stream (little-endian) and pushes them as a 16-bit value.
+
+@item ForthPushByte (PushByte)
+Pushes an 8-bit value from the instruction stream, zero-extended to 16-bit, onto the stack.
+Stack effect: @dots{} @rightarrow @dots{}, @var{value} (where @var{value} is in the range 0-255)
+Description: Reads one byte from the instruction stream and pushes it as a 16-bit value with the high byte zero.
+
+@item ForthSetByte (SetByte)
+Stores the byte at the top of the stack to the memory address given by the next item on the stack.
+Stack effect: @var{value}, @var{address} @rightarrow @dots{}
+Description: Pops an address and a value (16-bit, but only the low byte is used). Stores the low byte of @var{value} at the 16-bit address @var{address}.
+
+@item ForthGetByte (GetByte)
+Fetches a byte from the memory address on top of the stack, zero-extends it to 16-bit, and pushes it.
+Stack effect: @var{address} @rightarrow @dots{}, @var{value} (where @var{value} is in the range 0-255)
+Description: Replaces the address on the stack with the zero-extended byte read from that address.
+
+@item ForthSetWord (SetWord)
+Stores the 16-bit value at the top of the stack to the memory address given by the next item on the stack.
+Stack effect: @var{value}, @var{address} @rightarrow @dots{}
+Description: Pops an address and a value. Stores the 16-bit @var{value} at the 16-bit address @var{address}.
+
+@item ForthGetWord (GetWord)
+Fetches a 16-bit value from the memory address on top of the stack and pushes it.
+Stack effect: @var{address} @rightarrow @dots{}, @var{value}
+Description: Replaces the address on the stack with the 16-bit value read from that address.
+
+@item ForthDup (Dup)
+Duplicates the top item on the stack.
+Stack effect: @var{x} @rightarrow @dots{}, @var{x}, @var{x}
+Description: Pushes a copy of the top item.
+
+@item ForthDrop (Drop)
+Discards the top item on the stack.
+Stack effect: @var{x} @rightarrow @dots{}
+Description: Removes the top item from the stack.
+
+@item ForthExecute (Execute)
+Calls the subroutine whose address is on top of the stack.
+Stack effect: @var{address} @rightarrow @dots{}
+Description: Pops the address and jumps to it. The stack is popped by two bytes (one 16-bit item) before the jump.
+
+@item ForthUnless (Unless)
+Conditional branch: if the top of stack is false (zero), skip the next two bytes in the instruction stream.
+Stack effect: @var{condition} @rightarrow @dots{}
+Description: Pops a 16-bit condition. If the condition is zero, the instruction pointer is advanced by two bytes (to skip a 16-bit offset). Otherwise, execution continues normally.
+
+@item ForthWhen (When)
+Conditional branch: if the top of stack is true (non-zero), continue; otherwise, skip the next two bytes in the instruction stream.
+Stack effect: @var{condition} @rightarrow @dots{}
+Description: Pops a 16-bit condition. If the condition is non-zero, execution continues normally. If the condition is zero, the instruction pointer is advanced by two bytes.
+
+@item ForthGo (Go)
+Unconditional jump: sets the instruction pointer to the address given by the next two bytes in the instruction stream.
+Stack effect: @dots{} @rightarrow @dots{}
+Description: Reads two bytes from the instruction stream (little-endian) and sets the instruction pointer to that address. Does not affect the stack.
+
+@item ForthSwap (Swap)
+Swaps the top two items on the stack.
+Stack effect: @var{x}, @var{y} @rightarrow @dots{}, @var{y}, @var{x}
+Description: Exchanges the top two items on the stack.
+@end table
+
+@subsection Stack Layout and Conventions
+
+The parameter stack is implemented as a circular buffer in RAM, with the stack pointer (@code{ForthStack}) indicating the next free slot.
+The stack stores 16-bit values in little-endian order (low byte at the lower address).
+
+When the stack pointer is @var{SP}, the top of the stack is located at @code{StackMemory + @var{SP} + 2} and @code{StackMemory + @var{SP} + 3} for the low and high bytes, respectively.
+The second item is at @code{StackMemory + @var{SP} + 4} and @code{StackMemory + @var{SP} + 5}.
+
+The stack pointer is decremented by two for each push operation and incremented by two for each pop operation.
+
+Stack underflow and overflow are checked by the interpreter; underflow results in a fault log, and overflow triggers a debug break.
+
+@subsection Usage in Fountain Scripts
+
+Fountain scripts are compiled to sequences of these opcodes by the Fountain compiler (@file{SkylineTool/src/fountain.lisp}).
+The resulting bytecode is executed by the Forth interpreter during gameplay to drive cutscenes, dialogue, and other scripted events.
+
+See the @file{Source/Code/7800/Routines/Forth.s} file for the full implementation of the interpreter and opcodes.
+@subsection Identifier Normalization
+
+The front-end converts identifiers to the canonical PascalCase form (or language-specific form) before AST production.@subsection Identifier Normalization
+
+The front-end converts identifiers to the canonical PascalCase form (or language-specific form) before AST production.

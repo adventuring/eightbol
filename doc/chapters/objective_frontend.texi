@@ -1,0 +1,424 @@
+@chapter Objective-C Frontend Language
+@cindex Objective-C frontend
+@cindex frontend, Objective-C
+
+This chapter describes the Objective-C frontend language as implemented in the EightBol compiler.
+The frontend consists of a lexer and parser that tokenize and parse Objective-C source code
+into an intermediate representation suitable for code generation.
+
+@menu
+* Lexer::
+* Parser::
+@end menu
+
+
+@node Lexer
+@section Lexer
+
+The Objective-C lexer transforms input source code into a stream of tokens.
+It recognizes keywords, operators, literals, and identifiers according to the Objective-C
+subset supported by EightBol.
+
+@menu
+* Keywords::
+* Operators::
+* Literals::
+* Identifiers::
+@end menu
+
+
+@subsection Keywords
+The lexer recognizes the following Objective-C keywords, which are mapped to token symbols:
+
+@table @asis
+@item @code{@@interface} @:: @code{:AT-INTERFACE}
+@item @code{@@implementation} @:: @code{:AT-IMPLEMENTATION}
+@item @code{@@end} @:: @code{:AT-END}
+@item @code{@@property} @:: @code{:AT-PROPERTY}
+@item @code{@@selector} @:: @code{:AT-SELECTOR}
+@item @code{@@protocol} @:: @code{:AT-PROTOCOL}
+@item @code{@public} @:: @code{:AT-PUBLIC}
+@item @code{@private} @:: @code{:AT-PRIVATE}
+@item @code{@protected} @:: @code{:AT-PROTECTED}
+@item @code{@synthesize} @:: @code{:AT-SYNTHESIZE}
+@item @code{@autoreleasepool} @:: @code{:AT-AUTORELEASEPOOL}
+@item @code{@try} @:: @code{:AT-TRY}
+@item @code{@catch} @:: @code{:AT-CATCH}
+@item @code{@finally} @:: @code{:AT-FINALLY}
+@item @code{@throw} @:: @code:AT-THROW}
+@item @code{@return} @:: @code{:AT-RETURN}
+@item @code{if} @:: @code{:IF}
+@item @code{else} @:: @code{:ELSE}
+@item @code{for} @:: @code{:FOR}
+@item @code{while} @:: @code{:WHILE}
+@item @code{do} @:: @code{:DO}
+@item @code{return} @:: @code{:RETURN}
+@item @code{break} @:: @code{:BREAK}
+@item @code{continue} @:: @code{:CONTINUE}
+@item @code{switch} @:: @code{:SWITCH}
+@item @code{case} @:: @code{:CASE}
+@item @code{default} @:: @code{:DEFAULT}
+@item @code{self} @:: @code{:SELF}
+@item @code{super} @:: @code{:SUPER}
+@item @code{nil} @:: @code{:NIL}
+@item @code{yes} @:: @code{:YES}
+@item @code{no} @:: @code{:NO}
+@item @code{true} @:: @code{:TRUE}
+@item @code{false} @:: @code{:FALSE}
+@item @code{id} @:: @code{:ID-TYPE}
+@item @code{void} @:: @code{:VOID}
+@item @code{class} @:: @code{:CLASS}
+@item @code{protocol} @:: @code{:PROTOCOL}
+@end table
+
+These keywords are case-insensitive in the lexer (matched via @code{string-equal}).
+The @code{@} prefixed keywords are recognized only when the lexeme begins with @code{@}.
+Analogous to reader macros in Lisp (e.g., @code{#x} for hexadecimal), the @code{@} prefix
+acts as a directive indicator that triggers special token handling.
+
+@subsection Operators
+The lexer recognizes the following operators, each mapped to a token symbol:
+
+@table @asis
+@item @code{+} @:: @code{:PLUS}
+@item @code{-} @:: @code{:MINUS}
+@item @code{*} @:: @code{:TIMES}
+@item @code{/} @:: @code{:DIVIDE}
+@item @code{%} @:: @code{:MODULO}
+@item @code{=} @:: @code{:EQUAL}
+@item @code{==} @:: @code{:EQUAL-EQUAL}
+@item @code{!=} @:: @code{:NOT-EQUAL} (also @code{<>})
+@item @code{<} @:: @code{:LT}
+@item @code{>} @:: @code{:GT}
+@item @code{<=} @:: @code{:LE}
+@item @code{>=} @:: @code{:GE}
+@item @code{&&} @:: @code{:AND-AND}
+@item @code{||} @:: @code{:OR-OR}
+@item @code{!} @:: @code{:NOT}
+@item @code{[} @:: @code{:LBRACKET}
+@item @code{]} @:: @code{:RBRACKET}
+@item @code{.} @:: @code{:DOT}
+@item @code{:} @:: @code{:COLON}
+@item @code{;} @:: @code{:SEMICOLON}
+@item @code{(} @:: @code{:LPAREN}
+@item @code{)} @:: @code{:RPAREN}
+@item @code{\{} @:: @code{:LBRACE}
+@item @code{\}} @:: @code{:RBRACE}
+@item @code{,} @:: @code{:COMMA}
+@item @code{->} @:: @code{:ARROW}
+@item @code{+=} @:: @code{:PLUS-EQUAL}
+@item @code{-=} @:: @code{:MINUS-EQUAL}
+@item @code{*=} @:: @code{:TIMES-EQUAL}
+@item @code{/=} @:: @code{:DIVIDE-EQUAL}
+@item @code{%=} @:: @code{:MODULO-EQUAL}
+@end table
+
+Operators are matched by exact string comparison. Compound operators (e.g., @code{+=}) are
+recognized as single tokens. The lexer does not support reader macros for operators, but
+the tokenization of operators parallels how Lisp reader macros like @code{#'} (sharp-quote)
+transform input syntax.
+
+@subsection Literals
+The lexer recognizes three types of literals: numbers, strings, and identifiers.
+
+@subsubsection Numbers
+Numeric literals support multiple formats with prefixes, similar to Lisp reader macros like @code{#x} and @code{#o}.
+The lexer scans numeric prefixes to determine the radix (base) of the number, then validates digits accordingly.
+
+@table @asis
+@item @code{Decimal} @:: No prefix required. Examples: @code{42}, @code{100}, @code{3.14}
+@item @code{Hexadecimal} @:: Prefix @code{0x}. Examples: @code{0xFF}, @code{0xDEADBEEF}, @code{0x10}
+@item @code{Octal} @:: Prefix @code{0o}. Examples: @code{0o755}, @code{0o644}, @code{0o77}
+@item @code{Binary} @:: Prefix @code{0b}. Examples: @code{0b1010}, @code{0b11110000}, @code{0b101}
+@item @code{Dword (Extended Decimal)} @:: Prefix @code{0d}. Examples: @code{0d42}, @code{0d1000}. Supports floating-point notation.
+@end table
+
+All numeric formats produce a @code{:NUMBER} token. For example:
+@itemize
+@item @code{42} @→ @code{(:NUMBER "42")}
+@item @code{0xFF} @→ @code{(:NUMBER "0xFF")}
+@item @code{0o755} @→ @code{(:NUMBER "0o755")}
+@item @code{0b1010} @→ @code{(:NUMBER "0b1010")}
+@end itemize
+
+The lexer validates that hexadecimal literals contain only 0-9 and A-F (case-insensitive),
+octal literals contain only 0-7, and binary literals contain only 0-1. Invalid digits for a given
+format result in a scan error.
+
+@subsubsection Strings
+String literals are enclosed in double quotes (@code{"..."}). The lexer scans from the
+opening quote to the closing quote, handling escaped quotes (@code{\"}) within the string.
+The token value excludes the surrounding quotes. For example, @code{"hello"} produces
+(@code{:STRING} . @code{"hello"}).
+
+@subsection Identifiers
+Identifiers consist of alphanumeric characters and underscores, and must not begin with a
+digit. The lexer recognizes identifiers that are not keywords as @code{:IDENT} tokens.
+
+@subsubsection Identifier Normalization
+The frontend automatically normalizes all identifiers to @strong{PascalCase} during lexing,
+consistent with the Eightbol naming convention (Header-Case). This ensures uniform identifier
+style in the generated AST regardless of source convention.
+
+Normalization rules:
+@itemize
+@item The first character is converted to uppercase.
+@item Subsequent characters are converted to lowercase.
+@item Leading and trailing underscores are trimmed.
+@end itemize
+
+Examples:
+@itemize
+@item @code{myVariable} @→ @code{Myvariable}
+@item @code{MY_CONST} @→ @code{My_const}
+@item @code{_private} @→ @code{Private}
+@item @code{className} @→ @code{Classname}
+@end itemize
+
+Objective-C conventionally uses @code{camelCase} for variables and @code{UpperCamelCase}
+for class names in source code, but the frontend converts all identifiers to PascalCase
+in AST nodes for consistency with the Eightbol code generation pipeline.
+
+
+@node Parser
+@section Parser
+
+The Objective-C parser transforms a token stream into an EightBol abstract syntax tree (AST).
+It implements a subset of Objective-C suitable for 8-bit/16-bit targets, mapping constructs
+to EightBol primitives like @code{:set}, @code{:call}, @code{:method}, and control structures.
+
+@menu
+* Grammar Overview::
+* Program Structure::
+* Data Definitions::
+* Statements::
+* Expressions::
+* Control Structures::
+@end menu
+
+
+@subsection Grammar Overview
+The parser is defined using YACC-like syntax in Common Lisp. The start symbol is
+@code{objective-program}. The parser recognizes terminals for punctuation, operators,
+keywords, and literals (numbers, strings, identifiers).
+
+Precedence levels (from lowest to highest):
+@enumerate
+@item @code{or} (@code{||})
+@item @code{and} (@code{&&})
+@item @code{not} (@code{!})
+@item Equality and inequality (@code{=!=}, @code{<}, @code{<=}, @code{>}, @code{>=})
+@item Addition and subtraction (@code{+}, @code{-})
+@item Multiplication and division (@code{*}, @code{/})
+@item Assignment (@code{=}) (right-associative)
+@end enumerate
+
+
+@subsection Program Structure
+An @code{objective-program} consists of optional comments followed by an
+@code{objective-chunk}. The chunk combines data definitions and statements.
+
+@example
+(objective-program
+  (comments* objective-chunk
+    (lambda (_c chunk _end)
+      (declare (ignore _c _end))
+      chunk)))
+@end example
+
+
+@subsection Data Definitions
+Data definitions declare variables and arrays. They are parsed into @code{:dd} (data
+definition) AST nodes.
+
+@subsubsection Variable Declaration
+@code{obj-var-decl> parses a variable declaration of the form:
+@example
+keyword-local ident = number
+@end example
+where @code{keyword-local} is a locally scoped variable keyword (e.g., @code{local} in
+EightBol), @code{ident} is the variable name, and @code{number} is the initial value.
+Produces:
+@example
+(list :dd :level 01 :label <var> :attr (list :usage :binary :value <val>))
+@end example
+
+@subsubsection Array Declaration
+@code{obj-array-decl> parses an array declaration of the form:
+@example
+keyword-local ident = left-brace number-list right-brace
+@end example
+where @code{number-list} is a comma-separated list of numbers.
+Produces:
+@example
+(list :dd :level 01 :label <arr> :attr (list :usage :binary :occurs (list 'length <elements>)))
+@end example
+
+
+@subsection Statements
+The parser recognizes six types of statements, each mapped to an EightBol AST node.
+
+@subsubsection If Statement
+@code{if-statement> parses:
+@example
+keyword-if condition keyword-then block keyword-else else-block keyword-end
+@end example
+Produces (via @code{parse/obj-if}):
+@example
+(list :if :condition <cond> :then <blk> :else <else-block>)
+@end example
+Note: The @code{else} clause is optional in the grammar but required in this production.
+
+@subsubsection While Statement
+@code{while-statement> parses:
+@example
+keyword-while condition keyword-do block keyword-end
+@end example
+Produces (via @code{parse/obj-while}):
+@example
+(list :while :cond <cond> :body <blk>)
+@end example
+Maps to EightBol @code{:perform :until} construct.
+
+@subsubsection For Statement
+@code{for-statement> parses:
+@example
+keyword-for ident = number keyword-to number keyword-do block keyword-end
+@end example
+Produces (via @code{parse/obj-for}):
+@example
+(list :for :var <var> :start <start> :end <end> :body <blk>)
+@end example
+Maps to EightBol @code{:perform :varying} construct.
+
+@subsubsection Call Statement
+@code{call-statement> parses:
+@example
+ident left-paren args right-paren
+@end example
+Produces (via @code{parse/obj-call}):
+@example
+(list :call :target <fn> :args <args>)
+@end example
+
+@subsubsection Method Statement
+@code{method-statement> parses:
+@example
+ident colon ident left-paren args right-paren
+@end example
+Produces (via @code{parse/obj-method}):
+@example
+(list :method :object <obj> :target <method> :args <args>)
+@end example
+Represents Objective-C message sending (e.g., @code{[obj method:arg]}).
+
+@subsubsection Set Statement
+@code{set-statement> parses:
+@example
+ident = expr
+@end example
+Produces (via @code{parse/obj-set}):
+@example
+(list :set :target <lhs> :value <rhs>)
+@end example
+
+@subsubsection Return Statement
+@code{return-statement> parses:
+@example
+keyword-return expr?
+@end example
+Produces (via @code{parse/obj-return}):
+@example
+(list :exit-method :value <expr>)
+@end example
+Note: The expression is optional; if absent, @code{:value} is @code{nil}.
+
+
+@subsection Expressions
+Expressions are used in statements and include literals, identifiers, and binary operations.
+
+The @code{expr> nonterminal produces:
+@itemize
+@item @code{number} @-> @code{:NUMBER} token value
+@item @code{ident} @-> @code{:IDENT} token value
+@item @code{string} @-> @code{:STRING} token value
+@item Binary operations: @code{expr :op expr} for @code{:+}, @code{:-}, @code{:*}, @code{:/},
+  @code{:eq} (@code{==}), @code{:neq} (@code{!=}), @code{:lt} (@code{<}), @code{:le} (@code{<=}),
+  @code{:gt} (@code{>}), @code{:ge} (@code{>=})
+@end itemize
+
+For example, @code{x + 5 * y> parses as:
+@example
+(expr :plus (ident "x") (expr :times (number "5") (ident "y")))
+@end example
+
+
+@subsection Control Structures
+Control structures are implemented as statements that alter flow of execution.
+
+@subsubsection Conditional (@code{if})
+The @code{if> statement evaluates a condition and executes one of two blocks.
+Condition evaluation follows standard truthiness: @code{nil} or @code{false} is false;
+all other values are true.
+
+@subsubsection Loops (@code{while}, @code{for})
+The @code{while> loop repeats a block while a condition is true.
+The @code{for> loop iterates a variable from a start value to an end value (inclusive).
+Both map to EightBol @code{:perform> constructs with @code{:until> and @code{:varying> respectively.
+
+@subsubsection Jump Statements (@code{break}, @code{continue})
+Note: The current grammar does not explicitly include @code{break> or @code{continue> statements.
+These would need to be added to the @code{objective-statement> rule to be supported.
+Analogous to how Lisp reader macros like @code{#.> (read-time evaluation) affect parsing,
+adding such statements would require extending the grammar.
+
+
+@node Analogies to Reader Macros
+@section Analogies to Reader Macros
+
+In Lisp, reader macros (e.g., @code{#x} for hexadecimal, @code{#' > for function
+notation) extend the reader's tokenization syntax. Similarly, the Objective-C frontend
+uses specific patterns to trigger special handling:
+
+@itemize
+@item The @code{@> prefix (as in @code{@interface>) acts like a reader macro keyword,
+  signaling Objective-C directives.
+@item Compound operators (e.g., @code{+=>) are single tokens, analogous to how
+  @code{#> + > might be a reader macro for increment-if-bound.
+@item String delimiters (@code{"..."}) function like the @code{#\" > reader macro
+  for canonical strings in some Lisp implementations.
+@end itemize
+
+These analogies help readers familiar with Lisp understand how the frontend
+recognizes and processes special syntax patterns.
+
+
+@node Unsupported Features
+@section Unsupported Features
+
+The Objective-C frontend intentionally omits certain features to match EightBol's
+8-bit/16-bit target constraints:
+
+@itemize
+@item Preprocessor directives (beyond @code{@> keywords)
+@item Exception handling (@code{@try>, @code{@catch>, @code{@finally>, @code{@throw>)
+@item Automatic Reference Counting (ARC)
+@item Blocks and Grand Central Dispatch
+@item Non-floating-point numeric types (e.g., @code{float>, @code{double>)
+@item Variadic methods
+@item Properties with custom getters/setters (beyond @code{@synthesize>)
+@item Dynamic method resolution (@code{resolveInstanceMethod:>)
+@end itemize
+
+These exclusions ensure the generated code remains efficient for resource-constrained
+systems. Features like exception handling are replaced with fault logging (see
+@code{:log-fault> nodes in the AST).
+
+@node Conclusion
+@section Conclusion
+
+The Objective-C frontend provides a practical subset of Objective-C for retro game
+development. By mapping Objective-C constructs to EightBol primitives, it enables
+object-oriented programming while respecting the limitations of 8-bit/16-bit CPUs.
+The lexer and parser are designed for simplicity and efficiency, with clear
+analogies to Lisp reader macros for those familiar with that ecosystem.

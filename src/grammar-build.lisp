@@ -227,10 +227,6 @@
   "Build a :fortran-compute AST node with explicit result-type."
   (list :fortran-compute :target target :expression expression :result-type result-type))
 
-(defun make-fortran-declare-node (name &key type init)
-  "Build a :fortran-declare AST node for typed variable declarations."
-  (list :fortran-declare :name name :type type :init init))
-
 (defun make-fortran-do-node (var from to &key by stmts)
   "Build a :fortran-do AST node for DO loops."
   (list :fortran-do :var var :from from :to to :by by :stmts stmts))
@@ -243,6 +239,27 @@
   "Build a :fortran-arithmetic AST node with type info."
   (list :fortran-arithmetic :op op :left left :right right :result-type result-type))
 
-(defun make-fortran-type-node (name type &key fields)
-  "Build a :fortran-type AST node for structured type definitions."
-  (list :fortran-type :name name :type type :fields fields))
+;;; Dialogue, Print, and Input AST nodes (Prolog-like structure)
+
+(defun make-dialogue-node (name &key statements goals)
+  "Build a :dialogue AST node with Prolog-like structure.
+NAME is the dialogue identifier; STATEMENTS are the body; GOALS are optional query goals."
+  (list* :dialogue :name name
+         (when statements `(:statements ,statements))
+         (when goals `(:goals ,goals))))
+
+(defun make-print-node (expressions)
+  "Build a :print AST node.
+EXPRESSIONS is a list of expressions to output."
+  (list :print :expressions (ensure-list expressions)))
+
+(defun make-input-node (variables &key prompt)
+  "Build an :input AST node with optional prompt.
+VARIABLES is a list of identifiers to read; PROMPT is optional greeting text."
+  (list* :input :variables (ensure-list variables)
+         (when prompt `(:prompt ,prompt))))
+
+(defun make-prolog-goal (functor &rest args)
+  "Build a Prolog-like goal structure (functor args…).
+FUNCTOR is the goal predicate name; ARGS are arguments."
+  (list* (intern functor) args))

@@ -58,7 +58,7 @@ Handles labels (IDENTIFIER:), numbers, strings, identifiers, and operators."
             ((char= c #\;)
              (flush)
              (push (list :semicolon nil) tokens))
-            ((char= c #\,)
+            ((char= c #\Comma)
              (flush)
              (push (list :comma nil) tokens))
             ((char= c #\()

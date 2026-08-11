@@ -8,7 +8,7 @@
               program subroutine function end return stop call
               goto if then else do read write print open close
               real integer logical character complex type data
-              parameter dimension common equivalence include
+              parameter dimension common equivalence include copy
               while until and or not true false
               class method instance new delete invoke super self procedure
               number string ident))))
@@ -41,15 +41,15 @@
   (make-call-node target))
 
 (defun fortran-parse-instantiation (class-name init-args)
-  (list :fortran-new :target class-name :args init-args))
+  (make-invoke :object class-name :method "New" :using init-args))
 
 (defun fortran-parse-invoke (obj method args)
-  (declare (ignore args))
-  (list :invoke :target obj :method method))
+   (declare (ignore args))
+   (list :invoke :object obj :method method))
 
 (defun fortran-parse-create-method (name parameters body)
   (declare (ignore parameters body))
-  (list :fortran-method :method-name name))
+  (make-method-node name :statements '()))
 
 (defun fortran-parse-super-call (method)
   (list :sup-call :method method))
@@ -58,10 +58,33 @@
   (list :goto :target label))
 
 (defun fortran-parse-return ()
-  (make-goback-node))
+   (make-goback-node))
+
+(defun fortran-parse-copy (filename)
+   (list :copy :name filename))
 
 (defun fortran-parse-stop ()
   (make-stop-run-node))
+
+(defun fortran-parse-print (arguments &optional format)
+   "Parse PRINT statement. Emit a CALL to PrintRoutine."
+   (declare (ignore format))
+   (make-call-node "PrintRoutine"))
+
+(defun fortran-parse-read (variables &optional format unit)
+   "Parse READ statement. Emit a CALL to ReadRoutine."
+   (declare (ignore variables format unit))
+   (make-call-node "ReadRoutine"))
+
+(defun fortran-parse-write (unit arguments &optional format)
+   "Parse WRITE statement. Emit a CALL to WriteRoutine."
+   (declare (ignore arguments format unit))
+   (make-call-node "WriteRoutine"))
+
+(defun fortran-parse-input (arguments)
+   "Parse INPUT statement (dialogue). Emit a CALL to InputRoutine."
+   (declare (ignore arguments))
+   (make-call-node "InputRoutine"))
 
 (defun fortran-parse-if-then (condition then-stmts)
   (make-if-node condition then-stmts '()))
@@ -70,24 +93,26 @@
   (make-if-node condition then-stmts else-stmts))
 
 (defun fortran-parse-do-loop (var from to by stmts)
-  (make-perform-node (format nil "DO-~A" var)
-                     :varying var
-                     :from from
-                     :by (or by 1)
-                     :until (list '> var to)
-                     :stmts stmts))
+   (make-perform-node (format nil "DO-~A" var)
+                      :varying var
+                      :from from
+                      :by (or by 1)
+                      :until (list '> var to)
+                      :body stmts))
 
 (defun fortran-build-literal (value) value)
 (defun fortran-build-string (value) value)
-(defun fortran-build-identifier (name) (string-upcase name))
+(defun fortran-build-identifier (name)
+  "Normalize identifier NAME to PascalCase."
+  (fortran-normalize-identifier name))
 
 (defun fortran-build-arithmetic (op left right)
-  (ecase op
-    (:plus (list :add :from left :to right :giving nil))
-    (:minus (list :subtract :subtrahend right :from left :giving nil))
-    (:times (list :multiply :by left :multiplier right :giving nil))
-    (:divide (list :divide :numerator left :denominator right :giving nil))
-    (:power (list :multiply :by left :multiplier right :giving nil))))
+   (ecase op
+     (:plus (list :add :from left :to right :giving nil))
+     (:minus (list :subtract :subtrahend right :from left :giving nil))
+     (:times (list :multiply :by left :multiplier right :giving nil))
+     (:divide (list :divide :numerator left :denominator right :giving nil))
+     (:power (fortran-unsupported "power operator (**)"))))
 
 (defun fortran-build-relational (op left right)
   (ecase op
@@ -178,15 +203,20 @@
           (declare (ignore _ eq-keyword comma-keyword enddo-keyword))
           (fortran-parse-do-loop var from to opt-step stmts)))
 
-      (read ident arg-list
-        (lambda (_ u args)
-          (declare (ignore _ u))
-          (fortran-unsupported "READ")))
+       (read ident arg-list
+         (lambda (_ u args)
+           (declare (ignore _))
+           (fortran-parse-read args nil u)))
 
-      (write ident format arg-list
-        (lambda (_ u f args)
-          (declare (ignore _ u f))
-          (fortran-unsupported "WRITE")))
+       (write ident format arg-list
+         (lambda (_ u f args)
+           (declare (ignore _))
+           (fortran-parse-write u args f)))
+
+       (print arg-list
+         (lambda (_ args)
+           (declare (ignore _))
+           (fortran-parse-print args)))
 
       (data ident :EQUAL expression
         (lambda (_ n eq-keyword e)
@@ -213,15 +243,20 @@
           (declare (ignore _ open-paren close-paren))
           (fortran-unsupported "DIMENSION")))
 
-      (include string
-        (lambda (_ f)
-          (declare (ignore _))
-          (fortran-unsupported "INCLUDE")))
+       (include string
+         (lambda (_ f)
+           (declare (ignore _))
+           (fortran-unsupported "INCLUDE")))
 
-      (class ident end ident
-        (lambda (_ name _2 body _3 end-name)
-          (declare (ignore _ _2 _3 end-name))
-          (list :fortran-class :name name)))
+       (copy string
+         (lambda (_ f)
+           (declare (ignore _))
+           (fortran-parse-copy f)))
+
+       (class ident end ident
+           (lambda (_ name _2 body _3 end-name)
+             (declare (ignore _ _2 _3 end-name))
+             (make-method-node name :statements body)))
 
       (class method ident colon ident parameter-list stmt-list endmethod
         (lambda (_1 _2 mname _3 mname2 params body _4)
@@ -312,9 +347,14 @@
       (expression ge expression
         (lambda (l _ r) (declare (ignore _)) (fortran-build-relational :greater-equal l r))))
 
-    (condition (expression))
+     (condition (expression))
 
-    (keyword
+     (format
+       (string (lambda (s) s))
+       (number (lambda (n) n))
+       ())
+
+     (keyword
       (program (constantly :PROGRAM))
       (subroutine (constantly :SUBROUTINE))
       (function (constantly :FUNCTION))
@@ -337,9 +377,10 @@
       (parameter (constantly :PARAMETER))
       (dimension (constantly :DIMENSION))
       (common (constantly :COMMON))
-      (equivalence (constantly :EQUIVALENCE))
-      (include (constantly :INCLUDE))
-      (while (constantly :WHILE))
+       (equivalence (constantly :EQUIVALENCE))
+       (include (constantly :INCLUDE))
+       (copy (constantly :COPY))
+       (while (constantly :WHILE))
       (until (constantly :UNTIL))
       (and (constantly :AND))
       (or (constantly :OR))

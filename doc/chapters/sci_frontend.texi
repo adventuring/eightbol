@@ -1,0 +1,697 @@
+@chapter SCI Frontend Language
+
+This chapter documents the SCI (Sierra Creative Interpreter) frontend language as processed by the EightBol compiler. The SCI frontend provides a Lisp-like syntax with imperative constructs for game logic programming.
+
+@section Lexical Elements
+
+The SCI frontend recognizes the following lexical elements:
+
+@subsection Identifiers
+Identifiers in SCI begin with a letter or underscore, followed by zero or more letters, digits, or underscores. They are used for variable names, function names, and labels.
+
+@subsection Keywords
+The following reserved keywords have special meaning in SCI:
+@table @asis
+@item if
+@item else
+@item then
+@item while
+@item for
+@item foreach
+@item break
+@item continue
+@item return
+@item define
+@item setq
+@item set
+@item get
+@item put
+@item call
+@item proc
+@item method
+@item class
+@item instance
+@item send
+@item super
+@item self
+@item print
+@item format
+@item strcat
+@item strlen
+@item substr
+@item upcase
+@item downcase
+@item numtostr
+@item strtonum
+@end table
+
+@subsection Operators
+SCI supports the following operators:
+@table @asis
+@item + (addition)
+@item - (subtraction)
+@item * (multiplication)
+@item / (division)
+@item = (equality)
+@item <> (inequality)
+@item < (less than)
+@item > (greater than)
+@item <= (less than or equal)
+@item >= (greater than or equal)
+@item & (logical AND)
+@item | (logical OR)
+@item ! (logical NOT)
+@end table
+
+@subsection Literals
+@table @asis
+@item Decimal literals: Sequences of digits (0-9) representing decimal numbers (e.g., @code{123}, @code{0}).
+@item Hexadecimal literals: @code{#x} prefix followed by hexadecimal digits (0-9, A-F) (e.g., @code{#xFF}, @code{#x1A2B}).
+@item Octal literals: @code{#o} prefix followed by octal digits (0-7) (e.g., @code{#o377}, @code{#o755}).
+@item Binary literals: @code{#b} prefix followed by binary digits (0-1) (e.g., @code{#b1010}, @code{#b11110000}).
+@item Dword literals: @code{#d"} followed by a four-character ASCII string and @code{"} (e.g., @code{#d"WORD"}, @code{#d"TEST"}). The ASCII codes are combined into a 32-bit value: first character in high byte, last character in low byte.
+@item String literals: Text enclosed in double quotes (e.g., @code{"Hello, world!"}).
+@end table
+
+@section Control Structures
+
+@subsection Conditional Statements
+@subsubsection if-then-else
+The @code{if} statement conditionally executes code based on a boolean expression.
+
+@subsection Inputs
+@itemize @bullet
+@item Condition: An expression evaluating to true (non-zero) or false (zero).
+@item Then-form: One or more statements to execute if condition is true.
+@item Else-form (optional): One or more statements to execute if condition is false.
+@end itemize
+
+@subsection Outputs
+None directly; the construct affects program flow.
+
+@subsection Processing
+Evaluates the condition. If true, executes the then-form; if false and an else-form is present, executes the else-form.
+
+@subsection Side-Effects
+Depends on the executed statements; the conditional itself has no side-effects beyond flow control.
+
+@example
+(if (< score 100)
+    (print "Keep going!")
+    (print "You win!"))
+@end example
+
+@subsubsection while
+The @code{while} loop repeatedly executes a body while a condition remains true.
+
+@subsection Inputs
+@itemize @bullet
+@item Condition: Boolean expression evaluated before each iteration.
+@item Body: One or more statements to execute per iteration.
+@end itemize
+
+@subsection Outputs
+None directly.
+
+@subsection Processing
+Evaluates condition; if true, executes body and repeats; if false, exits loop.
+
+@subsection Side-Effects
+Depends on the loop body; the loop construct itself has no side-effects.
+
+@example
+(while (< attempts 3)
+    (send player 'try-action)
+    (setq attempts (+ attempts 1)))
+@end example
+
+@subsubsection for
+The @code{for} loop iterates a variable from a start value to an end value (inclusive), incrementing by 1 each time.
+
+@subsection Inputs
+@itemize @bullet
+@item Variable: Identifier to hold the current iteration value.
+@item Start: Initial value for the variable.
+@item End: Final value for the variable (loop stops after this value).
+@item Body: One or more statements to execute per iteration.
+@end itemize
+
+@subsection Outputs
+None directly.
+
+@subsection Processing
+Initializes variable to start value. Before each iteration, checks if variable <= end; if true, executes body and increments variable by 1; if false, exits loop.
+
+@subsection Side-Effects
+Modifies the loop variable; depends on the loop body.
+
+@example
+(for i 0 9
+    (print i))
+@end example
+
+@subsubsection foreach
+The @code{foreach} loop iterates over a collection (though the current SCI frontend implementation treats it similarly to @code{for} due to parser limitations; see implementation notes).
+
+@subsection Inputs
+@itemize @bullet
+@item Variable: Identifier to hold the current element.
+@item Collection: Expression representing the iterable (currently not fully implemented).
+@item Body: One or more statements to execute per iteration.
+@end itemize
+
+@subsection Outputs
+None directly.
+
+@subsection Processing
+Currently parsed but not fully implemented; intended to iterate over elements of a collection.
+
+@subsection Side-Effects
+Depends on implementation.
+
+@subsection Note
+The @code{foreach} keyword is reserved but the current implementation does not provide distinct functionality from @code{for}. Future versions may extend it to handle arrays or lists.
+
+@subsection Jump Statements
+@subsubsection break
+The @code{break} statement immediately exits the nearest enclosing loop (@code{while}, @code{for}, or @code{foreach}).
+
+@subsection Inputs
+None.
+
+@subsection Outputs
+None.
+
+@subsection Processing
+Transfers control to the statement following the innermost loop.
+
+@subsection Side-Effects
+None; may prevent execution of loop cleanup code if present.
+
+@example
+(while t
+    (if (game-over?)
+        (break))
+    (update-game))
+@end example
+
+@subsubsection continue
+The @code{continue} statement skips the remainder of the current loop iteration and proceeds to the next iteration.
+
+@subsection Inputs
+None.
+
+@subsection Outputs
+None.
+
+@subsection Processing
+Transfers control to the loop's condition evaluation (for @code{while}) or increment step (for @code{for}/@code{foreach}).
+
+@subsection Side-Effects
+None; may skip intended loop body processing.
+
+@example
+(for i 0 9
+    (if (= (mod i 2) 0)
+        (continue))
+    (print i)) ; Prints odd numbers 1,3,5,7,9
+@end example
+
+@subsubsection return
+The @code{return} statement exits the current procedure and optionally returns a value.
+
+@subsection Inputs
+@itemize @bullet
+@item Value (optional): Expression to return as the procedure result.
+@end itemize
+
+@subsection Outputs
+The procedure returns the value of the expression (if provided) or undefined.
+
+@subsection Processing
+Evaluates the optional expression and returns from the current procedure.
+
+@subsection Side-Effects
+None; terminates procedure execution.
+
+@example
+(define (add a b)
+    (return (+ a b)))
+@end example
+
+@section Procedures and Modularity
+
+@subsubsection define
+The @code{define} statement declares a new procedure.
+
+@subsection Inputs
+@itemize @bullet
+@item Name: Identifier for the procedure.
+@item Parameters: List of identifiers for formal parameters (currently empty in parser; see implementation).
+@item Body: One or more statements comprising the procedure body.
+@end itemize
+
+@subsection Outputs
+Defines a callable procedure.
+
+@subsection Processing
+Creates a procedure object associated with the given name.
+
+@subsection Side-Effects
+Adds the procedure to the current scope; may overwrite existing definitions.
+
+@example
+(define (main)
+    (print "Hello, SCI!"))
+@end example
+
+@subsubsection call
+The @code{call} statement invokes a procedure by name.
+
+@subsection Inputs
+@itemize @bullet
+@item Function: Identifier of the procedure to call.
+@item Arguments: List of expressions to pass as parameters (currently not implemented in parser).
+@end itemize
+
+@subsection Outputs
+Returns the result of the called procedure.
+
+@subsection Processing
+Evaluates arguments (if any), transfers control to the procedure, and returns the result.
+
+@subsection Side-Effects
+Depends on the called procedure.
+
+@example
+(call main)
+@end example
+
+@section Object-Oriented Features
+
+@subsubsection class
+The @code{class} statement declares a new class.
+
+@subsection Inputs
+@itemize @bullet
+@item Name: Identifier for the class.
+@item Body: Class definition containing variables and methods (currently not fully implemented).
+@end itemize
+
+@subsection Outputs
+Defines a new class type.
+
+@subsection Processing
+Creates a class object in the current scope.
+
+@subsection Side-Effects
+Adds the class to the current scope; may enable instance creation.
+
+@example
+(class GameState
+    ;; Variables and methods would go here
+)
+@end example
+
+@subsubsection instance
+The @code{instance} statement creates an instance of a class.
+
+@subsection Inputs
+@itemize @bullet
+@item Class: Identifier of the class to instantiate.
+@item Name: Identifier for the new instance variable.
+@end itemize
+
+@subsection Outputs
+Creates a new object of the specified class.
+
+@subsection Processing
+Allocates memory for the instance and initializes it (if applicable).
+
+@subsection Side-Effects
+Allocates memory; may invoke constructor logic.
+
+@example
+(instance GameState player1)
+@end example
+
+@subsubsection send
+The @code{send} statement invokes a method on an object.
+
+@subsection Inputs
+@itemize @bullet
+@item Object: Expression evaluating to an object instance.
+@item Method: Identifier of the method to invoke.
+@item Arguments: List of expressions to pass as parameters.
+@end itemize
+
+@subsection Outputs
+Returns the result of the method invocation.
+
+@subsection Processing
+Evaluates the object and arguments, locates the method in the object's class, and invokes it.
+
+@subsection Side-Effects
+Depends on the method; may modify object state.
+
+@example
+(send player 'move-to 10 20)
+@end example
+
+@subsubsection super
+The @code{super} keyword refers to the parent class of the current object, used within methods to call overridden methods.
+
+@subsection Inputs
+Used as part of a method call (e.g., @code{(send super 'initialize)}).
+
+@subsection Outputs
+Refers to the parent class object.
+
+@subsection Processing
+Resolves to the parent class in the inheritance chain.
+
+@subsection Side-Effects
+None; depends on usage in method calls.
+
+@subsubsection self
+The @code{self} keyword refers to the current object instance, used within methods.
+
+@subsection Inputs
+Used as an expression representing the current object.
+
+@subsection Outputs
+The current object instance.
+
+@subsection Processing
+Evaluates to the object whose method is currently executing.
+
+@subsection Side-Effects
+None.
+
+@example
+(define (initialize)
+    (send self 'set-position 0 0))
+@end example
+
+@section Built-in Functions
+
+@subsubsection print
+The @code{print} function outputs text to the console or display.
+
+@subsection Inputs
+@itemize @bullet
+@item Text: String literal or expression evaluating to a string.
+@end itemize
+
+@subsection Outputs
+None; produces side-effect of displaying text.
+
+@subsection Processing
+Converts the argument to a string (if necessary) and renders it.
+
+@subsection Side-Effects
+Updates the display or console output.
+
+@example
+(print "Score: " (numtostr score))
+@end example
+
+@subsubsection format
+The @code{format} function produces formatted output similar to @code{printf}.
+
+@subsection Inputs
+@itemize @bullet
+@item Format string: String with placeholders (e.g., ~d for decimal).
+@item Arguments: Values to substitute into the format string.
+@end itemize
+
+@subsection Outputs
+None; produces formatted text output.
+
+@subsection Processing
+Substitutes arguments into placeholders and outputs the result.
+
+@subsection Side-Effects
+Updates display or console.
+
+@example
+(format "Level: ~d, Lives: ~d" level lives)
+@end example
+
+@subsubsection strcat
+The @code{strcat} function concatenates two or more strings.
+
+@subsection Inputs
+@itemize @bullet
+@item Strings: Two or more string expressions to concatenate.
+@end itemize
+
+@subsection Outputs
+Returns a new string containing the concatenated result.
+
+@subsection Processing
+Combines the input strings in order.
+
+@subsection Side-Effects
+None; may allocate memory for the result string.
+
+@example
+(setq greeting (strcat "Hello, " name "!"))
+@end example
+
+@subsubsection strlen
+The @code{strlen} function returns the length of a string.
+
+@subsection Inputs
+@itemize @bullet
+@item String: String expression to measure.
+@end itemize
+
+@subsection Outputs
+Returns an integer representing the number of characters in the string.
+
+@subsection Processing
+Counts the characters in the string.
+
+@subsection Side-Effects
+None.
+
+@example
+(if (> (strlen name) 10)
+    (print "Name too long!"))
+@end example
+
+@subsubsection substr
+The @code{substr} function extracts a substring from a string.
+
+@subsection Inputs
+@itemize @bullet
+@item String: Source string.
+@item Start: Zero-based index of the first character to extract.
+@item Length: Number of characters to extract.
+@end itemize
+
+@subsection Outputs
+Returns a new string containing the requested substring.
+
+@subsection Processing
+Extracts characters from start index for the specified length.
+
+@subsection Side-Effects
+None; may allocate memory for the result string.
+
+@example
+(setq initial (substr name 0 1))
+@end example
+
+@subsubsection upcase
+The @code{upcase} function converts a string to uppercase.
+
+@subsection Inputs
+@itemize @bullet
+@item String: String expression to convert.
+@end itemize
+
+@subsection Outputs
+Returns a new string with all alphabetic characters converted to uppercase.
+
+@subsection Processing
+Maps each character to its uppercase equivalent.
+
+@subsection Side-Effects
+None; may allocate memory for the result string.
+
+@example
+(setq shout (upcase message))
+@end example
+
+@subsubsection downcase
+The @code{downcase} function converts a string to lowercase.
+
+@subsection Inputs
+@itemize @bullet
+@item String: String expression to convert.
+@end itemize
+
+@subsection Outputs
+Returns a new string with all alphabetic characters converted to lowercase.
+
+@subsection Processing
+Maps each character to its lowercase equivalent.
+
+@subsection Side-Effects
+None; may allocate memory for the result string.
+
+@example
+(setq file-name (downcase user-input))
+@end example
+
+@subsubsection numtostr
+The @code{numtostr} function converts a number to its string representation.
+
+@subsection Inputs
+@itemize @bullet
+@item Number: Numeric expression to convert.
+@end itemize
+
+@subsection Outputs
+Returns a string representing the number in decimal notation.
+
+@subsection Processing
+Converts the numeric value to its textual representation.
+
+@subsection Side-Effects
+None; may allocate memory for the result string.
+
+@example
+(print "Value: " (numtostr counter))
+@end example
+
+@subsubsection strtonum
+The @code{strtonum} function converts a string to a number.
+
+@subsection Inputs
+@itemize @bullet
+@item String: String expression containing a numeric representation.
+@end itemize
+
+@subsection Outputs
+Returns an integer parsed from the string; returns 0 if the string does not represent a valid number.
+
+@subsection Processing
+Parses the string as a decimal integer.
+
+@subsection Side-Effects
+None.
+
+@example
+(setq count (strtonum user-input))
+@end example
+
+@section Expressions and Operators
+
+@subsection Arithmetic Expressions
+Arithmetic expressions combine numbers using operators @code{+}, @code{-}, @code{*}, and @code{/}.
+
+@subsection Inputs
+Two numeric expressions.
+
+@subsection Outputs
+Returns the result of the arithmetic operation.
+
+@subsection Processing
+Performs the specified operation on the operands.
+
+@subsection Side-Effects
+None; may produce overflow or division by zero faults (see Faults section).
+
+@example
+(setq total (+ price tax))
+(setq difference (- max min))
+(setq product (* width height))
+(setq average (/ total count))
+@end example
+
+@subsection Comparison Expressions
+Comparison expressions produce boolean results based on relational operators.
+
+@subsection Inputs
+Two expressions of comparable types (typically numbers).
+
+@subsection Outputs
+Returns true (non-zero) if the comparison holds, false (zero) otherwise.
+
+@subsection Processing
+Evaluates both operands and applies the relational test.
+
+@subsection Side-Effects
+None.
+
+@example
+(if (> score high-score)
+    (setq high-score score))
+@end example
+
+@subsection Logical Expressions
+Logical expressions combine boolean values using operators @code{&} (AND), @code{|} (OR), and @code{!} (NOT).
+
+@subsection Inputs
+Boolean expressions.
+
+@subsection Outputs
+Returns true or false based on logical operation.
+
+@subsection Processing
+Evaluates operands and applies logical rules.
+
+@subsection Side-Effects
+None.
+
+@example
+(if (and (> health 0) (< timer 100))
+    (print "Still in danger!"))
+@end example
+
+@section Faults
+
+The SCI frontend may produce the following fault conditions:
+
+@table @asis
+@item Division by zero: Occurs when the @code{/} operator has a zero denominator.
+@item Overflow: Arithmetic operations may exceed the representable range for integers.
+@item Invalid memory access: Using @code{get} or @code{put} with invalid addresses.
+@end table
+
+These faults are detected at runtime and may terminate execution or invoke error handlers depending on the target platform and EightBol configuration.
+
+@section Implementation Notes
+
+The current SCI frontend implementation has the following limitations:
+@itemize @bullet
+@item The @code{foreach} construct is parsed but not distinguished from @code{for}.
+@item Parameter lists in @code{define} and @code{call} are not fully implemented; procedures currently take no parameters.
+@item Object-oriented features (@code{class}, @code{instance}, @code{send}) are parsed but may have limited functionality depending on the EightBol backend.
+@item The @code{get} and @code{put} operators are reserved keywords but not implemented in the expression parser.
+@end itemize
+
+Future versions of the SCI frontend will address these limitations to provide full compliance with the SCI language specification.
+
+@subsection Identifier Normalization
+
+All identifiers in SCI source code are normalized to kebab-case (lowercase with hyphens) before AST production. This normalization:
+
+@itemize @bullet
+@item Converts uppercase letters to lowercase.
+@item Replaces underscores (@code{_}) with hyphens (@code{-}).
+@item Ensures consistent canonical naming across the AST.
+@end itemize
+
+Examples:
+@table @asis
+@item @code{MyVariableName} @tab becomes @tab @code{my-variable-name}
+@item @code{my_var_name} @tab becomes @tab @code{my-var-name}
+@item @code{someVar} @tab becomes @tab @code{some-var}
+@item @code{CONSTANT_VALUE} @tab becomes @tab @code{constant-value}
+@end table
+
+This normalization applies to all identifiers: variables, function names, method names, class names, and object names. The backend compiler can then apply language-specific naming conventions as needed.

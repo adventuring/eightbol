@@ -1,0 +1,453 @@
+@c src/frontend-forth/parser.texf — Forth Parser documentation fragment
+@c Regenerate with: (regenerate-documentation-for-module "forth-parser")
+
+@section FORTH Parser
+
+The FORTH parser transforms tokenized Forth source code into an Abstract Syntax Tree (AST)
+suitable for compilation to EIGHTBOL intermediate representation and assembly.
+
+The parser:
+@itemize @bullet
+@item Converts Forth token streams to stack operation AST nodes
+@item Manages word definitions (colon definitions) and constants
+@item Handles control structures (IF/THEN/ELSE, BEGIN/UNTIL, loops)
+@item Supports dialogue/narrative extensions (SAY, NARRATE, SHOW, etc.)
+@item Generates appropriate AST nodes for stack, memory, and I/O operations
+@end itemize
+
+@subsection forth-parse-tokens
+
+@deffn {Function} forth-parse-tokens TOKENS-PER-LINE
+Parse tokenized Forth code into an AST.
+
+@table @asis
+@item Input @var{TOKENS-PER-LINE}
+Output from @code{forth-tokenize-source}: list of token lists
+@item Return value
+@code{(:forth-program :definitions [...AST nodes...])}
+@item Outputs
+Top-level AST node containing all parsed definitions and statements
+@end table
+
+@subsection Behavior
+Iterates through each line of tokens, calling @code{forth-parse-line} to generate
+statements. Returns a complete Forth program node.
+
+@end deffn
+
+@subsection forth-parse-line
+
+@deffn {Function} forth-parse-line CTX TOKENS
+Parse a single line of tokens.
+
+@table @asis
+@item Input @var{CTX}
+Parser context structure (tracks state, definitions)
+@item Input @var{TOKENS}
+List of tokens from one source line
+@item Return value
+(values statements-list tokens-consumed)
+@item Statements
+List of AST statement nodes generated from this line
+@end table
+
+@end deffn
+
+@subsection forth-parse-token
+
+@deffn {Function} forth-parse-token CTX TOKEN IDX TOKENS
+Parse a single token within line context.
+
+@table @asis
+@item Input @var{CTX}
+Parser context
+@item Input @var{TOKEN}
+Single token @code{(type . value)}
+@item Input @var{IDX}
+Token position in line
+@item Input @var{TOKENS}
+Full token list for lookahead
+@item Return value
+(values statement new-index) or (values nil new-index)
+@item Statement
+AST node or nil if no statement produced
+@end table
+
+@end deffn
+
+@c AST Node Constructors
+@section AST Node Constructors
+
+@subsection make-forth-push-literal
+
+@deffn {Function} make-forth-push-literal VALUE
+Create a stack push for a literal value.
+
+@table @asis
+@item Input @var{VALUE}
+Numeric or string literal
+@item Return value
+@code{(:forth-push-literal :value @var{VALUE})}
+@end table
+
+@end deffn
+
+@subsection make-forth-push-identifier
+
+@deffn {Function} make-forth-push-identifier NAME
+Create a stack push for an identifier (variable fetch).
+
+@table @asis
+@item Input @var{NAME}
+Variable or symbol name
+@item Return value
+@code{(:forth-push-identifier :name @var{NAME})}
+@end table
+
+@end deffn
+
+@subsection make-forth-stack-op
+
+@deffn {Function} forth-stack-op OP-NAME &key ARGS
+Create a stack manipulation operation node.
+
+@table @asis
+@item Input @var{OP-NAME}
+Operation symbol (e.g., @code{:DUP}, @code{:SWAP})
+@item Keyword @var{ARGS}
+Optional arguments list
+@item Return value
+@code{(:forth-stack-op :name @var{OP-NAME} :args @var{ARGS})}
+@end table
+
+@subsection Supported Operations
+@table @code
+@item :DUP
+Duplicate top of stack
+@item :SWAP
+Exchange top two
+@item :DROP
+Remove top
+@item :OVER
+Copy second to top
+@item :ROT
+Rotate top three
+@item :TWODUP, :TWOSWAP, :TWODROP
+2-cell variants
+@item :NIP, :TUCK
+Additional manipulations
+@item :ABS, :NEGATE
+Unary arithmetic
+@item :NOT, :ZEQUAL, :ZLT, :ZGT
+Logical/comparison
+@item :TORET, :FROMRET, :RATFETCH
+Return stack ops
+@item :PLUSSTORE, :CFETCH, :CSTORE
+Memory operations
+@item :SPACES, :PAGE
+Output operations
+@end table
+
+@end deffn
+
+@subsection make-forth-arithmetic
+
+@deffn {Function} make-forth-arithmetic OP &key LEFT RIGHT RESULT-NAME
+Create an arithmetic operation node.
+
+@table @asis
+@item Keyword @var{OP}
+Operation: @code{:ADD}, @code{:SUB}, @code{:MUL}, @code{:DIV}, @code{:MOD}
+@item Keyword @var{LEFT}
+Left operand (optional)
+@item Keyword @var{RIGHT}
+Right operand (optional)
+@item Keyword @var{RESULT-NAME}
+Variable to store result (optional)
+@item Return value
+@code{(:forth-arithmetic :op @var{OP} :left @var{LEFT} :right @var{RIGHT} :result-name @var{RESULT-NAME})}
+@end table
+
+@subsection Bitwise Operations
+@table @code
+@item :AND, :OR, :XOR, :LSHIFT, :RSHIFT
+Bitwise operations for integer manipulation
+@end table
+
+@end deffn
+
+@subsection make-forth-comparison
+
+@deffn {Function} make-forth-comparison OP &key LEFT RIGHT
+Create a comparison operation node (for IF/THEN conditions).
+
+@table @asis
+@item Keyword @var{OP}
+Comparison: @code{:EQ}, @code{:LT}, @code{:GT}, @code{:LE}, @code{:GE}, @code{:NE}
+@item Keyword @var{LEFT}
+Left operand
+@item Keyword @var{RIGHT}
+Right operand
+@item Return value
+@code{(:forth-comparison :op @var{OP} :left @var{LEFT} :right @var{RIGHT})}
+@end table
+
+@end deffn
+
+@subsection make-forth-conditional
+
+@deffn {Function} make-forth-conditional CONDITION THEN-BODY ELSE-BODY
+Create a conditional (IF/THEN/ELSE) node.
+
+@table @asis
+@item Input @var{CONDITION}
+Condition expression or AST node
+@item Input @var{THEN-BODY}
+List of statements to execute if true
+@item Input @var{ELSE-BODY}
+List of statements if false (may be empty)
+@item Return value
+@code{(:forth-conditional :condition @var{CONDITION} :then @var{THEN-BODY} :else @var{ELSE-BODY})}
+@end table
+
+@end deffn
+
+@subsection make-forth-loop
+
+@deffn {Function} make-forth-loop LOOP-TYPE INIT-BODY CONDITION-BODY BODY
+Create a loop node.
+
+@table @asis
+@item Input @var{LOOP-TYPE}
+@code{:begin-until}, @code{:begin-while}, or @code{:do-loop}
+@item Input @var{INIT-BODY}
+Initialization statements
+@item Input @var{CONDITION-BODY}
+Condition (for BEGIN/UNTIL or BEGIN/WHILE)
+@item Input @var{BODY}
+Loop body statements
+@item Return value
+@code{(:forth-loop :type @var{LOOP-TYPE} :init @var{INIT-BODY} :condition @var{CONDITION-BODY} :body @var{BODY})}
+@end table
+
+@end deffn
+
+@c Output / Dialogue / Memory
+@subsection Output and Dialogue Nodes
+
+@deffn {Function} make-forth-print-value
+Print top of stack value (Forth @code{.} word).
+
+@table @asis
+@item Return value
+@code{(:forth-print-value)}
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-print-string STRING
+Print a string literal.
+
+@table @asis
+@item Input @var{STRING}
+String to output
+@item Return value
+@code{(:forth-print-string :string @var{STRING})}
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-print-char
+Output character from top of stack (EMIT).
+
+@table @asis
+@item Return value
+@code{(:forth-emit)}
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-print-cr
+Output carriage return / newline (CR).
+
+@table @asis
+@item Return value
+@code{(:forth-print-cr)}
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-input-key
+Read a single key from input (KEY).
+
+@table @asis
+@item Return value
+@code{(:forth-input-key)}
+Pushes key code to stack
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-input-line MAX-LENGTH
+Read a line of input (ACCEPT).
+
+@table @asis
+@item Input @var{MAX-LENGTH}
+Maximum input buffer size
+@item Return value
+@code{(:forth-input-line :max-length @var{MAX-LENGTH})}
+Reads into buffer, pushes count
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-dialogue DIALOGUE-TYPE &key SPEAKER TEXT OPTIONS
+Create a dialogue/narrative node.
+
+@table @asis
+@item Input @var{DIALOGUE-TYPE}
+@code{:say}, @code{:narrate}, @code{:choice}, @code{:show}, @code{:hide}, @code{:fade}, @code{:music}, @code{:sound}
+@item Keyword @var{SPEAKER}
+Speaker name (for dialogue)
+@item Keyword @var{TEXT}
+Text content
+@item Keyword @var{OPTIONS}
+Choice options (for @code{:choice})
+@item Return value
+@code{(:forth-dialogue :type @var{DIALOGUE-TYPE} :speaker @var{SPEAKER} :text @var{TEXT} :options @var{OPTIONS})}
+@end table
+
+@subsection Dialogue Extensions
+@itemize @bullet
+@item @code{:say} — Character dialogue
+@item @code{:narrate} — Narrative text
+@item @code{:choice} — Player choice menu
+@item @code{:show}, @code{:hide} — Visual element toggling
+@item @code{:fade} — Fade transition
+@item @code{:music}, @code{:sound} — Audio playback
+@end itemize
+
+@end deffn
+
+@subsection Memory and Definition Nodes
+
+@deffn {Function} make-forth-variable-def NAME &optional INITIAL-VALUE
+Create a variable definition node.
+
+@table @asis
+@item Input @var{NAME}
+Variable name
+@item Input @var{INITIAL-VALUE}
+Initial value (optional)
+@item Return value
+@code{(:forth-variable :name @var{NAME} :initial-value @var{INITIAL-VALUE})}
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-fetch ADDRESS
+Create a memory fetch node (@).
+
+@table @asis
+@item Input @var{ADDRESS}
+Address expression (TOS)
+@item Return value
+@code{(:forth-fetch :address @var{ADDRESS})}
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-store ADDRESS VALUE
+Create a memory store node (!).
+
+@table @asis
+@item Input @var{ADDRESS}
+Address expression
+@item Input @var{VALUE}
+Value to store
+@item Return value
+@code{(:forth-store :address @var{ADDRESS} :value @var{VALUE})}
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-word-def NAME PARAMS BODY
+Create a colon definition node.
+
+@table @asis
+@item Input @var{NAME}
+Word name
+@item Input @var{PARAMS}
+Parameter list (optional)
+@item Input @var{BODY}
+Body token list or AST nodes
+@item Return value
+@code{(:forth-word-def :name @var{NAME} :params @var{PARAMS} :body @var{BODY})}
+@end table
+
+@end deffn
+
+@deffn {Function} make-forth-constant-def NAME VALUE
+Create a constant definition node.
+
+@table @asis
+@item Input @var{NAME}
+Constant name
+@item Input @var{VALUE}
+Constant value
+@item Return value
+@code{(:forth-constant :name @var{NAME} :value @var{VALUE})}
+@end table
+
+@end deffn
+
+@subsection High-Level Interfaces
+
+@deffn {Function} forth-compile-source SOURCE-STRING
+Compile Forth source code string to AST.
+
+@table @asis
+@item Input @var{SOURCE-STRING}
+Forth program text
+@item Return value
+@code{(:forth-program :definitions [...AST nodes...])}
+@item Errors
+Parse errors or invalid syntax
+@end table
+
+@end deffn
+
+@deffn {Function} forth-compile-file FILENAME
+Compile a .forth file to AST.
+
+@table @asis
+@item Input @var{FILENAME}
+Path to .forth source file
+@item Return value
+@code{(:forth-program :definitions [...])}
+@item Errors
+File not found or parse errors
+@end table
+
+@end deffn
+
+@subsection Typical Workflow
+@enumerate
+@item Call @code{forth-tokenize-source} to tokenize Forth source
+@item Call @code{forth-parse-tokens} to produce AST
+@item Walk AST and emit EIGHTBOL IR or assembly
+@end enumerate
+
+@subsection Bugs and TODOs
+@table @asis
+@item TODO
+Structured control flow (BEGIN/UNTIL, BEGIN/WHILE, DO/LOOP +LOOP)
+@item TODO
+Return stack operations (@code{>R}, @code{R>}, @code{R@@}) in nested contexts
+@item TODO
+Optimization: constant folding, stack depth analysis for code generation
+@item XXX
+User-defined word recursion not yet validated; tail-call optimization missing
+@item FIXME
+No separate @code{:do-loop} parsing; traditional Forth @code{DO...LOOP} not yet supported
+@end table

@@ -1,6 +1,38 @@
-;; src/frontend-sci/sci-parser.lisp — YACC grammar for SCI → EIGHTBOL AST
-;;; Copyright © 2026 Interworldly Adventuring, LLC
-(in-package :eightbol)
+(defun sci-parse-number (n)
+  "Parse number N which may be decimal, hex (#x or 0x), octal (#o or 0o), 
+  or binary (#b or 0b) format. Returns an integer."
+  (cond
+    ;; Hex: #xHEX or 0xHEX
+    ((or (string-starts-with "#x" n :test #'string-equal)
+         (string-starts-with "0x" n :test #'string-equal))
+     (let ((hex-str (if (string-starts-with "#x" n :test #'string-equal)
+                        (subseq n 2)
+                        (subseq n 2))))
+       (parse-integer hex-str :radix 16)))
+    
+    ;; Octal: #oOCT or 0oOCT
+    ((or (string-starts-with "#o" n :test #'string-equal)
+         (string-starts-with "0o" n :test #'string-equal))
+     (let ((oct-str (if (string-starts-with "#o" n :test #'string-equal)
+                        (subseq n 2)
+                        (subseq n 2))))
+       (parse-integer oct-str :radix 8)))
+    
+    ;; Binary: #bBIN or 0bBIN
+    ((or (string-starts-with "#b" n :test #'string-equal)
+         (string-starts-with "0b" n :test #'string-equal))
+     (let ((bin-str (if (string-starts-with "#b" n :test #'string-equal)
+                        (subseq n 2)
+                        (subseq n 2))))
+       (parse-integer bin-str :radix 2)))
+    
+    ;; Default: decimal
+    (t (parse-integer n))))
+
+(defun string-starts-with (prefix s &key (test #'equal))
+  "Check if string S starts with PREFIX using TEST function."
+  (and (>= (length s) (length prefix))
+       (funcall test (subseq s 0 (length prefix)) prefix)))
 
 ;;; Token list for SCI YACC parser
 (eval-when (:compile-toplevel :execute :load-toplevel)
@@ -58,6 +90,24 @@
   "return [val]"
   (make-goback-node))
 
+(defun sci-parse-print (args)
+  "print args or (print arg1 arg2 ...)"
+  (make-print-node args))
+
+(defun sci-parse-dialogue (character text)
+  "dialogue character text"
+  (make-dialogue-node character text))
+
+(defun sci-parse-say (character &rest args)
+  "say character text [response1 response2 ...]"
+  ;; Create dialogue node (say is alias for dialogue)
+  (make-dialogue-node character (car args)))
+
+(defun sci-parse-input (prompt &optional variable)
+  "input prompt [variable]"
+  ;; Create input node for user interaction
+  (make-input-node (if variable (list variable) '())))
+
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)
   (eval
@@ -72,10 +122,10 @@
                    :define :setq :set :get :put :call
                    :proc :method :class :instance
                    :send :super :self
-                   :print :format
+                   :print :dialogue :dialog :say :input :ask :format
                    :strcat :strlen :substr :upcase :downcase
                    :numtostr :strtonum
-                   number string ident))
+                   number hex octal binary dword string ident))
 
       (program
        (form
@@ -93,7 +143,15 @@
        (ident
         (lambda (id) (make-identifier id)))
        (number
-        (lambda (n) (parse-integer n)))
+        (lambda (n) (sci-parse-number n)))
+       (hex
+        (lambda (h) (sci-parse-number (concatenate 'string "#x" h))))
+       (octal
+        (lambda (o) (sci-parse-number (concatenate 'string "#o" o))))
+       (binary
+        (lambda (b) (sci-parse-number (concatenate 'string "#b" b))))
+       (dword
+        (lambda (d) d))
        (string
         (lambda (s) s)))
 
@@ -101,13 +159,33 @@
        (lparen atom rparen
         (lambda (a) a))
        (lparen atom form-list rparen
-        (lambda (f args) (list f args))))
+        (lambda (f args) (list f args)))
+       (lparen :print form-list rparen
+        (lambda (args) (sci-parse-print args)))
+       (lparen :dialogue string string rparen
+        (lambda (char text) (sci-parse-dialogue char text)))
+       (lparen :dialogue string string form-list rparen
+        (lambda (char text resps) (list :dialogue :character char :text text :responses resps)))
+       (lparen :say string string rparen
+        (lambda (char text) (sci-parse-say char text)))
+       (lparen :input string rparen
+        (lambda (prompt) (sci-parse-input prompt)))
+       (lparen :input string ident rparen
+        (lambda (prompt var) (sci-parse-input prompt var))))
 
       (expression
        (ident
         (lambda (id) (make-identifier id)))
        (number
-        (lambda (n) (parse-integer n)))
+        (lambda (n) (sci-parse-number n)))
+       (hex
+        (lambda (h) (sci-parse-number (concatenate 'string "#x" h))))
+       (octal
+        (lambda (o) (sci-parse-number (concatenate 'string "#o" o))))
+       (binary
+        (lambda (b) (sci-parse-number (concatenate 'string "#b" b))))
+       (dword
+        (lambda (d) d))
        (string
         (lambda (s) s))
        (expression plus expression

@@ -1,53 +1,6 @@
-;; backend-6502.lisp -- 6502 / 64tass code generation backend
-;;
-;; Implements COMPILE-TO-ASSEMBLY for the :6502 CPU keyword. Targets the
-;; MOS  6502   instruction  set,   emitting  64tass   assembler  syntax.
-;; Output conforms  to OOPS (Object-Oriented Programming  System) naming
-;; conventions defined in Phantasia/SkylineTool.
-;;
-;; CPU-specific  instruction   sets  (64tass  format):  6502:   JMP  for
-;; branches;  SED/CLD for  BCD;  undocumented opcodes  (lax, dcp)  where
-;; helpful 65c02:  BRA, STZ, TRB,  TSB; no undocumented  opcodes 65c816:
-;; Like 65c02 (emulation mode); 64tass  syntax HuC6280: Like 65c02; bank
-;; switching via macros  RP2A03: 6502 subset; no SED  (no decimal mode);
-;; software BCD
-;;
-;; Key conventions: Method labels: MethodCharacterThink: .block ...
-
-;; {Class}Class  INVOKE Var  "M": .CallMethod  Call{Type}M, {Type}Class,
-;; Var  Slot access:  ldy  #{OriginClass}{Slot} /  lda  (Self), y  Array
-;; access:  ldx index  /  lda base,  x  (X for  subscript;  Y for  slot)
-;; Constants (78/77):  lda #ConstName (immediate  addressing) Variables:
-;; lda  VarName  (direct/absolute  addressing) Fault:  .LogFault  "code"
-;; (4-char string; assembler does minifont)
-;;
-;; Register  usage: A=accumulator,  X=subscript  index  or temp,  Y=slot
-;; offset.   Array   fetches   use    X   (or   Y   for   slot-of-self).
-;; Complex expressions may have multiple subscripts at different stages.
-;; When using X  for temp (e.g. 16-bit add low-byte),  prefer PHA/PLA if
-;; operands contain subscripts to avoid conflict.
-
+;; src/backend-6502-part1.lisp — 6502-family code generation part 1
+;;; Copyright © 2026 Interworldly Adventuring, LLC
 (in-package :eightbol)
-
-;;; CPU variant selection (bound during compilation)
-
-(defvar *6502-family-cpu* :6502
-  "CPU keyword for 6502-family backends. One of :6502 :65c02 :65c816 :huc6280 :rp2a03.
-Controls opcode choice: bra vs jmp, stz vs lda/sta, undocumented opcodes.")
-
-(defun 6502-branch-always-mnemonic ()
-  "Return \"jmp\" for 6502/RP2A03 (no BRA), \"bra\" for 65c02/65c816/HuC6280."
-  (if (member *6502-family-cpu* '(:65c02 :65c816 :HuC6280))
-      "bra"
-      "jmp"))
-
-(defun 6502-has-stz-p ()
-  "True if CPU has STZ (65c02 and derivatives)."
-  (member *6502-family-cpu* '(:65c02 :65c816 :HuC6280)))
-
-(defun 6502-use-undocumented-p ()
-  "True if CPU allows undocumented 6502 opcodes (lax, dcp, etc.). Only :6502."
-  (eq *6502-family-cpu* :6502))
 
 (defvar *6502-accumulator-expression* :trash/init
   "AST for the value currently in A during 6502-family emission, or NIL if unknown.")
@@ -55,6 +8,10 @@ Controls opcode choice: bra vs jmp, stz vs lda/sta, undocumented opcodes.")
   "AST for the value currently in X during 6502-family emission, or NIL if unknown.")
 (defvar *6502-y-index-expression* :trash/init
   "AST for the value currently in Y during 6502-family emission, or NIL if unknown.")
+(defvar *6502-break-label* nil
+  "Label to break to from current PERFORM loop, or NIL if not in a loop.")
+(defvar *6502-continue-label* nil
+  "Label to continue to from current PERFORM loop, or NIL if not in a loop.")
 (defvar *6502-accumulator-lru-time* 0
   "Last time the accumulator register was used (for LRU tracking).")
 (defvar *6502-x-lru-time* 0
@@ -65,6 +22,10 @@ Controls opcode choice: bra vs jmp, stz vs lda/sta, undocumented opcodes.")
   "Global counter for LRU timestamping.")
 (defvar *6502-opt-level* 2
   "Optimization level: 0=none, 1=basic, 2=full (default).")
+(defvar *6502-enable-undoc-opcodes* T
+  "Enable usage of undocumented opcodes when CPU supports them.")
+(defvar *6502-undoc-policy* t
+  "Policy for undocumented opcode usage: T for all, or restricted list.")
 (defvar *6502-enable-undoc-opcodes* T
   "Enable usage of undocumented opcodes when CPU supports them.")
 (defvar *6502-undoc-policy* t

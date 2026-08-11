@@ -1,0 +1,250 @@
+@chapter SCI Language Reference
+@cindex SCI language reference
+
+This chapter provides a complete reference to the SCI (Sierra Creative Interpreter) frontend language as implemented in the EightBol compiler. It covers every statement, function, operator, and control structure recognized by the SCI lexer and parser.
+
+@section Lexical Elements
+
+The SCI language uses the following lexical elements:
+
+@table @asis
+@item Identifiers
+Variable and function names. Must begin with a letter or underscore, followed by letters, digits, or underscores. Case-insensitive.
+
+@item Numbers
+Integer literals, e.g., @code{42}, @code{-10}.
+
+@item Strings
+Text enclosed in double quotes, e.g., @code{"Hello, world!"}. 
+Strings support escape sequences: @code{\"} for quote, @code{\\} for backslash.
+
+@item Symbols
+Text enclosed in single quotes, e.g., @code{'symbol}. Used for symbolic constants.
+
+@item Comments
+Semicolon (@code{;}) to end of line.
+
+@item Whitespace
+Spaces, tabs, newlines ignored except to separate tokens.
+@end table
+
+@section Operators
+
+SCI supports the following operators, listed by precedence (highest first):
+
+@table @asis
+@item Parentheses
+@code{( @var{expression} @code{)}} for grouping.
+
+@item Arithmetic
+@table @asis
+@item Multiplication: @code{*}
+@item Division: @code{/}
+@item Addition: @code{+}
+@item Subtraction: @code{-}
+@end table
+
+@item Comparison
+@table @asis
+@item Equal: @code{=}
+@item Not equal: @code{<>}
+@item Less than: @code{<}
+@item Greater than: @code{>}
+@item Less than or equal: @code{<=}
+@item Greater than or equal: @code{>=}
+@end table
+
+@item Logical
+@table @asis
+@item Not: @code{!} (prefix)
+@item And: @code{&} (infix)
+@item Or: @code{|} (infix)
+@end table
+@end table
+
+@section Statements and Control Structures
+
+Each statement is expressed as a parenthesized list where the first element is a keyword.
+
+@subsection @code{(if @var{condition} @var{then-body} [@var{else-body}])}
+Conditional execution. Evaluates @var{condition}; if true, executes @var{then-body}; otherwise, executes @var{else-body} if provided.
+Inputs: condition (boolean), then-body (implicit progn), else-body (optional implicit progn).
+Outputs: None.
+Side-effects: Executes one of the bodies.
+
+@subsection @code{(while @var{condition} @var{body})}
+Repeatedly executes @var{body} while @var{condition} is true.
+Inputs: condition (boolean), body (implicit progn).
+Outputs: None.
+Side-effects: May execute body zero or more times.
+
+@subsection @code{(for @var{var} @var{start} @var{end} [@var{body}])}
+Executes @var{body} with @var{var} bound to each integer from @var{start} to @var{end} inclusive.
+Inputs: var (symbol), start (number), end (number), body (optional implicit progn).
+Outputs: None.
+Side-effects: Sets var to each value in range; executes body for each.
+
+@subsection @code{(foreach @var{var} @var{list} [@var{body}])}
+Executes @var{body} with @var{var} bound to each element of @var{list}.
+Inputs: var (symbol), list (list value), body (optional implicit progn).
+Outputs: None.
+Side-effects: Sets var to each list element; executes body for each.
+
+@subsection @code{(break)}
+Exits the innermost enclosing loop (@code{while}, @code{for}, @code{foreach}) immediately.
+Inputs: None.
+Outputs: None.
+Side-effects: Transfers control to the statement following the loop.
+
+@subsection @code{(continue)}
+Skips the remainder of the current loop iteration and proceeds to the next iteration.
+Inputs: None.
+Outputs: None.
+Side-effects: Increments loop counter (for @code{for}) or advances to next list element (for @code{foreach}) and re-evaluates condition.
+
+@subsection @code{(return [@var{value}])}
+Exits the current procedure, optionally returning @var{value}.
+Inputs: value (optional, any type).
+Outputs: None.
+Side-effects: Returns value to caller; if omitted, returns undefined.
+
+@subsection @code{(define @var{name} [(@var{param} ...)] @var{body})}
+Defines a procedure named @var{name} with optional parameters and body.
+Inputs: name (symbol), param-list (list of symbols), body (implicit progn).
+Outputs: None.
+Side-effects: Creates a procedure binding in the current scope.
+
+@subsection @code{(setq @var{place} @var{value})}
+Assigns @var{value} to @var{place}. @var{place} can be a variable, object property (@code{object:property}), or array element (@code{(array-get array index)}).
+Inputs: place (assignable lvalue), value (any type).
+Outputs: None.
+Side-effects: Stores value in place.
+
+@subsection @code{(set @var{place} @var{value})}
+Synonym for @code{setq}.
+
+@subsection @code{(get @var{place})}
+Retrieves the value of @var{place}. @var{place} can be a variable, object property, or array element.
+Inputs: place (accessible lvalue).
+Outputs: The current value of place.
+Side-effects: None.
+
+@subsection @code{(put @var{place} @var{value})}
+Synonym for @code{setq} but provided for symmetry with @code{get}.
+
+@subsection @code{(call @var{function-name} [@var{arg} ...])}
+Calls the procedure @var{function-name} with arguments.
+Inputs: function-name (symbol), args (list of values).
+Outputs: Return value of function (if any).
+Side-effects: Executes function body.
+
+@subsection @code{(proc @var{name} [(@var{param} ...)] @var{body})}
+Synonym for @code{define}.
+
+@subsection @code{(method @var{name} [(@var{param} ...)] @var{body})}
+Defines a method in the current class context.
+Inputs: name (symbol), param-list (list of symbols), body (implicit progn).
+Outputs: None.
+Side-effects: Creates a method binding in the current class.
+
+@subsection @code{(class @var{name} [(@var{superclass})] (@var{slot} ...) (@var{method-def} ...))}
+Defines a class named @var{name} inheriting from @var{superclass} (optional) with slots and methods.
+Inputs: name (symbol), superclass (symbol or omitted), slot-list (list of slot symbols), method-def-list (list of method definitions).
+Outputs: None.
+Side-effects: Creates a class definition.
+
+@subsection @code{(instance @var{name} [(@var{class})] (@var{slot-value} ...))}
+Creates an instance of @var{class} (defaults to current class if omitted) named @var{name} and initializes slots.
+Inputs: name (symbol), class (symbol or omitted), slot-value-list (list of values corresponding to slots).
+Outputs: None.
+Side-effects: Allocates and initializes an object.
+
+@subsection @code{(send @var{object} @var{method} [@var{arg} ...])}
+Invokes method @var{method} on @var{object} with arguments.
+Inputs: object (object reference), method (symbol), args (list of values).
+Outputs: Return value of method.
+Side-effects: Executes method on object.
+
+@subsection @code{(super)}
+Refers to the superclass of the current class. Used within a method to call the superclass implementation.
+Inputs: None.
+Outputs: Superclass reference.
+Side-effects: None.
+
+@subsection @code{(self)}
+Refers to the current object instance. Used within a method to access the object's slots or send messages to itself.
+Inputs: None.
+Outputs: Current object reference.
+Side-effects: None.
+
+@subsection @code{(print @var{value} ...)}
+Outputs the string representation of each @var{value} to the console, separated by spaces.
+Inputs: values (any type).
+Outputs: None.
+Side-effects: Prints to standard output.
+
+@subsection @code{(format @var{template} @var{arg} ...)}
+Formats a string using @var{template} (similar to printf) and substitutes @var{args}.
+Inputs: template (string), args (values to format).
+Outputs: Formatted string.
+Side-effects: None.
+
+@subsection @code{(strcat @var{string} ...)}
+Concatenates strings.
+Inputs: strings (one or more string values).
+Outputs: Concatenated string.
+Side-effects: None.
+
+@subsection @code{(strlen @var{string})}
+Returns the length of @var{string} in characters.
+Inputs: string.
+Outputs: Integer length.
+Side-effects: None.
+
+@subsection @code{(substr @var{string} @var{start} @var{length})}
+Extracts a substring from @var{string} starting at index @var{start} (0-based) of length @var{length}.
+Inputs: string, start (integer), length (integer).
+Outputs: Substring.
+Side-effects: None.
+
+@subsection @code{(upcase @var{string})}
+Converts @var{string} to uppercase.
+Inputs: string.
+Outputs: Uppercased string.
+Side-effects: None.
+
+@subsection @code{(downcase @var{string})}
+Converts @var{string} to lowercase.
+Inputs: string.
+Outputs: Lowercased string.
+Side-effects: None.
+
+@subsection @code{(numtostr @var{number})}
+Converts @var{number} to its string representation.
+Inputs: number.
+Outputs: String.
+Side-effects: None.
+
+@subsection @code{(strtonum @var{string})}
+Converts @var{string} to a number if possible; returns 0 if not.
+Inputs: string.
+Outputs: Integer.
+Side-effects: None.
+
+@section Analogies to Reader Macros
+
+The SCI frontend does not support reader macros in the traditional Lisp sense. However, several notations provide similar convenience:
+
+@table @asis
+@item Hexadecimal Notation
+Numbers can be written in hexadecimal by prefixing with @code{#x}, e.g., @code{#xFF} for 255. This is handled by the number reader in the lexer.
+
+@item Character Literals
+Individual characters can be expressed using @code{#\c} where @var{c} is the character, e.g., @code{#\A} for capital A. This is not directly supported in SCI but can be emulated via @code{(char-code #\A)} if available.
+
+@item String Escaping
+Within strings, @code{\"} represents a literal quote, @code{\\} a literal backslash, and @code{\n} a newline (though newline in strings may not be portable).
+
+@end table
+
+@end chapter

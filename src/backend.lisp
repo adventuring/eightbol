@@ -1269,6 +1269,84 @@ Signals an error (no successful return)."
   (declare (ignore cpu ast-node-data))
   (error "EIGHTBOL: :service-bank is copybook metadata, not a procedure statement (corrupt AST)"))
 
+;;; Identifier normalization and number literal formatting utilities
+
+(defun normalize-identifier-to-pascal-case (identifier)
+  "Convert IDENTIFIER (string or symbol) to PascalCase for label emission.
+
+Converts COBOL stabby-case (e.g. Song--Heal--ID) to PascalCase (e.g. SongHealID),
+and handles hyphen-separated names (e.g. Song-Heal-ID) to PascalCase.
+
+@table @asis
+@item IDENTIFIER
+String or symbol identifier (e.g. 'Song--Heal--ID', 'Song-Heal-ID', 'Character').
+@end table
+
+@subsection Outputs
+String in PascalCase format suitable for assembly labels."
+  (let ((identifier-str (format nil "~a" identifier)))
+    (if (search "--" identifier-str)
+        ;; Handle COBOL stabby-case (--) -> PascalCase with _ separators for special names
+        (format nil "~{~a~^_~}" (mapcar (lambda (seg)
+                                          (if (string-equal seg "ID")
+                                              "ID"
+                                              (pascal-case seg)))
+                                        (cl-ppcre:split "--" identifier-str)))
+        ;; Handle standard hyphen-separated names
+        (pascal-case identifier-str))))
+
+(defun format-number-literal (number &optional (radix :hex))
+  "Format NUMBER as a numeric literal with appropriate radix marker.
+
+Used by backends to emit number literals in assembly-target format.
+The radix parameter defaults to :HEX for general assembly use.
+
+@table @asis
+@item NUMBER
+Numeric value to format (integer or rational).
+@item RADIX
+One of :HEX, :DEC, :OCT, :BIN (defaults to :HEX).
+@end table
+
+@subsection Outputs
+String with appropriate radix prefix/suffix for assembly context (e.g. '$1234', 'd42').
+
+@subsection Behavior
+- :HEX emits '$XXXX' format (standard for assembly)
+- :DEC emits decimal format without prefix
+- :OCT emits radix prefix appropriate to target language
+- :BIN emits binary format with radix marker
+
+Callers should validate that the target backend supports the radix format."
+  (ecase radix
+    (:hex (format nil "$~x" (abs (numerator number))))
+    (:dec (format nil "~d" (abs (numerator number))))
+    (:oct (format nil "$~o" (abs (numerator number))))
+    (:bin (format nil "%~b" (abs (numerator number))))))
+
+;;; Default handlers for dialogue/print/input (error on unsupported CPU)
+
+(defmethod compile-statement (cpu (stmt-type (eql :dialogue)) ast-node-data)
+  "Default error handler: :dialogue not implemented for this CPU.
+
+Override in CPU-specific backend module."
+  (declare (ignore ast-node-data))
+  (error "EIGHTBOL/~a: :dialogue statement not yet supported" cpu))
+
+(defmethod compile-statement (cpu (stmt-type (eql :print)) ast-node-data)
+  "Default error handler: :print not implemented for this CPU.
+
+Override in CPU-specific backend module."
+  (declare (ignore ast-node-data))
+  (error "EIGHTBOL/~a: :print statement not yet supported" cpu))
+
+(defmethod compile-statement (cpu (stmt-type (eql :input)) ast-node-data)
+  "Default error handler: :input not implemented for this CPU.
+
+Override in CPU-specific backend module."
+  (declare (ignore ast-node-data))
+  (error "EIGHTBOL/~a: :input statement not yet supported" cpu))
+
 ;;; Legacy helpers kept for backwards compatibility
 
 (defun build-slot-table (data-items)

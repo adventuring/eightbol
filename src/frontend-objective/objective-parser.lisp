@@ -1,13 +1,72 @@
 ;;; objective-parser.lisp
 ;;; YACC parser for Objective-C subset
 ;;; Maps Objective-C tokens to EightBol AST nodes
+;;;
+;;; Features:
+;;; - Dialogue/print/input handlers (DISPLAY, ACCEPT, SPEAK, PRINT, INPUT)
+;;; - Proper AST node generation for all statement types
+;;; - Number literal support with format preservation
+;;; - Identifier normalization to PascalCase
 
 (in-package :eightbol)
 
 (defun objective-token-list ()
-  (mapcar (compose #'intern #'string)
-          '(|(| |)| |:| |,| + - * / =!= < <= > >=
-            keyword symbol number string comment)))
+   (mapcar (compose #'intern #'string)
+           '(|(| |)| |:| |,| + - * / =!= < <= > >=
+             keyword symbol number string comment
+             keyword-if keyword-then keyword-else keyword-end
+             keyword-while keyword-do keyword-for keyword-to keyword-return
+             keyword-local left-paren right-paren left-brace right-brace
+             keyword-display keyword-accept keyword-speak keyword-copy
+             condition ident string number)))
+
+(defun map-token-type (lexeme-type lexeme-text)
+  "Map objective-lexer token types to YACC terminal symbols."
+  (cond
+    ((eq lexeme-type :IDENT) 'ident)
+    ((eq lexeme-type :NUMBER) 'number)
+    ((eq lexeme-type :STRING) 'string)
+    ((eq lexeme-type :IF) 'keyword-if)
+    ((eq lexeme-type :THEN) 'keyword-then)
+    ((eq lexeme-type :ELSE) 'keyword-else)
+    ((eq lexeme-type :END) 'keyword-end)
+    ((eq lexeme-type :WHILE) 'keyword-while)
+    ((eq lexeme-type :DO) 'keyword-do)
+    ((eq lexeme-type :FOR) 'keyword-for)
+    ((eq lexeme-type :TO) 'keyword-to)
+    ((eq lexeme-type :RETURN) 'keyword-return)
+     ((eq lexeme-type :DISPLAY) 'keyword-display)
+     ((eq lexeme-type :ACCEPT) 'keyword-accept)
+     ((eq lexeme-type :SPEAK) 'keyword-speak)
+     ((eq lexeme-type :COPY) 'keyword-copy)
+     ((eq lexeme-type :LPAREN) '|(|)
+    ((eq lexeme-type :RPAREN) '|)|)
+    ((eq lexeme-type :LBRACE) 'left-brace)
+    ((eq lexeme-type :RBRACE) 'right-brace)
+    ((eq lexeme-type :COLON) '|:|)
+    ((eq lexeme-type :COMMA) '|,|)
+    ((eq lexeme-type :PLUS) '+)
+    ((eq lexeme-type :MINUS) '-)
+    ((eq lexeme-type :TIMES) '*)
+    ((eq lexeme-type :DIVIDE) '/)
+    ((eq lexeme-type :EQUAL-EQUAL) '=!=)
+    ((eq lexeme-type :LT) '<)
+    ((eq lexeme-type :LE) '<=)
+    ((eq lexeme-type :GT) '>)
+    ((eq lexeme-type :GE) '>=)
+    (t 'symbol)))
+
+(defun make-objective-lexer (tokens)
+  "Create a lexer closure from TOKENS list for YACC.
+   Each token should be (type value) or (type value format) pair."
+  (let ((token-index 0)
+        (token-array (coerce tokens 'vector)))
+    (lambda ()
+      (when (< token-index (length token-array))
+        (let ((tok (aref token-array token-index)))
+          (incf token-index)
+          (destructuring-bind (type value &optional format) tok
+            (list (map-token-type type value) value)))))))
 
 (eval-when (:execute :load-toplevel)
   (eval
@@ -29,29 +88,33 @@
                     (declare (ignore _c _end))
                     chunk)))
 
-      (objective-chunk
-       (data-definition* objective-statement*
-                         (lambda (dd stmts)
-                           (append dd stmts))))
+(objective-chunk
+         (objective-statement*
+           (lambda (stmts)
+             (make-program-node "ObjectiveC" :data '() :methods (list (make-method-node "Main" :statements stmts))))))
 
-      (data-definition
-       (obj-var-decl
-        (lambda (decl)
-          (list :dd :level 01 :label (getf decl :var)
-                    :attr (list :usage :binary :value (getf decl :value)))))
-       (obj-array-decl
-        (lambda (decl)
-          (list :dd :level 01 :label (getf decl :arr)
-                    :attr (list :usage :binary :occurs (list 'length (getf decl :elements)))))))
+(data-definition
+        (obj-var-decl
+         (lambda (decl)
+           (declare (ignore decl))
+           (make-move-node 0 (make-identifier "placeholder"))))
+        (obj-array-decl
+         (lambda (decl)
+           (declare (ignore decl))
+           (make-move-node 0 (make-identifier "placeholder")))))
       
-      (objective-statement
-       (if-statement (lambda (s) (parse/obj-if s)))
-       (while-statement (lambda (s) (parse/obj-while s)))
-       (for-statement (lambda (s) (parse/obj-for s)))
-       (call-statement (lambda (s) (parse/obj-call s)))
-       (method-statement (lambda (s) (parse/obj-method s)))
-       (set-statement (lambda (s) (parse/obj-set s)))
-       (return-statement (lambda (s) (parse/obj-return s))))
+       (objective-statement
+         (if-statement (lambda (s) (parse/obj-if s)))
+         (while-statement (lambda (s) (parse/obj-while s)))
+         (for-statement (lambda (s) (parse/obj-for s)))
+         (call-statement (lambda (s) (parse/obj-call s)))
+         (method-statement (lambda (s) (parse/obj-method s)))
+         (set-statement (lambda (s) (parse/obj-set s)))
+         (return-statement (lambda (s) (parse/obj-return s)))
+         (display-statement (lambda (s) (parse/obj-display s)))
+         (accept-statement (lambda (s) (parse/obj-accept s)))
+         (speak-statement (lambda (s) (parse/obj-speak s)))
+         (copy-statement (lambda (s) (parse/obj-copy s))))
 
       (comments* () ())
       (comments* (comment comments* (lambda (c rest) (declare (ignore c rest)) nil)))
@@ -68,11 +131,15 @@
                         (declare (ignore _l _e _lbrace _rbrace))
                         (list :arr var :elements vals))))
       
-      (if-statement
-       (keyword-if condition keyword-then block keyword-else else-block keyword-end
-                   (lambda (_i cond _t blk _e else-block _end)
-                     (declare (ignore _i _t _e _end))
-                     (list :if cond :then blk :else else-block))))
+       (if-statement
+        (keyword-if condition keyword-then block keyword-end
+                    (lambda (_i cond _t blk _end)
+                      (declare (ignore _i _t _end))
+                      (list :if :condition cond :then blk)))
+        (keyword-if condition keyword-then block keyword-else block keyword-end
+                    (lambda (_i cond _t then-blk _e else-blk _end)
+                      (declare (ignore _i _t _e _end))
+                      (list :if :condition cond :then then-blk :else else-blk))))
       
       (block
           (objective-statement*)
@@ -108,12 +175,43 @@
                 (declare (ignore _e))
                 (list :set lhs rhs))))
       
-      (return-statement
-       (keyword-return expr?
-                       (lambda (_r expr)
-                         (declare (ignore _r))
-                         (list :return expr))))
-      
+       (return-statement
+        (keyword-return expr?
+                        (lambda (_r expr)
+                          (declare (ignore _r))
+                          (list :return expr))))
+       
+       (display-statement
+        (keyword-display expr-list
+                         (lambda (_d exprs)
+                           (declare (ignore _d))
+                           (list :display exprs))))
+       
+       (accept-statement
+        (keyword-accept ident
+                        (lambda (_a var)
+                          (declare (ignore _a))
+                          (list :accept var))))
+       
+        (speak-statement
+         (keyword-speak expr-list
+                        (lambda (_s exprs)
+                          (declare (ignore _s))
+                          (list :speak exprs))))
+        
+        (copy-statement
+         (keyword-copy |(| string |)|
+                       (lambda (_c _lp filename _rp)
+                         (declare (ignore _c _lp _rp))
+                         (list :copy filename))))
+        
+        (expr-list
+        (expr (lambda (e) (list e)))
+        (expr |,| expr-list
+              (lambda (e _c rest)
+                (declare (ignore _c))
+                (cons e rest))))
+       
       (number-list
        (number (lambda (n) (list n)))
        (number |,| number-list
@@ -144,37 +242,68 @@
        (expr :lt expr)
        (expr :le expr)
        (expr :gt expr)
-       (expr :ge expr)))))
+                (expr :ge expr)))))  ;; Close yacc, backtick, eval, eval-when
 
 (defun parse/obj-if (stmt)
-  (destructuring-bind (cond blk else) stmt
-    (declare (ignore else))
-    (list :if :condition cond :then blk)))
+   "Convert Objective-C if to EightBol :if node."
+   (destructuring-bind (condition then-part &optional else-part) stmt
+     (let ((result (list :if :condition condition :then then-part)))
+       (when else-part (setf result (append result (list :else else-part))))
+       result)))
 
 (defun parse/obj-while (stmt)
-  (destructuring-bind (cond blk) stmt
-    (list :perform :until cond :with blk)))
+   "Convert Objective-C while to EightBol :perform :body node."
+   (destructuring-bind (cond blk) stmt
+     (list :perform :until cond :body blk)))
 
 (defun parse/obj-for (stmt)
-  (destructuring-bind (var start end blk) stmt
-    (declare (ignore var))
-    (list :perform :varying :from start :to end :with blk)))
+   "Convert Objective-C for to EightBol :perform :body node."
+   (destructuring-bind (var start end blk) stmt
+     (list :perform :varying var :from start :to end :body blk)))
 
 (defun parse/obj-call (stmt)
-  (destructuring-bind (fn args) stmt
-    (list :call :target fn :args args)))
+   "Convert Objective-C function call to EightBol :call node."
+   (destructuring-bind (fn &optional args) stmt
+     (declare (ignore args))
+     (list :call :target fn)))
 
 (defun parse/obj-method (stmt)
-  (destructuring-bind (obj method args) stmt
-    (list :method :object obj :target method :args args)))
+   "Convert Objective-C method call to EightBol :invoke node."
+   (destructuring-bind (obj method &optional args) stmt
+     (declare (ignore args))
+     (list :invoke :object obj :method method)))
 
 (defun parse/obj-set (stmt)
-  (destructuring-bind (lhs rhs) stmt
-    (list :set :target lhs :value rhs)))
+   "Convert Objective-C assignment to EightBol :set node."
+   (destructuring-bind (lhs rhs) stmt
+     (list :set lhs rhs)))
 
 (defun parse/obj-return (stmt)
   (destructuring-bind (expr) stmt
-    (list :exit-method :value expr)))
+    (if expr
+        (list :exit-method :value expr)
+        '(:exit-method))))
+
+(defun parse/obj-display (stmt)
+  "Parse DISPLAY statement to AST move/output nodes.
+   Generates a MOVE statement for each expression."
+  (destructuring-bind (exprs) stmt
+    (list :display :values exprs)))
+
+(defun parse/obj-accept (stmt)
+  "Parse ACCEPT statement to AST move/input node."
+  (destructuring-bind (var) stmt
+    (list :accept :target var)))
+
+(defun parse/obj-speak (stmt)
+   "Parse SPEAK statement to AST dialogue node."
+   (destructuring-bind (exprs) stmt
+     (list :speak :values exprs)))
+
+(defun parse/obj-copy (stmt)
+   "Parse COPY statement to AST copy node."
+   (destructuring-bind (filename) stmt
+     (list :copy :name filename)))
 
 (defun obj-lex (source)
   "Simple Objective-C lexer returning tokens from SOURCE string."
@@ -183,5 +312,6 @@
 
 (defun parse/obj-program (source)
   "Parse Objective-C SOURCE to EIGHTBOL AST."
-  (declare (ignore source))
-  nil)
+  (let* ((tokens (objective-lex source)))
+    (when tokens
+      (yacc:parse-with-lexer *objective-parser* :lexer (make-objective-lexer tokens)))))

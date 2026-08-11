@@ -14,7 +14,6 @@
 (defun paragraph-label (name)
   "Return assembly label for paragraph NAME.
    COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
-  (declare (ignore _))
   (m6800-symbol (format nil "~a" name)))
 
 ;;; def-m6800-statement macro — compiles through the generic compile-statement
@@ -22,6 +21,7 @@
 (defmacro def-m6800-statement (statement-type &body body)
   `(defmethod compile-statement ((cpu (eql :m6800)) (statement-type (eql ,statement-type)) ast-node-data)
      (let ((statement (cons statement-type ast-node-data)))
+       (declare (ignorable statement))
        ,@body)))
 
 ;;; Top-level entry point
@@ -63,17 +63,17 @@
                                    (m6800-symbol *class-id*)
                                    (m6800-symbol (format nil "~a" method-id))))
            (custom-entry (nth-value 0 (split-method-leading-assembly-entry
-                                        (getf (rest method) :statements))))
+                                       (getf (rest method) :statements))))
            (stmts (nth-value 1 (split-method-leading-assembly-entry
-                                 (getf (rest method) :statements)))))
+                                (getf (rest method) :statements)))))
       (if custom-entry
           (progn
-            (format *output-stream* "~&~%~a:" (m6800-symbol custom-entry))
-            (format *output-stream* "~&~a:" dispatch-label))
-          (format *output-stream* "~&~%~a:" dispatch-label))
+            (format *output-stream*  "~2&~a:" (m6800-symbol custom-entry))
+            (format *output-stream*  "~&~a:" dispatch-label))
+          (format *output-stream*  "~&~%~a:" dispatch-label))
       (dolist (stmt stmts)
         (compile-statement :m6800 (first stmt) (rest stmt)))
-      (format *output-stream* "~&~8tRTS"))))
+      (format *output-stream*  "~&~8tRTS"))))
 
 ;;; Expression / value emission
 
@@ -81,41 +81,45 @@
   (declare (ignore width))
   (cond
     ((numberp expression)
-     (format *output-stream* "~&~8tLDAA    #~d" expression))
+     (format *output-stream*  "~&~8tLDAA    #~d" expression))
     ((and (stringp expression) (constant-p expression))
-     (format *output-stream* "~&~8tLDAA    #~d" (constant-value expression)))
+     (format *output-stream*  "~&~8tLDAA    #~d" (constant-value expression)))
     ((stringp expression)
-     (format *output-stream* "~&~8tLDAA    ~a" (bare-data-assembly-symbol expression *class-id*)))
+     (format *output-stream*  "~&~8tLDAA    ~a" (bare-data-assembly-symbol expression *class-id*)))
     ((and (listp expression) (eq (first expression) :of))
      (let ((slot (second expression)) (obj (third expression)))
        (if (member obj '(:self "Self" self) :test #'equal)
            (progn
-             (format *output-stream* "~&~8tLDX     Self")
-             (format *output-stream* "~&~8tLDAA    ~a,X" (slot-symbol slot *class-id*)))
-           (format *output-stream* "~&~8t; Unsupported OF target ~s for m6800 load" obj))))
+             (format *output-stream*  "~&~8tLDX     Self")
+             (format *output-stream*  "~&~8tLDAA    ~a,X" (slot-symbol slot *class-id*)))
+           (format *output-stream*  "~&~8t; Unsupported OF target ~s for m6800 load" obj))))
     (t
-     (format *output-stream* "~&~8t; Unsupported load ~s for m6800" expression)
-     (format *output-stream* "~&~8tLDAA    #0"))))
+     (format *output-stream*  "~&~8t; Unsupported load ~s for m6800" expression)
+     (format *output-stream*  "~&~8tLDAA    #0"))))
 
 (defun compile-m6800-store-a (destination)
   (cond
     ((stringp destination)
-     (format *output-stream* "~&~8tSTAA    ~a" (bare-data-assembly-symbol destination *class-id*)))
+     (format *output-stream*  "~&~8tSTAA    ~a" (bare-data-assembly-symbol destination *class-id*)))
     ((and (listp destination) (eq (first destination) :of))
      (let ((slot (second destination)) (obj (third destination)))
        (if (member obj '(:self "Self" self) :test #'equal)
            (progn
-             (format *output-stream* "~&~8tLDX     Self")
-             (format *output-stream* "~&~8tSTAA    ~a,X" (slot-symbol slot *class-id*)))
-           (format *output-stream* "~&~8t; Unsupported OF target ~s for m6800 store" obj))))
+             (format *output-stream*  "~&~8tLDX     Self")
+             (format *output-stream*  "~&~8tSTAA    ~a,X" (slot-symbol slot *class-id*)))
+           (format *output-stream*  "~&~8t; Unsupported OF target ~s for m6800 store" obj))))
     (t
-     (format *output-stream* "~&~8t; Unsupported store ~s for m6800" destination))))
+     (format *output-stream*  "~&~8t; Unsupported store ~s for m6800" destination))))
 
 ;;; Labels
 
 (defvar *m6800-label-counter* 0)
 
 (defun m6800-label (prefix)
+(defvar *m6800-break-label* nil
+  "Label to break to from current PERFORM loop, or NIL if not in a loop.")
+(defvar *m6800-continue-label* nil
+  "Label to continue to from current PERFORM loop, or NIL if not in a loop.")
   (format nil "L~a~d" prefix (incf *m6800-label-counter*)))
 
 ;;; Condition compilation
@@ -124,19 +128,19 @@
   (cond
     ((and (listp condition) (member (first condition) '(= equal) :test #'eq))
      (compile-m6800-load-a (second condition))
-     (format *output-stream* "~&~8tTAB")
+     (format *output-stream*  "~&~8tTAB")
      (compile-m6800-load-a (third condition))
-     (format *output-stream* "~&~8tCBA")
-     (format *output-stream* "~&~8tBNE     ~a" false-label))
+     (format *output-stream*  "~&~8tCBA")
+     (format *output-stream*  "~&~8tBNE     ~a" false-label))
     ((and (listp condition) (eq (first condition) :is-zero))
      (compile-m6800-load-a (second condition))
-     (format *output-stream* "~&~8tBNE     ~a" false-label))
+     (format *output-stream*  "~&~8tBNE     ~a" false-label))
     ((and (listp condition) (eq (first condition) :is-not-zero))
      (compile-m6800-load-a (second condition))
-     (format *output-stream* "~&~8tBEQ     ~a" false-label))
+     (format *output-stream*  "~&~8tBEQ     ~a" false-label))
     (t
-     (format *output-stream* "~&~8t; Unsupported condition ~s for m6800" condition)
-     (format *output-stream* "~&~8tJMP     ~a" false-label))))
+     (format *output-stream*  "~&~8t; Unsupported condition ~s for m6800" condition)
+     (format *output-stream*  "~&~8tJMP     ~a" false-label))))
 
 ;;; Statement dispatch — :around method for source comments
 
@@ -147,27 +151,26 @@
 ;;; Individual statement methods
 
 (def-m6800-statement :goback
-  (format *output-stream* "~&~8tRTS"))
+  (format *output-stream*  "~&~8tRTS"))
 
 (def-m6800-statement :exit-method
-  (format *output-stream* "~&~8tRTS"))
+  (format *output-stream*  "~&~8tRTS"))
 
 (def-m6800-statement :exit-program
-  (format *output-stream* "~&~8tRTS"))
+  (format *output-stream*  "~&~8tRTS"))
 
-(def-m6800-statement :exit
-  (format *output-stream* "~&~8tRTS"))
+(def-m6800-statement :break
+  (if *m6800-break-label*
+      (format *output-stream*  "~&~8tjmp ~a~%" *m6800-break-label*)
+      (error  "BREAK statement outside of PERFORM loop")))
 
-(def-m6800-statement :stop-run
-  (format *output-stream* "~&~8tRTS"))
+(def-m6800-statement :continue
+  (format *output-stream*  "~&~8tRTS"))
 
 (def-m6800-statement :move
   (compile-m6800-load-a (getf statement :from))
   (compile-m6800-store-a (getf statement :to)))
 
-(def-m6800-statement :set
-  (compile-m6800-load-a (getf statement :value))
-  (compile-m6800-store-a (getf statement :target)))
 
 (def-m6800-statement :if
   (let ((false-label (m6800-label "IfFalse"))
@@ -178,31 +181,31 @@
     (dolist (s then-stmts)
       (compile-statement :m6800 (first s) (rest s)))
     (when else-stmts
-      (format *output-stream* "~&~8tJMP     ~a" end-label))
-    (format *output-stream* "~&~a:" false-label)
+      (format *output-stream*  "~&~8tJMP     ~a" end-label))
+    (format *output-stream*  "~&~a:" false-label)
     (dolist (s else-stmts)
       (compile-statement :m6800 (first s) (rest s)))
     (when else-stmts
-      (format *output-stream* "~&~a:" end-label))))
+      (format *output-stream*  "~&~a:" end-label))))
 
 (def-m6800-statement :call
   (let ((target (or (getf statement :service) (getf statement :target) "UnknownCall")))
-    (format *output-stream* "~&~8tJSR     ~a" (m6800-symbol target))))
+    (format *output-stream*  "~&~8tJSR     ~a" (m6800-symbol target))))
 
 (def-m6800-statement :invoke
   (let ((method (or (getf statement :method) "UnknownMethod")))
-    (format *output-stream* "~&~8tJSR     Invoke~a~a"
+    (format *output-stream*  "~&~8tJSR     Invoke~a~a"
             (m6800-symbol *class-id*)
             (m6800-symbol method))))
 
 (def-m6800-statement :goto
   (let ((target (or (getf statement :target) (first (getf statement :targets)))))
-    (format *output-stream* "~&~8tJMP     ~a" (m6800-symbol target))))
+    (format *output-stream*  "~&~8tJMP     ~a" (m6800-symbol target))))
 
 (def-m6800-statement :paragraph
    (let ((name (first ast-node-data)))
      (when name
-       (format *output-stream* "~&~a:" (paragraph-label (format nil "~a" name))))))
+       (format *output-stream*  "~&~a:" (paragraph-label (format nil "~a" name))))))
 
 (def-m6800-statement :add
   (let* ((to (getf statement :to))
@@ -211,28 +214,28 @@
          (bcd-p (when result (usage-bcd-p result))))
     (assert-pic-decimal-add-compiled :m6800 statement)
     (compile-m6800-load-a to)
-    (format *output-stream* "~&~8tTAB")
+    (format *output-stream*  "~&~8tTAB")
     (compile-m6800-load-a from)
-    (format *output-stream* "~&~8tABA")
+    (format *output-stream*  "~&~8tABA")
     (when bcd-p
       (let ((ok1 (m6800-label "ad1")) (ok2 (m6800-label "ad2")))
-        (format *output-stream* "~&~8tTAB")
-        (format *output-stream* "~&~8tANDA    #$0F")
-        (format *output-stream* "~&~8tCMPA    #10")
-        (format *output-stream* "~&~8tBLO     ~a" ok1)
-        (format *output-stream* "~&~8tLDAA    B")
-        (format *output-stream* "~&~8tADDA    #6")
-        (format *output-stream* "~&~8tTAB")
-        (format *output-stream* "~&~a:" ok1)
-        (format *output-stream* "~&~8tLDAA    B")
-        (format *output-stream* "~&~8tANDA    #$F0")
-        (format *output-stream* "~&~8tCMPA    #$A0")
-        (format *output-stream* "~&~8tBLO     ~a" ok2)
-        (format *output-stream* "~&~8tLDAA    B")
-        (format *output-stream* "~&~8tADDA    #$60")
-        (format *output-stream* "~&~8tTAB")
-        (format *output-stream* "~&~a:" ok2)
-        (format *output-stream* "~&~8tLDAA    B")))
+        (format *output-stream*  "~&~8tTAB")
+        (format *output-stream*  "~&~8tANDA    #$0F")
+        (format *output-stream*  "~&~8tCMPA    #10")
+        (format *output-stream*  "~&~8tBLO     ~a" ok1)
+        (format *output-stream*  "~&~8tLDAA    B")
+        (format *output-stream*  "~&~8tADDA    #6")
+        (format *output-stream*  "~&~8tTAB")
+        (format *output-stream*  "~&~a:" ok1)
+        (format *output-stream*  "~&~8tLDAA    B")
+        (format *output-stream*  "~&~8tANDA    #$F0")
+        (format *output-stream*  "~&~8tCMPA    #$A0")
+        (format *output-stream*  "~&~8tBLO     ~a" ok2)
+        (format *output-stream*  "~&~8tLDAA    B")
+        (format *output-stream*  "~&~8tADDA    #$60")
+        (format *output-stream*  "~&~8tTAB")
+        (format *output-stream*  "~&~a:" ok2)
+        (format *output-stream*  "~&~8tLDAA    B")))
     (compile-m6800-store-a result)))
 
 (def-m6800-statement :subtract
@@ -242,51 +245,48 @@
     (let* ((result (or (getf statement :giving) minuend))
            (bcd-p (when result (usage-bcd-p result))))
       (compile-m6800-load-a minuend)
-      (format *output-stream* "~&~8tTAB")
+      (format *output-stream*  "~&~8tTAB")
       (compile-m6800-load-a subtrahend)
-      (format *output-stream* "~&~8tSBA")
+      (format *output-stream*  "~&~8tSBA")
       (when bcd-p
         (let ((ok1 (m6800-label "sb1")) (ok2 (m6800-label "sb2")))
-          (format *output-stream* "~&~8tTAB")
-          (format *output-stream* "~&~8tANDA    #$0F")
-          (format *output-stream* "~&~8tCMPA    #10")
-          (format *output-stream* "~&~8tBLO     ~a" ok1)
-          (format *output-stream* "~&~8tLDAA    B")
-          (format *output-stream* "~&~8tSUBA    #6")
-          (format *output-stream* "~&~8tTAB")
-          (format *output-stream* "~&~a:" ok1)
-          (format *output-stream* "~&~8tLDAA    B")
-          (format *output-stream* "~&~8tANDA    #$F0")
-          (format *output-stream* "~&~8tCMPA    #$A0")
-          (format *output-stream* "~&~8tBLO     ~a" ok2)
-          (format *output-stream* "~&~8tLDAA    B")
-          (format *output-stream* "~&~8tSUBA    #$60")
-          (format *output-stream* "~&~8tTAB")
-          (format *output-stream* "~&~a:" ok2)
-          (format *output-stream* "~&~8tLDAA    B")))
+          (format *output-stream*  "~&~8tTAB")
+          (format *output-stream*  "~&~8tANDA    #$0F")
+          (format *output-stream*  "~&~8tCMPA    #10")
+          (format *output-stream*  "~&~8tBLO     ~a" ok1)
+          (format *output-stream*  "~&~8tLDAA    B")
+          (format *output-stream*  "~&~8tSUBA    #6")
+          (format *output-stream*  "~&~8tTAB")
+          (format *output-stream*  "~&~a:" ok1)
+          (format *output-stream*  "~&~8tLDAA    B")
+          (format *output-stream*  "~&~8tANDA    #$F0")
+          (format *output-stream*  "~&~8tCMPA    #$A0")
+          (format *output-stream*  "~&~8tBLO     ~a" ok2)
+          (format *output-stream*  "~&~8tLDAA    B")
+          (format *output-stream*  "~&~8tSUBA    #$60")
+          (format *output-stream*  "~&~8tTAB")
+          (format *output-stream*  "~&~a:" ok2)
+          (format *output-stream*  "~&~8tLDAA    B")))
       (compile-m6800-store-a result))))
 
 (def-m6800-statement :compute
   (compile-m6800-load-a (getf statement :expression))
   (compile-m6800-store-a (getf statement :target)))
 
-(def-m6800-statement :perform
-  (format *output-stream* "~&~8t; PERFORM not yet implemented for m6800"))
-
 (def-m6800-statement :evaluate
-  (format *output-stream* "~&~8t; EVALUATE not yet implemented for m6800"))
+  (format *output-stream*  "~&~8t; EVALUATE not yet implemented for m6800"))
 
 (def-m6800-statement :inspect
-  (format *output-stream* "~&~8t; INSPECT not yet implemented for m6800"))
+  (format *output-stream*  "~&~8t; INSPECT not yet implemented for m6800"))
 
 (def-m6800-statement :string-blt
-  (format *output-stream* "~&~8t; STRING BLT not yet implemented for m6800"))
+  (format *output-stream*  "~&~8t; STRING BLT not yet implemented for m6800"))
 
 (def-m6800-statement :log-fault
-  (format *output-stream* "~&~8t; LOG FAULT ~s" (getf statement :code)))
+  (format *output-stream*  "~&~8t; LOG FAULT ~s" (getf statement :code)))
 
 (def-m6800-statement :debug-break
-  (format *output-stream* "~&~8t; DEBUG BREAK ~s" (getf statement :code)))
+  (format *output-stream*  "~&~8t; DEBUG BREAK ~s" (getf statement :code)))
 
 (def-m6800-statement :divide
   (let* ((divisor (getf statement :divisor))
@@ -305,11 +305,11 @@
           (unless (zerop shift)
             (compile-m6800-load-a (or source dest))
             (dotimes (_ shift)
-              (if signed (format *output-stream* "~&~8tASRA") (format *output-stream* "~&~8tLSRA")))
+              (if signed (format *output-stream*  "~&~8tASRA") (format *output-stream*  "~&~8tLSRA")))
             (compile-m6800-store-a dest)))
-        (error 'source-error
-               :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
-               :detail (format nil "DIVIDE by ~s" divisor)))))
+        (error  'source-error
+                :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
+                :detail (format nil "DIVIDE by ~s" divisor)))))
 
 (def-m6800-statement :multiply
   (let* ((multiplier (getf statement :multiplier))
@@ -327,14 +327,14 @@
           (unless (zerop shift)
             (compile-m6800-load-a (or source dest))
             (dotimes (_ shift)
-              (format *output-stream* "~&~8tASLA"))
+              (format *output-stream*  "~&~8tASLA"))
             (compile-m6800-store-a dest)))
         (error 'source-error
                :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
                :detail (format nil "MULTIPLY by ~s" multiplier)))))
 
 (def-m6800-statement :comment
-  (format *output-stream* "~&~8t; ~a"
+  (format *output-stream*  "~&~8t; ~a"
           (let ((text (first ast-node-data)))
             (if (listp text)
                 (format nil "~{~a~%~8t; ~}" (mapcar (lambda (s) (if (stringp s) s (princ-to-string s))) text))
@@ -344,17 +344,17 @@
   (unless (gethash *class-id* *parent-classes*)
     (load-classes))
   (if-let (parent-class (gethash *class-id* *parent-classes*))
-    (format *output-stream* "~&~8tJSR     Method~a~a"
+    (format *output-stream*  "~&~8tJSR     Method~a~a"
             (m6800-symbol parent-class)
             (m6800-symbol (format nil "~a" *method-id*)))
-    (error "Can't figure out parent class of ~a" *class-id*)))
+    (format *output-stream*  "Can't figure out parent class of ~a" *class-id*)))
 
 (def-m6800-statement :shift-left
   (let* ((target (getf statement :target))
          (count (getf statement :count 1)))
     (compile-m6800-load-a target)
     (dotimes (_ count)
-      (format *output-stream* "~&~8tASLA"))
+      (format *output-stream*  "~&~8tASLA"))
     (compile-m6800-store-a target)))
 
 (def-m6800-statement :shift-right
@@ -364,10 +364,40 @@
     (compile-m6800-load-a target)
     (dotimes (_ count)
       (if signed
-          (format *output-stream* "~&~8tASRA")
-          (format *output-stream* "~&~8tLSRA")))
+          (format *output-stream*  "~&~8tASRA")
+          (format *output-stream*  "~&~8tLSRA")))
     (compile-m6800-store-a target)))
 
 (def-m6800-statement :copy
-  (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
-         (getf statement :name)))
+  (format *output-stream*  "EIGHTBOL: COPY ~s should have been expanded at lex time"
+          (getf statement :name)))
+
+(def-m6800-statement :dialogue
+  (let ((text (getf statement :text))
+        (speaker (or (getf statement :speaker) "Narrator")))
+    ;; Emit dialogue ID reference (deduplication handled upstream)
+    (format *output-stream*  "~&~8t;; Dialogue: ~a | ~a" text speaker)
+    ;; Load dialogue ID into A (ID generated by asset pipeline)
+    (format *output-stream*  "~&~8tLDA  A  #DialogueID_~a"
+            (normalize-identifier-to-pascal-case text))
+    ;; Set speaker register (B holds speaker ID)
+    (format *output-stream*  "~&~8tLDB  B  #~a" (normalize-identifier-to-pascal-case speaker))
+    ;; Call dialogue dispatcher
+    (format *output-stream*  "~&~8tJSR  DoDialogue~%")))
+
+(def-m6800-statement :print
+  (let ((value (getf statement :value)))
+    (format *output-stream*  "~&~8t;; Print: ~a" value)
+    ;; Load value into A
+    (compile-m6800-load-a value)
+    ;; Call print output routine
+    (format *output-stream*  "~&~8tJSR  DoPrint~%")))
+
+(def-m6800-statement :input
+  (let ((target (getf statement :target)))
+    (format *output-stream*  "~&~8t;; Input to ~a" target)
+    ;; Call input routine (returns value in A)
+    (format *output-stream*  "~&~8tJSR  DoInput")
+    ;; Store result to target
+    (compile-m6800-store-a target)))
+

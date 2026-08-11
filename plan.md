@@ -1,7 +1,7 @@
 # EIGHTBOL: 11 Front-Ends & Full Back-End Support Plan
 
 ## Overview
-This plan implements full support for 14 front-end languages (8 existing + 6 new) across all 13 back-end processors, with complete call form support, COPY handling, CLI generalization, and enhanced PERFORM for inline loops. The plan maintains the invariant that only COBOL parses data structures (via copybooks), while all other languages access data structure definitions exclusively through COPY statements.
+This plan implements full support for 14 front-end languages (8 existing + 6 new) across all 13 back-end processors, with complete call form support, COPY handling, CLI generalization, and enhanced PERFORM for inline loops. The plan maintains the invariant that **only COBOL parses data structures (via copybooks), while all other front-ends access data structure definitions exclusively through COPY statements**.
 
 ## Progress Summary
 ### Completed (Phase 0 Foundation)
@@ -31,6 +31,18 @@ This plan implements full support for 14 front-end languages (8 existing + 6 new
 ### Blocked
 - Compilation errors in backend-6502-part3.lisp and backend-6502-part4.lisp preventing system load
 - Need to resolve syntax issues before proceeding with backend updates
+
+### Invariants & Requirements
+- **Data Definition Rule**: Only COBOL front-end produces `:dd` data definition nodes (via copybook reader). All other front-ends emit data structure definitions exclusively through `(:copy :name ...)` statements. Non-COBOL front-ends that emit `:dd` or `:fortran-*` data definition nodes are considered buggy. A validation function `validate-ast-no-data-definitions` is provided for this purpose.
+- **Identifier Normalization Rule**: All front-ends must normalize identifiers to the canonical case form before producing AST nodes. The canonical form is PascalCase (e.g., `MyVar`, not `my_var`). AGI uses Header.Case (dots instead of hyphens), Muddle/Lisp uses hyphenated-names, etc. See Identifier Normalization section below.
+- **Identifier Normalization Section**:
+  - Each front-end is responsible for converting its local identifier style to the canonical interchange form:
+    - PascalCase for most languages (assembly, BASIC, AGI, GOAL, etc.)
+    - Header-Case (with hyphens) for Lisp/Muddle/COBOL
+    - Header.Case (with dots) for AGI (since AGI source uses dots as separators)
+    - SHOUT-SNAKE-CASE for some backends
+  - The front-end lexer/parser must perform this conversion; the backend expects the canonical PascalCase form.
+  - The function `frontend-normalize-identifier` (language-specific) handles this conversion.
 
 ### Not Started
 - Phase 1: Fix existing 8 front-ends (Lingo, SmallTalk, FORTRAN, Lua, ObjC, COBOL, Pascal, BASIC)
@@ -77,7 +89,7 @@ This plan implements full support for 14 front-end languages (8 existing + 6 new
    - `make-program-node`/`make-method-node` (ast.lisp:63,72 vs grammar-build.lisp:7,16)
    - `make-call-with-service/library/bank` (lingo-lexer:238-246 vs smalltalk-lexer:238-246)
 
-### Phase 1: Fix Existing 8 Front-Ends (NOT STARTED)
+### Phase 1: Fix Existing 8 Front-Ends (IN PROGRESS — BASIC parser resolved)
 - All fixes for Lingo, SmallTalk, FORTRAN, Lua, Objective-C, COBOL, Pascal, BASIC pending
 - Waiting for Phase 0 foundation to be complete and system loading successfully
 
@@ -120,8 +132,14 @@ This plan implements full support for 14 front-end languages (8 existing + 6 new
    - `make-program-node`/`make-method-node` (ast.lisp:63,72 vs grammar-build.lisp:7,16)
    - `make-call-with-service/library/bank` (lingo-lexer:238-246 vs smalltalk-lexer:238-246)
 
-### Phase 1: Fix Existing 8 Front-Ends
-*(Brings COBOL, FORTRAN, BASIC, Pascal, Lua, ObjC, SmallTalk, Lingo to full functionality)*
+### Phase 1: Fix Existing 8 Front-Ends (IN PROGRESS)
+* BASIC parser resolved (updated parser Lisp files)
+* Lingo: Fixing A1-A4 (awaiting compiler integration)
+* SmallTalk: Implementing B1-B3 (COPY syntax pending)
+* FORTRAN: Finalizing C1 (parser rule adjustments)
+* Lua: Balancing AST node handling
+* Objective-C: Fixing identifier normalization
+* Pascal: Parsing property accessors
 **Lingo** (`src/frontend-lingo/lingo-parser.lisp`):
 - A1: Replace `(make-call-node … :library t)` with raw `(:call :target … :bank nil :library t)`
 - A2: Drop `:args` from `make-invoke-node` calls
