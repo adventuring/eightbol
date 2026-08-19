@@ -112,18 +112,22 @@
                                          :depends-on ("muddle-lexer"))))
 
                           ;; SCI frontend
-                          (:module "frontend-sci"
-                           :depends-on ("package" "ast" "grammar-build")
-                           :components ((:file "sci-lexer")
-                                        (:file "sci-parser"
-                                         :depends-on ("sci-lexer"))))
+                           (:module "frontend-sci"
+                            :depends-on ("package" "ast" "grammar-build" "eightbol-compile")
+                            :components ((:file "sci-lexer")
+                                         (:file "sci-parser"
+                                          :depends-on ("sci-lexer"))
+                                         (:file "sci-transpile"
+                                          :depends-on ("sci-parser"))))
 
-                          ;; SCUMM frontend
-                          (:module "frontend-scumm"
-                           :depends-on ("package" "ast" "grammar-build")
-                           :components ((:file "scumm-lexer")
-                                        (:file "scumm-parser"
-                                         :depends-on ("scumm-lexer"))))
+                           ;; SCUMM frontend
+                           (:module "frontend-scumm"
+                            :depends-on ("package" "ast" "grammar-build" "eightbol-compile")
+                            :components ((:file "scumm-lexer")
+                                         (:file "scumm-parser"
+                                          :depends-on ("scumm-lexer"))
+                                         (:file "scumm-transpile"
+                                          :depends-on ("scumm-parser"))))
 
                           ;; ZIL frontend
                           (:module "frontend-zil"

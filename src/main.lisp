@@ -158,14 +158,10 @@ Root directory for output paths.
          (compile-eightbol (list input-file)
                            :cpus cpus
                            :output-file (when output-file (pathname output-file))))
-        (:sci
-         (compile-eightbol (list input-file)
-                           :cpus cpus
-                           :output-file (when output-file (pathname output-file))))
-        (:scumm
-         (compile-eightbol (list input-file)
-                           :cpus cpus
-                           :output-file (when output-file (pathname output-file))))
+         (:sci
+          (compile-sci-from-path input-file :cpus cpus :output-file output-file))
+         (:scumm
+          (compile-scumm-from-path input-file :cpus cpus :output-file output-file))
         (:zil
          (compile-eightbol (list input-file)
                            :cpus cpus
