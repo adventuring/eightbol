@@ -64,12 +64,43 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
   (list :if :condition condition :true-branch true-branch :false-branch false-branch))
 
 (defun make-while-node (condition body)
-  "Create a while loop AST node."
-  (list :while :condition condition :body body))
+  "Create a while loop AST node (converted to :perform)."
+  (list :perform :body body :until (list :not condition)))
 
 (defun make-block-node (&key params expressions)
   "Create a code block AST node."
   (list :block :params params :expressions expressions))
+
+(defun make-call-node (target &key args)
+  "Create a function call AST node."
+  (list :call :target target :using args))
+
+(defun make-perform-node (body &key until varying)
+  "Create a loop/perform AST node."
+  (let ((node (list :perform :body body)))
+    (when until (setf node (append node (list :until until))))
+    (when varying (setf node (append node (list :varying varying))))
+    node))
+
+(defun make-copy-node (filename)
+  "Create a copy (include) AST node."
+  (list :copy :name filename))
+
+(defun make-dialogue-node (&key speaker text)
+  "Create a dialogue AST node."
+  (list :dialogue :speaker speaker :text text))
+
+(defun make-comment-node (text)
+  "Create a comment AST node."
+  (list :comment :text text))
+
+(defun make-break-node ()
+  "Create a break AST node."
+  (list :break))
+
+(defun make-continue-node ()
+  "Create a continue AST node."
+  (list :continue))
 
 (eval
  `(yacc:define-parser *smalltalk-parser*
@@ -154,15 +185,15 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
            (declare (ignore _colon))
            (make-copy-node filename))))
 
-     ;; Message: receiver.selector or receiver.selector(args)
-     (message
+      ;; Message: receiver.selector or receiver.selector(args)
+      (message
        (expression :PERIOD expression
          (lambda (receiver selector)
-           (:invoke :receiver receiver :selector selector)))
+           (list :invoke :receiver receiver :selector selector)))
        (expression :PERIOD expression :LPAREN expression-list :RPAREN
          (lambda (receiver selector args)
            (declare (ignore args))
-           (:invoke :receiver receiver :selector selector))))
+           (list :invoke :receiver receiver :selector selector))))
 
     (expression
       (variable)

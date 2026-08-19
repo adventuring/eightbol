@@ -37,23 +37,11 @@
 ;; Expression/operand values:
 ;;   literal number or string
 ;;   symbol (identifier reference)
-;;   (:of slot obj)       — qualified identifier (slot OF obj)
-;;   (:address-of id)     — ADDRESS OF id
-;;   (:refmod :base name :start expr :length expr)  — reference modification name(start:length)
-;;   (:subscript name index)  — subscripted identifier name(index)
-;;   :self / :null        — SELF / NULL
-;; ;;
-;; FORTRAN-inspired node shapes (explicit typing, no implicit numeric):
-;;   (:fortran-move       :from expr :to identifier :target-type type-keyword)
-;;   (:fortran-compute    :target identifier :expression expr :result-type type-keyword)
-;;   (:fortran-do         :var identifier :from expr :to expr [:by expr] :stmts stmts)
-;;   (:fortran-if         :condition expr :then stmts :else stmts)
-;;   (:fortran-logical-op :op keyword :left expr :right expr)
-;;   (:fortran-arith-op   :op keyword :left expr :right expr :result-type type-keyword)
-;;   (:fortran-print      :arguments exprs :format format-spec :unit unit-expr)
-;;   (:fortran-read       :variables vars :format format-spec :unit unit-expr)
-;;   (:fortran-write      :arguments exprs :format format-spec :unit unit-expr)
-;;   (:fortran-dialogue   :type keyword :arguments exprs :format format-spec)
+ ;;   (:of slot obj)       — qualified identifier (slot OF obj)
+ ;;   (:address-of id)     — ADDRESS OF id
+ ;;   (:refmod :base name :start expr :length expr)  — reference modification name(start:length)
+ ;;   (:subscript name index)  — subscripted identifier name(index)
+ ;;   :self / :null        — SELF / NULL
 
 (in-package :eightbol)
 
@@ -77,64 +65,6 @@
   (list :method
         :method-id  method-id
         :statements (or statements '())))
-
-;;; FORTRAN I/O and dialogue node constructors
-
-(defun make-fortran-print (arguments &key format unit)
-  "Build a :fortran-print AST node for PRINT statements.
-   ARGUMENTS — list of expressions to output
-   FORMAT — optional format specification
-   UNIT — optional output unit (default: standard output)"
-  (list :fortran-print :arguments arguments :format format :unit unit))
-
-(defun make-fortran-read (variables &key format unit)
-  "Build a :fortran-read AST node for READ statements.
-   VARIABLES — list of variables to read into
-   FORMAT — optional format specification
-   UNIT — optional input unit (default: standard input)"
-  (list :fortran-read :variables variables :format format :unit unit))
-
-(defun make-fortran-write (arguments &key format unit)
-  "Build a :fortran-write AST node for WRITE statements.
-   ARGUMENTS — list of expressions to write
-   FORMAT — optional format specification
-   UNIT — output unit (required)"
-  (list :fortran-write :arguments arguments :format format :unit unit))
-
-(defun make-fortran-dialogue (dialogue-type arguments &key format)
-  "Build a :fortran-dialogue AST node for dialogue/input/output operations.
-   DIALOGUE-TYPE — keyword like :PRINT, :READ, :INPUT, :OUTPUT
-   ARGUMENTS — list of expressions or variables
-   FORMAT — optional format specification"
-  (list :fortran-dialogue :type dialogue-type :arguments arguments :format format))
-
-(defun make-fortran-move (from to &optional target-type)
-  "Build a :fortran-move AST node with explicit typing."
-  (list :fortran-move :from from :to to :target-type target-type))
-
-(defun make-fortran-compute (target expression &optional result-type)
-  "Build a :fortran-compute AST node with explicit result typing."
-  (list :fortran-compute :target target :expression expression :result-type result-type))
-
-(defun make-fortran-declare (name &key type init)
-  "Build a :fortran-declare AST node for variable declarations."
-  (list :fortran-declare :name name :type type :init init))
-
-(defun make-fortran-do (var from to &key by stmts)
-  "Build a :fortran-do AST node for DO loops."
-  (list :fortran-do :var var :from from :to to :by by :stmts stmts))
-
-(defun make-fortran-if (condition then else)
-  "Build a :fortran-if AST node."
-  (list :fortran-if :condition condition :then then :else else))
-
-(defun make-fortran-arithmetic (op left right &optional result-type)
-  "Build a :fortran-arithmetic AST node with type info."
-  (list :fortran-arithmetic :op op :left left :right right :result-type result-type))
-
-(defun make-fortran-type (name type &key fields)
-  "Build a :fortran-type AST node for structured types."
-  (list :fortran-type :name name :type type :fields fields))
 
 (defun make-print-node (expressions)
   "Build a :print AST node for PRINT statements.

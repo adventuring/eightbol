@@ -16,13 +16,13 @@
       (:start-symbol program)
       (:terminals (number string ident :comma |=| |+| |-| |*| |/| |\|\|| |&| 
                           |<| |>| |<=| |>=| |==| |~=| |(| |)| |{| |}| |[| |]| |\:|
-                          |\;| keyword))
+                          |\;| keyword |break| |continue| |comment| |move| |to|))
                           (:precedence ((:left :|or|) (:left :|and|)
                                                       (:left :|==| :|~=| :|<| :|>| :|<=| :|>=|)
-                  (:left :|+| :|-| )
-                  (:left :|*| :|/| )
-                  (:right :|not|)))
-   (:muffle-conflicts t)
+                              (:left :|+| :|-| )
+                              (:left :|*| :|/| )
+                              (:right :|not|)))
+    (:muffle-conflicts t)
 
    ;; Top-level program: list of statements
    (program
@@ -39,19 +39,23 @@
                     (lambda (stmts stmt)
                       (append stmts (remove nil (list stmt))))))
 
-   ;; Statements
-   (statement
-    (nil)
-    (local-declaration)
-    (if-statement)
-    (while-statement)
-    (for-statement)
-    (return-statement)
-    (expression-statement)
-    (dialogue-statement)
-    (print-statement)
-    (input-statement)
-    (copy-statement))
+    ;; Statements
+    (statement
+     (nil)
+     (local-declaration)
+     (if-statement)
+     (while-statement)
+     (for-statement)
+     (return-statement)
+     (expression-statement)
+     (dialogue-statement)
+     (print-statement)
+     (input-statement)
+     (copy-statement)
+     (comment-statement)
+     (break-statement)
+     (continue-statement)
+     (move-statement))
 
    ;; Local variable declaration
    (local-declaration
@@ -171,19 +175,51 @@
                      (declare (ignore _comma))
                      (append prev (list (list :address-of var))))))
 
-      ;; Copy statement
-      
-      (copy-statement
-       (|copy| |(| string |)| |;|
-               (lambda (_copy _lp filename _rp _semi)
-                 (declare (ignore _copy _lp _rp _semi))
-                 (list :copy :name filename)))
-       (|copy| |(| string |)|
-               (lambda (_copy _lp filename _rp)
-                 (declare (ignore _copy _lp _rp))
-                 (list :copy :name filename))))
+       ;; Copy statement
+       
+       (copy-statement
+        (|copy| |(| string |)| |;|
+                (lambda (_copy _lp filename _rp _semi)
+                  (declare (ignore _copy _lp _rp _semi))
+                  (list :copy :name filename)))
+        (|copy| |(| string |)|
+                (lambda (_copy _lp filename _rp)
+                  (declare (ignore _copy _lp _rp))
+                  (list :copy :name filename))))
 
-      ;; Expressions
+       ;; Comment statement
+       
+       (comment-statement
+        (|comment| string
+                   (lambda (_comment text)
+                     (declare (ignore _comment))
+                     (list :comment :text text))))
+
+       ;; Break statement (for loops/perform)
+       
+       (break-statement
+        (|break|
+         (lambda (_break)
+           (declare (ignore _break))
+           (list :break))))
+
+       ;; Continue statement (for loops/perform)
+       
+       (continue-statement
+        (|continue|
+         (lambda (_continue)
+           (declare (ignore _continue))
+           (list :continue))))
+
+       ;; Move statement (direct assignment/copy to another variable)
+       
+       (move-statement
+        (|move| expression |to| ident
+                (lambda (_move expr _to target)
+                  (declare (ignore _move _to))
+                  (list :move :from expr :to target))))
+
+       ;; Expressions
       
       (expression
        (number)
@@ -334,6 +370,22 @@
   "Create a copy AST node."
   (list :copy :name filename))
 
+(defun parse/lua-comment (text)
+  "Create a comment AST node."
+  (list :comment :text text))
+
+(defun parse/lua-break ()
+  "Create a break AST node."
+  (list :break))
+
+(defun parse/lua-continue ()
+  "Create a continue AST node."
+  (list :continue))
+
+(defun parse/lua-move (from to)
+  "Create a move AST node (copy value from one place to another)."
+  (list :move :from from :to to))
+
 ;;; Main parser entry points
 
 (defun lua-lex (source)
@@ -368,4 +420,8 @@ Returns a :program node with :statements containing all parsed statements."
           parse/lua-dialogue
           parse/lua-print
           parse/lua-input
-          parse/lua-copy))
+          parse/lua-copy
+          parse/lua-comment
+          parse/lua-break
+          parse/lua-continue
+          parse/lua-move))

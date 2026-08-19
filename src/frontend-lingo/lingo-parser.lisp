@@ -289,3 +289,97 @@
     (multiple-value-bind (val _base)
         (lingo-parse-number s)
       (or val (parse-integer s :radix 10 :junk-allowed t)))))
+
+;;; Helper functions for standard EIGHTBOL node production
+
+(defun make-procedure-node (name &key statements)
+  "Create a procedure/method AST node."
+  (make-method-node name :statements statements))
+
+(defun make-conditional-or (left right)
+  "Create a conditional OR node."
+  (list :or left right))
+
+(defun make-conditional-and (left right)
+  "Create a conditional AND node."
+  (list :and left right))
+
+(defun make-conditional-not (expr)
+  "Create a conditional NOT node."
+  (list :not expr))
+
+(defun make-conditional-eq (left right)
+  "Create an equality comparison node."
+  (list :eq left right))
+
+(defun make-conditional-ne (left right)
+  "Create a not-equal comparison node."
+  (list :neq left right))
+
+(defun make-conditional-lt (left right)
+  "Create a less-than comparison node."
+  (list :lt left right))
+
+(defun make-conditional-gt (left right)
+  "Create a greater-than comparison node."
+  (list :gt left right))
+
+(defun make-conditional-le (left right)
+  "Create a less-than-or-equal comparison node."
+  (list :le left right))
+
+(defun make-conditional-ge (left right)
+  "Create a greater-than-or-equal comparison node."
+  (list :ge left right))
+
+(defun make-expression-add (left right)
+  "Create an addition expression node."
+  (list :add :from left :to right))
+
+(defun make-expression-subtract (left right)
+  "Create a subtraction expression node."
+  (list :subtract :from left :from-target right))
+
+(defun make-expression-multiply (left right)
+  "Create a multiplication expression node."
+  (list :compute :target 'result :expression (list :* left right)))
+
+(defun make-expression-divide (left right)
+  "Create a division expression node."
+  (list :compute :target 'result :expression (list :/ left right)))
+
+(defun make-goto-node (label)
+  "Create a goto (unconditional jump) AST node."
+  (list :goto :target label))
+
+(defun make-qualified-identifier (prop obj)
+  "Create a qualified identifier (object.property) AST node."
+  (list :property :object obj :name prop))
+
+(defun make-perform-node (var &key from to by body)
+  "Create a perform/loop AST node."
+  (let ((node (list :perform :varying var)))
+    (when from (setf node (append node (list :from from))))
+    (when to (setf node (append node (list :to to))))
+    (when by (setf node (append node (list :by by))))
+    (when body (setf node (append node (list :body body))))
+    node))
+
+(defun make-move-node (value target)
+  "Create a move/assignment AST node."
+  (list :move :from value :to target))
+
+(defun make-if-node (cond then-stmts else-stmts)
+  "Create an if-conditional AST node."
+  (let ((node (list :if :condition cond :then then-stmts)))
+    (when else-stmts (setf node (append node (list :else else-stmts))))
+    node))
+
+(defun make-invoke-node (target &key args)
+  "Create an invocation (method/function call) AST node."
+  (declare (ignore args))
+  (list :invoke :target target))
+
+(defun make-goback-node ()
+  "Create a return/goback AST node."
+  (list :goback))

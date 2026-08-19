@@ -310,6 +310,37 @@
   (declare (ignore source))
   nil)
 
+;;; Helper functions for AST node conversion to standard EIGHTBOL types
+
+(defun parse/objective-move (from to)
+  "Create a move AST node (copy value from one variable to another)."
+  (list :move :from from :to to))
+
+(defun parse/objective-comment (text)
+  "Create a comment AST node."
+  (list :comment :text text))
+
+(defun parse/objective-print (&rest args)
+  "Create a print AST node (becomes :call to print)."
+  (list :call :target 'print :args (list args)))
+
+(defun parse/objective-input (&rest vars)
+  "Create an input AST node (becomes :call to input)."
+  (list :call :target 'input :args 
+        (mapcar (lambda (v) (list :address-of v)) vars)))
+
+(defun parse/objective-dialogue (text)
+  "Create a dialogue AST node."
+  (list :dialogue :text text))
+
+(defun parse/objective-break ()
+  "Create a break AST node."
+  (list :break))
+
+(defun parse/objective-continue ()
+  "Create a continue AST node."
+  (list :continue))
+
 (defun parse/obj-program (source)
   "Parse Objective-C SOURCE to EIGHTBOL AST."
   (let* ((tokens (objective-lex source)))

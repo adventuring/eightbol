@@ -52,7 +52,7 @@
   (make-method-node name :statements '()))
 
 (defun fortran-parse-super-call (method)
-  (list :sup-call :method method))
+  (list :invoke-super :method method))
 
 (defun fortran-parse-goto (label)
   (list :goto :target label))
