@@ -12,8 +12,9 @@ Examples: 'myVariable' stays 'myVariable', 'MyVariable' becomes 'myVariable'."
                       "")))
         (concatenate 'string first-lower rest))))
 
-(defun normalize-identifier (ident)
-  "Normalize IDENT to camelCase for AST node representation."
+(defun smalltalk-normalize-identifier (ident)
+  "Normalize IDENT to camelCase for Smalltalk AST node representation.
+Renamed from normalize-identifier to avoid collision with COBOL lexer's normalize-identifier."
   (if (stringp ident)
       (smalltalk-to-camel-case ident)
       ident))
@@ -31,14 +32,14 @@ Examples: 'myVariable' stays 'myVariable', 'MyVariable' becomes 'myVariable'."
 (defun make-move-node (target value)
   "Create an assignment AST node (MOVE in COBOL terminology)."
   (list :move
-        :target (normalize-identifier target)
+        :target (smalltalk-normalize-identifier target)
         :value value))
 
 (defun make-invoke-node (receiver selector)
   "Create a message send (method invocation) AST node."
   (list :invoke
         :receiver receiver
-        :selector (normalize-identifier selector)))
+        :selector (smalltalk-normalize-identifier selector)))
 
 (defun make-literal-string (s)
   "Create a string literal AST node."
@@ -203,7 +204,7 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
         (lambda (expr) expr)))
 
     (variable
-      (ident (lambda (i) (normalize-identifier i))))
+      (ident (lambda (i) (smalltalk-normalize-identifier i))))
 
     (literal
       (number)
