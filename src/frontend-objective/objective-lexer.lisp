@@ -114,11 +114,21 @@
     (t :UNKNOWN)))
 
 (defun objective-normalize-identifier (s)
-  "Normalize identifier S to PascalCase.
-   Converts first letter to uppercase, preserves camelCase for rest."
-  (when (and (stringp s) (plusp (length s)))
-    (let ((chars (coerce s 'list)))
-      (coerce (cons (char-upcase (car chars)) (cdr chars)) 'string))))
+   "Normalize identifier S to PascalCase.
+    Converts first letter to uppercase, preserves camelCase for rest."
+   (when (and (stringp s) (plusp (length s)))
+     (let ((chars (coerce s 'list)))
+       (coerce (cons (char-upcase (car chars)) (cdr chars)) 'string))))
+
+(defun objective-valid-identifier-p (lexeme)
+   "Return true if LEXEME is a valid identifier (for :IDENT token).
+    Identifiers can contain letters, digits, and underscores, and cannot start with a digit."
+   (when (and (stringp lexeme) (plusp (length lexeme)))
+     (let* ((first (char lexeme 0))
+            (rest (subseq lexeme 1)))
+       (and (or (alpha-char-p first) (char= first #\_))
+            (every #'(lambda (c) (or (alphanumericp c) (char= c #\_)))
+                   rest)))))
 
 (defun objective-parse-number-literal (lexeme)
   "Parse number literal LEXEME, supporting decimal, hex (0x), octal (0o),
@@ -169,7 +179,7 @@ Handles quoted strings, operators, identifiers, and Objective-C specific syntax.
                   ;; Dword format: 0d"..."
                   ((and (not (eof?)) (char= (peek) #\0)
                         (not (eof?)) (< (1+ i) (length chars))
-                        (char-equal (char chars (1+ i)) #\d))
+                         (char-equal (nth (1+ i) chars) #\d))
                    (setf i (+ i 2))
                    (when (and (not (eof?)) (char= (peek) #\"))
                      (next-char)
@@ -180,7 +190,7 @@ Handles quoted strings, operators, identifiers, and Objective-C specific syntax.
                   ;; Hex format: 0x... or 0X...
                   ((and (not (eof?)) (char= (peek) #\0)
                         (not (eof?)) (< (1+ i) (length chars))
-                        (char-equal (char chars (1+ i)) #\x))
+                         (char-equal (nth (1+ i) chars) #\x))
                    (setf i (+ i 2))
                    (loop while (and (not (eof?))
                                     (or (digit-char-p (peek))
@@ -190,7 +200,7 @@ Handles quoted strings, operators, identifiers, and Objective-C specific syntax.
                   ;; Octal format: 0o... or 0O...
                   ((and (not (eof?)) (char= (peek) #\0)
                         (not (eof?)) (< (1+ i) (length chars))
-                        (char-equal (char chars (1+ i)) #\o))
+                         (char-equal (nth (1+ i) chars) #\o))
                    (setf i (+ i 2))
                    (loop while (and (not (eof?))
                                     (find (peek) '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7)))
@@ -199,7 +209,7 @@ Handles quoted strings, operators, identifiers, and Objective-C specific syntax.
                   ;; Binary format: 0b... or 0B...
                   ((and (not (eof?)) (char= (peek) #\0)
                         (not (eof?)) (< (1+ i) (length chars))
-                        (char-equal (char chars (1+ i)) #\b))
+                         (char-equal (nth (1+ i) chars) #\b))
                    (setf i (+ i 2))
                    (loop while (and (not (eof?))
                                     (find (peek) '(#\0 #\1)))

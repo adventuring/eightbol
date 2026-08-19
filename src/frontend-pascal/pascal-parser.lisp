@@ -517,8 +517,8 @@ Calls the canonical make-input-node from grammar-build.lisp."
 
 (defun pascal-make-dialogue-node (name)
   "Create a :dialogue AST node for dialogue/narrative text.
-Calls the canonical make-dialogue-node from grammar-build.lisp."
-  (make-dialogue-node name :statements '() :goals '()))
+Calls the canonical make-dialogue-node from ast.lisp."
+  (make-dialogue-node :speaker name :text ""))
 
 (defun make-assembly-entry-node (label)
   "Create an :assembly-entry AST node for label definitions."

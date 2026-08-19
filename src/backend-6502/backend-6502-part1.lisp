@@ -30,6 +30,26 @@
   "Enable usage of undocumented opcodes when CPU supports them.")
 (defvar *6502-undoc-policy* t
   "Policy for undocumented opcode usage: T for all, or restricted list.")
+(defvar *6502-family-cpu* :6502
+  "The specific CPU in the 6502 family being targeted for code generation.")
+
+(defun 6502-has-stz-p ()
+  "Return true if the current CPU has the STZ (store zero) instruction."
+  (member *6502-family-cpu* '(:65c02 :65c816 :huc6280)))
+
+(defun 6502-use-undocumented-p ()
+  "Return true if we are allowed to use undocumented opcodes on the current CPU."
+  (and *6502-enable-undoc-opcodes*
+       (eq *6502-family-cpu* :6502)
+       *6502-undoc-policy*))
+
+(defun 6502-branch-always-mnemonic ()
+  "Return the mnemonic for the branch always instruction for the current CPU."
+  (if (member *6502-family-cpu* '(:65c02 :65c816 :huc6280))
+      "bra"
+      ;; For 6502, we don't have bra, so we use jmp (absolute jump).
+      ;; This is not position-independent but works for local labels.
+      "jmp"))
 (defmacro with-fast-paths (&body body)
   "Execute BODY with fast-path optimizations enabled for register-intensive code."
   `(let ((*6502-opt-level* 2)

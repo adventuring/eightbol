@@ -63,6 +63,10 @@ Avoids type-error on (nil) or tails like (\"Name\" :source-file …) from @code{
         write
         zero zeroes))))
 
+(defun cobol-token-list ()
+  "Return the COBOL YACC terminal token list (aliases @code{token-list})."
+  (token-list))
+
 ;;; Parser action functions
 
 (defun parse/class-object-procedures-only (proc)

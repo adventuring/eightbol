@@ -309,7 +309,7 @@ Handles quoted strings, operators, and identifiers."
                                 (scan-identifier start-pos))))))
                    ((and (char= (peek) #\0)
                          (< (1+ i) (length chars))
-                         (member (char chars (1+ i)) '(#\x #\X #\o #\O #\b #\B #\d #\D)))
+                         (member (nth (1+ i) chars) '(#\x #\X #\o #\O #\b #\B #\d #\D)))
                     ;; Prefixed number like 0x, 0o, 0b, 0d
                     (let ((start-pos i))
                       (next-char)

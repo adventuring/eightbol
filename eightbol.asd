@@ -1,4 +1,3 @@
-(in-package :cl-user)
 (require 'asdf)
 
 (asdf:defsystem :eightbol
@@ -208,4 +207,4 @@
                                                  "frontend-pascal" "frontend-sci"
                                                  "frontend-scumm" "frontend-smalltalk"
                                                  "frontend-zil" "eightbol-compile")))))
-  :in-order-to ((test-op :eightbol-test)))
+  :in-order-to ((test-op (test-op :eightbol-test))))

@@ -318,6 +318,180 @@ routine AST passes run as in `compile-eightbol`."
   (with-open-file (stream ast-file :direction :input)
     (read-ast stream)))
 
+;;; Non-COBOL front-ends emit (:copy :name …) statements instead of parsing
+;;; data structures (see plan.md "Data Definition Rule"). These are expanded by
+;;; expand-copy-statements into :dd data nodes spliced into the program :data,
+;;; then consumed by the shared compile-ast-program driver.
+
+(defun %copybook-name-to-dd-nodes (name)
+  "Read copybook NAME and return a list of @code{:dd} data nodes.
+
+Each @code{parse-cpy-line} @code{:data-item} row becomes a @code{:dd} node
+matching the COBOL parser shape @code{(:dd :level L :label NAME :attr …)}.
+
+@table @asis
+@item NAME
+Copybook basename without @code{.cpy} (e.g. @code{\"Globals\"}).
+@end table"
+  (let ((path (find-copybook name)))
+    (when (consp *copybook-dependencies*)
+      (pushnew (truename path) *copybook-dependencies* :test #'equalp))
+    (with-open-file (in path :direction :input :if-does-not-exist nil)
+      (when in
+        (loop for line = (read-line in nil nil) while line
+              for node = (parse-cpy-line line)
+              when (eq (first node) :data-item)
+                collect (let ((type-class (getf (rest node) :type-class))
+                              (pic (getf (rest node) :pic))
+                              (usage (getf (rest node) :usage)))
+                          (list :dd
+                                :level (getf (rest node) :level)
+                                :label (getf (rest node) :name)
+                                :attr (append
+                                       (when type-class
+                                         (list (list :usage :object-ref :class type-class)))
+                                       (when (and (null type-class) pic)
+                                         (list (list :pic pic)))
+                                       (when (and (null type-class) usage)
+                                         (list (list :usage usage)))))))))))
+
+(defun %expand-copy-recursively (node dd-fn)
+  "Walk NODE replacing @code{(:copy :name …)} with the copybook's data nodes.
+
+DD-FN is called with each copybook NAME (to resolve + collect its :dd nodes);
+each @code{:copy} form is dropped from the tree. Non-copy structure is preserved
+verbatim: keyword-led plists keep their keyword/value pairing, list elements
+(statement lists, method lists) keep their nesting, and NIL plist values are not
+lost. Only NILs that collapsed from @code{:copy} nodes (always surrounded by
+non-keyword neighbors in a statement/method/data container) are removed.
+(The original @code{mapcan} walk flattened every list and dropped NIL values,
+corrupting any AST that contained no @code{:copy} nodes.)"
+  (cond
+    ((and (listp node) (eq (first node) :copy))
+     (let ((name (getf (rest node) :name)))
+       (when name (funcall dd-fn name))
+       nil))
+    ((atom node) node)
+    (t
+     (let ((mapped (mapcar (lambda (x) (%expand-copy-recursively x dd-fn)) node)))
+       ;; Drop residual NILs from (:copy …) nodes. A NIL that is a plist value is
+       ;; always preceded and followed by keyword keys, so it is kept; a NIL
+       ;; produced by a dropped :copy node sits next to non-keyword neighbors
+       ;; (statement/method/data nodes) and is removed.
+       (loop for elt in mapped
+             for prev = nil then elt
+             for next in (append (cdr mapped) '(nil))
+             append (let ((is-plist-value-nil
+                            (and (null elt)
+                                 (keywordp prev)
+                                 (or (null next) (keywordp next)))))
+                      (unless is-plist-value-nil (list elt))))))))
+
+(defun expand-copy-statements (program-ast)
+  "Expand residual @code{(:copy :name …)} statements in PROGRAM-AST.
+
+Non-COBOL front-ends emit @code{(:copy :name \"X\")} instead of parsing data
+structures. This pass walks every node, resolves each COPY via
+@code{find-copybook} (recording the dependency and signalling
+@code{copybook-not-found} when the copybook is missing), converts the copybook's
+data rows into @code{:dd} nodes spliced into each @code{:program} node's
+@code{:data}, and removes the residual @code{:copy} statement so no backend sees
+one.
+
+@table @asis
+@item PROGRAM-AST
+A @code{:program} node or a list of them.
+@end table
+
+@subsection Outputs
+The expanded AST (with @code{:copy} nodes removed and @code{:data} extended)."
+  (let ((dd-nodes '()))
+    (flet ((collect-dd (name)
+             (let ((nodes (%copybook-name-to-dd-nodes name)))
+               (setf dd-nodes (append dd-nodes nodes)))))
+      (let ((expanded (%expand-copy-recursively program-ast #'collect-dd)))
+        (when dd-nodes
+          (if (and (listp expanded) (eq (first expanded) :program))
+              (setf (getf (rest expanded) :data)
+                    (append (or (getf (rest expanded) :data) '()) dd-nodes))
+              (dolist (prog expanded)
+                (when (and (listp prog) (eq (first prog) :program))
+                  (setf (getf (rest prog) :data)
+                        (append (or (getf (rest prog) :data) '()) dd-nodes))))))
+        expanded))))
+
+(defun compile-ast-program (program-ast
+                            &key (cpus +supported-cpus+)
+                                 output-file
+                                 copybook-paths
+                                 (root-directory (truename #p".")))
+  "Compile an in-memory @code{:program} AST to assembly for each CPU in CPUS.
+
+Runs @code{expand-copy-statements} → @code{optimize-ast} →
+@code{validate-eightbol-program}, then per-CPU @code{compile-to-assembly}. When
+COPYBOOK-PATHS is NIL, @code{*copybook-paths*} is bound via
+@code{project-copybook-paths}. Honors OUTPUT-FILE for the first CPU; other CPUs
+write to @code{Source/Generated/Classes/{cpu}/{Class}Class.s}.
+
+@table @asis
+@item PROGRAM-AST
+@code{:program} AST node (or a list of them).
+@item CPUS
+Target CPU keywords (default @code{+supported-cpus+}).
+@item OUTPUT-FILE
+Optional single output for the first CPU.
+@item COPYBOOK-PATHS
+Override copybook search directories.
+@item ROOT-DIRECTORY
+Project root for generated output paths.
+@end table
+
+@subsection Outputs
+The optimized, validated AST list."
+  (unless (and (listp program-ast)
+               (or (and (listp (first program-ast))
+                        (eq (first (first program-ast)) :program))
+                   (eq (first program-ast) :program)))
+    (error "EIGHTBOL: compile-ast-program expected a :program AST node"))
+  (let ((*eightbol-root-directory* root-directory)
+        (*copybook-paths* (or copybook-paths
+                              (project-copybook-paths root-directory (first cpus))))
+        (*copybook-dependencies* ()))
+    (let ((ast (if (and (listp program-ast) (eq (first program-ast) :program))
+                   (list (optimize-ast (expand-copy-statements program-ast)))
+                   (optimize-ast (mapcar #'expand-copy-statements program-ast)))))
+      (setf ast (remove-if #'null ast))
+      (dolist (module ast)
+        (validate-eightbol-program module))
+      (let ((class-id (ast-class-id ast)))
+        (dolist (cpu cpus)
+          (handler-case
+              (let ((asm-path (if (and (eql cpu (first cpus)) output-file)
+                                  (pathname output-file)
+                                  (merge-pathnames
+                                   (make-pathname
+                                    :directory (list :relative "Source" "Generated" "Classes"
+                                                     (cpu-directory-name cpu))
+                                    :name (if class-id
+                                              (concatenate 'string (pascal-case class-id) "Class")
+                                              (concatenate 'string (ast-program-id ast) "Class"))
+                                    :type "s")
+                                   root-directory))))
+                (ensure-directories-exist asm-path)
+                (with-open-file (out asm-path
+                                     :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+                  (dolist (module ast)
+                    (compile-to-assembly module cpu out)))
+                (format t "~2&EIGHTBOL: wrote ~a assembly to ~a"
+                        (cpu-display-name cpu) (enough-namestring asm-path)))
+            (error (e)
+              (format *error-output* "~2&EIGHTBOL: error compiling ~a for ~a: ~a"
+                      class-id (cpu-display-name cpu) e)
+              (error e))))
+        ast))))
+
 (defvar *class-methods* (make-hash-table :test 'equalp))
 (defvar *parent-classes* (make-hash-table :test 'equalp))
 
@@ -374,22 +548,25 @@ routine AST passes run as in `compile-eightbol`."
                   (return-from slot-class (header-case origin))
                   (error "~s is not a slot of class ~s, nor its parent classes up to ~s"
                          slot-id class-id consider-class))
-              (slot-class object slot-id (oops-class-of object)))))))
+              (return (slot-class object slot-id (oops-class-of object))))))))
 
 (defun load-classes ()
   (when (plusp (hash-table-count *parent-classes*))
     (return-from load-classes))
-  (with-input-from-file (classes.defs (pathname "Source/Classes/Classes.Defs"))
-    (loop with last-class = "BasicObject"
-	for line = (read-line classes.defs nil nil)
-	while line
-	do (cond ((search "<" line)
-		(destructuring-bind (child parent)
-		    (mapcar (lambda (word)
-			    (string-trim #(#\Space #\Tab) word))
-			  (split-sequence #\< line))
-		  (setf (gethash (header-case child) *parent-classes*) (header-case parent)
-		        last-class (header-case child))))
-	         ((and (< 2 (length line)) (char= #\# (char line 0)))
-		(appendf (gethash last-class *class-methods* '())
-		         (cons (subseq line 1) nil)))))))
+  (let ((classes-defs (pathname "Source/Classes/Classes.Defs")))
+    (unless (probe-file classes-defs)
+      (return-from load-classes))
+    (with-input-from-file (classes.defs classes-defs)
+      (loop with last-class = "BasicObject"
+          for line = (read-line classes.defs nil nil)
+          while line
+          do (cond ((search "<" line)
+                  (destructuring-bind (child parent)
+                      (mapcar (lambda (word)
+                                (string-trim #(#\Space #\Tab) word))
+                              (split-sequence #\< line))
+                    (setf (gethash (header-case child) *parent-classes*) (header-case parent)
+                          last-class (header-case child))))
+                 ((and (< 2 (length line)) (char= #\# (char line 0)))
+                  (appendf (gethash last-class *class-methods* '())
+                           (cons (subseq line 1) nil))))))))

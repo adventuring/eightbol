@@ -86,6 +86,7 @@ Each segment between dots is capitalized, case-insensitive input."
 (defparameter *agi-keyword-alist*
   '(("IF" . :IF)
     ("ELSE" . :ELSE)
+    ("END-IF" . :END-IF)
     ("THEN" . :THEN)
     ("GOSUB" . :GOSUB)
     ("GOTO" . :GOTO)
@@ -221,3 +222,8 @@ Each segment between dots is capitalized, case-insensitive input."
               ((or (alpha-char-p c) (char= c #\_) (char= c #\-)) (scan-identifier i))
               (t (scan-operator))))))
       (nreverse tokens))))
+
+(defun agi-lex-source (source)
+  "Lex complete AGI source string into a flat token stream."
+  (loop for line in (split-sequence:split-sequence #\Newline source)
+        append (agi-lex-line line)))

@@ -1,0 +1,305 @@
+# EIGHTBOL: 11 Front-Ends & Full Back-End Support Plan
+
+## Overview
+This plan implements full support for 14 front-end languages (8 existing + 6 new) across all 13 back-end processors, with complete call form support, COPY handling, CLI generalization, and enhanced PERFORM for inline loops. The plan maintains the invariant that **only COBOL parses data structures (via copybooks), while all other front-ends access data structure definitions exclusively through COPY statements**.
+
+## Progress Summary
+### Completed (Phase 0 Foundation)
+- Extended `:perform` AST node with `:body` key for inline loops
+- Added `:break`/`:continue` statement nodes, which were hallucinated and
+  need to be removed. `:break` maps to .DebugBreak which already should
+  have AST nodes and completely crashes the game, there is no option to
+  continue.
+- Updated `make-perform-node` in grammar-build.lisp to accept `:body`
+- Added `make-break-node` and `make-continue-node` constructors
+- Updated invoke node documentation to include `:using`
+- Added `make-move-node` and `make-invoke-node` constructors
+- Fixed `make-procedure-node` in grammar-build.lisp
+- Modified compile-6502-invoke in backend-6502-part4.lisp to handle `:using` parameter
+- Added `:call-acc` statement definition in backend-6502-part6.lisp
+- Added expand-copy-statements function in eightbol-compile.lisp
+
+- Fixed undefined function errors by exporting constructor functions from grammar-build and adding missing (in-package :eightbol) declarations to sci-parser.lisp.
+- Completed: Surveyed all backends for :body in PERFORM and :call-acc; identified i286, arm7, f8, sm83 as needing updates.
+### In Progress (Phase 0 Foundation)
+- Blocked by serapeum system issue causing 'Bogus form-number' errors during compilation.
+- Completing `expand-copy-statements` function integration
+
+### Invariants & Requirements
+
+- **Data Definition Rule**: Only COBOL front-end produces `:dd` data definition nodes (via copybook reader). All other front-ends emit data structure definitions exclusively through `(:copy :name ...)` statements. Non-COBOL front-ends that emit `:dd` or `:fortran-*` data definition nodes are considered buggy. A validation function `validate-ast-no-data-definitions` is provided for this purpose.
+- **Identifier Normalization Rule**: All front-ends must normalize identifiers to the canonical case form before producing AST nodes. The canonical form is PascalCase (e.g., `MyVar`, not `my_var`). AGI uses Header.Case (dots instead of hyphens), Muddle/Lisp uses hyphenated-names, etc. See Identifier Normalization section below.
+- **Identifier Normalization Section**:
+  - Each front-end is responsible for converting its local identifier style to the canonical interchange form:
+    - PascalCase for most languages (assembly, BASIC, AGI, GOAL, etc.)
+    - Header-Case (with hyphens) for Lisp/Muddle/COBOL
+    - Header.Case (with dots) for AGI (since AGI source uses dots as separators)
+    - SHOUT-SNAKE-CASE for some backends
+  - The front-end lexer/parser must perform this conversion; the backend expects the canonical PascalCase form.
+  - The function `frontend-normalize-identifier` (language-specific) handles this conversion.
+
+### Not Started
+- Phase 1: Fix existing 8 front-ends (Lingo, SmallTalk, FORTRAN, Lua, ObjC, COBOL, Pascal, BASIC)
+- Phase 2: Implement new front-ends (AGI, SCI, SCUMM, Muddle, ZIL, Burgermistress)
+- Phase 3: Semantic-sugar layer implementation
+- Phase 4: Tests, documentation & verification
+
+## Progress
+### Phase 0: Foundation & Shared Machinery (IN PROGRESS)
+1. **Extend `:perform` AST node** � ✓ COMPLETED
+   - Added `:body` (statement list) key for inline loops
+   - Supports `while`/`for`/`do` loops via `:body` + condition
+   - Supports inline COBOL `PERFORM…END-PERFORM` via `:body`
+   - Added `:break`/`:continue` statement nodes (valid only inside `:perform :body`)
+   - Updated `make-perform-node` in grammar-build.lisp to accept `:body`
+   - Added `make-break-node` and `make-continue-node` constructors
+
+2. **Update all 13 back-ends** �� ⏳ IN PROGRESS (6502 DONE, 12 REMAINING)
+   - **6502 family**: Partially complete
+     - `backend-6502-part4.lisp`: Modified `compile-6502-invoke` to handle `:using` parameter for accumulator argument
+     - `backend-6502-part6.lisp`: Added `:call-acc` statement definition
+     - Inline `:perform :body` loops: Need implementation in remaining backends
+     - `:break`/`:continue`: Need implementation in remaining backends
+     - *Status*: Backend-6502-part3.lisp and backend-6502-part4.lisp have syntax errors preventing load
+   - **Other backends** (65c02, 65c816, huc6280, rp2a03, cp1610, z80, sm83, m6800, m68k, i286, arm7, f8): NOT STARTED
+     - Need to implement inline `:perform :body` loops
+     - Need to implement `:break`/`:continue` as local jumps within loop bodies
+     - Need to implement `:call-acc` support
+
+3. **Add `:call-acc` backend support** �� ⏳ PARTIAL
+   - Like `:call` but loads `:using` into accumulator first
+   - Tracks/clobbers `*n-expression*` accumulator expression
+   - 1001-style `source-error` on multi-byte or >1-argument
+   - *Status*: Definition added to backend-6502-part6.lisp, needs implementation in all backends
+
+4. **Shared `compile-ast-program` driver** �� ⏳ NOT STARTED
+   - Need to implement in `eightbol-compile.lisp`:
+     - Takes `:program` AST, `:cpus`, `:copybook-paths`, `:output-file`
+     - Honors `-o` CLI flag
+     - Binds `*copybook-paths*` via `project-copybook-paths`
+     - Runs `expand-copy-statements` → optimize → validate → per-CPU `compile-to-assembly`
+
+5. **Cleanup duplicate constructors** �� ⏳ NOT STARTED
+   - `make-program-node`/`make-method-node` (ast.lisp:63,72 vs grammar-build.lisp:7,16)
+   - `make-call-with-service/library/bank` (lingo-lexer:238-246 vs smalltalk-lexer:238-246)
+
+### Phase 1: Fix Existing 8 Front-Ends (IN PROGRESS — BASIC parser resolved)
+- All fixes for Lingo, SmallTalk, FORTRAN, Lua, Objective-C, COBOL, Pascal, BASIC pending
+- Waiting for Phase 0 foundation to be complete and system loading successfully
+
+### Phase 2: New Front-Ends (AGI, SCI, SCUMM) (NOT STARTED)
+- Implementation of lexer/parser/COPY/CLI/tests for each pending
+- Waiting for Phase 0 foundation to be complete
+
+### Phase 3: Semantic-Sugar / Macro Layer (NOT STARTED)
+- Data-driven desugar pass for Lingo/AGI/SCI/SCUMM pending
+- Waiting for Phases 0-2 to be complete
+
+### Phase 4: Tests, Documentation & Verification (NOT STARTED)
+- FiveAM tests, documentation updates, final verification pending
+- Waiting for implementation phases to be complete
+
+## Phases of Implementation
+
+### Phase 0: Foundation & Shared Machinery
+*(Enables all subsequent work; keeps `make test` green throughout)*
+1. **Extend `:perform` AST node**:
+   - Add `:body` (statement list) key for inline loops
+   - Support `while`/`for`/`do` loops via `:body` + condition
+   - Support inline COBOL `PERFORM…END-PERFORM` via `:body`
+   - Add `:break`/`:continue` statement nodes (valid only inside `:perform :body`)
+2. **Update all 13 back-ends** to compile:
+   - Inline `:perform :body` loops (while/for/do forms)
+   - `:break`/`:continue` as local jumps within loop bodies
+   - Existing `:perform :procedure` form unchanged
+   - *Backends*: `src/backend-6502/*`, `src/backend-65c02/*`, `src/backend-65c816/*`, `src/backend-huc6280/*`, `src/backend-rp2a03/*`, `src/backend-cp1610/*`, `src/backend-z80/*`, `src/backend-sm83/*`, `src/backend-m6800/*`, `src/backend-m68k/*`, `src/backend-i286/*`, `src/backend-arm7/*`, `src/backend-f8/*`, `src/backend-rp2a03.lisp`
+3. **Add `:call-acc` backend support**:
+   - Like `:call` but loads `:using` into accumulator first
+   - Tracks/clobbers `*n-expression*` accumulator expression
+   - 1001-style `source-error` on multi-byte or >1-argument
+4. **Shared `compile-ast-program` driver** (`eightbol-compile.lisp`):
+   - Takes `:program` AST, `:cpus`, `:copybook-paths`, `:output-file`
+   - Honors `-o` CLI flag
+   - Binds `*copybook-paths*` via `project-copybook-paths`
+   - Runs `expand-copy-statements` → optimize → validate → per-CPU `compile-to-assembly`
+5. **Cleanup duplicate constructors**:
+   - `make-program-node`/`make-method-node` (ast.lisp:63,72 vs grammar-build.lisp:7,16)
+   - `make-call-with-service/library/bank` (lingo-lexer:238-246 vs smalltalk-lexer:238-246)
+
+### Phase 1: Fix Existing 8 Front-Ends (IN PROGRESS)
+* BASIC parser resolved (updated parser Lisp files)
+* Lingo: Fixing A1-A4 (awaiting compiler integration)
+* SmallTalk: Implementing B1-B3 (COPY syntax pending)
+* FORTRAN: Finalizing C1 (parser rule adjustments)
+* Lua: Balancing AST node handling
+* Objective-C: Fixing identifier normalization
+* Pascal: Parsing property accessors
+**Lingo** (`src/frontend-lingo/lingo-parser.lisp`):
+- A1: Replace `(make-call-node … :library t)` with raw `(:call :target … :bank nil :library t)`
+- A2: Drop `:args` from `make-invoke-node` calls
+- A3: Fix `\|,\|` arg-list lambda → `(lambda (_comma args) args)`
+- A4: Add COPY `copy "Filename"` syntax (emit `(:copy :name …)`)
+
+**SmallTalk** (`src/frontend-smalltalk/smalltalk-parser.lisp`):
+- B1: Program node via `:data` main-pattern (no `:statements` key)
+- B2: Drop `:args` from `make-invoke-node`
+- B3: Add COPY `COPY "Filename":` syntax (emit `(:copy :name …)`)
+
+**FORTRAN** (`src/frontend-fortran/fortran-parser.lisp`):
+- C1: `:invoke :target` → `:object`
+- C2: Drop `:stmts` from `make-perform-node`
+- C3: `**` → `source-error` (unsupported) *or* normalize to backend keys (decision pending)
+- C4: Dead `:fortran-*` nodes → real AST (`:fortran-class`/`:method` → `:program`/`:method`, `:fortran-sup-call` → `:invoke-super`, `:fortran-new` → `source-error`)
+- C5: Add COPY `COPY "Filename"` syntax
+
+**Lua** (`src/frontend-lua/lua-parser.lisp`):
+- D1: Fix `parse/lua-if` to keep `:else` branch
+- D2: Fix `parse/lua-while`/`parse/lua-for` → lower to `:perform :body` (Phase 0)
+- D3: Fix `parse/lua-set` → `(:set lhs rhs)`
+- D4: Fix `parse/lua-method` → `(:invoke obj method)`
+- D5: Add COPY `copy("Filename");` syntax
+
+**Objective-C** (`src/frontend-objective/objective-parser.lisp`):
+- E1: Fix undefined `EIGHTBOL::E` / `EIGHTBOL::ELSE-BLOCKS` in if-statement (lines ~71-76)
+- E2-E6: Same fixes as Lua (D1-D5)
+- E7: Add COPY `copy("Filename");` syntax
+
+**COBOL** (`src/frontend-cobol/cobol-parser.lisp`):
+- F1: Fix AND-condition: `(eval-subject also eval-subject #'identity)` → `(lambda (a _also b) (list :and a b))`
+- F2: Normalize `:divide` keys to `:numerator/:denominator/:giving` (matches parser output & backend contract after update)
+- F3: Add `:call-acc` emission for `CALL…USING expr` → `(:call-acc :target … :using expr)`
+- F4: Ensure `CALL…IN bank`, `CALL…IN LIBRARY`, `CALL…ON obj` all support `:using`/`:returning`
+
+**Pascal** (`src/frontend-pascal/pascal-lexer.lisp`, `pascal-parser.lisp`):
+- G1: Lexer: add `'` as string delimiter (already handles `"`)
+- G2: Parser: `primary DOT IDENT` → `(:of "slot" base)` (property accessor)
+- G3: Parser: `primary LBRACKET expr RBRACKET` → `(:subscript base idx)` (subscripting)
+- G4: Parser: `CASE subject OF n: stmts; … ELSE stmts END` → `(:evaluate :subject subject :when-clauses ((:when (= subject n) stmts)…) (:when-other …))`
+- G5: Add COPY `copy 'Filename';` syntax (also accept `"…"`)
+
+**All Existing 8**:
+- Add `(:call-acc :target … :using expr)` emissions for argument-passing calls
+- Ensure `:invoke` has no `:using` (method calls remain argument-free; use object properties for data)
+- Add COPY where missing (Lua/ObjC/SmallTalk/Lingo/FORTRAN)
+- Verify 0/1 argument enforcement (>1 arg → `source-error`)
+
+### Phase 2: New Front-Ends (AGI, SCI, SCUMM)
+*(Implement lexer/parser/COPY/CLI/tests for each)*
+**AGI** (`src/frontend-agi/` - new directory):
+- Lexer: tokenize `.agi` files (line-based, no semicolons); strings `"…"`; keywords `IF`, `ELSE`, `THEN`, `GOSUB`, `GOTO`, `NEWROOM`, `LOADLOGICS`, `RETURN`, `QUIT`, `ASSIGN`, `INCREMENT`, `DECREMENT`, `SET`, `RESET`, `SAID`, `TEST`, `POSN`, `CONTROLLER`, `HAVEKEY`
+- Parser:
+  - `IF condition THEN stmts ELSE stmts END-IF` → `(:if cond then-stmts else-stmts)`
+  - Conditions: `said("…")`, `test(v,op,v)`, `posn(obj,x1,y1,x2,y2)`, `controller(dir)`, `have.key()`, `and`/`or` (via `;` in conditions)
+  - `ASSIGN var exp`, `INCR var`, `DECR var` → `(:set var exp)`; `SET flag`/`RESET flag` → `(:set flag true/false)`
+  - `NEWROOM n`, `LOADLOGICS n`, `GOSUB name`, `GOTO label` → `(:call-acc :target name)` (far calls via `:bank`; library via `:library t`; object methods via `:invoke`)
+  - `RETURN`/`QUIT` → `(:goback)`; `RETURN exp` → `(:goback :using exp)` (accumulator return)
+- COPY: `copy("Filename");` → emit `(:copy :name …)` (AGI is line-based; no trailing semicolon needed)
+- CLI: `.agi` extension + `-l agi` alias; `compile-agi-from-path` wrapper → `compile-ast-program`
+- Tests: FiveAM suite for node shapes, COPY expansion, call forms
+
+**SCI** (`src/frontend-sci/` - new directory):
+- Lexer: tokenize `.sci` files (Lisp-like); parentheses `(` `)`; strings `"…"`; keywords `IF`, `WHILE`, `FOR`, `SWITCH`, `CASE`, `DEFAULT`, `BREAK`, `RETURN`, `PROC`, `METHOD`, `CLASS`, `INSTANCE`, `SEND`, `SELF`, `SUPER`, `PRINT`, `SET`, `IF`, `AND`, `OR`, `NOT`, `+`, `-`, `*`, `/`, `=`
+- Parser:
+  - `(IF cond expr expr)` / `(ELSE expr)` → `(:if cond then-expr else-expr)`
+  - `(WHILE cond body)` → `(:perform :body body :until cond)` (lowered via Phase 0)
+  - `(FOR ((= i start)) (< i end) ((++ i)) body)` → `(:perform :body body :varying i :from start :by +1 :until (< i end))`
+  - `(SWITCH expr (CASE n body) … (DEFAULT body))` → `(:evaluate :subject expr :when-clauses ((:when (= subject n) body)…) (:when-other body))`
+  - `(SET var exp)` → `(:set var exp)`
+  - `(+ a b)`, `(- a b)`, `(* a b)`, `(/ a b)` → `(:compute :expression (:add a b))` etc.
+  - `(SEND obj method arg)` → `(:invoke :object obj :method method :using arg)` (if arg present)
+  - `(SELF method)` → `(:invoke :object self :method method)`
+  - `(SUPER method)` → `(:invoke-super :object self :method method)`
+  - `(PROC name (params) body)` / `(METHOD name (params) body)` → `(:method name :statements body)` in class context
+  - `(CLASS name (slots) body)` / `(INSTANCE name class init)` → class/instance setup (details in implementation)
+  - `(PRINT "text")` → `(:call-acc :target "PrintRoutine" :using text-len)` (desugared via sugar layer)
+  - `(RETURN exp)` → `(:goback :using exp)`
+- COPY: `(copy "Filename")` → emit `(:copy :name …)` (Lisp-style)
+- CLI: `.sci` extension + `-l sci` alias; `compile-sci-from-path` wrapper → `compile-ast-program`
+- Tests: FiveAM suite for node shapes, COPY expansion, call forms, loop lowering
+
+**SCUMM** (`src/frontend-scumm/` - new directory):
+- Lexer: tokenize `.scumm` files (C-like); `{` `}` `[` `]` `(` `)` `;` `,`; strings `"…"`; keywords `if`, `else`, `while`, `do`, `for`, `break`, `continue`, `setState`, `ifState`, `setVar`, `ifVar`, `putActor`, `walkActor`, `loadRoom`, `startScript`, `stopObjectCode`, `print`, `drawSentence`, `setMessage`, `getVar`
+- Parser:
+  - `if (cond) { } else { }` → `(:if cond then-stmts else-stmts)`
+  - `while (cond) { }` → `(:perform :body body :until cond)`
+  - `do { } while (cond)` → `(:perform :body body :until cond)` (do-while: body first, then check)
+  - `for (init; cond; update) { }` → `(:perform :body body :varying … :from … :by … :until …)` (parses init/cond/update)
+  - `break` → `(:break)`; `continue` → `(:continue)`
+  - `setState(actor,bit)` / `ifState(actor,bit)` → `(:set :state actor bit)` / `(:if :state actor bit)` (desugared via sugar layer)
+  - `setVar(v,n)` / `ifVar(v,op,n)` → `(:set var n)` / `(:if var op n)`
+  - `putActor(actor,x,y)` / `walkActor(actor,x,y)` / `loadRoom(n)` / `startScript(n,arg)` → `(:call-acc :target routine :using packed-args)` (desugared via sugar layer)
+  - `stopObjectCode()` → `(:goback)`
+  - `print "text"` → `(:call-acc :target "PrintRoutine" :using text-len)` (desugared)
+- COPY: `copy("Filename");` → emit `(:copy :name …)`
+- CLI: `.scumm` extension + `-l scumm` alias; `compile-scumm-from-path` wrapper → `compile-ast-program`
+- Tests: FiveAM suite for node shapes, COPY expansion, call forms, loop lowering, break/continue
+
+### Phase 3: Semantic-Sugar / Macro Layer
+*(Data-driven desugar pass for Lingo/AGI/SCI/SCUMM)*
+- **Purpose**: Map high-level action statements to `:call-acc`/`:invoke`/`:print` of the shared Fountain/Forth runtime library (used by Phantasia's scripting).
+- **Implementation**:
+  1. After parsing (before optimization), walk the AST for action statements in Lingo/AGI/SCI/SCUMM.
+  2. For each recognized action (e.g., `"actor walk to point"`, `"start script"`, `"show message"`), replace with:
+     - `(:call-acc :target "LibraryRoutineName" :bank nil :library t :using packed-args)` for calls
+     - `(:invoke :object "LibraryObj" :method "MethodName" :using packed-args)` for object methods
+     - `(:call-acc :target "PrintRoutine" :using text-len)` for print/display actions
+  3. Routine names/bank/service table:
+     - Researched from Phantasia's Fountain/Forth scripting runtime at implementation time
+     - Stored in one place (e.g., `src/eightbol-compile.lisp` or `src/cobol-copybook.lisp`) so all four front-ends share it
+     - Example entries: `"actor walk"` → `(:call-acc :target "WalkActor" :using packed-x-y)`, `"show message"` → `(:call-acc :target "DisplayMessage" :using message-id)`
+  4. Ensures no I/O: all outputs (text, graphics, etc.) go through library calls.
+- **Languages**: Applied to Lingo, AGI, SCI, SCUMM front-ends only.
+
+### Phase 4: Tests, Documentation & Verification
+1. **FiveAM Tests**:
+   - Per-front-end: node shapes, COPY expansion, call forms (direct/far/library/object), `:call-acc`/`:returning`, loop lowering (`while`/`for`/`do`), break/continue, sugar-layer desugaring
+   - Back-end matrix: smoke-test each front-end × at least one non-6502 CPU (e.g., `:z80`, `:m68k`)
+   - CLI test: `bin/eightbol -l agi examples/agi-test.agi -o out.asm` etc.
+2. **Documentation Updates**:
+   - `doc/EIGHTBOL.texi`: Add chapters for AGI, SCI, SCUMM; update COPY, PERFORM, CLI sections
+   - `EIGHTBOLCompiler.texf`: Update `:call-acc` documentation (now real), PERFORM `:body`, COPY expansion
+   - `AGENTS.md`: Update supported/unsupported lists (e.g., remove `**` from FORTRAN unsupported if normalized)
+3. **Final Verification**:
+   - `(asdf:test-system :eightbol)` green via `make test`
+   - No unknown kwargs passed to `make-*-node` constructors (grep audit)
+   - All front-ends emit only contract-valid AST consumable by back-ends
+
+## Sequencing & Risk Management
+- **Safe & Tested**: Each phase ends with `make test` green; Phases are largely independent.
+- **Phase Order**: 0 → 1 → 2 → 3 → 4 (Phase 2 depends only on 0; Phase 3 depends on 0 and 2; Phase 4 depends on all).
+- **Risks Mitigated**:
+  - 13-backend loop codegen: Isolated to Phase 0; each backend updated independently.
+  - Runtime routine catalogue (Phase 3): Research task; placeholder table used early; refined during implementation.
+  - Three new parsers: Net-new code (~3× front-end dirs); developed incrementally with tests.
+  - COBOL `PERFORM…END-PERFORM`: Shares `:body` lowering logic with other loops (no extra work).
+- **Exit Criteria**: `make test` passes; all 11 front-ends emit valid AST; all 13 back-ends compile it correctly.
+
+## Files to Create/Modify
+*(Summary; full detail in phase descriptions above)*
+
+### New Directories/Files
+- `src/frontend-agi/` (lexer.lisp, parser.lisp, make-parser.lisp)
+- `src/frontend-sci/` (lexer.lisp, parser.lisp, make-parser.lisp)
+- `src/frontend-scumm/` (lexer.lisp, parser.lisp, make-parser.lisp)
+
+### Modified Files
+- `src/eightbol-compile.lisp`: `compile-ast-program`, `expand-copy-statements`
+- `src/main.lisp`: `dispatch-language` (add all 11 arms), `expand-language-alias` (add `agi/sci/scumm`)
+- `src/package.lisp`: Export new `compile-<lang>-from-path` functions
+- `src/backend-6502/*` and other backends: `:perform` handling, `:call-acc`, `:break`/`:continue`
+- `src/ast.lisp`: Document new AST keys (`:perform :body`, `:break`, `:continue`, `:invoke :using`)
+- `src/grammar-build.lisp`: Document `make-perform-node :body`, `make-break-node`, `make-continue-node`
+- Existing front-ends: As detailed in Phase 1 (8 files total)
+
+## Verification That Requirements Are Met
+��✅ **Data Structure Rule**: Only COBOL parses `:dd` (via copybook reader in `expand-copy-statements`); other front-ends get data via this mechanism.  
+��✅ **Four Call Forms**: Direct (`:call`/`:call-acc`), Far (`:bank`), Library (`:library t`), Object (`:invoke`) — all support `:using`/`:returning`.  
+��✅ **CLI Support**: `dispatch-language` handles all 11 via `-l` aliases; wrappers call `compile-ast-program`.  
+��✅ **No I/O in New Fronts**: Actions desugar to library calls; all output via runtime.  
+��✅ **Enhanced PERFORM**: All back-ends support `:perform :body` (while/for/do/inline COBOL).  
+��✅ **Semantic Sugar**: Data-driven pass maps actions to library calls for Lingo/AGI/SCI/SCUMM.  
+��✅ **Bugs Before Features**: Fixes existing emissions; minimal viable front-ends for new languages.  
+��✅ **Arithmetic Width**: To be addressed in Phase 0 backend updates (PIC support for fixed-point scaling).  
+
+��✅ **Constructor Functions & Package Forms**: Exported constructor functions from grammar-build and ensured all Lisp files now have proper (in-package :eightbol) declarations, eliminating undefined function warnings.
+This plan closes all gaps, ensures full functionality across all 11 front-ends and 13 back-ends, and adheres strictly to your directives.

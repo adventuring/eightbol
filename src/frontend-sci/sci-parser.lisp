@@ -1,3 +1,5 @@
+(in-package :eightbol)
+
 (defun sci-parse-number (n)
   "Parse number N which may be decimal, hex (#x or 0x), octal (#o or 0o), 
   or binary (#b or 0b) format. Returns an integer."
@@ -63,12 +65,12 @@
 
 (defun sci-parse-while (cond body)
   "while condition body"
-  (make-perform-node "WHILE" :until (make-conditional-not cond)))
+  (make-perform-node "WHILE" :until (make-conditional-not cond) :body (ensure-list body)))
 
 (defun sci-parse-for (var start end body)
   "for var start end body"
   (make-perform-node "FOR" :varying var :from start :by 1
-                     :until (make-conditional-gt (make-identifier var) end)))
+                     :until (make-conditional-gt (make-identifier var) end) :body (ensure-list body)))
 
 (defun sci-parse-setq (var expr)
   "setq var expr"
@@ -96,12 +98,12 @@
 
 (defun sci-parse-dialogue (character text)
   "dialogue character text"
-  (make-dialogue-node character text))
+  (make-dialogue-node :speaker character :text text))
 
 (defun sci-parse-say (character &rest args)
   "say character text [response1 response2 ...]"
   ;; Create dialogue node (say is alias for dialogue)
-  (make-dialogue-node character (car args)))
+  (make-dialogue-node :speaker character :text (car args)))
 
 (defun sci-parse-input (prompt &optional variable)
   "input prompt [variable]"
@@ -169,9 +171,17 @@
        (lparen :say string string rparen
         (lambda (char text) (sci-parse-say char text)))
        (lparen :input string rparen
-        (lambda (prompt) (sci-parse-input prompt)))
-       (lparen :input string ident rparen
-        (lambda (prompt var) (sci-parse-input prompt var))))
+         (lambda (prompt) (sci-parse-input prompt)))
+        (lparen :input string ident rparen
+         (lambda (prompt var) (sci-parse-input prompt var)))
+        (lparen :while expression form rparen
+         (lambda (_while cond body _rparen) (declare (ignore _while _rparen)) (sci-parse-while cond body)))
+        (lparen :while expression form-list rparen
+         (lambda (_while cond body _rparen) (declare (ignore _while _rparen)) (sci-parse-while cond (ensure-list body))))
+        (lparen :for lparen ident expression expression rparen form rparen
+         (lambda (_for _lparen var start end _rparen body _rparen2) (declare (ignore _for _lparen _rparen _rparen2)) (sci-parse-for var start end body)))
+        (lparen :for lparen ident expression expression rparen form-list rparen
+         (lambda (_for _lparen var start end _rparen body _rparen2) (declare (ignore _for _lparen _rparen _rparen2)) (sci-parse-for var start end (ensure-list body)))))
 
       (expression
        (ident

@@ -127,6 +127,8 @@
      (compile-z80-invoke out statement class-id type-table pic-width-table))
     (:call
      (compile-z80-call out statement))
+    (:call-acc
+     (compile-z80-call-acc out statement class-id slot-table const-table pic-width-table))
     (:if
      (compile-z80-if out statement class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:add
@@ -540,6 +542,21 @@
     (let ((name (z80-symbol (format nil "~a" (or service target)))))
       (format out "~&~10tcall ~a" name))))
 
+(defun compile-z80-call-acc (out statement class-id slot-table const-table pic-width-table)
+  (let* ((target (getf (rest statement) :target))
+         (using (getf (rest statement) :using)))
+    (when using
+      (let ((width (operand-width using pic-width-table)))
+        (if (> width 1)
+            (error 'source-error
+                   :message "CALL-ACC: using argument must be single byte"
+                   :detail (format nil "CALL-ACC: using argument is ~d bytes" width))
+            (progn
+              (compile-z80-load out using class-id slot-table const-table pic-width-table)
+              (setf *z80-accumulator-expression* :trash)))))
+    (let ((name (z80-symbol (format nil "~a" target))))
+      (format out "~&~10tcall ~a" name))))
+
 ;;; IF
 
 (defvar *z80-label* 0)
@@ -547,6 +564,8 @@
   "Label to break to from current PERFORM loop, or NIL if not in a loop.")
 (defvar *z80-continue-label* nil
   "Label to continue to from current PERFORM loop, or NIL if not in a loop.")
+(defvar *z80-accumulator-expression* :trash/init
+  "AST for the value currently in A during Z80 emission, or NIL if unknown.")
 
 (defun z80-label (prefix)
   (format nil "_~a~d" prefix (incf *z80-label*)))
@@ -570,10 +589,16 @@
 
 (defun compile-z80-condition (out condition class-id slot-table type-table const-table pic-width-table branch-label)
   (cond
-    ((and (listp condition) (member (first condition) '(= equal < less > greater) :test #'eq))
+    ((and (listp condition) (member (first condition) '(= equal < less > greater) :test #'string-equal))
      (let* ((lhs (second condition)) (rhs (third condition)) (op (first condition))
             (w (max (or (operand-width lhs pic-width-table) 1)
-                    (or (operand-width rhs pic-width-table) 1))))
+                    (or (operand-width rhs pic-width-table) 1)))
+            (short-op (let ((n (symbol-name op)))
+                        (cond ((string-equal n "=") 'equal)
+                              ((string-equal n "LESS") '<)
+                              ((string-equal n ">") '>)
+                              ((string-equal n "GREATER") '>)
+                              (t 'equal)))))
        (if (= w 2)
            (progn
              (compile-z80-load out lhs class-id slot-table const-table pic-width-table 2)
@@ -582,29 +607,31 @@
              (format out "~&~10tpop de")
              (format out "~&~10tor a")
              (format out "~&~10tsbc hl, de")
-             (ecase op
-               ((= equal) (format out "~&~10tjp nz, ~a" branch-label))
-               ;; Unsigned < after HL = RHS - LHS: equal (Z) or LHS>RHS (C) => false.
-               ((< less)
+             (ecase short-op
+               (equal (format out "~&~10tjp nz, ~a" branch-label))
+               ;; SBC HL,DE with DE=LHS, HL=RHS => HL = RHS-LHS. C=0 when
+               ;; RHS>=LHS, so branch when C=0 (not-less: >=) or Z (equal).
+               ((<)
                 (format out "~&~10tjp z, ~a" branch-label)
-                (format out "~&~10tjp c, ~a" branch-label))
-               ((> greater)
+                (format out "~&~10tjp nc, ~a" branch-label))
+               ((>)
                 (format out "~&~10tjp z, ~a" branch-label)
-                (format out "~&~10tjp nc, ~a" branch-label))))
+                (format out "~&~10tjp c, ~a" branch-label))))
            (progn
              (compile-z80-load out lhs class-id slot-table const-table pic-width-table)
              (format out "~&~10tld b, a")
              (compile-z80-load out rhs class-id slot-table const-table pic-width-table)
              (format out "~&~10tcp b")
-             (ecase op
-               ((= equal) (format out "~&~10tjp nz, ~a" branch-label))
-               ;; CP A,B with A=RHS, B=LHS: Z if equal; C if RHS<LHS (i.e. LHS>RHS).
-               ((< less)
+             (ecase short-op
+               (equal (format out "~&~10tjp nz, ~a" branch-label))
+               ;; CP A,B with A=RHS, B=LHS computes RHS-LHS: Z if equal;
+               ;; C if RHS<LHS, so C=0 (nc) when LHS<RHS.
+               ((<)
                 (format out "~&~10tjp z, ~a" branch-label)
-                (format out "~&~10tjp c, ~a" branch-label))
-               ((> greater)
+                (format out "~&~10tjp nc, ~a" branch-label))
+               ((>)
                 (format out "~&~10tjp z, ~a" branch-label)
-                (format out "~&~10tjp nc, ~a" branch-label)))))))
+                (format out "~&~10tjp c, ~a" branch-label)))))))
     ((and (listp condition) (eq (first condition) :is-zero))
      (let* ((expression (second condition))
             (width (operand-width expression pic-width-table)))
@@ -1020,30 +1047,78 @@
                 (compile-z80-load out (third target) class-id slot-table const-table pic-width-table 1)
                 (format out "~&~10tld c, a")
                 (format out "~&~10tld a, b")
-                (format out "~&~10tld b, 0")
-                )))))))
-  (error "interrupted"))
+                (format out "~&~10tld b, 0")))))))))
 ;;; PERFORM
 
 (defun compile-z80-perform (out statement class-id slot-table type-table const-table pic-size-table pic-width-table)
   (let* ((proc (getf (rest statement) :procedure))
          (times (getf (rest statement) :times))
          (until (getf (rest statement) :until))
+         (varying (getf (rest statement) :varying))
+         (from (getf (rest statement) :from))
+         (by (getf (rest statement) :by))
          (body (getf (rest statement) :body)))
-    (cond
-      (body
-       ;; Inline loop body case
-       (let ((label-loop (z80-label "perfloop"))
-             (label-end (z80-label "perfend"))
-             (label-continue (z80-label "perfcontinue")))
-         (let ((*z80-break-label* label-end)
-               (*z80-continue-label* label-continue))
-           (format out "~&~a:" label-continue)  ; Continue label: start of loop body
-            (dolist (statement body)
-              (compile-z80-statement out statement class-id slot-table type-table const-table pic-size-table pic-width-table))
-           (format out "~&~a:" label-end)     ; End label: after loop
-           )))
-      (times
+    (labels ((emit-body ()
+               (dolist (statement body)
+                 (compile-z80-statement out statement class-id slot-table type-table const-table pic-size-table pic-width-table)))
+             (store-var (var)
+               (if (= (or (operand-width var pic-width-table) 1) 2)
+                   (format out "~&~10tld (~a), hl" (bare-data-assembly-symbol var class-id))
+                   (format out "~&~10tld (~a), a" (bare-data-assembly-symbol var class-id)))))
+      (cond
+        (body
+         ;; Inline loop body case
+         (cond
+           ((and varying)
+            (let ((label-loop (z80-label "perfloop"))
+                  (label-end (z80-label "perfend"))
+                  (label-continue (z80-label "perfcontinue")))
+              (compile-z80-load out (or from 0) class-id slot-table const-table pic-width-table)
+              (store-var varying)
+              (format out "~&~a:" label-loop)
+              (when until (compile-z80-condition out until class-id slot-table type-table const-table pic-width-table label-end))
+              (let ((*z80-break-label* label-end)
+                    (*z80-continue-label* label-continue))
+                (format out "~&~a:" label-continue)
+                (emit-body))
+              (compile-z80-load out varying class-id slot-table const-table pic-width-table)
+              (format out "~&~10tadd a, ~d" (or by 1))
+              (store-var varying)
+              (format out "~&~10tjp ~a" label-loop)
+              (format out "~&~a:" label-end)))
+           (until
+            (let ((label-loop (z80-label "perfloop"))
+                  (label-end (z80-label "perfend"))
+                  (label-continue (z80-label "perfcontinue")))
+              (format out "~&~a:" label-loop)
+              (compile-z80-condition out until class-id slot-table type-table const-table pic-width-table label-end)
+              (let ((*z80-break-label* label-end)
+                    (*z80-continue-label* label-continue))
+                (format out "~&~a:" label-continue)
+                (emit-body))
+              (format out "~&~10tjp ~a" label-loop)
+              (format out "~&~a:" label-end)))
+           (times
+            (let ((label-loop (z80-label "perfloop"))
+                  (label-done (z80-label "perfend"))
+                  (label-continue (z80-label "perfcontinue")))
+              (compile-z80-load out times class-id slot-table const-table pic-width-table)
+              (format out "~&~10tld b, a")
+              (format out "~&~a:" label-loop)
+              (format out "~&~10tld a, b")
+              (format out "~&~10tor a")
+              (format out "~&~10tjp z, ~a" label-done)
+              (let ((*z80-break-label* label-done)
+                    (*z80-continue-label* label-continue))
+                (format out "~&~a:" label-continue)
+                (emit-body))
+              (format out "~&~10tld a, b")
+              (format out "~&~10tdec a")
+              (format out "~&~10tld b, a")
+              (format out "~&~10tjp ~a" label-loop)
+              (format out "~&~a:" label-done)))
+           (t (error "EIGHTBOL/Z80: PERFORM with inline body requires UNTIL, TIMES, or VARYING"))))
+        (times
        (let ((label (z80-label "perf"))
              (label-done (z80-label "perfd"))
              (times-w (operand-width times pic-width-table)))
@@ -1077,8 +1152,8 @@
             (format out "~&~10tcall ~a" (z80-symbol (format nil "~a" proc)))
             (format out "~&~10tjp ~a" label-loop)
             (format out "~&~a:" label-end)))
-      (t
-       (format out "~&~10tcall ~a" (z80-symbol (format nil "~a" proc)))))))
+(t
+        (format out "~&~10tcall ~a" (z80-symbol (format nil "~a" proc))))))))
 
 (defun %z80-string-operand-length-expr (source statement)
   "Return length expression for STRING BLT from STATEMENT or SOURCE :refmod.

@@ -105,7 +105,7 @@
                ;; Check for 0x (hex), 0o (octal), 0b (binary) prefixes
                (let ((c (peek)))
                  (if (and (char= c #\0) (plusp (- (length chars) (1+ i))))
-                     (let ((next-c (char chars (1+ i))))
+                     (let ((next-c (elt chars (1+ i))))
                        (cond
                          ((char-equal next-c #\x)
                           ;; Handle 0xHEXDIGITS
@@ -140,6 +140,7 @@
                            do (next-char)))
                  (flush-token start i :number)))
              (scan-prefixed-number (start)
+               (declare (ignore start))
                ;; Handle #x (hex), #o (octal), #b (binary), #d"..." (dword)
                (next-char) ;; Skip the '#'
                (let ((format-char (when (not (end-of-file-p)) (peek))))
@@ -201,7 +202,7 @@
                  ((char= (peek) #\#) (scan-prefixed-number i))
                  ((and (char= (peek) #\d) 
                        (plusp (- (length chars) (1+ i)))
-                       (find (char chars (1+ i)) "'\""))
+                       (find (elt chars (1+ i)) "'\""))
                   ;; Handle d'WORD' or d"WORD" dword literal
                   (next-char) ;; Skip 'd'
                   (let ((quote-char (peek)))

@@ -9,13 +9,18 @@
 ;; Structure based on backend-Z80.lisp for consistency.
 (in-package :eightbol)
 
-;;; ---------------------------------------------------------------
 ;;; Shared helpers (symbol naming)
-;;; ---------------------------------------------------------------
 
 (defun i286-symbol (name)
   "Convert EIGHTBOL identifier to i286 assembly symbol (PascalCase). COBOL stabby-case supported."
   (pascal-case (format nil "~a" name)))
+
+;;; Dynamic variables for break and continue labels in PERFORM loops with inline body
+
+(defvar *i286-break-label* nil
+  "Label to jump to for BREAK statement inside PERFORM loop with inline body.")
+(defvar *i286-continue-label* nil
+  "Label to jump to for CONTINUE statement inside PERFORM loop with inline body.")
 
 (defun paragraph-label (name)
   "Return assembly label for paragraph NAME.
@@ -23,9 +28,7 @@
   (declare (ignore _))
   (i286-symbol (format nil "~a" name)))
 
-;;; ---------------------------------------------------------------
 ;;; Top-level entry point
-;;; ---------------------------------------------------------------
 
 (defmethod compile-to-assembly (ast (cpu (eql :i286)) output-stream)
   (unless (and (listp ast) (eq (first ast) :program))
@@ -48,9 +51,7 @@
             (compile-i286-method output-stream method class-id
                                 slot-table type-table const-table pic-size-table pic-width-table)))))))
 
-;;; ---------------------------------------------------------------
 ;;; Method compilation
-;;; ---------------------------------------------------------------
 
 (defun compile-i286-method (out method class-id slot-table type-table const-table pic-size-table pic-width-table)
   (let ((*slot-table* slot-table)
@@ -112,15 +113,25 @@
     (:stop-run (format out "~&~8tret"))
     (:move (compile-i286-move out stmt class-id slot-table const-table pic-width-table))
     (:invoke (compile-i286-invoke out stmt class-id type-table pic-width-table))
-    (:call (compile-i286-call out stmt))
-    (:if (compile-i286-if out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
+     (:call (compile-i286-call out stmt))
+     (:call-acc (compile-i286-call-acc out stmt))
+     (:if (compile-i286-if out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:add (compile-i286-add out stmt class-id slot-table const-table pic-width-table))
     (:subtract (compile-i286-subtract out stmt class-id slot-table const-table pic-width-table))
     (:compute (compile-i286-compute out stmt class-id slot-table const-table pic-width-table))
     (:set (compile-i286-set out stmt class-id slot-table const-table pic-width-table))
     (:log-fault (format out "~&~8t; LOG FAULT ~s" (getf (rest stmt) :code)))
-    (:debug-break (format out "~&~8t; DEBUG BREAK ~s" (getf (rest stmt) :code)))
-    (:perform (compile-i286-perform out stmt class-id slot-table type-table const-table pic-width-table))
+     (:debug-break (format out "~&~8t; DEBUG BREAK ~s" (getf (rest stmt) :code)))
+     (:break (if *i286-break-label*
+                 (format out "~&~8tjmp     ~a" *i286-break-label*)
+                 (error "BREAK statement outside of PERFORM loop with inline body")))
+     (:continue (if *i286-continue-label*
+                    (format out "~&~8tjmp     ~a" *i286-continue-label*)
+                    (error "CONTINUE statement outside of PERFORM loop with inline body")))
+     (:perform (compile-i286-perform out stmt :class-id class-id :slot-table slot-table
+                                             :type-table type-table :const-table const-table
+                                             :pic-size-table pic-size-table
+                                             :pic-width-table pic-width-table))
     (:string-blt (compile-i286-string-blt out stmt class-id slot-table const-table))
     (:goto
      (compile-i286-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
@@ -245,9 +256,7 @@
     (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
                   (getf (rest stmt) :name)))))
 
-;;; ---------------------------------------------------------------
 ;;; Register helpers
-;;; ---------------------------------------------------------------
 
 (defun i286-reg (width)
   "Return accumulator register for width: al (byte) or ax (word)."
@@ -257,9 +266,7 @@
   "Return temp register for width: bl (byte) or bx (word)."
   (if (= (or width 1) 2) "bx" "bl"))
 
-;;; ---------------------------------------------------------------
 ;;; Expression / value emission
-;;; ---------------------------------------------------------------
 
 (defun i286-expr-is-constant-p (expr const-table)
   "True if EXPR is a compile-time constant. CONST-TABLE is ignored; use @code{*CONST-TABLE*}."
@@ -345,9 +352,7 @@
        (format out "~&~8tnot     ~a" reg))
       (t (format out "~&~8t; Unsupported load ~s" expr)))))
 
-;;; ---------------------------------------------------------------
 ;;; MOVE
-;;; ---------------------------------------------------------------
 
 (defun compile-i286-move (out stmt class-id slot-table const-table pic-width-table)
   (let* ((from (getf (rest stmt) :from))
@@ -376,9 +381,7 @@
          (format out "~&~8tmov     [si], ~a" (i286-temp-reg to-w))))
       (t (format out "~&~8t; Unsupported store to ~s" to)))))
 
-;;; ---------------------------------------------------------------
 ;;; INVOKE / CALL
-;;; ---------------------------------------------------------------
 
 (defun compile-i286-invoke (out stmt class-id type-table pic-width-table)
   (let ((object   (getf (rest stmt) :object))
@@ -401,11 +404,20 @@
   (let ((target (getf (rest stmt) :target))
         (service (getf (rest stmt) :service)))
     (let ((name (i286-symbol (format nil "~a" (or service target)))))
-      (format out "~&~8tcall    ~a" name))))
+       (format out "~&~8tcall    ~a" name))))
 
-;;; ---------------------------------------------------------------
+;;; CALL ACC
+
+(defun compile-i286-call-acc (out statement)
+  (let* ((target (getf (rest statement) :target))
+         (bank (getf (rest statement) :bank)))
+    (if bank
+        (format out "~&~8tcall far ~a:~a" (i286-symbol bank) (i286-symbol target))
+        (format out "~&~8tcall     ~a" (i286-symbol target)))))
+
 ;;; IF / condition
-;;; ---------------------------------------------------------------
+
+;;; IF / condition
 
 (defvar *i286-label* 0)
 
@@ -433,10 +445,10 @@
   (cond
     ((and (listp condition) (member (first condition) '(= equal < less > greater) :test #'eq))
      (let ((lhs (second condition)) (rhs (third condition)) (op (first condition))
-           (w (max (or (operand-width lhs pic-width-table) 1)
-                   (or (operand-width rhs pic-width-table) 1)))
-           (acc (i286-reg w))
-           (tmp (i286-temp-reg w)))
+                                    (w (max (or (operand-width lhs pic-width-table) 1)
+                                            (or (operand-width rhs pic-width-table) 1)))
+                                    (acc (i286-reg w))
+                                    (tmp (i286-temp-reg w)))
        (compile-i286-load out lhs class-id slot-table const-table pic-width-table)
        (format out "~&~8tmov     ~a, ~a" tmp acc)
        (compile-i286-load out rhs class-id slot-table const-table pic-width-table)
@@ -484,9 +496,7 @@
      (format out "~&~8t; Unsupported condition ~s" condition)
      (format out "~&~8tjmp     ~a" branch-label))))
 
-;;; ---------------------------------------------------------------
 ;;; EVALUATE statement
-;;; ---------------------------------------------------------------
 
 (defun compile-i286-evaluate (out stmt class-id slot-table type-table const-table pic-size-table pic-width-table)
   (let ((subject (getf (rest stmt) :subject))
@@ -559,9 +569,7 @@
                 (format out "~&~a:" lbl-next))))))))
     (format out "~&~a:" lbl-end)))
 
-;;; ---------------------------------------------------------------
 ;;; INSPECT statement
-;;; ---------------------------------------------------------------
 
 (defun compile-i286-inspect (out stmt class-id slot-table const-table pic-size-table pic-width-table)
   (let ((target (getf (rest stmt) :target))
@@ -619,9 +627,7 @@
              (format out "~&~8tinc     si")
              (format out "~&~8tloop    ~a" lbl))))))))
 
-;;; ---------------------------------------------------------------
 ;;; ADD / SUBTRACT / COMPUTE / SET
-;;; ---------------------------------------------------------------
 
 (defun compile-i286-add (out stmt class-id slot-table const-table pic-width-table)
   (let* ((from (getf (rest stmt) :from))
@@ -751,37 +757,127 @@
          (format out "~&~8tmov     [si], ~a" (i286-temp-reg w))))
       (t (format out "~&~8t; Unsupported set ~s" target)))))
 
-;;; ---------------------------------------------------------------
 ;;; PERFORM
-;;; ---------------------------------------------------------------
 
-(defun compile-i286-perform (out stmt class-id slot-table type-table const-table pic-width-table)
-  (let ((proc (getf (rest stmt) :procedure))
-        (times (getf (rest stmt) :times))
-        (until (getf (rest stmt) :until)))
-    (cond
-      (times
-       (let ((lbl (i286-label "perf")))
-         (compile-i286-load out times class-id slot-table const-table pic-width-table)
-         (format out "~&~8tmov     cl, al")
-         (format out "~&~a:" lbl)
-         (format out "~&~8tcall    ~a" (i286-symbol (format nil "~a" proc)))
-         (format out "~&~8tdec     cl")
-         (format out "~&~8tjnz     ~a" lbl)))
-      (until
-       (let ((lbl-loop (i286-label "loop"))
-             (lbl-end (i286-label "end")))
-         (format out "~&~a:" lbl-loop)
-         (compile-i286-condition out until class-id slot-table type-table const-table pic-width-table lbl-end)
-         (format out "~&~8tcall    ~a" (i286-symbol (format nil "~a" proc)))
-         (format out "~&~8tjmp     ~a" lbl-loop)
-         (format out "~&~a:" lbl-end)))
-      (t
-       (format out "~&~8tcall    ~a" (i286-symbol (format nil "~a" proc)))))))
+(defun compile-i286-perform (out statement &key class-id slot-table type-table const-table
+                                         pic-size-table pic-width-table)
+  (let* ((procedure (getf (rest statement) :procedure))
+         (varying (getf (rest statement) :varying))
+         (from (getf (rest statement) :from))
+         (by (getf (rest statement) :by))
+         (until (getf (rest statement) :until))
+         (times (getf (rest statement) :times))
+         (body (getf (rest statement) :body)))
+    (if body
+        (let ((label-loop (i286-label "PerfLoop"))
+              (label-end (i286-label "PerfEnd")))
+          (cond
+            ;; PERFORM ... VARYING ... FROM ... BY ... TIMES ... WITH inline body
+            ((and varying from by times body)
+             (let ((label-continue (i286-label "PerfContinue")))
+               (compile-i286-load out (or from 0) class-id slot-table const-table pic-width-table)
+               (format out "~&~8tmov     ~a, al" (i286-symbol varying))
+               (format out "~&~a:" label-loop)
+               (setf *i286-break-label* label-end
+                     *i286-continue-label* label-continue)
+               (format out "~&~a:" label-continue)
+               (dolist (s (rest body))
+                 (compile-i286-statement out s class-id slot-table type-table const-table
+                                         pic-size-table pic-width-table))
+               (setf *i286-break-label* nil
+                     *i286-continue-label* nil)
+               (compile-i286-load out (i286-symbol varying) class-id slot-table const-table pic-width-table)
+               (format out "~&~8tadd     al, ~d" (or by 1))
+               (format out "~&~8tmov     ~a, al" (i286-symbol varying))
+               (format out "~&~8tcmp     al, ~d" (* (or by 1) times))
+               (format out "~&~8tjb      ~a" label-loop)
+               (format out "~&~a:" label-end)))
+            ;; PERFORM ... TIMES ... WITH inline body (no varying)
+            ((and procedure times body)
+             (let ((label-continue (i286-label "PerfContinue")))
+               (compile-i286-load out times class-id slot-table const-table pic-width-table)
+               (format out "~&~8tmov     cl, al")
+               (format out "~&~a:" label-loop)
+               (setf *i286-break-label* label-end
+                     *i286-continue-label* label-continue)
+               (format out "~&~a:" label-continue)
+               (dolist (s (rest body))
+                 (compile-i286-statement out s class-id slot-table type-table const-table
+                                         pic-size-table pic-width-table))
+               (setf *i286-break-label* nil
+                     *i286-continue-label* nil)
+               (format out "~&~8tdec     cl")
+               (format out "~&~8tjnz     ~a" label-loop)
+               (format out "~&~a:" label-end)))
+            ;; PERFORM ... UNTIL ... WITH inline body (no varying)
+            ((and procedure until body (not varying))
+             (let ((label-continue (i286-label "PerfContinue")))
+               (format out "~&~a:" label-loop)
+               (setf *i286-break-label* label-end
+                     *i286-continue-label* label-continue)
+               (format out "~&~a:" label-continue)
+               (dolist (s (rest body))
+                 (compile-i286-statement out s class-id slot-table type-table const-table
+                                         pic-size-table pic-width-table))
+               (setf *i286-break-label* nil
+                     *i286-continue-label* nil)
+               (compile-i286-condition out until class-id slot-table type-table const-table
+                                       pic-width-table label-end)
+               (format out "~&~8tjmp     ~a" label-loop)
+               (format out "~&~a:" label-end)))
+            ((and procedure body)
+             (error "PERFORM with inline body requires TIMES, UNTIL, or VARYING"))
+            ;; Existing subroutine call cases (non-inline)
+            ((and varying from by times)
+             (let ((label (i286-label "perf")))
+               (compile-i286-load out (or from 0) class-id slot-table const-table pic-width-table)
+               (format out "~&~8tmov     ~a, al" (i286-symbol varying))
+               (format out "~&~a:" label)
+               (format out "~&~8tcall    ~a" (i286-symbol (format nil "~a" procedure)))
+               (format out "~&~8tadd     al, ~d" (or by 1))
+               (format out "~&~8tmov     ~a, al" (i286-symbol varying))
+               (format out "~&~8tcmp     al, ~d" (* (or by 1) times))
+               (format out "~&~8tjb      ~a" label)))
+            ((and varying procedure until)
+             (let ((label-loop (i286-label "loop"))
+                   (label-end (i286-label "end")))
+               (compile-i286-load out (or from 0) class-id slot-table const-table pic-width-table)
+               (format out "~&~8tmov     ~a, al" (i286-symbol varying))
+               (format out "~&~a:" label-loop)
+               (format out "~&~8tcall    ~a" (i286-symbol (format nil "~a" procedure)))
+               (compile-i286-load out (i286-symbol varying) class-id slot-table const-table pic-width-table)
+               (format out "~&~8tadd     al, ~d" (or by 1))
+               (format out "~&~8tmov     ~a, al" (i286-symbol varying))
+               (format out "~&~8t; TODO: condition for until")
+               (format out "~&~8tjmp     ~a" label-loop)
+               (format out "~&~a:" label-end)))
+            (procedure
+             (format out "~&~8tcall    ~a" (i286-symbol (format nil "~a" procedure))))
+            ((or times until)
+             (error "PERFORM TIMES or UNTIL require VARYING and procedure paragraph name."))
+            (t (error "PERFORM requires procedure paragraph name."))))
+        (cond
+          (times
+           (let ((label (i286-label "perf")))
+             (compile-i286-load out times class-id slot-table const-table pic-width-table)
+             (format out "~&~8tmov     cl, al")
+             (format out "~&~a:" label)
+             (format out "~&~8tcall    ~a" (i286-symbol (format nil "~a" procedure)))
+             (format out "~&~8tdec     cl")
+             (format out "~&~8tjnz     ~a" label)))
+          (until
+           (let ((label-loop (i286-label "loop"))
+                 (label-end (i286-label "end")))
+             (format out "~&~a:" label-loop)
+             (compile-i286-condition out until class-id slot-table type-table const-table
+                                     pic-width-table label-end)
+             (format out "~&~8tcall    ~a" (i286-symbol (format nil "~a" procedure)))
+             (format out "~&~8tjmp     ~a" label-loop)
+             (format out "~&~a:" label-end)))
+          (t
+           (format out "~&~8tcall    ~a" (i286-symbol (format nil "~a" procedure))))))))
 
-;;; ---------------------------------------------------------------
-;;; STRING BLT
-;;; ---------------------------------------------------------------
+;;; String BLT
 
 (defun i286-string-operand-address (operand)
   "Return Intel address expression for STRING operand (identifier or :refmod)."

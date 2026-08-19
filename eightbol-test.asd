@@ -1,4 +1,3 @@
-(in-package :cl-user)
 (require 'asdf)
 
 (asdf:defsystem "eightbol-test"
@@ -39,8 +38,10 @@
                               :depends-on ("eightbol-tests"))
                              (:file "backend-6502-classification-tests"
                               :depends-on ("eightbol-tests"))
-                             (:file "backend-f8-tests"
-                              :depends-on ("eightbol-tests"))
+                              (:file "backend-f8-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-sm83-tests"
+                               :depends-on ("eightbol-tests"))
                              (:file "expression-constant-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "numeric-precision-all-backends"
@@ -57,7 +58,8 @@
                                            :compile-regression :copybook-generation
                                            :service-bank-lut :backend-cp1610
                                            :backend-z80 :backend-operand-kinds
-                                           :backend-f8 :backend-6502-classification
+                                            :backend-f8 :backend-sm83
+                                            :backend-6502-classification
                                            :expression-constant :numeric-precision
                                            :numeric-precision-all-backends
                                            :pic-1-bit :s-decimal

@@ -73,12 +73,17 @@
     
     (transpile-stmts ast)))
 
-(defun compile-agi-from-path (path &key (cpus '( :6502 )))
-  "Compile AGI source file from path."
-  (let* ((source (uiop:read-file-string path))
-         (ast (parse-agi source))
-         (transpiled (agi-transpile ast)))
-    (compile-eightbol-from-ast transpiled :cpus cpus)))
+(defun compile-agi-from-path (path
+                              &key (cpus +supported-cpus+)
+                                   output-file
+                                   root-directory)
+  "Compile AGI source file from PATH via parse-agi → compile-ast-program."
+  (let ((source (uiop:read-file-string path)))
+    (compile-ast-program (parse-agi source)
+                         :cpus cpus
+                         :output-file output-file
+                         :copybook-paths nil
+                         :root-directory (or root-directory (truename #p".")))))
 
 ;; Export the function
 (defun |compile-agi-from-path| (&rest args)

@@ -14,9 +14,18 @@
   (pascal-case (format nil "~a" name)))
 
 (defun paragraph-label (name)
-  "Return assembly label for paragraph NAME.
-   COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
-  (to-identifier name))
+   "Return assembly label for paragraph NAME.
+    COBOL stabby-case (e.g. My-Para) maps to PascalCase (MyPara); underscores become part of one symbol."
+   (to-identifier name))
+
+;;; ---------------------------------------------------------------
+;;; Dynamic variables for break and continue labels in PERFORM loops with inline body
+;;; ---------------------------------------------------------------
+
+(defvar *arm7-break-label* nil
+  "Label to jump to for BREAK statement inside PERFORM loop with inline body.")
+(defvar *arm7-continue-label* nil
+  "Label to jump to for CONTINUE statement inside PERFORM loop with inline body.")
 
 (defmacro def-arm7-statement (statement-type &body body)
   "Define compile-statement method for ARM7 backend. Uses *output-stream*."
@@ -118,15 +127,25 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
     (:exit (format out  "~&~8tbx      lr"))
     (:move (compile-arm7-move out stmt class-id slot-table const-table pic-width-table))
     (:invoke (compile-arm7-invoke out stmt class-id type-table pic-width-table))
-    (:call (compile-arm7-call out stmt))
-    (:if (compile-arm7-if out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
+     (:call (compile-arm7-call out stmt))
+     (:call-acc (compile-arm7-call-acc out stmt))
+     (:if (compile-arm7-if out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:add (compile-arm7-add out stmt class-id slot-table const-table pic-width-table))
     (:subtract (compile-arm7-subtract out stmt class-id slot-table const-table pic-width-table))
     (:compute (compile-arm7-compute out stmt class-id slot-table const-table pic-width-table))
     (:set (compile-arm7-set out stmt class-id slot-table const-table pic-width-table))
     (:log-fault (format out  "~&~8t@ LOG FAULT ~s" (getf (rest stmt) :code)))
-    (:debug-break (format out  "~&~8t@ DEBUG BREAK ~s" (getf (rest stmt) :code)))
-    (:perform (compile-arm7-perform out stmt class-id slot-table type-table const-table pic-width-table))
+     (:debug-break (format out  "~&~8t@ DEBUG BREAK ~s" (getf (rest stmt) :code)))
+     (:break (if *arm7-break-label*
+                 (format out  "~&~8tb       ~a" *arm7-break-label*)
+                 (error "BREAK statement outside of PERFORM loop with inline body")))
+     (:continue (if *arm7-continue-label*
+                    (format out  "~&~8tb       ~a" *arm7-continue-label*)
+                    (error "CONTINUE statement outside of PERFORM loop with inline body")))
+     (:perform (compile-arm7-perform out stmt :class-id class-id :slot-table slot-table
+                                             :type-table type-table :const-table const-table
+                                             :pic-size-table pic-size-table
+                                             :pic-width-table pic-width-table))
     (:string-blt (compile-arm7-string-blt out stmt class-id slot-table const-table))
     (:goto
      (compile-arm7-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
@@ -366,6 +385,19 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
         (library (getf (rest stmt) :library)))
     (declare (ignore library))
     (format out  "~&~8tbl      ~a" (arm7-symbol (format nil "~a" (or service target))))))
+
+;;; ---------------------------------------------------------------
+;;; CALL ACC
+;;; ---------------------------------------------------------------
+
+(defun compile-arm7-call-acc (out statement)
+  (let* ((target (getf (rest statement) :target))
+         (bank (getf (rest statement) :bank)))
+    (if bank
+        (format out  "~&~8tbl      ~a:~a" (arm7-symbol bank) (arm7-symbol target))
+        (format out  "~&~8tbl      ~a" (arm7-symbol target)))))
+
+;;; ---------------------------------------------------------------
 
 (defvar *arm7-label* 0)
 
@@ -749,29 +781,99 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
           (format out "~&~8t~a     r1, [r2, r0]" op))
          (t (format out "~&~8t@ Unsupported set ~s" target)))))))
 
-(defun compile-arm7-perform (out stmt class-id slot-table type-table const-table pic-width-table)
-  (let ((proc (getf (rest stmt) :procedure))
-        (times (getf (rest stmt) :times))
-        (until (getf (rest stmt) :until)))
-    (cond
-      (times
-       (let ((lbl (arm7-label "perf")))
-         (compile-arm7-load out times class-id slot-table const-table pic-width-table)
-         (format out  "~&~8tmovs    r1, r0")
-         (format out  "~&~a:" lbl)
-         (format out  "~&~8tbl      ~a" (arm7-symbol (format nil "~a" proc)))
-         (format out  "~&~8tsubs    r1, #1")
-         (format out  "~&~8tbne     ~a" lbl)))
-      (until
-       (let ((lbl-loop (arm7-label "loop"))
-             (lbl-end (arm7-label "end")))
-         (format out  "~&~a:" lbl-loop)
-         (compile-arm7-condition out until class-id slot-table type-table const-table pic-width-table lbl-end)
-         (format out  "~&~8tbl      ~a" (arm7-symbol (format nil "~a" proc)))
-         (format out  "~&~8tb       ~a" lbl-loop)
-         (format out  "~&~a:" lbl-end)))
-      (t
-       (format out  "~&~8tbl      ~a" (arm7-symbol (format nil "~a" proc)))))))
+(defun compile-arm7-perform (out statement &key class-id slot-table type-table const-table
+                                         pic-size-table pic-width-table)
+  (let* ((procedure (getf (rest statement) :procedure))
+         (varying (getf (rest statement) :varying))
+         (from (getf (rest statement) :from))
+         (by (getf (rest statement) :by))
+         (until (getf (rest statement) :until))
+         (times (getf (rest statement) :times))
+         (body (getf (rest statement) :body)))
+    (if body
+        (let ((label-loop (arm7-label "PerfLoop"))
+              (label-end (arm7-label "PerfEnd")))
+          (cond
+            ;; PERFORM ... VARYING ... FROM ... BY ... TIMES ... WITH inline body
+            ((and varying from by times body)
+             (let ((label-continue (arm7-label "PerfContinue")))
+               (compile-arm7-load out (or from 0) class-id slot-table const-table pic-width-table)
+               (format out "~&~8t; TODO: store initial value to varying")
+               (format out "~&~a:" label-loop)
+               (setf *arm7-break-label* label-end
+                     *arm7-continue-label* label-continue)
+               (format out "~&~a:" label-continue)
+               (dolist (s (rest body))
+                 (compile-arm7-statement out s class-id slot-table type-table const-table
+                                         pic-size-table pic-width-table))
+               (setf *arm7-break-label* nil
+                     *arm7-continue-label* nil)
+               (format out "~&~8t; TODO: increment varying and loop")
+               (format out "~&~a:" label-end)))
+            ;; PERFORM ... TIMES ... WITH inline body (no varying)
+            ((and procedure times body)
+             (let ((label-continue (arm7-label "PerfContinue")))
+               (compile-arm7-load out times class-id slot-table const-table pic-width-table)
+               (format out "~&~8t; TODO: store count")
+               (format out "~&~a:" label-loop)
+               (setf *arm7-break-label* label-end
+                     *arm7-continue-label* label-continue)
+               (format out "~&~a:" label-continue)
+               (dolist (s (rest body))
+                 (compile-arm7-statement out s class-id slot-table type-table const-table
+                                         pic-size-table pic-width-table))
+               (setf *arm7-break-label* nil
+                     *arm7-continue-label* nil)
+               (format out "~&~8t; TODO: decrement count and loop")
+               (format out "~&~a:" label-end)))
+            ;; PERFORM ... UNTIL ... WITH inline body (no varying)
+            ((and procedure until body (not varying))
+             (let ((label-continue (arm7-label "PerfContinue")))
+               (format out "~&~a:" label-loop)
+               (setf *arm7-break-label* label-end
+                     *arm7-continue-label* label-continue)
+               (format out "~&~a:" label-continue)
+               (dolist (s (rest body))
+                 (compile-arm7-statement out s class-id slot-table type-table const-table
+                                         pic-size-table pic-width-table))
+               (setf *arm7-break-label* nil
+                     *arm7-continue-label* nil)
+               (format out "~&~8t; TODO: condition and loop")
+               (format out "~&~a:" label-end)))
+            ((and procedure body)
+             (error "PERFORM with inline body requires TIMES, UNTIL, or VARYING"))
+            ;; Existing subroutine call cases (non-inline)
+            ((and varying from by times)
+             (format out "~&~8t; TODO: PERFORM VARYING TIMES (subroutine call)")
+             (format out "~&~8tbl      ~a" (arm7-symbol (format nil "~a" procedure))))
+            ((and varying procedure until)
+             (format out "~&~8t; TODO: PERFORM VARYING UNTIL (subroutine call)")
+             (format out "~&~8tbl      ~a" (arm7-symbol (format nil "~a" procedure))))
+            (procedure
+             (format out "~&~8tbl      ~a" (arm7-symbol (format nil "~a" procedure))))
+            ((or times until)
+             (error "PERFORM TIMES or UNTIL require VARYING and procedure paragraph name."))
+            (t (error "PERFORM requires procedure paragraph name."))))
+        (cond
+          (times
+           (let ((label (arm7-label "perf")))
+             (compile-arm7-load out times class-id slot-table const-table pic-width-table)
+             (format out "~&~8tmovs    r1, r0")
+             (format out "~&~a:" label)
+             (format out "~&~8tbl      ~a" (arm7-symbol (format nil "~a" procedure)))
+             (format out "~&~8tsubs    r1, #1")
+             (format out "~&~8tbne     ~a" label)))
+          (until
+           (let ((label-loop (arm7-label "loop"))
+                 (label-end (arm7-label "end")))
+             (format out "~&~a:" label-loop)
+             (compile-arm7-condition out until class-id slot-table type-table const-table
+                                     pic-width-table label-end)
+             (format out "~&~8tbl      ~a" (arm7-symbol (format nil "~a" procedure)))
+             (format out "~&~8tb       ~a" label-loop)
+             (format out "~&~a:" label-end)))
+          (t
+           (format out "~&~8tbl      ~a" (arm7-symbol (format nil "~a" procedure))))))))
 
 (defun arm7-string-operand-address (operand)
   (cond

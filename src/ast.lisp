@@ -146,10 +146,15 @@ EXPRESSIONS is a list of values/strings to print."
 VARIABLES is a list of identifiers to read into."
   (list :input :variables (or variables '())))
 
-(defun make-dialogue-node (character text)
-  "Build a :dialogue AST node for dialogue statements.
-CHARACTER is the character name, TEXT is the dialogue string."
-  (list :dialogue :character character :text text))
+(defun make-copy-node (name)
+  "Create a copy statement node."
+  (list :copy :name name))
+
+(defun make-dialogue-node (&rest plist)
+  "Build a :dialogue AST node. PLIST is keyword arguments; canonical keys
+:speaker and :text are read by all back-ends, extra keys pass through
+(e.g. :statements). Keyword form is canonical (see plan.md Phase 0 item 5)."
+  (list* :dialogue plist))
 
 ;;; Accessors
 

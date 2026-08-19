@@ -138,6 +138,16 @@ parser mixed-case identifiers (see @code{load-copybook-tables}).")
 NAME is trimmed and uppercased so mixed-case sources match copybook rows."
   (string-upcase (string-trim " " (if (stringp name) name (format nil "~a" name)))))
 
+(defun pic-width-table-lookup (name &optional (pic-width-table *pic-width-table*))
+  "Look up NAME in the PIC width table, trying hyphen-stripped then bare keys.
+
+Copybook rows key on the uppercased, hyphen-stripped spelling (e.g. @code{05 MAX-HP}
+→ @code{MAXHP}) while source references use hyphenated spelling (@code{Max-HP}).
+Tries @code{MAXHP}, @code{MAX-HP}, then the raw NAME."
+  (or (gethash (remove #\- (cobol-slot-table-name-key name)) pic-width-table)
+      (gethash (cobol-slot-table-name-key name) pic-width-table)
+      (gethash name pic-width-table)))
+
 (defun operand-nybble-semantics-p (name)
   "True when NAME is listed in @code{*pic-nybble-semantics-table*} (single-digit @code{PIC 9} row)."
   (and *pic-nybble-semantics-table*
@@ -426,7 +436,8 @@ class design notes."
    (let ((s (and (stringp pic-rest) (%pic-strip-leading-picture-keyword pic-rest))))
      (when (and s (plusp (length s)))
        (let* ((n9 (%pic-count-9-x-slots s))
-              (n1 (%pic-count-bit-slots s))
+(n1 (%pic-count-bit-slots
+                    (cl-ppcre:regex-replace-all "(?i)(?:9|x)\\(\\d+\\)" s "9")))
               (s-nybble (if (and (eq usage :decimal) (%pic-has-s-p s)) 1 0)))
          (when (plusp (+ n9 n1 s-nybble))
            (max 1 (+ (ceiling (+ n9 s-nybble) 2) (ceiling n1 8)))))))))

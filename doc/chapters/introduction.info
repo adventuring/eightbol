@@ -1,0 +1,91 @@
+This is introduction.info, produced by makeinfo version 7.2 from
+introduction.texi.
+
+
+File: introduction.info,  Node: Editing Classes.Defs,  Next: Syntax Overview
+
+1 Editing Classes.Defs
+======================
+
+Classes.Defs is a Lisp-like DSL for defining classes, their slots,
+methods, and inheritance for the OOPS system used by EIGHTBOL.
+
+* Menu:
+
+* Syntax Overview::
+* Defining Classes::
+* Defining Methods::
+* Inheritance and Slots::
+
+
+File: introduction.info,  Node: Syntax Overview,  Next: Defining Classes,  Prev: Editing Classes.Defs,  Up: Editing Classes.Defs
+
+2 Syntax Overview
+=================
+
+The syntax of Classes.Defs follows Common Lisp conventions with
+parentheses.  Each definition is a form that begins with a keyword.
+
+     (defclass Player
+       ((health :initform 100 :accessor player-health)
+        (inventory :initform (make-list 10) :accessor player-inventory))
+       (:methods
+        (move (dx dy) ...)
+        (attack (target) ...)))
+
+
+File: introduction.info,  Node: Defining Classes,  Next: Defining Methods,  Prev: Syntax Overview,  Up: Editing Classes.Defs
+
+3 Defining Classes
+==================
+
+Use ‘defclass’ to define a new class.  The first argument is the class
+name.  The second argument is a list of slot specifications.  Each slot
+specification is a list containing the slot name and optional keyword
+arguments such as :initform, :accessor, :allocation, etc.
+
+   The third argument is optional and specifies methods directly within
+the class definition (see *note Defining Methods::).
+
+
+File: introduction.info,  Node: Defining Methods,  Next: Inheritance and Slots,  Prev: Defining Classes,  Up: Editing Classes.Defs
+
+4 Defining Methods
+==================
+
+Methods can be defined inside the class definition using the :methods
+keyword or separately with ‘defmethod’.
+
+     (defmethod Player::attack ((self Player) (target Enemy))
+       ;; attack logic
+       )
+
+
+File: introduction.info,  Node: Inheritance and Slots,  Prev: Defining Methods,  Up: Editing Classes.Defs
+
+5 Inheritance and Slots
+=======================
+
+Inheritance is specified by adding a :superclass keyword option to the
+defclass form.  Slots inherit from superclasses and can be overridden
+with different :initform or :accessor.
+
+     (defclass Enemy (Character)
+       ((strength :initform 15 :accessor enemy-strength))
+       (:methods
+        (damage (amount) ...)))
+
+
+Tag Table:
+Node: Editing Classes.Defs85
+Node: Syntax Overview441
+Node: Defining Classes970
+Node: Defining Methods1539
+Node: Inheritance and Slots1922
+
+End Tag Table
+
+
+Local Variables:
+coding: utf-8
+End:

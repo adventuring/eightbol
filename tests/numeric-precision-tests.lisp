@@ -9,6 +9,13 @@
   :description "PIC DECIMAL/BINARY precision, sign, V scaling, and mixed arithmetic")
 (in-suite :numeric-precision)
 
+(defun %test-ht (&rest entries)
+  "Build an equalp hash-table from ENTRY (key . value) conses.
+SBCL's make-hash-table does not accept :initial-contents."
+  (let ((ht (make-hash-table :test 'equalp)))
+    (dolist (entry entries ht)
+      (setf (gethash (car entry) ht) (cdr entry)))))
+
 ;;;;
 ;;;; PIC DECIMAL storage rules
 ;;;;
@@ -120,6 +127,32 @@
   "Compile MOVE from TO via compile-method-ast-with-tables for Z80."
   (compile-method-ast-with-tables
    `(:method :method-id "M" :statements ((:move :from ,from :to ,to)))
+   class-id :z80
+   :pic-width-table (or pic (make-hash-table :test 'equalp))
+   :working-storage (or ws (make-hash-table :test 'equalp))))
+
+(defun cp1610-shift-asm (var count direction &key (class-id "T") (unsigned nil) pic ws)
+  "Compile SHIFT for var via compile-method-ast-with-tables for cp1610.
+DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
+  (compile-method-ast-with-tables
+   `(:method :method-id "M"
+             :statements ((,(ecase direction
+                             (:left :shift-left)
+                             (:right :shift-right))
+                           :target ,var :count ,count :unsigned ,unsigned)))
+   class-id :cp1610
+   :pic-width-table (or pic (make-hash-table :test 'equalp))
+   :working-storage (or ws (make-hash-table :test 'equalp))))
+
+(defun z80-shift-asm (var count direction &key (class-id "T") (unsigned nil) pic ws)
+  "Compile SHIFT for var via compile-method-ast-with-tables for Z80.
+DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
+  (compile-method-ast-with-tables
+   `(:method :method-id "M"
+             :statements ((,(ecase direction
+                             (:left :shift-left)
+                             (:right :shift-right))
+                           :target ,var :count ,count :unsigned ,unsigned)))
    class-id :z80
    :pic-width-table (or pic (make-hash-table :test 'equalp))
    :working-storage (or ws (make-hash-table :test 'equalp))))
@@ -529,8 +562,8 @@
    (is (= 8 (eightbol::pic-digits-to-width "9(16)" :usage :decimal))))
    
 (test decimal-storage/8byte-signed
-   "8-byte signed DECIMAL storage"
-   (is (= 8 (eightbol::pic-digits-to-width "S9(16)" :usage :decimal))))
+   "8-byte signed DECIMAL storage: S adds one sign nybble (see s-decimal suite)."
+   (is (= 9 (eightbol::pic-digits-to-width "S9(16)" :usage :decimal))))
 
 ;;;;
 ;;;; Cross-format arithmetic tests
@@ -777,35 +810,50 @@
 ;;;; Bit-shifting tests for extended formats
 ;;;;;
 
+(defun shift-8byte-storage (signed)
+  (cons (list :usage :binary :signed signed :pic "9(16)") "9(16)"))
+
 (test shift/cp1610-binary-shift-left-8byte
-   "cp1610: LEFT shift 8-byte BINARY"
-   (let ((asm (cp1610-shift-asm "A" 1 :left :pic (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9(16)"))) :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9(16)")))))))
-     (is (plusp (length asm)))))
+  "cp1610: LEFT shift 8-byte BINARY"
+  (let ((asm (cp1610-shift-asm "A" 1 :left
+                               :pic (%test-ht (cons "A" "9(16)"))
+                               :ws (%test-ht (cons "A" (list :usage :binary :signed nil :pic "9(16)"))))))
+    (is (plusp (length asm)))))
 
 (test shift/z80-binary-shift-left-8byte
-   "z80: LEFT shift 8-byte BINARY"
-   (let ((asm (z80-shift-asm "A" 1 :left :pic (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9(16)"))) :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9(16)")))))))
-     (is (plusp (length asm)))))
+  "z80: LEFT shift 8-byte BINARY"
+  (let ((asm (z80-shift-asm "A" 1 :left
+                            :pic (%test-ht (cons "A" "9(16)"))
+                            :ws (%test-ht (cons "A" (list :usage :binary :signed nil :pic "9(16)"))))))
+    (is (plusp (length asm)))))
 
 (test shift/cp1610-binary-shift-right-8byte-unsigned
-   "cp1610: RIGHT shift 8-byte BINARY unsigned"
-   (let ((asm (cp1610-shift-asm "A" 1 :right :unsigned t :pic (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9(16)"))) :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9(16)")))))))
-     (is (plusp (length asm)))))
+  "cp1610: RIGHT shift 8-byte BINARY unsigned"
+  (let ((asm (cp1610-shift-asm "A" 1 :right :unsigned t
+                               :pic (%test-ht (cons "A" "9(16)"))
+                               :ws (%test-ht (cons "A" (list :usage :binary :signed nil :pic "9(16)"))))))
+    (is (plusp (length asm)))))
 
 (test shift/z80-binary-shift-right-8byte-unsigned
-   "z80: RIGHT shift 8-byte BINARY unsigned"
-   (let ((asm (z80-shift-asm "A" 1 :right :unsigned t :pic (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9(16)"))) :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9(16)")))))))
-     (is (plusp (length asm)))))
+  "z80: RIGHT shift 8-byte BINARY unsigned"
+  (let ((asm (z80-shift-asm "A" 1 :right :unsigned t
+                            :pic (%test-ht (cons "A" "9(16)"))
+                            :ws (%test-ht (cons "A" (list :usage :binary :signed nil :pic "9(16)"))))))
+    (is (plusp (length asm)))))
 
 (test shift/cp1610-binary-shift-right-8byte-signed
-   "cp1610: RIGHT shift 8-byte BINARY signed"
-   (let ((asm (cp1610-shift-asm "A" 1 :right :unsigned nil :pic (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9(16)"))) :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed t :pic "9(16)")))))))
-     (is (plusp (length asm)))))
+  "cp1610: RIGHT shift 8-byte BINARY signed"
+  (let ((asm (cp1610-shift-asm "A" 1 :right :unsigned nil
+                               :pic (%test-ht (cons "A" "9(16)"))
+                               :ws (%test-ht (cons "A" (list :usage :binary :signed t :pic "9(16)"))))))
+    (is (plusp (length asm)))))
 
 (test shift/z80-binary-shift-right-8byte-signed
-   "z80: RIGHT shift 8-byte BINARY signed"
-   (let ((asm (z80-shift-asm "A" 1 :right :unsigned nil :pic (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9(16)"))) :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed t :pic "9(16)")))))))
-     (is (plusp (length asm)))))
+  "z80: RIGHT shift 8-byte BINARY signed"
+  (let ((asm (z80-shift-asm "A" 1 :right :unsigned nil
+                            :pic (%test-ht (cons "A" "9(16)"))
+                            :ws (%test-ht (cons "A" (list :usage :binary :signed t :pic "9(16)"))))))
+    (is (plusp (length asm)))))
 
 ;;;;
 ;;;; Error case tests for unsupported operations
@@ -813,36 +861,36 @@
 
 (test multiply/error-non-power-of-two
    "MULTIPLY by non-power-of-two signals error"
-   (signals eightbol::backend-error
+   (signals eightbol::source-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:multiply :from "A" :by 3)))
        "T" :cp1610
-       :pic-width-table (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9"))) 
-       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9")))))))
+       :pic-width-table (%test-ht (cons "A" "9")) 
+       :working-storage (%test-ht (cons "A" (list :usage :binary :signed nil :pic "9"))))))
 
 (test multiply/error-decimal-operands
    "MULTIPLY with USAGE DECIMAL operands signals error"
-   (signals eightbol::backend-error
+   (signals eightbol::source-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:multiply :from "A" :by 2)))
        "T" :cp1610
-       :pic-width-table (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9"))) 
-       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :decimal :signed nil :pic "9")))))))
+       :pic-width-table (%test-ht (cons "A" "9")) 
+       :working-storage (%test-ht (cons "A" (list :usage :decimal :signed nil :pic "9"))))))
 
 (test divide/error-non-power-of-two
    "DIVIDE by non-power-of-two signals error"
-   (signals eightbol::backend-error
+   (signals eightbol::source-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:divide :from "A" :into 3)))
        "T" :cp1610
-       :pic-width-table (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9"))) 
-       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :binary :signed nil :pic "9")))))))
+       :pic-width-table (%test-ht (cons "A" "9")) 
+       :working-storage (%test-ht (cons "A" (list :usage :binary :signed nil :pic "9"))))))
 
 (test divide/error-decimal-operands
    "DIVIDE with USAGE DECIMAL operands signals error"
-   (signals eightbol::backend-error
+   (signals eightbol::source-error
      (compile-method-ast-with-tables
        '(:method :method-id "M" :statements ((:divide :from "A" :into 2)))
        "T" :cp1610
-       :pic-width-table (make-hash-table :test 'equalp :initial-contents (list (cons "A" "9"))) 
-       :working-storage (make-hash-table :test 'equalp :initial-contents (list (cons "A" (list :usage :decimal :signed nil :pic "9")))))))
+       :pic-width-table (%test-ht (cons "A" "9")) 
+       :working-storage (%test-ht (cons "A" (list :usage :decimal :signed nil :pic "9"))))))

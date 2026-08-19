@@ -113,13 +113,13 @@
     (setf (gethash "B" pic) 1)
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "M"
-                  :statements ((:if :condition (:less "A" "B")
+                  :statements ((:if :condition (less "A" "B")
                               :then ((:move :from 0 :to "A")))))
                 "T" :z80
                 :pic-width-table pic)))
       (is (search "cp b" asm))
       (is (search "jp z," asm))
-      (is (search "jp c," asm)))))
+      (is (search "jp nc," asm)))))
 
 (test matrix/z80-subtract-16-bit-clears-carry-before-sbc-hl-de
   "16-bit SUBTRACT must not use SBC HL,DE with carry set (scf); use or a then sbc."
@@ -146,7 +146,7 @@
                   :statements ((:goto :target "LABEL")))
                 "Character" :z80
                 :slot-table slots :const-table consts)))
-    (is (plusp (length asm)))))
+      (is (plusp (length asm))))))
 
 (test matrix/cp1610-goto
   (let ((slots (make-hash-table :test 'equalp))
@@ -154,35 +154,35 @@
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "M"
                   :statements ((:goto :target "LABEL")))
-                "Character" :cp1610
+"Character" :cp1610
                 :slot-table slots :const-table consts)))
-    (is (plusp (length asm)))))
+      (is (plusp (length asm))))))
 
 (test matrix/z80-set
   (let ((slots (make-hash-table :test 'equalp))
         (consts (make-hash-table :test 'equalp))
         (ws (make-hash-table :test 'equalp)))
-    (setf (gethash "VAR" ws) '(:pic 9 :usage :binary))
+    (setf (gethash "VAR" ws) '(:pic "9" :usage :binary))
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "M"
                   :statements ((:set :target "VAR" :value 5)))
                 "Character" :z80
                 :slot-table slots :const-table consts
                 :working-storage ws)))
-    (is (plusp (length asm)))))
+      (is (plusp (length asm))))))
 
 (test matrix/cp1610-set
   (let ((slots (make-hash-table :test 'equalp))
         (consts (make-hash-table :test 'equalp))
         (ws (make-hash-table :test 'equalp)))
-    (setf (gethash "VAR" ws) '(:pic 9 :usage :binary))
+    (setf (gethash "VAR" ws) '(:pic "9" :usage :binary))
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "M"
                   :statements ((:set :target "VAR" :value 5)))
                 "Character" :cp1610
                 :slot-table slots :const-table consts
                 :working-storage ws)))
-    (is (plusp (length asm)))))
+      (is (plusp (length asm))))))
 
 (test matrix/z80-perform
   "PERFORM procedure emits call for Z80."
@@ -200,6 +200,46 @@
               "Character" :cp1610)))
     (is (search "JSR" asm))))
 
+(test matrix/6502-perform
+  "PERFORM procedure emits jsr for 6502 (was silently omitted)."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M"
+                :statements ((:perform :procedure "Foo")))
+              "Character" :6502)))
+    (is (search "jsr" asm))))
+
+(test matrix/6502-perform-inline-until
+  "6502 PERFORM UNTIL with inline body emits a real loop."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M"
+                :statements ((:perform :procedure "While"
+                                :until (= "Count" 5)
+                                :body ((:move :from 1 :to "X")))))
+              "Character" :6502)))
+    (is (search "PerfLoop" asm))
+    (is (search "jmp" asm))))
+
+(test matrix/z80-perform-inline-until
+  "Z80 PERFORM UNTIL with inline body emits condition-checked loop."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M"
+                :statements ((:perform :procedure "While"
+                                :until (= "Count" 5)
+                                :body ((:move :from 1 :to "X")))))
+              "Character" :z80)))
+    (is (search "jp nz, _perfend" asm))
+    (is (search "jp _perfloop" asm))))
+
+(test matrix/cp1610-perform-inline-until
+  "CP1610 PERFORM UNTIL with inline body emits condition-checked loop."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "M"
+                :statements ((:perform :procedure "While"
+                                :until (= "Count" 5)
+                                :body ((:move :from 1 :to "X")))))
+              "Character" :cp1610)))
+    (is (search "BNEQ" asm))))
+
 (test matrix/other-cpus-smoke-perform
   "SM83, m68k, i286, ARM7, F8 compile PERFORM with tables and emit method label."
   (let ((slots (make-hash-table :test 'equalp))
@@ -212,4 +252,3 @@
                   :slot-table slots :const-table consts)))
         (is (search "Method" asm) "CPU ~s should emit method label" cpu)
         (is (plusp (length asm)) "CPU ~s should emit non-empty assembly" cpu)))))
-))))

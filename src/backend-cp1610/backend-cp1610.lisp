@@ -1017,9 +1017,49 @@ W is the byte width (1 or 2). For w=2, corrects both bytes with carry."
 (defun compile-cp1610-perform (stmt)
   (let ((proc (getf (rest stmt) :procedure))
         (times (getf (rest stmt) :times))
-        (until (getf (rest stmt) :until)))
-    (cond
-      (times
+        (until (getf (rest stmt) :until))
+        (varying (getf (rest stmt) :varying))
+        (from (getf (rest stmt) :from))
+        (by (getf (rest stmt) :by))
+        (body (getf (rest stmt) :body)))
+    (flet ((emit-body ()
+             (dolist (s (ensure-list body))
+               (compile-statement :cp1610 (first s) (rest s)))))
+      (cond
+        (body
+         (cond
+           (varying
+            (let ((label-loop (cp1610-label "perfloop"))
+                  (label-end (cp1610-label "perfend")))
+              (compile-cp1610-move (list :move :from (or from 0) :to varying))
+              (format *output-stream* "~&~a:" label-loop)
+              (when until (compile-cp1610-condition until label-end))
+              (emit-body)
+              (compile-statement :cp1610 :add (list :from (or by 1) :to varying :giving nil))
+              (format *output-stream* "~&~10tB       ~a" label-loop)
+              (format *output-stream* "~&~a:" label-end)))
+           (until
+            (let ((label-loop (cp1610-label "perfloop"))
+                  (label-end (cp1610-label "perfend")))
+              (format *output-stream* "~&~a:" label-loop)
+              (compile-cp1610-condition until label-end)
+              (emit-body)
+              (format *output-stream* "~&~10tB       ~a" label-loop)
+              (format *output-stream* "~&~a:" label-end)))
+           (times
+            (let ((label-loop (cp1610-label "perfloop"))
+                  (label-end (cp1610-label "perfend")))
+              (compile-cp1610-load times)
+              (format *output-stream* "~&~10tMOVR    R0, R1")
+              (format *output-stream* "~&~a:" label-loop)
+              (format *output-stream* "~&~10tTSTR    R1")
+              (format *output-stream* "~&~10tBEQ     ~a" label-end)
+              (emit-body)
+              (format *output-stream* "~&~10tDECR    R1")
+              (format *output-stream* "~&~10tBNEQ    ~a" label-loop)
+              (format *output-stream* "~&~a:" label-end)))
+           (t (error "EIGHTBOL/CP1610: PERFORM with inline body requires UNTIL, TIMES, or VARYING"))))
+        (times
        (let ((label (cp1610-label "perf")))
          (compile-cp1610-load times)
          (format *output-stream* "~&~10tMOVR    R0, R1")
@@ -1035,8 +1075,8 @@ W is the byte width (1 or 2). For w=2, corrects both bytes with carry."
          (format *output-stream* "~&~10tJSR     R5, ~a" (cp1610-symbol (format nil "~a" proc)))
          (format *output-stream* "~&~10tB       ~a" label-loop)
          (format *output-stream* "~&~a:" label-end)))
-      (t
-       (format *output-stream* "~&~10tJSR     R5, ~a" (cp1610-symbol (format nil "~a" proc)))))))
+(t
+        (format *output-stream* "~&~10tJSR     R5, ~a" (cp1610-symbol (format nil "~a" proc))))))))
 
 ;;; STRING BLT
 

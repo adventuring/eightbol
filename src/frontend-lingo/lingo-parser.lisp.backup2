@@ -1,0 +1,304 @@
+;; src/lingo-parser.lisp -- YACC parser for Lingo source
+(in-package :eightbol)
+
+(defun collect-methods (modules)
+  "Collect method names from module list. Currently returns the modules list as-is.
+   Placeholder for future method collection logic."
+  modules)
+
+;; Lingo YACC grammar with AST node construction
+
+;;; YACC parser definition
+(eval-when (:execute :load-toplevel)
+  (eval
+   `(yacc:define-parser *lingo-parser*
+      (:start-symbol program)
+      (:muffle-conflicts :some)
+
+      ;; Program Root
+      (program
+        (module-definition+
+          (lambda (modules)
+            (module-definition+
+              (module-definition)
+              (module-definition+ module-definition)))))
+
+      ;; Method Definitions
+      (method-definition
+        (method-signature method-body
+          (lambda (name args body)
+            (make-method-node name :statements body))))
+
+      ;; Procedure Definitions
+      (procedure-definition
+        (procedure-signature procedure-body
+          (lambda (name body)
+            (make-procedure-node name :statements body))))
+
+      ;; Statement List
+      (statement-list
+        ((constantly nil))
+        (statement (lambda (s) (list s)))
+        (statement-list statement
+          (lambda (list stmt) (append list (list stmt)))))
+
+      ;; Module Definition
+      (module-definition
+        (PROGRAM ident :IS statement-list :FINISH
+          (lambda (_ _ stmts __)
+            (declare (ignore _ _ __))
+            (make-module-node ident :statements stmts))))
+
+      ;; Property Statement (Lingo specific)
+      (property-stmt
+        (PROPERTY identifiers
+          (lambda (idents)
+            (make-move-node (make-literal-string "properties") (make-qualified-identifier (first idents) "self")))))
+
+      ;; Copy Statement
+      (copy-stmt
+        (COPY string
+          (lambda (filename)
+            (make-copy-node filename))))
+
+      ;; Set Statement
+      (set-stmt
+        (SET ident :TO expression
+          (lambda (target value)
+            (make-move-node target value))))
+
+      ;; Move Statement
+      (move-stmt
+        (MOVE expression :TO ident
+          (lambda (value target)
+            (make-move-node value target))))
+
+      ;; Call Statement
+      (call-stmt
+        (CALL expression LPAREN arg-list? RPAREN
+          (lambda (target args)
+            (if (assoc "library" args)
+                (call :target target :bank nil :library t)
+                (:call :target target :args (or args nil))))))
+
+      ;; Loop Statements
+      (loop-stmt
+        (FOR ident :IN expression :TO expression :STEP expression DO statement-list END
+          (lambda (_ var start end step stmts ___)
+            (declare (ignore _ ___))
+            (make-for-node var start end step stmts))))
+
+      (loop-stmt
+        (FOR ident :IN expression :TO expression DO statement-list END
+          (lambda (_ var start end __ stmts ___)
+            (declare (ignore _ ___))
+            (make-for-node var start end (make-literal-number 1) stmts))))
+
+      ;; Exit Statement
+      (exit-stmt
+        (EXIT
+          (lambda ()
+            (make-exit-node))))
+
+      ;; Return Statement
+      (return-stmt
+        (RETURN expression?
+          (lambda (value)
+            (make-return-node value))))
+
+      ;; If Statement
+      (if-stmt
+        (IF expression THEN statement-list ELSE statement-list? END IF
+          (lambda (_ cond then-stmts else-stmts _ __)
+            (declare (ignore _ __))
+            (make-if-node cond then-stmts (or else-stmts '(nil))))))
+
+      ;; Evaluate Statement
+      (evaluate-stmt
+        (EVALUATE expression WHEN expression-list THEN statement-list? END EVALUATE
+          (lambda (_ expr when-list then-stmts __)
+            (declare (ignore _ __))
+            (make-evaluate-node expr when-list (or then-stmts '(nil))))))
+
+      ;; When Clause
+      (when-clause
+        (WHEN expression-list :THEN statement-list
+          (lambda (expr-list stmts)
+            (make-when-clause expr-list stmts))))
+
+      ;; Expression List
+      (expression-list+
+        (expression
+          (lambda (expr) (list expr)))
+        (expression-list+ expression
+          (lambda (list expr) (append list (list expr)))))
+
+      (expression-list
+        ((constantly nil))
+        (expression-list+))
+
+      ;; Break Statement
+      (break-stmt
+        (BREAK
+          (lambda ()
+            (make-break-node))))
+
+      ;; Inspect Statement
+      (inspect-stmt
+        (INSPECT expression TALLYING expression-list? CONVERTING expression-list? REPLACING expression-list? WITH expression
+          (lambda (_ expr tallying-list converting-list replacing-list with-expr)
+            (make-inspect-node expr tallying-list converting-list replacing-list with-expr))))
+
+      ;; Perform Statement
+      (perform-stmt
+        (PERFORM identifier
+          (lambda (ident)
+            (make-perform-node ident))))
+
+      ;; Continue Statement
+      (continue-stmt
+        (CONTINUE
+          (lambda ()
+            (make-continue-node))))
+
+      ;; GoTo Statement
+      (goto-stmt
+        (GO TO ident
+          (lambda (_ target)
+            (declare (ignore _))
+            (make-go-to-node target))))
+
+      ;; GoSub Statement
+      (gosub-stmt
+        (GO SUB ident
+          (lambda (_ target)
+            (declare (ignore _))
+            (make-gosub-node target))))
+
+      ;; Subroutine Definition
+      (subroutine-definition
+        (SUBROUTINE ident :IS statement-list :END SUBROUTINE
+          (lambda (_ _ stmts __)
+            (declare (ignore _ _ __))
+            (make — wait, this doesn't look right. Let me check what the original had for subroutine...))
+
+      ;; Function Definition
+      (function-definition
+        (FUNCTION ident :IS statement-list :END FUNCTION
+          (lambda (_ _ stmts __)
+            (declare (ignore _ _ __))
+            (make — also incomplete)))
+
+      ;; Variable Declaration
+      (variable-declaration
+        (DIMENSION ident AS type
+          (lambda (ident _ type)
+            (make-variable-declaration ident type))))
+
+      ;; Type Specification
+      (type-spec
+        (INTEGER
+          (lambda () :INTEGER))
+        (STRING
+          (lambda () :STRING))
+        (NUMBER
+          (lambda () :NUMBER))
+        (BOOLEAN
+          (lambda () :BOOLEAN)))
+
+      ;; Expression Rules
+      (expression
+        (binary-op
+          (lambda (left op right)
+            (make-binary-op-node left op right)))
+        (unary-op
+          (lambda (op operand)
+            (make-unary-op-node op operand)))
+        (primary-expression))
+
+      (binary-op
+        (expression PLUS expression
+          (lambda (left _ right)
+            (make-binary-op-node left :+ right)))
+        (expression MINUS expression
+          (lambda (left _ right)
+            (make-binary-op-node left :- right)))
+        (expression TIMES expression
+          (lambda (left _ right)
+            (make-binary-op-node left :* right)))
+        (expression DIVIDE expression
+          (lambda (left _ right)
+            (make-binary-op-node left :/ right)))
+        (expression LT expression
+          (lambda (left _ right)
+            (make-binary-op-node left :< right)))
+        (expression GT expression
+          (lambda (left _ right)
+            (make-binary-op-node left :> right)))
+        (expression LE expression
+          (lambda (left _ right)
+            (make-binary-op-node left :<= right)))
+        (expression GE expression
+          (lambda (left _ right)
+            (make-binary-op-node left :>= right)))
+        (expression EQ expression
+          (lambda (left _ right)
+            (make-binary-op-node left := right)))
+        (expression NE expression
+          (lambda (left _ right)
+            (make-binary-op-node left :/= right))))
+      (unary-op
+        (PLUS expression
+          (lambda (_ operand)
+            (make-unary-op-node :+ operand)))
+        (MINUS expression
+          (lambda (_ operand)
+            (make-unary-op-node :- operand)))
+        (NOT expression
+          (lambda (_ operand)
+            (make-unary-op-node :not operand))))
+
+      ;; Primary Expression
+      (primary-expression
+        (identifier
+          (lambda (ident)
+            (make-variable-reference ident)))
+        (literal
+          (lambda (lit)
+            (make-literal-node lit)))
+        (LPAREN expression RPAREN
+          (lambda (_ expr _)
+            (declare (ignore _ _))
+            expr)))
+        (identifier LPAREN arg-list? RPAREN
+          (lambda (ident _ args __)
+            (declare (ignore _ __))
+            (if (assoc "library" args)
+                (call :target ident :bank nil :library t)
+                (:call :target ident :args (or args nil))))))
+
+      ;; Literal
+      (literal
+        (NUMBER
+          (lambda (n)
+            (make-literal-number n)))
+        (STRING
+          (lambda (s)
+            (make-literal-string s)))
+        (TRUE
+          (lambda ()
+            (make-literal-boolean t)))
+        (FALSE
+          (lambda ()
+            (make-literal-boolean nil))))
+
+      ;; Identifier
+      (identifier
+        (IDENT
+          (lambda (ident)
+            (make-identifier ident))))
+
+      ;; Argument List
+      (arg-list?
+        ((constantly nil))
+        (|,| arg-list (lambda (_comma args) args)))))

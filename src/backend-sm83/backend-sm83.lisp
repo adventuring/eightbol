@@ -126,6 +126,13 @@
 (def-sm83-statement :call
   (compile-sm83-call statement))
 
+(def-sm83-statement :call-acc
+  (let* ((target (getf (rest statement) :target))
+         (using (getf (rest statement) :using)))
+    (when using
+      (compile-sm83-load using))
+    (format *output-stream* "~&~8tcall    ~a" (sm83-symbol (format nil "~a" target)))))
+
 (def-sm83-statement :if
   (compile-sm83-if statement))
 
@@ -931,19 +938,74 @@
   (let* ((procedure (getf (rest statement) :procedure))
          (times (getf (rest statement) :times))
          (until (getf (rest statement) :until))
+         (varying (getf (rest statement) :varying))
+         (from (getf (rest statement) :from))
+         (by (getf (rest statement) :by))
          (body (getf (rest statement) :body)))
     (cond
-      (body
-       ;; Inline loop body case
+      ((and body varying)
        (let ((label-loop (sm83-label "perfloop"))
              (label-end (sm83-label "perfend"))
-             (label-continue (sm83-label "perfcontinue")))
+             (increment (or by 1)))
+         (compile-sm83-load (or from 0))
+         (format *output-stream* "~&~8tld      b, a")
+         (format *output-stream* "~&~a:" label-loop)
+         (when until (compile-sm83-condition until label-end))
+         (format *output-stream* "~&~8tld      a, b")
+         (format *output-stream* "~&~8tld      [~a], a"
+                 (bare-data-assembly-symbol varying *class-id*))
          (let ((*6502-break-label* label-end)
-               (*6502-continue-label* label-continue))
-           (format *output-stream* "~&~a:" label-continue)  ; Continue label: start of loop body
-           (compile-sm83-statements body)
-           (format *output-stream* "~&~a:" label-end)     ; End label: after loop
-           )))
+               (*6502-continue-label* label-loop))
+           (compile-sm83-statements body))
+         (format *output-stream* "~&~8tld      a, b")
+         (if (and (numberp increment) (< increment 0))
+             (format *output-stream* "~&~8tsub     ~d" (abs increment))
+             (format *output-stream* "~&~8tadd     a, ~d" increment))
+         (format *output-stream* "~&~8tld      b, a")
+         (format *output-stream* "~&~8tjr      ~a" label-loop)
+         (format *output-stream* "~&~a:" label-end)))
+      ((and body until)
+       (let ((label-loop (sm83-label "perfloop"))
+             (label-end (sm83-label "perfend")))
+         (format *output-stream* "~&~a:" label-loop)
+         (compile-sm83-condition until label-end)
+         (let ((*6502-break-label* label-end)
+               (*6502-continue-label* label-loop))
+           (compile-sm83-statements body))
+         (format *output-stream* "~&~8tjr      ~a" label-loop)
+         (format *output-stream* "~&~a:" label-end)))
+      ((and body times)
+       (let ((label-loop (sm83-label "perfloop"))
+             (label-done (sm83-label "perfdone"))
+             (times-width (operand-width times)))
+         (compile-sm83-load times)
+         (if (= (or times-width 1) 2)
+             (progn
+               (format *output-stream* "~&~8tld      b, h")
+               (format *output-stream* "~&~8tld      c, l")
+               (format *output-stream* "~&~a:" label-loop)
+               (format *output-stream* "~&~8tld      a, b")
+               (format *output-stream* "~&~8tor      c")
+               (format *output-stream* "~&~8tjr      z, ~a" label-done))
+             (progn
+               (format *output-stream* "~&~8tld      b, a")
+               (format *output-stream* "~&~a:" label-loop)
+               (format *output-stream* "~&~8tld      a, b")
+               (format *output-stream* "~&~8tor      a")
+               (format *output-stream* "~&~8tjr      z, ~a" label-done)))
+         (let ((*6502-break-label* label-done)
+               (*6502-continue-label* label-loop))
+           (compile-sm83-statements body))
+         (if (= (or times-width 1) 2)
+             (progn
+               (format *output-stream* "~&~8tdec     bc")
+               (format *output-stream* "~&~8tjr      nz, ~a" label-loop))
+             (progn
+               (format *output-stream* "~&~8tdec     b")
+               (format *output-stream* "~&~8tjr      nz, ~a" label-loop)))
+         (format *output-stream* "~&~a:" label-done)))
+      (body
+       (error "EIGHTBOL/SM83: PERFORM with inline body requires UNTIL, TIMES, or VARYING"))
       (times
        (let ((label (sm83-label "perf"))
              (label-done (sm83-label "perfd"))
@@ -965,7 +1027,7 @@
                (format *output-stream* "~&~8a:" label-done))
              (progn
                (format *output-stream* "~&~8tld      b, a")
-               (format *output-stream* "~&~8a:" label)
+               (format *output-stream* "~&~a:" label)
                (format *output-stream* "~&~8tpush    bc")
                (format *output-stream* "~&~8tcall    ~a" (sm83-symbol (format nil "~a" procedure)))
                (format *output-stream* "~&~8tpop     bc")

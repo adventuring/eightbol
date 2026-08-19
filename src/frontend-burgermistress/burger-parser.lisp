@@ -86,7 +86,7 @@
 
 (defun burgermistress-parse-dialogue (name goals)
   "DIALOGUE name : goals"
-  (make-dialogue-node name :goals (ensure-list goals)))
+  (make-dialogue-node :speaker name :goals (ensure-list goals)))
 
 (defun burgermistress-parse-print (expressions)
   "PRINT expr [, expr, …]"

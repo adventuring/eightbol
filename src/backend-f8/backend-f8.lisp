@@ -29,7 +29,7 @@
 
 (defun %f8-dc0-add-slot-offset (slot-name)
   "Add slot byte offset (symbol) to DC0 via LI + ADC."
-  (format *output-stream* "~&~10tLI ~a" (slot-symbol slot-name *class-id*))
+  (format *output-stream* "~&~10tLI ~a" (slot-symbol slot-name :self))
   (format *output-stream* "~&~10tADC"))
 
 (defun %f8-dc0-to-10-11 ()
@@ -177,6 +177,10 @@
 (def-f8-statement :call
   (let ((stmt (cons :call ast-node-data)))
     (compile-f8-call stmt)))
+
+(def-f8-statement :call-acc
+  (let ((stmt (cons :call-acc ast-node-data)))
+    (compile-f8-call-acc stmt)))
 
 (def-f8-statement :if
   (let ((stmt (cons :if ast-node-data)))
@@ -345,13 +349,13 @@
       ((stringp expr)
        (if (= (or width 1) 2)
            (progn
-             (format *output-stream* "~&~10tDCI ~a" (slot-symbol expr *class-id*))
+             (format *output-stream* "~&~10tDCI ~a" (bare-data-assembly-symbol expr *class-id*))
              (%f8-load-byte-at-dc0)
              (format *output-stream* "~&~10tLR 10, A")
              (%f8-load-byte-at-dc0)
              (format *output-stream* "~&~10tLR 11, A"))
            (progn
-             (format *output-stream* "~&~10tDCI ~a" (slot-symbol expr *class-id*))
+             (format *output-stream* "~&~10tDCI ~a" (bare-data-assembly-symbol expr *class-id*))
              (%f8-load-byte-at-dc0))))
       ((and (listp expr) (eq (first expr) :of))
        (let ((slot (second expr)) (obj (third expr)))
@@ -372,7 +376,7 @@
          (format *output-stream* "~&~10tLR A, 6")
          (format *output-stream* "~&~10tSL 1")
          (format *output-stream* "~&~10tLR 6, A"))
-       (format *output-stream* "~&~10tDCI ~a" (slot-symbol (second expr) *class-id*))
+       (format *output-stream* "~&~10tDCI ~a" (bare-data-assembly-symbol (second expr) *class-id*))
        (let ((loop-label (f8-label "ix"))
              (done-label (f8-label "ixd")))
          (%f8-dc0-bump-by-count 6 loop-label done-label))
@@ -435,13 +439,13 @@
       ((stringp dest)
        (if (or word-pair-p (= (or w 1) 2))
            (progn
-             (format *output-stream* "~&~10tDCI ~a" (slot-symbol dest *class-id*))
+             (format *output-stream* "~&~10tDCI ~a" (bare-data-assembly-symbol dest *class-id*))
              (format *output-stream* "~&~10tLR A, 10")
              (%f8-store-a-via-dc0)
              (format *output-stream* "~&~10tLR A, 11")
              (%f8-store-a-via-dc0))
            (progn
-             (format *output-stream* "~&~10tDCI ~a" (slot-symbol dest *class-id*))
+             (format *output-stream* "~&~10tDCI ~a" (bare-data-assembly-symbol dest *class-id*))
              (%f8-store-a-via-dc0))))
       ((and (listp dest) (eq (first dest) :of))
        (let ((slot (second dest)) (obj (third dest)))
@@ -467,7 +471,7 @@
          (format *output-stream* "~&~10tLR A, 6")
          (format *output-stream* "~&~10tSL 1")
          (format *output-stream* "~&~10tLR 6, A"))
-       (format *output-stream* "~&~10tDCI ~a" (slot-symbol (second dest) *class-id*))
+       (format *output-stream* "~&~10tDCI ~a" (bare-data-assembly-symbol (second dest) *class-id*))
        (let ((loop-label (f8-label "stx"))
              (done-label (f8-label "std")))
          (%f8-dc0-bump-by-count 6 loop-label done-label))
@@ -1028,9 +1032,9 @@
             (%f8-dc0-add-slot-offset (second (slot-of-expression src)))
             (%f8-dc0-to-10-11))
            ((stringp src)
-            ;; Load 16-bit address of symbol (not value at symbol).
-            ;; F8 LI loads low byte; HIGH operator gets high byte.
-            (let ((sym (slot-symbol src *class-id*)))
+             ;; Load 16-bit address of symbol (not value at symbol).
+             ;; F8 LI loads low byte; HIGH operator gets high byte.
+             (let ((sym (bare-data-assembly-symbol src *class-id*)))
               (format *output-stream* "~&~10tLI ~a" sym)
               (format *output-stream* "~&~10tLR 10, A")
               (format *output-stream* "~&~10tLI HIGH(~a)" sym)
@@ -1046,11 +1050,67 @@
 
 ;;; PERFORM
 
+(defun compile-f8-statements (statements)
+  (dolist (statement (ensure-list statements))
+    (compile-statement :f8 (first statement) (rest statement))))
+
 (defun compile-f8-perform (statement)
   (let ((procedure (getf (rest statement) :procedure))
         (times (getf (rest statement) :times))
-        (until (getf (rest statement) :until)))
+        (until (getf (rest statement) :until))
+        (varying (getf (rest statement) :varying))
+        (from (getf (rest statement) :from))
+        (by (getf (rest statement) :by))
+        (body (getf (rest statement) :body)))
     (cond
+      ((and body until)
+       (let ((loop-label (f8-label "plp"))
+             (end-label (f8-label "pend")))
+         (format *output-stream* "~&~a:" loop-label)
+         (compile-f8-condition until end-label)
+         (compile-f8-statements body)
+         (format *output-stream* "~&~10tBR ~a" loop-label)
+         (format *output-stream* "~&~a:" end-label)))
+      ((and body times)
+       (let ((loop-label (f8-label "ptl"))
+             (done-label (f8-label "ptd"))
+             (times-width (operand-width times)))
+         (compile-f8-load times)
+         (if (= (or times-width 1) 2)
+             (progn
+               (format *output-stream* "~&~10tLR 6, 10")
+               (format *output-stream* "~&~10t;; | PERFORM count in 6 (lo) only if word — simplify"))
+             (format *output-stream* "~&~10tLR 6, A"))
+         (format *output-stream* "~&~a:" loop-label)
+         (format *output-stream* "~&~10tLR A, 6")
+         (format *output-stream* "~&~10tCI 0")
+         (format *output-stream* "~&~10tBZ ~a" done-label)
+         (compile-f8-statements body)
+         (format *output-stream* "~&~10tDS 6")
+         (format *output-stream* "~&~10tBR ~a" loop-label)
+         (format *output-stream* "~&~a:" done-label)))
+      ((and body varying)
+       (let ((loop-label (f8-label "pvl"))
+             (end-label (f8-label "pvd"))
+             (increment (or by 1)))
+         (compile-f8-load (or from 0))
+         (format *output-stream* "~&~10tLR 7, A")
+         (format *output-stream* "~&~a:" loop-label)
+         (when until (compile-f8-condition until end-label))
+         (format *output-stream* "~&~10tLR A, 7")
+         (format *output-stream* "~&~10t;; | ~a := A" (f8-symbol (format nil "~a" varying)))
+         (compile-f8-statements body)
+         (format *output-stream* "~&~10tLR A, 7")
+         (if (and (numberp increment) (< increment 0))
+             (progn
+               (format *output-stream* "~&~10tAI ~d" (logand (- increment) #xff))
+               (format *output-stream* "~&~10tBR ~a" loop-label))
+             (progn
+               (format *output-stream* "~&~10tAI ~d" (logand increment #xff))
+               (format *output-stream* "~&~10tBR ~a" loop-label)))
+         (format *output-stream* "~&~a:" end-label)))
+      (body
+       (error "EIGHTBOL/F8: PERFORM with inline body requires UNTIL, TIMES, or VARYING"))
       (times
        (let ((loop-label (f8-label "perf"))
              (done-label (f8-label "pfd"))
@@ -1079,6 +1139,19 @@
             (format *output-stream* "~&~a:" end-label)))
       (t
        (format *output-stream* "~&~10tPI ~a" (f8-symbol (format nil "~a" procedure)))))))
+
+;;; CALL-ACC
+
+(defun compile-f8-call-acc (statement)
+  (let* ((target (getf (rest statement) :target))
+         (using (getf (rest statement) :using))
+         (bank (getf (rest statement) :bank)))
+    (when using
+      (compile-f8-load using 1))
+    (format *output-stream* "~&~10tPI ~a"
+            (if bank
+                (f8-symbol (format nil "~a~a" bank target))
+                (f8-symbol (format nil "~a" target))))))
 
 ;;; STRING BLT
 

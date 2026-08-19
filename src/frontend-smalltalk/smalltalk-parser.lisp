@@ -28,12 +28,6 @@ Examples: 'myVariable' stays 'myVariable', 'MyVariable' becomes 'myVariable'."
               stmts)
       (list stmts)))
 
-(defun make-program-node (&key class-id data)
-  "Create a program AST node."
-  (list :program
-        :class-id class-id
-        :data data))
-
 (defun make-move-node (target value)
   "Create an assignment AST node (MOVE in COBOL terminology)."
   (list :move
@@ -65,10 +59,6 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
   "Create an input/read statement AST node."
   (list :input :var var :prompt prompt))
 
-(defun make-dialogue-node (&key speaker text)
-  "Create a dialogue/say statement AST node."
-  (list :dialogue :speaker speaker :text text))
-
 (defun make-if-node (condition true-branch &key false-branch)
   "Create an if/conditional statement AST node."
   (list :if :condition condition :true-branch true-branch :false-branch false-branch))
@@ -81,10 +71,6 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
   "Create a code block AST node."
   (list :block :params params :expressions expressions))
 
-(defun make-copy-node (name)
-  "Create a COPY statement AST node."
-  (list :copy :name name))
-
 (eval
  `(yacc:define-parser *smalltalk-parser*
     (:muffle-conflicts :some)
@@ -92,7 +78,7 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
 
     (program (stmt-list
               (lambda (stmts)
-                (make-program-node :class-id "SmallTalk Program"
+                (make-program-node "SmallTalk Program"
                                    :data (collect-smalltalk-statements stmts)))))
 
      (stmt-list
@@ -172,11 +158,11 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
      (message
        (expression :PERIOD expression
          (lambda (receiver selector)
-           (make-invoke-node receiver selector)))
+           (:invoke :receiver receiver :selector selector)))
        (expression :PERIOD expression :LPAREN expression-list :RPAREN
          (lambda (receiver selector args)
            (declare (ignore args))
-           (make-invoke-node receiver selector))))
+           (:invoke :receiver receiver :selector selector))))
 
     (expression
       (variable)

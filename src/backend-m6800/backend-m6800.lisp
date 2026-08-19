@@ -20,8 +20,9 @@
 
 (defmacro def-m6800-statement (statement-type &body body)
   `(defmethod compile-statement ((cpu (eql :m6800)) (statement-type (eql ,statement-type)) ast-node-data)
-     (let ((statement (cons statement-type ast-node-data)))
-       (declare (ignorable statement))
+     (let ((statement ast-node-data)
+           (full-statement (cons statement-type ast-node-data)))
+       (declare (ignorable statement full-statement))
        ,@body)))
 
 ;;; Top-level entry point
@@ -212,7 +213,7 @@
          (from (getf statement :from))
          (result (or (getf statement :giving) to))
          (bcd-p (when result (usage-bcd-p result))))
-    (assert-pic-decimal-add-compiled :m6800 statement)
+    (assert-pic-decimal-add-compiled :m6800 full-statement)
     (compile-m6800-load-a to)
     (format *output-stream*  "~&~8tTAB")
     (compile-m6800-load-a from)

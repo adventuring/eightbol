@@ -41,7 +41,7 @@
   (make-call-node target))
 
 (defun fortran-parse-instantiation (class-name init-args)
-  (make-invoke :object class-name :method "New" :using init-args))
+  (list :invoke :object class-name :method "New"))
 
 (defun fortran-parse-invoke (obj method args)
    (declare (ignore args))

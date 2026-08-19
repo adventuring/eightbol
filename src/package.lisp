@@ -149,4 +149,13 @@
        :source-error
        :copybook-not-found
        ;; Include path support
-       :include-path))
+       :include-path
+       ;; Expression constructors
+       :make-expression-add
+       :make-expression-subtract
+       :make-expression-multiply
+       :make-expression-divide
+       :make-expression-shift-left
+       :make-expression-shift-right
+       :make-identifier-literal
+      ))

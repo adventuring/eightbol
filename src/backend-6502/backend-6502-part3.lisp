@@ -32,27 +32,23 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
      (format out "~%~10T~a ~a + ~a~[~:;~:* + ~d~]"
              mnemonic (emit-6502-value (third arg0))
              (apply #'slot-symbol (rest arg0)) n))
-    (t
-     (emit-6502-load-byte-n out arg1 nil n w)
-     (format out "~%~10Tpha")
-     (emit-6502-load-byte-n out arg0 nil n w)
-     (format out "~%~
-~10Ttsx
-~10T~a $101, x
-~10Tinx
-~10Ttxs"
-             mnemonic)
-     (setf *6502-x-index-expression* :trash/rithmetic))))
+     (t
+      (emit-6502-load-byte-n out arg1 nil n w)
+      (format out "~%~10Tpha")
+      (emit-6502-load-byte-n out arg0 nil n w)
+      (format out "~%~10Tpha~%~10Ttxs~%~10T~a $101, x~%~10Tinx~%~10Ttxs"
+              mnemonic)
+      (setf *6502-x-index-expression* :trash/rithmetic))))
 
 (defun emit-6502-load-byte-n-of (out expression class-id n w)
-  (declare (ignore class-id))
+  (declare (ignore class-id w))
   (format out "~%~10Tldy # ~a~[~:;~:* + ~d~]" (apply #'slot-symbol (rest expression)) n)
   (format out "~%~10Tlda (~a), y" (second expression))
   (setf *6502-accumulator-expression* :trash/of
         *6502-x-index-expression* :trash/of))
 
 (defun emit-6502-load-byte-n-on (out expression class-id n w)
-  (declare (ignore class-id))
+  (declare (ignore class-id w))
   (format out "~%~10Tlda ~a + ~a~[~:;~:* + ~d~]"
           (second expression) (apply #'slot-symbol (rest expression)) n)
   (setf *6502-accumulator-expression* :trash/on
@@ -78,14 +74,14 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
   (emit-6502-load-byte-n-rithmetic out "sbc" (getf (rest expression) :from) (getf (rest expression) :subtrahend) n w))
 
 (defun emit-6502-load-byte-n-low (out expression class-id n w)
-  (declare (ignore class-id))
+  (declare (ignore class-id w))
   (assert (zerop n))
-  (emit-6502-load-byte-n out (second expression) nil 0 2))
+  (emit-6502-load-byte-n out (second expression) nil n 2))
 
 (defun emit-6502-load-byte-n-high (out expression class-id n w)
-  (declare (ignore class-id))
+  (declare (ignore class-id w))
   (assert (zerop n))
-  (emit-6502-load-byte-n out (second expression) nil 1 2))
+  (emit-6502-load-byte-n out (second expression) nil n 2))
 
 (defun emit-6502-load-byte-n-bit-or (out expression class-id n w)
   (declare (ignore class-id))
@@ -370,13 +366,16 @@ Used for STZ when MOVE ZERO to a direct-memory destination on 65c02+."
        (format out "~%~10Tldy # ~a" source)
        (format out "~%~10T~a (~a), y" 
                (if (and *6502-enable-undoc-opcodes* (eq *6502-family-cpu* :6502))
-                   "lax" "lda") source-object)
+                   "lax" "lda")
+               source-object)
+       ;; FIXME: For non-6502 the value needs to move to the x register now.
        (format out "~%~10Tiny")
        (format out "~%~10Tlda (~a), y" source-object))
       (:on
        (format out "~%~10T~a ~a + ~a" 
                (if (and *6502-enable-undoc-opcodes* (eq *6502-family-cpu* :6502))
-                   "lax" "lda") source-object source)
+                   "lax" "lda")
+               source-object source)
        (format out "~%~10Tlda ~a + ~a + 1" source-object source)))
     (ecase (first to-dest)
       (:of
@@ -384,7 +383,7 @@ Used for STZ when MOVE ZERO to a direct-memory destination on 65c02+."
        (format out "~%~10Tsta (~a), y" dest-object)
        (format out "~%~10Tdey")
        (format out "~%~10T~a" (if (and *6502-enable-undoc-opcodes* (eq *6502-family-cpu* :6502))
-                                "txa" "tax"))
+                                  "txa" "tax"))
        (format out "~%~10Tsta (~a), y" dest-object))
       (:on
        (format out "~%~10Tsta ~a + ~a + 1" dest-object dest)

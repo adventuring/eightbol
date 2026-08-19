@@ -30,12 +30,12 @@
 
 (defun scumm-parse-while (cond body)
    "while (cond) body"
-   (make-perform-node "WHILE" :until (make-conditional-not cond)))
+   (make-perform-node "WHILE" :until (make-conditional-not cond) :body (ensure-list body)))
 
 (defun scumm-parse-for (var start end body)
    "for var = start to end body"
    (make-perform-node "FOR" :varying var :from start :by 1
-                      :until (make-conditional-gt (make-identifier var) end)))
+                      :until (make-conditional-gt (make-identifier var) end) :body (ensure-list body)))
 
 (defun scumm-parse-set (var expr)
   "set var = expr"
@@ -70,7 +70,8 @@
 (defun scumm-parse-dialogue (npc msg &optional responses)
   "dialogue npc says msg [with responses]
    Produces a :dialogue AST node for NPC dialogue."
-  (make-dialogue-node npc :statements (cons msg (or responses '()))))
+  (make-dialogue-node :speaker npc :text msg
+                      :statements (or responses '())))
 
 (defun scumm-parse-number (token-value token-type)
   "Parse number literals based on token type.

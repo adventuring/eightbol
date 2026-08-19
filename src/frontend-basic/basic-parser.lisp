@@ -233,7 +233,7 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
 
    (defun basic-parse-dialogue (character text)
      "DIALOGUE $(Character)\"text\""
-     (make-dialogue-node character text))
+     (make-dialogue-node :speaker character :text text))
 
 ;;; YACC grammar definition for BASIC
 (eval-when (:execute :load-toplevel)

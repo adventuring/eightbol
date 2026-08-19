@@ -3,21 +3,8 @@
 (in-package :eightbol)
 
 ;;; AST node constructors matching src/ast.lisp shapes
-
-(defun make-program-node (class-id &key data methods identification environment)
-  "Build a :program AST node matching ast.lisp:make-program-node."
-  (list :program
-        :class-id class-id
-        :identification identification
-        :environment environment
-        :data data
-        :methods methods))
-
-(defun make-method-node (method-id &key statements)
-  "Build a :method AST node matching ast.lisp:make-method-node."
-  (list :method
-        :method-id  method-id
-        :statements (or statements '())))
+;;; NOTE: make-program-node / make-method-node / make-copy-node live in
+;;; src/ast.lisp (canonical). Keep this file free of duplicates.
 
 (defun make-procedure-node (name &key statements)
   "Build a :procedure AST node (global procedure)."
@@ -62,12 +49,14 @@
   "Build a :log-fault AST node. CODE is a string literal per BASIC LOG FAULT \"CODE\"."
   (list :log-fault :code code))
 
-(defun make-perform-node (procedure &key times until varying from by)
-  "Build a :perform AST node."
-  (list* :perform :procedure procedure
-         (when times `(:times ,times))
-         (when until `(:until ,until))
-         (when varying `(:varying ,varying :from ,from :by ,by))))
+(defun make-perform-node (procedure &key times until varying from by body)
+  "Build a :perform AST node. BODY enables an inline loop body (PERFORM ... WITH
+inline body); backends require TIMES, UNTIL, or VARYING alongside."
+  (append (list :perform :procedure procedure)
+          (when times `(:times ,times))
+          (when until `(:until ,until))
+          (when varying `(:varying ,varying :from ,from :by ,by))
+          (when body `(:body ,body))))
 
 (defun make-set-node (target value)
   "Build a :set AST node."
@@ -76,10 +65,6 @@
 (defun make-assembly-entry-node (label)
   "Build an :assembly-entry AST node."
   (list :assembly-entry :label label))
-
-(defun make-copy-node (name)
-  "Build a :copy AST node."
-  (list :copy :name name))
 
 (defun make-string-blt-node (source dest &optional length)
   "Build a :string-blt AST node."
@@ -180,6 +165,10 @@
 (defun make-conditional-ge (e1 e2)
   (list '>= e1 e2))
 
+(defun make-conditional-node (op e1 e2)
+  "Build a conditional node (OP E1 E2) with a Lisp-style comparison operator."
+  (list op e1 e2))
+
 (defun make-conditional-and (c1 c2)
   (list :and c1 c2))
 
@@ -203,6 +192,11 @@
 
 (defun make-literal-number (n)
   n)
+
+(defun make-literal (value &key (type :number))
+  "Build a literal AST node. Numbers and strings are self-representing."
+  (declare (ignorable type))
+  value)
 
 (defun make-literal-string (s)
   s)
@@ -240,13 +234,7 @@
   (list :fortran-arithmetic :op op :left left :right right :result-type result-type))
 
 ;;; Dialogue, Print, and Input AST nodes (Prolog-like structure)
-
-(defun make-dialogue-node (name &key statements goals)
-  "Build a :dialogue AST node with Prolog-like structure.
-NAME is the dialogue identifier; STATEMENTS are the body; GOALS are optional query goals."
-  (list* :dialogue :name name
-         (when statements `(:statements ,statements))
-         (when goals `(:goals ,goals))))
+;;; make-dialogue-node lives in src/ast.lisp (canonical, keyword :speaker/:text form).
 
 (defun make-print-node (expressions)
   "Build a :print AST node.

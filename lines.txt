@@ -1,0 +1,3 @@
+                    (char= #\; (char trimmed 0))
+                    (char= #\' (char trimmed 0))))
+          (setf all-tokens (nconc all-tokens (fortran-lex-line trimmed))))
