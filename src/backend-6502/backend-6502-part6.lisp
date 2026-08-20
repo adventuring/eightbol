@@ -589,12 +589,20 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
                 (emit-6502-value code)))))
 (define-6502-statement :call-acc (statement)
   (let* ((target (safe-getf (rest statement) :target))
-         (bank (safe-getf (rest statement) :bank)))
+         (bank (safe-getf (rest statement) :bank))
+         (libraryp (safe-getf (rest statement) :library))
+         (using (safe-getf (rest statement) :using)))
+    ;; Emit the :using expression first (loads accumulator argument)
+    (when using
+      (emit-6502-load-expression *standard-output* using))
     (cond
       (bank
        ;; far call to bank
        (let ((bank-sym (sym-string bank)))
          (format *standard-output* "~%~10T.FarJSR ~a, ~a~%" (sym-string target) bank-sym)))
+      (libraryp
+       ;; library call (always emit jsr Lib.<RoutineName>)
+       (format *standard-output* "~%~10Tjsr Lib.~a~%" (sym-string target)))
       (t
        ;; near call
        (format *standard-output* "~%~10Tjsr ~a~%" (sym-string target))))))

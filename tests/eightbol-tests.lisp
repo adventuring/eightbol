@@ -3123,6 +3123,17 @@ AST is a :method plist (not full :program)."
       (is (null (search "BankAnimation" asm)))
       (is (null (search "jmp ServiceMoveDecalX" asm))))))
 
+(test backend-6502/call-acc-in-library-jsr-lib
+  "CALL target IN LIBRARY USING expr (generates :call-acc) emits jsr Lib.<RoutineName>."
+  (let ((asm (compile-method-ast-with-tables
+              '(:method :method-id "Test"
+                        :statements ((:call-acc :target "Load-Asset"
+                                               :library t
+                                               :using 42)))
+              "TestClass" :6502)))
+    (is (search "jsr Lib.LoadAsset" asm))
+    (is (null (search "jsr LoadAsset" asm)) "must use Lib. prefix")))
+
 (test backend-6502/call-plain-target-in-service-bank-table-farcall-not-jmp
   "CALL Service-Move-Decal-Y with *service-bank-table* mapping emits .FarCall, not jmp/jsr (tail-call safe)."
   (let ((svc (make-hash-table :test 'equalp)))
