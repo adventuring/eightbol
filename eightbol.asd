@@ -160,13 +160,15 @@
                                           :depends-on ("objective-lexer"))))
 
                            ;; Forth frontend
-                           (:module "frontend-forth"
-                            :depends-on ("package" "ast")
-                            :components ((:file "forth-lexer")
-                                         (:file "forth-parser"
-                                          :depends-on ("forth-lexer"))
-                                         (:file "forth-tests"
-                                          :depends-on ("forth-lexer" "forth-parser"))))
+                            (:module "frontend-forth"
+                             :depends-on ("package" "ast" "eightbol-compile")
+                             :components ((:file "forth-lexer")
+                                          (:file "forth-parser"
+                                           :depends-on ("forth-lexer"))
+                                          (:file "forth-transpile"
+                                           :depends-on ("forth-parser"))
+                                          (:file "forth-tests"
+                                           :depends-on ("forth-lexer" "forth-parser"))))
 
                            ;; Backend modules
                          (:module "backend-6502"
