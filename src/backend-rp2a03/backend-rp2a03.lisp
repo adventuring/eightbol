@@ -171,8 +171,8 @@
        (error "CONTINUE statement outside of PERFORM loop")))
 
 (def-rp2a03-statement :call-acc
-  (let* ((target (safe-getf (rest ast-node-data) :target))
-         (bank (safe-getf (rest ast-node-data) :bank)))
+  (let* ((target (safe-getf ast-node-data :target))
+         (bank (safe-getf ast-node-data :bank)))
     (cond
       (bank
        ;; far call to bank
