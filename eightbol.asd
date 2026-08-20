@@ -160,17 +160,27 @@
                                           :depends-on ("objective-lexer"))))
 
                            ;; Forth frontend
-                            (:module "frontend-forth"
-                             :depends-on ("package" "ast" "eightbol-compile")
-                             :components ((:file "forth-lexer")
-                                          (:file "forth-parser"
-                                           :depends-on ("forth-lexer"))
-                                          (:file "forth-transpile"
-                                           :depends-on ("forth-parser"))
-                                          (:file "forth-tests"
-                                           :depends-on ("forth-lexer" "forth-parser"))))
+                             (:module "frontend-forth"
+                              :depends-on ("package" "ast" "eightbol-compile")
+                              :components ((:file "forth-lexer")
+                                           (:file "forth-parser"
+                                            :depends-on ("forth-lexer"))
+                                           (:file "forth-transpile"
+                                            :depends-on ("forth-parser"))
+                                           (:file "forth-tests"
+                                            :depends-on ("forth-lexer" "forth-parser"))))
 
-                           ;; Backend modules
+                           (:module "frontend-fountain"
+                            :depends-on ("package" "ast" "eightbol-compile")
+                            :components ((:file "package")
+                                         (:file "lexer"
+                                          :depends-on ("package"))
+                                         (:file "parser"
+                                          :depends-on ("lexer"))
+                                         (:file "fountain-transpile"
+                                          :depends-on ("parser"))))
+
+                            ;; Backend modules
                          (:module "backend-6502"
                           :components ((:file "backend-6502-part1")
                                        (:file "backend-6502-part2")

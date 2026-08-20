@@ -72,14 +72,15 @@ Root directory for output paths.
 
 (defun expand-language-alias (lang)
   "Expand a short language alias to a keyword."
-  (let ((ext (string-downcase lang)))
-    (cond
-      ((member ext '("agi" "scr") :test #'string=) :agi)
-       ((member ext '("bas" "basic") :test #'string=) :basic)
-       ((member ext '("cob" "cobol" "cbl") :test #'string=) :cobol)
-       ((member ext '("f" "fortran" "for" "for77") :test #'string=) :fortran)
-       ((member ext '("fs" "forth") :test #'string=) :forth)
-       ((member ext '("ls" "lingo" "stx") :test #'string=) :lingo)
+   (let ((ext (string-downcase lang)))
+     (cond
+       ((member ext '("agi" "scr") :test #'string=) :agi)
+        ((member ext '("bas" "basic") :test #'string=) :basic)
+        ((member ext '("cob" "cobol" "cbl") :test #'string=) :cobol)
+        ((member ext '("f" "fortran" "for" "for77") :test #'string=) :fortran)
+        ((member ext '("fs" "forth") :test #'string=) :forth)
+        ((member ext '("fountain" "screenplay" "play" "teleplay") :test #'string=) :fountain)
+        ((member ext '("ls" "lingo" "stx") :test #'string=) :lingo)
       ((string= ext "lua") :lua)
       ((member ext '("m" "objective-c") :test #'string=) :objective-c)
       ((member ext '("p" "pascal" "pas") :test #'string=) :pascal)
@@ -108,7 +109,7 @@ Root directory for output paths.
          (lang (or (and explicit-lang (expand-language-alias explicit-lang))
                    (language-from-extension input-file))))
       (unless lang
-        (error "Cannot determine language for file ~a. Use -l <lang> (agi, bas, bms, cob, f, fs, ls, lua, m, mdl, p, sc, scc, st, zil)." input-file))
+        (error "Cannot determine language for file ~a. Use -l <lang> (agi, bas, bms, cob, f, fountain, fs, ls, lua, m, mdl, p, sc, scc, st, zil)." input-file))
     (let* ((output-file (getf options :output-file))
            (cpus (get-cpus (getf options :machine)))
            (include-paths (loop for (key value) on options by #'cddr
@@ -131,9 +132,11 @@ Root directory for output paths.
           (compile-eightbol (list input-file)
                             :cpus cpus
                             :output-file (when output-file (pathname output-file))))
-         (:forth
-          (compile-forth-from-path input-file :cpus cpus :output-file output-file))
-         (:lingo
+          (:forth
+           (compile-forth-from-path input-file :cpus cpus :output-file output-file))
+          (:fountain
+           (compile-fountain-from-path input-file :cpus cpus :output-file output-file))
+          (:lingo
          (compile-eightbol (list input-file)
                            :cpus cpus
                            :output-file (when output-file (pathname output-file))))
