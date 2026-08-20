@@ -142,10 +142,14 @@
        :make-forth-word-def
        :make-forth-constant-def
        :make-forth-program
-       
-       ;; End-to-end compilation helpers (externally invoked)
-       :compile-basic-from-path
-       ;; Conditions
+        
+        ;; End-to-end compilation helpers (externally invoked)
+        :compile-basic-from-path
+        :compile-forth-from-path
+        :compile-fountain-from-path
+        :compile-sci-from-path
+        :compile-scumm-from-path
+        ;; Conditions
        :source-error
        :copybook-not-found
        ;; Include path support
