@@ -16,16 +16,19 @@
   "Build a :move AST node."
   (list :move :from from :to to))
 
-(defun make-invoke-node (object method &key returning)
+(defun make-invoke-node (object method &key args returning)
   "Build an :invoke AST node."
   (list* :invoke :object object :method method
-         (when returning `(:returning ,returning))))
+         (append (when args `(:args ,args))
+                 (when returning `(:returning ,returning)))))
 
-(defun make-call-node (target &key bank returning)
+(defun make-call-node (target &key args bank library returning)
   "Build a :call AST node."
   (list* :call :target target
-         (when bank `(:bank ,bank))
-         (when returning `(:returning ,returning))))
+         (append (when args `(:args ,args))
+                 (when bank `(:bank ,bank))
+                 (when library `(:library ,library))
+                 (when returning `(:returning ,returning)))))
 
 (defun make-if-node (condition then-stmts &optional else-stmts)
   "Build an :if AST node."
@@ -49,14 +52,16 @@
   "Build a :log-fault AST node. CODE is a string literal per BASIC LOG FAULT \"CODE\"."
   (list :log-fault :code code))
 
-(defun make-perform-node (procedure &key times until varying from by body)
-  "Build a :perform AST node. BODY enables an inline loop body (PERFORM ... WITH
-inline body); backends require TIMES, UNTIL, or VARYING alongside."
-  (append (list :perform :procedure procedure)
-          (when times `(:times ,times))
-          (when until `(:until ,until))
-          (when varying `(:varying ,varying :from ,from :by ,by))
-          (when body `(:body ,body))))
+(defun make-perform-node (procedure &key times until varying from by then body)
+  "Build a :perform AST node. BODY (or THEN) enables an inline loop body
+(PERFORM ... WITH inline body); backends require TIMES, UNTIL, or VARYING
+alongside."
+  (let ((inline-body (or body then)))
+    (append (list :perform :procedure procedure)
+            (when times `(:times ,times))
+            (when until `(:until ,until))
+            (when varying `(:varying ,varying :from ,from :by ,by))
+            (when inline-body `(:body ,inline-body)))))
 
 (defun make-set-node (target value)
   "Build a :set AST node."

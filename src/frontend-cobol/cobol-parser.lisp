@@ -306,6 +306,11 @@ Extract statements from PROCEDURE DIVISION and build a :program AST node."
   (declare (ignore _proc _div _dot))
   (cons :methods (ensure-list methods)))
 
+(defun parse/object-procedure-division-statements (_proc _div _dot statements)
+  "Action for PROCEDURE DIVISION . statement-sequence (no methods)."
+  (declare (ignore _proc _div _dot))
+  (cons :methods (ensure-list statements)))
+
 (defun parse/procedure-statements (_proc _div _dot statements)
   (declare (ignore _proc _div _dot))
   (cons :proc-statements (ensure-list statements)))
@@ -1164,10 +1169,13 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (value is null (lambda (_value _is _null) (declare (ignore _value _is _null)) (list :value :null)))
           ())
 
-         ;; OBJECT PROCEDURE DIVISION containing method definitions
-         (object-procedure-division
-          (procedure division |.| method-definitions
-                     #'parse/object-procedure-division))
+          ;; OBJECT PROCEDURE DIVISION containing method definitions
+          ;; Also allow direct statement-sequence when no methods are defined
+          (object-procedure-division
+           (procedure division |.| method-definitions
+                      #'parse/object-procedure-division)
+           (procedure division |.| statement-sequence
+                      #'parse/object-procedure-division-statements))
 
          (method-definitions
           (method-definitions method-definition #'parse/method-defs-append)
