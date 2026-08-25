@@ -115,7 +115,7 @@
 
 (defun fortran-lex-line (line)
   "Split LINE into token list of (type value) pairs.
-   Handles quoted strings, operators, and identifiers, including prefixed number literals."
+   Handles quoted strings, operators, identifiers, and prefixed number literals."
   (let ((tokens '())
         (chars (coerce line 'list))
         (i 0))
@@ -210,6 +210,7 @@
                (let ((text (coerce (subseq chars start i) 'string)))
                  (let ((type (fortran-token-type text)))
                    (when (not (eq type :UNKNOWN))
+<<<<<<< HEAD
                      (flush-token start i type))))))
        (loop until (eof?)
              do (skip-whitespace)
@@ -253,15 +254,18 @@
                         (flush-token (- i 1) i :COMMA))
                        (t
                         (flush-token (- i 1) i :OP)))))))
-                  (nreverse tokens)))))))
+              (nreverse tokens))))))
 
 (defun fortran-lex-source (source)
   "Lex complete FORTRAN SOURCE string into token stream."
   (let ((all-tokens '()))
     (dolist (line (split-sequence:split-sequence #\Newline source))
       (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
-        "Lex FORTRAN SOURCE string into a token list for YACC."
-        (fortran-lex-source source)))))
+        (unless (or (zerop (length trimmed))
+                    (char= #\; (char trimmed 0))
+                    (char= #\' (char trimmed 0)))
+          (setf all-tokens (nconc all-tokens (fortran-lex-line trimmed))))))
+    all-tokens))
 
 (defun fortran-normalize-identifier (identifier)
   "Normalize IDENTIFIER to PascalCase form.
