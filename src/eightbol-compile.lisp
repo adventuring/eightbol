@@ -553,20 +553,34 @@ The optimized, validated AST list."
 (defun load-classes ()
   (when (plusp (hash-table-count *parent-classes*))
     (return-from load-classes))
-  (let ((classes-defs (pathname "Source/Classes/Classes.Defs")))
-    (unless (probe-file classes-defs)
-      (return-from load-classes))
-    (with-input-from-file (classes.defs classes-defs)
-      (loop with last-class = "BasicObject"
-          for line = (read-line classes.defs nil nil)
-          while line
-          do (cond ((search "<" line)
-                  (destructuring-bind (child parent)
-                      (mapcar (lambda (word)
-                                (string-trim #(#\Space #\Tab) word))
-                              (split-sequence #\< line))
-                    (setf (gethash (header-case child) *parent-classes*) (header-case parent)
-                          last-class (header-case child))))
-                 ((and (< 2 (length line)) (char= #\# (char line 0)))
-                  (appendf (gethash last-class *class-methods* '())
-                           (cons (subseq line 1) nil))))))))
+  ;; Try multiple paths: Source/Classes/Classes.Defs (Phantasia root),
+  ;; ../Source/Classes/Classes.Defs (when running from SkylineTool),
+  ;; and eightbol/tests/fixtures/Classes.Defs (for isolated tests)
+  (let ((paths (list (pathname "Source/Classes/Classes.Defs")
+                     (pathname "../Source/Classes/Classes.Defs")
+                     (merge-pathnames
+                      (make-pathname :directory '(:relative "tests" "fixtures")
+                                     :name "Classes" :type "Defs")
+                      (asdf:system-source-directory :eightbol)))))
+    (let ((classes-defs nil))
+      (dolist (path paths)
+        (when (probe-file path)
+          (setf classes-defs path)
+          (return)))
+      (unless classes-defs
+        (error "Classes.Defs not found. Tried paths: ~{~a~^, ~}"
+               (mapcar #'namestring paths)))
+      (with-input-from-file (classes.defs classes-defs)
+        (loop with last-class = "BasicObject"
+              for line = (read-line classes.defs nil nil)
+              while line
+              do (cond ((search "<" line)
+                        (destructuring-bind (child parent)
+                            (mapcar (lambda (word)
+                                      (string-trim #(#\Space #\Tab) word))
+                                    (split-sequence #\< line))
+                          (setf (gethash (header-case child) *parent-classes*) (header-case parent)
+                                last-class (header-case child))))
+                       ((and (< 2 (length line)) (char= #\# (char line 0)))
+                        (appendf (gethash last-class *class-methods* '())
+                                 (cons (subseq line 1) nil)))))))))
