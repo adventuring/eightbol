@@ -115,7 +115,7 @@
 
 (defun fortran-lex-line (line)
   "Split LINE into token list of (type value) pairs.
-   Handles quoted strings, operators, identifiers, and prefixed number literals."
+   Handles quoted strings, operators, and identifiers, including prefixed number literals."
   (let ((tokens '())
         (chars (coerce line 'list))
         (i 0))
@@ -210,7 +210,6 @@
                (let ((text (coerce (subseq chars start i) 'string)))
                  (let ((type (fortran-token-type text)))
                    (when (not (eq type :UNKNOWN))
-<<<<<<< HEAD
                      (flush-token start i type))))))
        (loop until (eof?)
              do (skip-whitespace)
@@ -254,7 +253,7 @@
                         (flush-token (- i 1) i :COMMA))
                        (t
                         (flush-token (- i 1) i :OP)))))))
-              (nreverse tokens))))))
+                  (nreverse tokens)))))))
 
 (defun fortran-lex-source (source)
   "Lex complete FORTRAN SOURCE string into token stream."
