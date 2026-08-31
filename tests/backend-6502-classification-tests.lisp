@@ -189,3 +189,28 @@
     (setf (gethash "Day-Time-Counter" pw) 3)
     (is (= 3 (let ((eightbol::*pic-width-table* pw))
                (eightbol::operand-width "Day-Time-Counter"))))))
+
+(test b6502-class/bit-or-stack-idiom-restores-sp
+  "REG: 2 non-`:on` operands must read the pushed byte via tsx/inx and restore SP.
+  Guards txs/tsx transposition bug in emit-6502-load-byte-n-rithmetic (8A7C rts->0001 brk)."
+  (let ((slots (%ht))
+        (pw (%ht)))
+    (setf (gethash "Move-XL" slots) "Character")
+    (setf (gethash "Acc16" slots) "Phantasia-Globals")
+    (setf (gethash "Move-XL" pw) 1)
+    (setf (gethash "Acc16" pw) 1)
+    (let ((asm (compile-method-ast-with-tables
+                '(:method :method-id "Connect"
+                          :statements
+                          ((:compute
+                            :target "X"
+                            :expression (:bit-or (:shift-left (:on "Self" "Move-XL") 1)
+                                                 (:low "Acc16")))))
+                "Character" :6502
+                :slot-table slots :pic-width-table pw)))
+      (let ((idiom (format nil "pha~%          tsx~%          inx~%          ora $101, x~%          inx~%          txs")))
+        (is (search idiom (string-downcase asm))
+            (format nil "expected stack-restoring rithmetic idiom, got:~%~a" asm))
+        (is (null (search (format nil "pha~%          txs~%          ora $101, x")
+                          (string-downcase asm)))
+            "buggy SP-clobbering idiom must not be emitted")))))

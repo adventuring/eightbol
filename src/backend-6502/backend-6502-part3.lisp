@@ -36,7 +36,7 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
       (emit-6502-load-byte-n out arg1 nil n w)
       (format out "~%~10Tpha")
       (emit-6502-load-byte-n out arg0 nil n w)
-      (format out "~%~10Tpha~%~10Ttxs~%~10T~a $101, x~%~10Tinx~%~10Ttxs"
+      (format out "~%~10Tpha~%~10Ttsx~%~10Tinx~%~10T~a $101, x~%~10Tinx~%~10Ttxs"
               mnemonic)
       (setf *6502-x-index-expression* :trash/rithmetic))))
 
