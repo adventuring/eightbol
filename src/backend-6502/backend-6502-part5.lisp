@@ -123,6 +123,12 @@
        (emit-6502-load-byte-n out (second condition) class-id 1 2)
        (format out "~%~10Tbeq ~a~%" branch-label))
 
+      ;; Forth bare-stack-value test — (:forth-test) means "branch if stack top = 0"
+      ;; Forth IF consumes the flag from the stack; this node represents that.
+      ((and (listp condition) (eql (first condition) :forth-test))
+       (emit-6502-load-expression out '(:forth-stack-top) class-id)
+       (format out "~%~10Tbeq ~a~%" branch-label))
+
       ;; Generic fallback
       (t (error "Unhandled comparison operation ~s" condition)))))
 

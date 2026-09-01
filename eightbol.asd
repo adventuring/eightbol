@@ -159,26 +159,26 @@
                                          (:file "objective-parser"
                                           :depends-on ("objective-lexer"))))
 
-                           ;; Forth frontend
-                             (:module "frontend-forth"
-                              :depends-on ("package" "ast" "eightbol-compile")
-                              :components ((:file "forth-lexer")
-                                           (:file "forth-parser"
-                                            :depends-on ("forth-lexer"))
-                                           (:file "forth-transpile"
-                                            :depends-on ("forth-parser"))
-                                           (:file "forth-tests"
-                                            :depends-on ("forth-lexer" "forth-parser"))))
+                            ;; Forth frontend
+                              (:module "frontend-forth"
+                               :depends-on ("package" "ast" "grammar-build" "eightbol-compile")
+                               :components ((:file "forth-lexer")
+                                            (:file "forth-parser"
+                                             :depends-on ("forth-lexer"))
+                                            (:file "forth-transpile"
+                                             :depends-on ("forth-parser"))))
 
-                           (:module "frontend-fountain"
-                            :depends-on ("package" "ast" "eightbol-compile")
-                            :components ((:file "package")
-                                         (:file "lexer"
-                                          :depends-on ("package"))
-                                         (:file "parser"
-                                          :depends-on ("lexer"))
-                                         (:file "fountain-transpile"
-                                          :depends-on ("parser"))))
+                            (:module "frontend-fountain"
+                             :depends-on ("package" "ast" "eightbol-compile")
+                             :components ((:file "package")
+                                          (:file "lexer"
+                                           :depends-on ("package"))
+                                          (:file "parser"
+                                           :depends-on ("lexer"))
+                                          (:file "fountain-forth-emit"
+                                           :depends-on ("parser"))
+                                          (:file "fountain-transpile"
+                                           :depends-on ("parser" "fountain-forth-emit"))))
 
                             ;; Backend modules
                          (:module "backend-6502"
@@ -211,16 +211,25 @@
                           :components ((:file "backend-arm7")))
                          (:module "backend-i286"
                           :components ((:file "backend-i286")))
-                         (:module "backend-f8"
-                          :components ((:file "backend-f8")))
+                          (:module "backend-f8"
+                           :components ((:file "backend-f8")))
+                          (:module "backend-forth"
+                           :components ((:file "backend-forth-part1")
+                                        (:file "backend-forth-statement"
+                                         :depends-on ("backend-forth-part1"))
+                                        (:file "backend-forth-emit"
+                                         :depends-on ("backend-forth-part1"))
+                                        (:file "backend-forth-tables"
+                                         :depends-on ("backend-forth-part1"))))
 
-                         ;; Main entry point
-                         (:file "main"
-                          :depends-on ("package" "frontend-agi" "frontend-basic" "frontend-cobol"
-                                                 "frontend-burgermistress" "frontend-forth" "frontend-fortran"
-                                                 "frontend-lingo" "frontend-lua"
-                                                 "frontend-muddle" "frontend-objective"
-                                                 "frontend-pascal" "frontend-sci"
-                                                 "frontend-scumm" "frontend-smalltalk"
-                                                 "frontend-zil" "eightbol-compile")))))
+                          ;; Main entry point
+                          (:file "main"
+                           :depends-on ("package" "frontend-agi" "frontend-basic" "frontend-cobol"
+                                                  "frontend-burgermistress" "frontend-forth" "frontend-fortran"
+                                                  "frontend-lingo" "frontend-lua"
+                                                  "frontend-muddle" "frontend-objective"
+                                                  "frontend-pascal" "frontend-sci"
+                                                  "frontend-scumm" "frontend-smalltalk"
+                                                  "frontend-zil" "eightbol-compile"
+                                                  "backend-forth")))))
   :in-order-to ((test-op (test-op :eightbol-test))))

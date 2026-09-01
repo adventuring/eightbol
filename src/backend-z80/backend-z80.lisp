@@ -675,6 +675,11 @@
        (compile-z80-load out (third inner) class-id slot-table const-table pic-width-table)
        (format out "~&~10tcp b")
        (format out "~&~10tjp z, ~a" branch-label)))
+    ;; Forth bare-stack test: value is in A from preceding Forth operations
+    ((and (listp condition) (eq (first condition) :forth-test))
+     (format out "~&~10t;; forth-test: stack top in A")
+     (format out "~&~10tor a")
+     (format out "~&~10tjp z, ~a" branch-label))
     (t
      (format out "~&~10t;; Unsupported condition ~s" condition)
      (format out "~&~10tjp ~a" branch-label))))

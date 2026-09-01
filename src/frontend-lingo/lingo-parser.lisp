@@ -62,7 +62,7 @@
     (procedure-def
      (procedure ident |(| param-list |)| statement-list end
                 (lambda (name params body)
-                  (make-procedure-node (lingo-make-ident name) :statements body))))
+                  (lingo-make-procedure-node (lingo-make-ident name) :statements body))))
 
     ;;  Class Definition 
     (class-def
@@ -292,7 +292,7 @@
 
 ;;; Helper functions for standard EIGHTBOL node production
 
-(defun make-procedure-node (name &key statements)
+(defun lingo-make-procedure-node (name &key statements)
   "Create a procedure/method AST node."
   (make-method-node name :statements statements))
 

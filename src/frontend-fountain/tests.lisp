@@ -246,25 +246,134 @@ Set $conversation-started to 1"))
       (parse-number-literal "0xZZ")
     (assert-true (not success) "invalid-hex-fails"))
   
-  (format t "~%All number literal tests passed!~%"))
+   (format t "~%All number literal tests passed!~%"))
+
+;;;; Tier 1 Tests: Character Actions, Camera, Timing, Branching
+
+(defun run-tier1-tests ()
+   "Run Tier 1 construct tests: character actions, camera, timing, branching."
+   (format t "~%=== Fountain Tier 1 Tests ===~%")
+   
+   ;; Test 1: Character action with emotion (PLAYER looks sad)
+   (let ((source "PLAYER looks sad."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "character-action-emotion-parse")
+       (assert-true (listp ast) "character-action-emotion-ast-type")
+       ;; AST should contain a :character-action node
+       (let ((stmts (getf (rest ast) :statements)))
+         (assert-true (> (length stmts) 0) "character-action-emotion-has-statements"))))
+   
+   ;; Test 2: Character action with gesture (PLAYER gestures north)
+   (let ((source "INNKEEPER gestures east."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "character-action-gesture-parse")
+       (assert-true (listp ast) "character-action-gesture-ast-type")))
+   
+   ;; Test 3: Camera cut (Cut to center on PLAYER)
+   (let ((source "Cut to center on PLAYER."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "camera-cut-parse")
+       (let ((stmts (getf (rest ast) :statements)))
+         (assert-true (> (length stmts) 0) "camera-cut-has-statements"))))
+   
+   ;; Test 4: Camera truck (Truck left to include ACTOR)
+   (let ((source "Truck left to include GEORGE."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "camera-truck-parse")))
+   
+   ;; Test 5: Timing - Beat
+   (let ((source "Beat."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "timing-beat-parse")
+       (let ((stmts (getf (rest ast) :statements)))
+         (assert-true (> (length stmts) 0) "timing-beat-has-statements"))))
+   
+   ;; Test 6: Timing - Multiple Beats
+   (let ((source "3 Beats."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "timing-beats-plural-parse")))
+   
+   ;; Test 7: Timing - Wait
+   (let ((source "Wait for 2 seconds."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "timing-wait-parse")))
+   
+   ;; Test 8: Dialogue branching (Player choice)
+   (let ((source "PLAYER
+(to \"Ask about gold\")
+What do you have for sale?
+(to continue)
+Never mind."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "dialogue-branch-parse")
+       ;; Should have parsed without errors
+       (assert-true (listp ast) "dialogue-branch-ast-type")))
+   
+   ;; Test 9: Lexer recognizes BEAT keyword
+   (let ((tokens (lex-fountain-source "BEAT")))
+     (assert-equal 1 (length tokens) "beat-keyword-token-count")
+     (assert-token-type :beat (first tokens) "beat-keyword-recognized"))
+   
+   ;; Test 10: Lexer recognizes CAMERA keywords
+   (let ((tokens (lex-fountain-source "CUT TRUCK DOLLY CLOSE FRAME")))
+     (assert-true (>= (length tokens) 5) "camera-keywords-token-count")
+     (assert-token-type :cut (first tokens) "cut-keyword-recognized")
+     (assert-token-type :truck (second tokens) "truck-keyword-recognized"))
+   
+   ;; Test 11: Lexer recognizes emotion keywords
+   (let ((tokens (lex-fountain-source "ANGRY SAD HAPPY SURPRISED")))
+     (assert-true (>= (length tokens) 4) "emotion-keywords-count")
+     (assert-token-type :angry (first tokens) "angry-keyword-recognized"))
+   
+   ;; Test 12: Lexer recognizes gesture keywords
+   (let ((tokens (lex-fountain-source "NORTH SOUTH EAST WEST LEFT RIGHT UP DOWN")))
+     (assert-true (>= (length tokens) 8) "gesture-keywords-count")
+     (assert-token-type :north (first tokens) "north-keyword-recognized"))
+   
+   ;; Test 13: Camera with location string
+   (let ((source "Frame \"Tavern Door\"."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "camera-location-parse")))
+   
+   ;; Test 14: Multiple consecutive beats
+   (let ((source "Beat. Beat. Beat."))
+     (multiple-value-bind (ast errors)
+         (parse-fountain-source source)
+       (assert-true (null errors) "multiple-beats-parse")
+       (let ((stmts (getf (rest ast) :statements)))
+         (assert-true (>= (length stmts) 3) "multiple-beats-statement-count"))))
+   
+   (format t "~%All Tier 1 tests passed!~%"))
 
 (defun run-all-tests ()
-  "Run all Fountain frontend tests."
-  (format t "~%~%╔════════════════════════════════════════╗")
-  (format t "~%║  Fountain Frontend Test Suite         ║")
-  (format t "~%╚════════════════════════════════════════╝")
-  
-  (run-normalization-tests)
-  (run-number-literal-tests)
-  (run-lexer-tests)
-  (run-parser-tests)
-  
-  (format t "~%~%╔════════════════════════════════════════╗")
-  (format t "~%║  ✓ All tests passed!                  ║")
-  (format t "~%╚════════════════════════════════════════╝~%~%"))
+   "Run all Fountain frontend tests."
+   (format t "~%~%╔════════════════════════════════════════╗")
+   (format t "~%║  Fountain Frontend Test Suite         ║")
+   (format t "~%╚════════════════════════════════════════╝")
+   
+   (run-normalization-tests)
+   (run-number-literal-tests)
+   (run-lexer-tests)
+   (run-parser-tests)
+   (run-tier1-tests)
+   
+   (format t "~%~%╔════════════════════════════════════════╗")
+   (format t "~%║  ✓ All tests passed!                  ║")
+   (format t "~%╚════════════════════════════════════════╝~%~%"))
 
 (export '(run-all-tests
           run-lexer-tests
           run-parser-tests
           run-normalization-tests
-          run-number-literal-tests))
+          run-number-literal-tests
+          run-tier1-tests))
+

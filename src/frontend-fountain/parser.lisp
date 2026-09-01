@@ -108,12 +108,70 @@ LEFT, RIGHT: expressions being compared."
         :right right))
 
 (defun make-program-node (scenes statements)
-  "Build a top-level :program AST node.
+   "Build a top-level :program AST node.
 SCENES: list of scene nodes
 STATEMENTS: list of top-level statements."
-  (list :program
-        :scenes scenes
-        :statements statements))
+   (list :program
+         :scenes scenes
+         :statements statements))
+
+;;;; Tier 1 AST Node Constructors
+
+(defun make-character-action-node (character action &key emotion gesture animation)
+   "Build a :character-action AST node for character emotional/physical actions.
+CHARACTER: character name
+ACTION: action verb (e.g., 'looks', 'gestures', 'animates')
+EMOTION: optional emotion type (:angry, :sad, :happy, :surprised, :confused, :neutral)
+GESTURE: optional gesture direction (:north, :south, :east, :west, :left, :right, :up, :down)
+ANIMATION: optional animation name or identifier."
+   (list :character-action
+         :character character
+         :action action
+         :emotion emotion
+         :gesture gesture
+         :animation animation))
+
+(defun make-camera-node (direction &key target location speed parameters)
+   "Build a :camera AST node for camera directions.
+DIRECTION: :cut, :frame, :truck, :dolly, :close
+TARGET: character or location name being focused
+LOCATION: specific location coordinates (x, y) or name
+SPEED: optional speed in tiles per frame
+PARAMETERS: additional keyword arguments (fade-color, fade-duration, etc.)."
+   (list :camera
+         :direction direction
+         :target target
+         :location location
+         :speed speed
+         :parameters parameters))
+
+(defun make-timing-node (timing-type &key duration beats value)
+   "Build a :timing AST node for scene pacing and delays.
+TIMING-TYPE: :beat, :wait, :pause
+DURATION: optional duration in seconds
+BEATS: number of beats (½ second each)
+VALUE: numeric expression for duration."
+   (list :timing
+         :type timing-type
+         :duration duration
+         :beats beats
+         :value value))
+
+(defun make-branch-node (dialogue-speaker choices)
+   "Build a :branch AST node for dialogue branching/player choices.
+DIALOGUE-SPEAKER: character speaking the dialogue
+CHOICES: list of branch options, each with (:label target-label :text display-text)."
+   (list :branch
+         :speaker dialogue-speaker
+         :choices choices))
+
+(defun make-branch-choice-node (target-label text)
+   "Build a branch choice option.
+TARGET-LABEL: label to jump to when this choice is selected
+TEXT: display text for this choice option."
+   (list :branch-choice
+         :label target-label
+         :text text))
 
 ;;;; Parser State and Utilities
 
@@ -340,41 +398,213 @@ Returns variable-assignment node or nil."
           (skip-newlines state)
           (make-variable-assignment-node var-name value))))))
 
-;;;; Print and Input Statements
-
-(defun parse-print (state)
-  "Parse PRINT statement.
-Returns print node or nil."
-  (when (and (current-token state) (eq (token-type (current-token state)) :print))
-    (consume-token state) ; PRINT
-    (let ((expressions '()))
-      (loop until (or (at-end-p state)
-                      (eq (token-type (current-token state)) :newline))
-            do (let ((expr (parse-expression state)))
-                 (when expr (push expr expressions))
-                 (when (and (current-token state) (eq (token-type (current-token state)) :comma))
-                   (consume-token state))))
-      (skip-newlines state)
-      (make-print-node (nreverse expressions)))))
+;;;; Input Statement
 
 (defun parse-input (state)
-  "Parse INPUT statement.
+   "Parse INPUT statement.
 Returns input node or nil."
-  (when (and (current-token state) (eq (token-type (current-token state)) :input))
-    (consume-token state) ; INPUT
-    (let ((prompt (when (and (current-token state)
-                             (eq (token-type (current-token state)) :string-literal))
-                    (token-value (consume-token state))))
-          (variables '()))
-      (loop until (or (at-end-p state)
-                      (eq (token-type (current-token state)) :newline))
-            do (when (and (current-token state)
-                          (eq (token-type (current-token state)) :variable))
-                 (push (token-value (consume-token state)) variables))
-               (when (and (current-token state) (eq (token-type (current-token state)) :comma))
-                 (consume-token state)))
+   (when (and (current-token state) (eq (token-type (current-token state)) :input))
+     (consume-token state) ; INPUT
+     (let ((prompt (when (and (current-token state)
+                              (eq (token-type (current-token state)) :string-literal))
+                     (token-value (consume-token state))))
+           (variables '()))
+       (loop until (or (at-end-p state)
+                       (eq (token-type (current-token state)) :newline))
+             do (when (and (current-token state)
+                           (eq (token-type (current-token state)) :variable))
+                  (push (token-value (consume-token state)) variables))
+                (when (and (current-token state) (eq (token-type (current-token state)) :comma))
+                  (consume-token state)))
+       (skip-newlines state)
+       (make-input-node prompt (nreverse variables)))))
+
+;;;; Tier 1: Character Action Parsing (EMOTION, GESTURE, ANIMATION)
+
+(defun parse-character-action (state)
+   "Parse character action like 'PLAYER looks sad' or 'PLAYER gestures north'.
+Returns character-action node or nil."
+   (when (and (current-token state) (eq (token-type (current-token state)) :identifier))
+     (let ((character (token-value (consume-token state))))
+       (when (and (current-token state)
+                  (member (token-type (current-token state)) '(:looks :faces :gestures :animates)))
+         (let ((action-type (token-type (consume-token state)))
+                (action-name (case action-type
+                               (:looks "looks")
+                               (:faces "faces")
+                               (:gestures "gestures")
+                               (:animates "animates")))
+                emotion gesture animation)
+           ;; Parse emotion modifier (e.g., 'sad', 'angry', 'happy')
+           (when (and (current-token state)
+                      (member (token-type (current-token state)) 
+                              '(:angry :sad :happy :surprised :confused :neutral)))
+             (setf emotion (token-type (consume-token state))))
+           ;; Parse gesture direction (e.g., 'north', 'left', 'right')
+           (when (and (current-token state)
+                      (member (token-type (current-token state))
+                              '(:north :south :east :west :left :right :up :down)))
+             (setf gesture (token-type (consume-token state))))
+           ;; Parse animation identifier (e.g., animation name)
+           (when (and (current-token state) (eq (token-type (current-token state)) :identifier))
+             (setf animation (token-value (consume-token state))))
+           
+           (skip-newlines state)
+           (make-character-action-node character action-name 
+                                        :emotion emotion 
+                                        :gesture gesture 
+                                        :animation animation))))))
+
+;;;; Tier 1: Camera Direction Parsing
+
+(defun parse-camera-direction (state)
+   "Parse camera direction like 'Cut to include ACTOR' or 'Truck left to center on ACTOR'.
+Returns camera node or nil."
+   (when (and (current-token state)
+              (member (token-type (current-token state)) '(:cut :frame :truck :dolly :close)))
+     (let ((direction (token-type (consume-token state)))
+           target location speed parameters)
+       
+       ;; For TRUCK and DOLLY, optionally parse direction and speed
+       (when (member direction '(:truck :dolly))
+         ;; Check for speed prefix (e.g., "Truck 4 left")
+         (when (and (current-token state) (eq (token-type (current-token state)) :decimal-number))
+           (setf speed (token-value (consume-token state)))
+           ;; Skip direction token if present
+           (when (and (current-token state)
+                      (member (token-type (current-token state)) '(:left :right :up :down)))
+             (consume-token state)))
+         ;; Skip direction-related keywords (left, right, up, down)
+         (when (and (current-token state)
+                    (member (token-type (current-token state)) '(:left :right :up :down)))
+           (consume-token state)))
+       
+       ;; Parse target/location specification
+       (cond
+         ;; "to include ACTOR" or "to include Location"
+         ((and (current-token state) (eq (token-type (current-token state)) :to))
+          (consume-token state) ; TO
+          (when (and (current-token state) (eq (token-type (current-token state)) :include))
+            (consume-token state) ; INCLUDE
+            ;; Next token is target
+            (cond
+              ((and (current-token state) (eq (token-type (current-token state)) :identifier))
+               (setf target (token-value (consume-token state))))
+              ((and (current-token state) (eq (token-type (current-token state)) :string-literal))
+               (setf location (token-value (consume-token state)))))))
+         
+         ;; "to center on ACTOR" or "to center on Location"
+         ((and (current-token state) (eq (token-type (current-token state)) :center))
+          (consume-token state) ; CENTER
+          (when (and (current-token state) (eq (token-type (current-token state)) :on))
+            (consume-token state) ; ON
+            (cond
+              ((and (current-token state) (eq (token-type (current-token state)) :identifier))
+               (setf target (token-value (consume-token state))))
+              ((and (current-token state) (eq (token-type (current-token state)) :string-literal))
+               (setf location (token-value (consume-token state)))))))
+         
+         ;; Single argument (CLOSE on ACTOR, FRAME ACTOR)
+         (t
+          (cond
+            ((and (current-token state) (eq (token-type (current-token state)) :identifier))
+             (setf target (token-value (consume-token state))))
+            ((and (current-token state) (eq (token-type (current-token state)) :string-literal))
+             (setf location (token-value (consume-token state)))))))
+       
+       (skip-newlines state)
+       (make-camera-node direction :target target :location location :speed speed :parameters parameters))))
+
+;;;; Tier 1: Timing Parsing (BEAT, WAIT, PAUSE)
+
+(defun parse-timing (state)
+   "Parse timing directive like 'Beat.' or 'Wait for 2 seconds.' or '3 Beats.'.
+Returns timing node or nil."
+   (cond
+     ;; BEAT or BEATS keyword (may be preceded by a number)
+     ((and (current-token state) (member (token-type (current-token state)) '(:beat :beats)))
+      (let ((timing-type :beat)
+            beats-count)
+        ;; Try to get count from previous token if available
+        ;; Check one token back for a number (for "3 Beats" pattern)
+        (let ((backup-pos (parser-state-position state)))
+          (when (> backup-pos 0)
+            (let ((prev-token (aref (parser-state-tokens state) (- backup-pos 1))))
+              (when (and prev-token (eq (token-type prev-token) :decimal-number))
+                (setf beats-count (token-value prev-token))))))
+        ;; If no previous number, check after keyword
+        (consume-token state) ; consume BEAT/BEATS
+        (when (and (not beats-count)
+                   (current-token state)
+                   (eq (token-type (current-token state)) :decimal-number))
+          (setf beats-count (token-value (consume-token state))))
+        (skip-newlines state)
+        (make-timing-node timing-type :beats (or beats-count 1))))
+     
+     ;; WAIT FOR seconds
+     ((and (current-token state) (eq (token-type (current-token state)) :wait))
+      (consume-token state) ; WAIT
+      (let ((duration 0))
+        (when (and (current-token state) (eq (token-type (current-token state)) :for))
+          (consume-token state) ; FOR
+          ;; Parse duration (could be a number)
+          (when (and (current-token state) (eq (token-type (current-token state)) :decimal-number))
+            (setf duration (token-value (consume-token state))))
+          ;; Check for SECONDS keyword
+          (when (and (current-token state) (eq (token-type (current-token state)) :seconds))
+            (consume-token state)))
+        (skip-newlines state)
+        (make-timing-node :wait :duration duration)))
+     
+     ;; PAUSE (same as BEAT)
+     ((and (current-token state) (eq (token-type (current-token state)) :pause))
+      (consume-token state)
       (skip-newlines state)
-      (make-input-node prompt (nreverse variables)))))
+      (make-timing-node :pause :beats 1))))
+
+;;;; Tier 1: Dialogue Branch Parsing
+
+(defun parse-dialogue-branch (state speaker)
+   "Parse dialogue with player choice branches.
+Looks for parenthetical choices like (to \"label\") or (to continue).
+Returns branch node or nil."
+   (let ((choices '()))
+     ;; Parse dialogue lines with embedded choices
+     (loop while (and (current-token state)
+                      (not (member (token-type (current-token state)) '(:int :ext :newline))))
+           do (cond
+                ;; Parenthetical with branch target
+                ((and (current-token state) (eq (token-type (current-token state)) :lparen))
+                 (consume-token state) ; (
+                 ;; Check for "to label" or "to continue"
+                 (when (and (current-token state) (eq (token-type (current-token state)) :to))
+                   (consume-token state) ; TO
+                   (let ((target nil))
+                     (cond
+                       ;; String label (e.g., "Ask about cake")
+                       ((and (current-token state) (eq (token-type (current-token state)) :string-literal))
+                        (setf target (token-value (consume-token state))))
+                       ;; CONTINUE keyword for non-branching dialogue
+                       ((and (current-token state) (eq (token-type (current-token state)) :continue))
+                        (setf target :continue)
+                        (consume-token state)))
+                     ;; Collect remaining text until )
+                     (let ((text-parts '()))
+                       (loop until (or (at-end-p state)
+                                       (eq (token-type (current-token state)) :rparen))
+                             do (push (token-value (consume-token state)) text-parts))
+                       (when (and (current-token state) (eq (token-type (current-token state)) :rparen))
+                         (consume-token state))
+                       (when target
+                         (push (make-branch-choice-node target
+                                                        (format nil "~{~A~^ ~}" (nreverse text-parts)))
+                               choices))))))
+                (t
+                 (consume-token state))))
+     (skip-newlines state)
+     (if choices
+         (make-branch-node speaker (nreverse choices))
+         nil)))
 
 ;;;; General Statement Parsing
 
@@ -406,9 +636,32 @@ Returns AST node or nil."
     ((eq (token-type (current-token state)) :transition)
      (consume-token state)
      (make-transition-node :fade))
-    ;; Dialogue
+     ;; Tier 1: Timing (BEAT, WAIT, PAUSE)
+     ;; Handle both "Beat." and "3 Beats." and "Wait for..." patterns
+     ((member (token-type (current-token state)) '(:beat :beats :wait :pause))
+      (parse-timing state))
+     ;; Handle "N Beats." pattern where N is a decimal number followed by BEATS
+     ((and (current-token state)
+           (eq (token-type (current-token state)) :decimal-number)
+           (peek-token state)
+           (member (token-type (peek-token state)) '(:beat :beats)))
+      (consume-token state) ; consume the number
+      (parse-timing state)) ; parse-timing will look back for the count
+
+    ;; Tier 1: Camera directions
+    ((member (token-type (current-token state)) '(:cut :frame :truck :dolly :close-on))
+     (parse-camera-direction state))
+    ;; Dialogue (check for character action modifiers or dialogue)
     ((eq (token-type (current-token state)) :identifier)
-     (parse-dialogue state))
+     (let ((backup-pos (parser-state-position state)))
+       ;; Try character action first
+       (let ((action (parse-character-action state)))
+         (if action
+             action
+             ;; Reset and try dialogue
+             (progn
+               (setf (parser-state-position state) backup-pos)
+               (parse-dialogue state))))))
     ;; Action/stage direction
     (t
      (let ((description-parts '()))
@@ -458,4 +711,10 @@ Returns (values program-ast error-list)."
           make-conditional-node
           make-print-node
           make-input-node
-          make-program-node))
+          make-program-node
+          ;; Tier 1 AST node constructors
+          make-character-action-node
+          make-camera-node
+          make-timing-node
+          make-branch-node
+          make-branch-choice-node))

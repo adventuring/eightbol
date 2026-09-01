@@ -168,6 +168,7 @@ Used by termination validation: @code{:assembly-entry} is not executable code."
       (:65c02 . "65c02")
       (:65c816 . "65c816")
       (:cp1610 . "cp1610")
+      (:forth . "Forth")
       (:huc6280 . "HuC6280")
       (:rp2a03 . "RP2A03")
       (:z80 . "Z80")

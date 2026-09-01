@@ -29,77 +29,77 @@ Renamed from normalize-identifier to avoid collision with COBOL lexer's normaliz
               stmts)
       (list stmts)))
 
-(defun make-move-node (target value)
+(defun smalltalk-make-move-node (target value)
   "Create an assignment AST node (MOVE in COBOL terminology)."
   (list :move
         :target (smalltalk-normalize-identifier target)
         :value value))
 
-(defun make-invoke-node (receiver selector)
+(defun smalltalk-make-invoke-node (receiver selector)
   "Create a message send (method invocation) AST node."
   (list :invoke
         :receiver receiver
         :selector (smalltalk-normalize-identifier selector)))
 
-(defun make-literal-string (s)
+(defun smalltalk-make-literal-string (s)
   "Create a string literal AST node."
   (list :literal-string :value s))
 
-(defun make-literal-number (n &key format)
+(defun smalltalk-make-literal-number (n &key format)
   "Create a numeric literal AST node with optional format type.
 FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
   (if format
       (list :literal-number :value n :format format)
       (list :literal-number :value n)))
 
-(defun make-print-node (args)
+(defun smalltalk-make-print-node (args)
   "Create a print/output statement AST node."
   (list :print :args args))
 
-(defun make-input-node (&key var prompt)
+(defun smalltalk-make-input-node (&key var prompt)
   "Create an input/read statement AST node."
   (list :input :var var :prompt prompt))
 
-(defun make-if-node (condition true-branch &key false-branch)
+(defun smalltalk-make-if-node (condition true-branch &key false-branch)
   "Create an if/conditional statement AST node."
   (list :if :condition condition :true-branch true-branch :false-branch false-branch))
 
-(defun make-while-node (condition body)
+(defun smalltalk-make-while-node (condition body)
   "Create a while loop AST node (converted to :perform)."
   (list :perform :body body :until (list :not condition)))
 
-(defun make-block-node (&key params expressions)
+(defun smalltalk-make-block-node (&key params expressions)
   "Create a code block AST node."
   (list :block :params params :expressions expressions))
 
-(defun make-call-node (target &key args)
+(defun smalltalk-make-call-node (target &key args)
   "Create a function call AST node."
   (list :call :target target :using args))
 
-(defun make-perform-node (body &key until varying)
+(defun smalltalk-make-perform-node (body &key until varying)
   "Create a loop/perform AST node."
   (let ((node (list :perform :body body)))
     (when until (setf node (append node (list :until until))))
     (when varying (setf node (append node (list :varying varying))))
     node))
 
-(defun make-copy-node (filename)
+(defun smalltalk-make-copy-node (filename)
   "Create a copy (include) AST node."
   (list :copy :name filename))
 
-(defun make-dialogue-node (&key speaker text)
+(defun smalltalk-make-dialogue-node (&key speaker text)
   "Create a dialogue AST node."
   (list :dialogue :speaker speaker :text text))
 
-(defun make-comment-node (text)
+(defun smalltalk-make-comment-node (text)
   "Create a comment AST node."
   (list :comment :text text))
 
-(defun make-break-node ()
+(defun smalltalk-make-break-node ()
   "Create a break AST node."
   (list :break))
 
-(defun make-continue-node ()
+(defun smalltalk-make-continue-node ()
   "Create a continue AST node."
   (list :continue))
 
@@ -132,59 +132,59 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
     (assignment
       (variable :ASSIGN expression
         (lambda (target value)
-          (make-move-node target value))))
+          (smalltalk-make-move-node target value))))
 
     ;; Print statement: print arg1, arg2, ...
     (print-stmt
       (:PRINT expression-list
-        (lambda (args) (make-print-node args)))
+        (lambda (args) (smalltalk-make-print-node args)))
       (:PRINT expression
-        (lambda (arg) (make-print-node (list arg))))
+        (lambda (arg) (smalltalk-make-print-node (list arg))))
       (:DISPLAY expression-list
-        (lambda (args) (make-print-node args)))
+        (lambda (args) (smalltalk-make-print-node args)))
       (:DISPLAY expression
-        (lambda (arg) (make-print-node (list arg)))))
+        (lambda (arg) (smalltalk-make-print-node (list arg)))))
 
     ;; Input statement: input var or ask var : 'prompt'
     (input-stmt
       (:INPUT variable
-        (lambda (var) (make-input-node :var var)))
+        (lambda (var) (smalltalk-make-input-node :var var)))
       (:READ variable
-        (lambda (var) (make-input-node :var var)))
+        (lambda (var) (smalltalk-make-input-node :var var)))
       (:ASK variable :COLON string
-        (lambda (var prompt) (make-input-node :var var :prompt prompt))))
+        (lambda (var prompt) (smalltalk-make-input-node :var var :prompt prompt))))
 
     ;; Dialogue statement: dialogue 'speaker' : 'text' or say 'text'
     (dialogue-stmt
       (:DIALOGUE string :COLON string
-        (lambda (speaker text) (make-dialogue-node :speaker speaker :text text)))
+        (lambda (speaker text) (smalltalk-make-dialogue-node :speaker speaker :text text)))
       (:SAY string
-        (lambda (text) (make-dialogue-node :speaker "Narrator" :text text))))
+        (lambda (text) (smalltalk-make-dialogue-node :speaker "Narrator" :text text))))
 
     ;; If statement: expression ifTrue: block ifFalse: block
     (if-stmt
       (expression :IF-TRUE block
         (lambda (cond true-block)
-          (make-if-node cond true-block)))
+          (smalltalk-make-if-node cond true-block)))
       (expression :IF-TRUE block :IF-FALSE block
         (lambda (cond true-block false-block)
-          (make-if-node cond true-block :false-branch false-block)))
+          (smalltalk-make-if-node cond true-block :false-branch false-block)))
       (expression :IF-TRUE-FALSE block block
         (lambda (cond true-block false-block)
-          (make-if-node cond true-block :false-branch false-block))))
+          (smalltalk-make-if-node cond true-block :false-branch false-block))))
 
      ;; While statement: expression whileTrue: block
      (while-stmt
        (expression :WHILE-TRUE block
          (lambda (cond body)
-           (make-while-node cond body))))
+           (smalltalk-make-while-node cond body))))
 
      ;; Copy statement: COPY "Filename":
      (copy-stmt
        (:COPY string :COLON
          (lambda (filename _colon)
            (declare (ignore _colon))
-           (make-copy-node filename))))
+           (smalltalk-make-copy-node filename))))
 
       ;; Message: receiver.selector or receiver.selector(args)
       (message
@@ -208,14 +208,14 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
 
     (literal
       (number)
-      (string (lambda (s) (make-literal-string s)))
+      (string (lambda (s) (smalltalk-make-literal-string s)))
       (symbol (lambda (sym) (list :symbol :value sym))))
 
     (ident
       (:IDENT (lambda (i) i)))
 
     (number
-      (:NUMBER (lambda (n) (make-literal-number n))))
+      (:NUMBER (lambda (n) (smalltalk-make-literal-number n))))
 
     (string
       (:STRING (lambda (s) s)))
@@ -229,10 +229,10 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
     (block-literal
       (:LBRACKET expression-list :RBRACKET
         (lambda (exprlist)
-          (make-block-node :expressions exprlist)))
+          (smalltalk-make-block-node :expressions exprlist)))
       (:LBRACKET :VBAR param-list :VBAR expression-list :RBRACKET
         (lambda (params exprs)
-          (make-block-node :params params :expressions exprs))))
+          (smalltalk-make-block-node :params params :expressions exprs))))
 
     (param-list
       (ident)

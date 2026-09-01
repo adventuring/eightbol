@@ -161,5 +161,7 @@
        :make-expression-divide
        :make-expression-shift-left
        :make-expression-shift-right
-       :make-identifier-literal
-      ))
+        :make-identifier-literal
+        ;; Constants
+        :+supported-cpus+
+       ))

@@ -22,50 +22,50 @@
 
 (defun scumm-parse-program (statements)
   "Top-level program node."
-  (make-program-node "SCUMM" :data (when statements (list (cons 'main-block statements)))))
+  (scumm-make-program-node "SCUMM" :data (when statements (list (cons 'main-block statements)))))
 
 (defun scumm-parse-if (cond then-stmt &optional else-stmt)
   "if (cond) then-stmt [else else-stmt]"
-  (make-if-node cond (list then-stmt) (if else-stmt (list else-stmt) '())))
+  (scumm-make-if-node cond (list then-stmt) (if else-stmt (list else-stmt) '())))
 
 (defun scumm-parse-while (cond body)
    "while (cond) body"
-   (make-perform-node "WHILE" :until (make-conditional-not cond) :body (ensure-list body)))
+   (scumm-make-perform-node "WHILE" :until (make-conditional-not cond) :body (ensure-list body)))
 
 (defun scumm-parse-for (var start end body)
    "for var = start to end body"
-   (make-perform-node "FOR" :varying var :from start :by 1
-                      :until (make-conditional-gt (make-identifier var) end) :body (ensure-list body)))
+   (scumm-make-perform-node "FOR" :varying var :from start :by 1
+                      :until (make-conditional-gt (scumm-make-identifier var) end) :body (ensure-list body)))
 
 (defun scumm-parse-set (var expr)
   "set var = expr"
-  (make-move-node expr (make-identifier var)))
+  (scumm-make-move-node expr (scumm-make-identifier var)))
 
 (defun scumm-parse-define (name body)
   "define name to body end"
-  (make-method-node name :statements (list body)))
+  (scumm-make-method-node name :statements (list body)))
 
 (defun scumm-parse-call (name args)
    "call name(args)"
-   (make-call-node name))
+   (scumm-make-call-node name))
 
 (defun scumm-parse-return (&optional val)
   "return [val]"
-  (make-goback-node))
+  (scumm-make-goback-node))
 
 (defun scumm-parse-goto (label)
   "goto label"
-  (make-goto-node label))
+  (scumm-make-goto-node label))
 
 (defun scumm-parse-print (msg &optional args)
   "print msg [, args...]
    Produces a :print AST node for output statements."
-  (make-print-node (cons msg (or args '()))))
+  (scumm-make-print-node (cons msg (or args '()))))
 
 (defun scumm-parse-input (prompt var)
   "input prompt var
    Produces an :input AST node for reading user input."
-  (make-input-node (make-identifier var) :prompt prompt))
+  (scumm-make-input-node (scumm-make-identifier var) :prompt prompt))
 
 (defun scumm-parse-dialogue (npc msg &optional responses)
   "dialogue npc says msg [with responses]
@@ -91,21 +91,21 @@
 
 ;;; Helper functions for standard EIGHTBOL node production
 
-(defun make-program-node (name &key data methods)
+(defun scumm-make-program-node (name &key data methods)
   "Create a program AST node."
   (list :program :name name :data data :methods (or methods nil)))
 
-(defun make-method-node (name &key statements)
+(defun scumm-make-method-node (name &key statements)
   "Create a method/procedure AST node."
   (list :method :name name :statements (or statements nil)))
 
-(defun make-if-node (cond then-stmts &optional else-stmts)
+(defun scumm-make-if-node (cond then-stmts &optional else-stmts)
   "Create an if-conditional AST node."
   (let ((node (list :if :condition cond :then then-stmts)))
     (when else-stmts (setf node (append node (list :else else-stmts))))
     node))
 
-(defun make-perform-node (name &key until varying from by body)
+(defun scumm-make-perform-node (name &key until varying from by body)
   "Create a perform/loop AST node."
   (let ((node (list :perform :name name)))
     (when varying (setf node (append node (list :varying varying))))
@@ -115,31 +115,31 @@
     (when body (setf node (append node (list :body body))))
     node))
 
-(defun make-move-node (expr target)
+(defun scumm-make-move-node (expr target)
   "Create a move/assignment AST node."
   (list :move :from expr :to target))
 
-(defun make-identifier (name)
+(defun scumm-make-identifier (name)
   "Create an identifier AST node."
   (list :identifier :name name))
 
-(defun make-call-node (func)
+(defun scumm-make-call-node (func)
   "Create a function call AST node."
   (list :call :target func))
 
-(defun make-goback-node ()
+(defun scumm-make-goback-node ()
   "Create a return/goback AST node."
   (list :goback))
 
-(defun make-goto-node (label)
+(defun scumm-make-goto-node (label)
   "Create a goto (unconditional jump) AST node."
   (list :goto :target label))
 
-(defun make-print-node (args)
+(defun scumm-make-print-node (args)
   "Create a print AST node."
   (list :print :args args))
 
-(defun make-input-node (var &key prompt)
+(defun scumm-make-input-node (var &key prompt)
   "Create an input AST node."
   (let ((node (list :input :variable var)))
     (when prompt (setf node (append node (list :prompt prompt))))
@@ -343,7 +343,7 @@
       
       (expression
        (ident
-        (lambda (id) (make-identifier id)))
+        (lambda (id) (scumm-make-identifier id)))
        (number-literal
         (lambda (n) n))
        (string

@@ -112,21 +112,21 @@
 
 ;;; Helper functions for standard EIGHTBOL node production
 
-(defun make-program-node (name &key data methods)
+(defun sci-make-program-node (name &key data methods)
   "Create a program AST node."
   (list :program :name name :data data :methods (or methods nil)))
 
-(defun make-method-node (name &key statements)
+(defun sci-make-method-node (name &key statements)
   "Create a method/procedure AST node."
   (list :method :name name :statements (or statements nil)))
 
-(defun make-if-node (cond then-stmts &optional else-stmts)
+(defun sci-make-if-node (cond then-stmts &optional else-stmts)
   "Create an if-conditional AST node."
   (let ((node (list :if :condition cond :then then-stmts)))
     (when else-stmts (setf node (append node (list :else else-stmts))))
     node))
 
-(defun make-perform-node (name &key until varying from by body)
+(defun sci-make-perform-node (name &key until varying from by body)
   "Create a perform/loop AST node."
   (let ((node (list :perform :name name)))
     (when varying (setf node (append node (list :varying varying))))
@@ -136,76 +136,76 @@
     (when body (setf node (append node (list :body body))))
     node))
 
-(defun make-move-node (expr target)
+(defun sci-make-move-node (expr target)
   "Create a move/assignment AST node."
   (list :move :from expr :to target))
 
-(defun make-identifier (name)
+(defun sci-make-identifier (name)
   "Create an identifier AST node."
   (list :identifier :name name))
 
-(defun make-call-node (func)
+(defun sci-make-call-node (func)
   "Create a function call AST node."
   (list :call :target func))
 
-(defun make-invoke-node (object method &key returning args)
+(defun sci-make-invoke-node (object method &key returning args)
   "Create an invocation (method call) AST node."
   (declare (ignore args))
   (let ((node (list :invoke :object object :method method)))
     (when returning (setf node (append node (list :returning returning))))
     node))
 
-(defun make-goback-node ()
+(defun sci-make-goback-node ()
   "Create a return/goback AST node."
   (list :goback))
 
-(defun make-print-node (args)
+(defun sci-make-print-node (args)
   "Create a print AST node."
   (list :print :args args))
 
-(defun make-dialogue-node (&key speaker text responses)
+(defun sci-make-dialogue-node (&key speaker text responses)
   "Create a dialogue AST node."
   (let ((node (list :dialogue :speaker speaker :text text)))
     (when responses (setf node (append node (list :responses responses))))
     node))
 
-(defun make-input-node (&optional vars)
+(defun sci-make-input-node (&optional vars)
   "Create an input AST node."
   (list :input :variables (or vars nil)))
 
-(defun make-conditional-not (expr)
+(defun sci-make-conditional-not (expr)
   "Create a NOT conditional node."
   (list :not expr))
 
-(defun make-conditional-gt (left right)
+(defun sci-make-conditional-gt (left right)
   "Create a > comparison node."
   (list :gt left right))
 
-(defun make-conditional-and (left right)
+(defun sci-make-conditional-and (left right)
   "Create an AND node."
   (list :and left right))
 
-(defun make-conditional-or (left right)
+(defun sci-make-conditional-or (left right)
   "Create an OR node."
   (list :or left right))
 
-(defun make-conditional-eq (left right)
+(defun sci-make-conditional-eq (left right)
   "Create an = comparison node."
   (list :eq left right))
 
-(defun make-conditional-ne (left right)
+(defun sci-make-conditional-ne (left right)
   "Create a <> (not equal) node."
   (list :neq left right))
 
-(defun make-conditional-lt (left right)
+(defun sci-make-conditional-lt (left right)
   "Create a < comparison node."
   (list :lt left right))
 
-(defun make-conditional-le (left right)
+(defun sci-make-conditional-le (left right)
   "Create a <= comparison node."
   (list :le left right))
 
-(defun make-conditional-ge (left right)
+(defun sci-make-conditional-ge (left right)
   "Create a >= comparison node."
   (list :ge left right))
 

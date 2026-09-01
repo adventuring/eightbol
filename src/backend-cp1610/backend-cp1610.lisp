@@ -660,6 +660,10 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
        (format *output-stream* "~&~a:" label-cond2)
        (compile-cp1610-condition (third condition) branch-label)
        (format *output-stream* "~&~a:" label-skip)))
+      ;; Forth bare-stack test: value is in R0 from preceding Forth operations
+      ((and (listp condition) (eq (first condition) :forth-test))
+       (format *output-stream* "~&~10tTSTR    R0")
+       (format *output-stream* "~&~10tBEQ     ~a" branch-label))
       (t (error "EIGHTBOL: condition ~s not implemented" condition)))))
 
 ;;; EVALUATE statement
