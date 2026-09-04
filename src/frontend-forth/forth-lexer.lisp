@@ -391,7 +391,6 @@ OUTPUT: list of token lists, one per line; each token is (type . value)"
 
 (defun forth-lex-token ()
   "Read next token from *standard-input*."
-  (declare (special *forth-lex-token-buffer*))
   (cond
     ((and (boundp '*forth-lex-token-buffer*) *forth-lex-token-buffer*)
      (prog1 (first *forth-lex-token-buffer*)
@@ -403,7 +402,7 @@ OUTPUT: list of token lists, one per line; each token is (type . value)"
            (unless (or (zerop (length trimmed))
                        (char= #\; (char trimmed 0)))
              (setq all-tokens (append all-tokens (forth-lex-line trimmed))))))
-     (nreverse all-tokens))))
+       (nreverse all-tokens)))))
 
 (defun forth-token-list ()
   "Return a thunk that reads tokens from *standard-input* using forth-lex-token."

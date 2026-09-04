@@ -350,8 +350,8 @@ Handles quoted strings, operators, identifiers, and Objective-C specific syntax.
               (objective-lex-token))))))))
 
 (defun objective-token-list ()
-   "Return a thunk that reads tokens from *standard-input* using objective-lex-token."
-   (lambda ()
-     (let ((token (objective-lex-token)))
-       (when token
-         (cons token (funcall (objective-token-list))))))
+  "Return a thunk that reads tokens from *standard-input* using objective-lex-token."
+  (lambda ()
+    (let ((token (objective-lex-token)))
+      (when token
+        (cons token (funcall (objective-token-list)))))))
