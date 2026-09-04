@@ -81,3 +81,25 @@ Handles labels (IDENTIFIER:), numbers, strings, identifiers, and operators."
                     (char= #\; (char trimmed 0)))
           (setq all-tokens (append all-tokens (pascal-lex-line trimmed))))))
     all-tokens))
+
+(defun pascal-lex-token ()
+  "Read next token from *standard-input*."
+  (declare (special *pascal-lex-token-buffer*))
+  (cond
+    ((and (boundp '*pascal-lex-token-buffer*) *pascal-lex-token-buffer*)
+     (prog1 (first *pascal-lex-token-buffer*)
+       (setf *pascal-lex-token-buffer* (rest *pascal-lex-token-buffer*))))
+    (t
+     (let ((line (read-line *standard-input* nil nil)))
+       (when line
+         (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+           (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
+             (setf *pascal-lex-token-buffer* (pascal-lex-line trimmed))
+             (pascal-lex-token))))))))
+
+(defun pascal-token-list ()
+  "Return a thunk that reads tokens from *standard-input* using pascal-lex-token."
+  (lambda ()
+    (let ((token (pascal-lex-token)))
+      (when token
+        (cons token (funcall (pascal-token-list)))))))

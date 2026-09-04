@@ -227,3 +227,26 @@ Each segment between dots is capitalized, case-insensitive input."
   "Lex complete AGI source string into a flat token stream."
   (loop for line in (split-sequence:split-sequence #\Newline source)
         append (agi-lex-line line)))
+
+(defun agi-lex-token ()
+   "Read next token from *standard-input*."
+   (declare (special *agi-lex-token-buffer*))
+   (cond
+     ((and (boundp '*agi-lex-token-buffer*) *agi-lex-token-buffer*)
+      (prog1 (first *agi-lex-token-buffer*)
+        (setf *agi-lex-token-buffer* (rest *agi-lex-token-buffer*))))
+     (t
+      (let ((line (read-line *standard-input* nil nil)))
+        (when line
+          (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+            (unless (or (zerop (length trimmed))
+                        (char= #\; (char trimmed 0)))
+              (setf *agi-lex-token-buffer* (agi-lex-line trimmed))
+              (agi-lex-token))))))))
+
+(defun agi-token-list ()
+   "Return a thunk that reads tokens from *standard-input* using agi-lex-token."
+   (lambda ()
+     (let ((token (agi-lex-token)))
+       (when token
+         (cons token (funcall (agi-token-list)))))))

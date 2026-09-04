@@ -353,3 +353,25 @@
         (unless (zerop (length trimmed))
           (setf all-tokens (nconc all-tokens (muddle-lex-line trimmed))))))
     all-tokens))
+
+(defun muddle-lex-token ()
+   "Read next token from *standard-input*."
+   (declare (special *muddle-lex-token-buffer*))
+   (cond
+     ((and (boundp '*muddle-lex-token-buffer*) *muddle-lex-token-buffer*)
+      (prog1 (first *muddle-lex-token-buffer*)
+        (setf *muddle-lex-token-buffer* (rest *muddle-lex-token-buffer*))))
+     (t
+      (let ((line (read-line *standard-input* nil nil)))
+        (when line
+          (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+            (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
+              (setf *muddle-lex-token-buffer* (muddle-lex-line trimmed))
+              (muddle-lex-token))))))))
+
+(defun muddle-token-list ()
+   "Return a thunk that reads tokens from *standard-input* using muddle-lex-token."
+   (lambda ()
+     (let ((token (muddle-lex-token)))
+       (when token
+         (cons token (funcall (muddle-token-list)))))))

@@ -297,3 +297,25 @@ EXAMPLE: fortran-normalize-identifier \"my_variable\" → \"MyVariable\""
   (values nil nil))
 
 (provide 'fortran-lexer)
+
+(defun fortran-lex-token ()
+   "Read next token from *standard-input*."
+   (declare (special *fortran-lex-token-buffer*))
+   (cond
+     ((and (boundp '*fortran-lex-token-buffer*) *fortran-lex-token-buffer*)
+      (prog1 (first *fortran-lex-token-buffer*)
+        (setf *fortran-lex-token-buffer* (rest *fortran-lex-token-buffer*))))
+     (t
+      (let ((line (read-line *standard-input* nil nil)))
+        (when line
+          (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+            (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
+              (setf *fortran-lex-token-buffer* (fortran-lex-line trimmed))
+              (fortran-lex-token))))))))
+
+(defun fortran-token-list ()
+   "Return a thunk that reads tokens from *standard-input* using fortran-lex-token."
+   (lambda ()
+     (let ((token (fortran-lex-token)))
+       (when token
+         (cons token (funcall (fortran-token-list)))))))

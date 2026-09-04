@@ -231,3 +231,25 @@
                     (char= #\; (char trimmed 0)))
           (setf all-tokens (nconc all-tokens (sci-lex-line trimmed))))))
     all-tokens))
+
+(defun sci-lex-token ()
+   "Read next token from *standard-input*."
+   (declare (special *sci-lex-token-buffer*))
+   (cond
+     ((and (boundp '*sci-lex-token-buffer*) *sci-lex-token-buffer*)
+      (prog1 (first *sci-lex-token-buffer*)
+        (setf *sci-lex-token-buffer* (rest *sci-lex-token-buffer*))))
+     (t
+      (let ((line (read-line *standard-input* nil nil)))
+        (when line
+          (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+            (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
+              (setf *sci-lex-token-buffer* (sci-lex-line trimmed))
+              (sci-lex-token))))))))
+
+(defun sci-token-list ()
+   "Return a thunk that reads tokens from *standard-input* using sci-lex-token."
+   (lambda ()
+     (let ((token (sci-lex-token)))
+       (when token
+         (cons token (funcall (sci-token-list)))))))

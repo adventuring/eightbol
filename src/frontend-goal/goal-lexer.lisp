@@ -258,3 +258,25 @@ Result is normalized to kebab-case for AST nodes."
         (unless (zerop (length trimmed))
           (setf all-tokens (nconc all-tokens (goal-lex-line trimmed))))))
     all-tokens))
+
+(defun goal-lex-token ()
+   "Read next token from *standard-input*."
+   (declare (special *goal-lex-token-buffer*))
+   (cond
+     ((and (boundp '*goal-lex-token-buffer*) *goal-lex-token-buffer*)
+      (prog1 (first *goal-lex-token-buffer*)
+        (setf *goal-lex-token-buffer* (rest *goal-lex-token-buffer*))))
+     (t
+      (let ((line (read-line *standard-input* nil nil)))
+        (when line
+          (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+            (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
+              (setf *goal-lex-token-buffer* (goal-lex-line trimmed))
+              (goal-lex-token))))))))
+
+(defun goal-token-list ()
+   "Return a thunk that reads tokens from *standard-input* using goal-lex-token."
+   (lambda ()
+     (let ((token (goal-lex-token)))
+       (when token
+         (cons token (funcall (goal-token-list))))))

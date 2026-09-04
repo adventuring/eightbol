@@ -376,3 +376,38 @@ Returns the token symbol (e.g., :DUP) or NIL if not found."
 Returns the token symbol (e.g., :SAY) or NIL if not found."
   (let ((normalized (forth-normalize-identifier lexeme)))
     (cdr (assoc normalized *forth-dialogue-words-alist* :test #'string-equal))))
+
+(defun forth-lex-source (source)
+  "Tokenize a complete Forth SOURCE string.
+INPUT:  source-string — the Forth source code as a single string
+OUTPUT: list of token lists, one per line; each token is (type . value)"
+  (let ((all-tokens '()))
+    (dolist (line (split-sequence:split-sequence #\Newline source))
+      (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+        (unless (or (zerop (length trimmed))
+                    (char= #\; (char trimmed 0)))
+          (setq all-tokens (append all-tokens (forth-lex-line trimmed))))))
+    all-tokens))
+
+(defun forth-lex-token ()
+  "Read next token from *standard-input*."
+  (declare (special *forth-lex-token-buffer*))
+  (cond
+    ((and (boundp '*forth-lex-token-buffer*) *forth-lex-token-buffer*)
+     (prog1 (first *forth-lex-token-buffer*)
+       (setf *forth-lex-token-buffer* (rest *forth-lex-token-buffer*))))
+    (t
+     (let ((line (read-line *standard-input* nil nil)))
+       (when line
+         (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+           (unless (or (zerop (length trimmed))
+                       (char= #\; (char trimmed 0)))
+             (setq all-tokens (append all-tokens (forth-lex-line trimmed))))))
+     (nreverse all-tokens))))
+
+(defun forth-token-list ()
+  "Return a thunk that reads tokens from *standard-input* using forth-lex-token."
+  (lambda ()
+    (let ((token (forth-lex-token)))
+      (when token
+        (cons token (funcall (forth-token-list)))))))

@@ -30,10 +30,105 @@
 ;;;   - Strings will be :string tokens.
 ;;;   - Comments will be :comment tokens.
 
-(defun tokenize-lua (source)
-  "Tokenize Lua SOURCE string.
-Return a list of tokens, each token is a plist:
-  (:type :value :line :column)"
+(defun lua-lex-line (line)
+  "Tokenize a single LINE of Lua source code.
+   Returns a list of tokens, each token is (type value)."
+  (let ((result '())
+        (pos 0)
+        (len (length line)))
+    (labels
+        ((skip-whitespace ()
+           (loop while (and (< pos len)
+                            (find (char line pos) '(#\Space #\Tab)))
+                 do (incf pos)))
+         (read-string ()
+           (let ((quote (char line pos))
+                 (start (1+ pos))
+                 (str (make-array 0 :element-type 'character :adjustable t :fill-pointer 0)))
+             (incf pos)
+             (loop while (and (< pos len) (not (char= (char line pos) quote)))
+                   do (vector-push-extend (char line pos) str)
+                      (incf pos))
+             (when (< pos len) (incf pos))
+             (push (list :type :string :value (coerce str 'string)) result)))
+         (read-number ()
+           (let ((start pos)
+                 (radix 10))
+             (when (and (< pos len) (char= (char line pos) #\0) (< (1+ pos) len))
+               (case (char-upcase (char line (1+ pos)))
+                 (#\X (setf radix 16) (incf pos 2))
+                 (#\O (setf radix 8) (incf pos 2))
+                 (#\B (setf radix 2) (incf pos 2))
+                 (otherwise ())))
+             (loop while (and (< pos len)
+                              (if (> radix 10)
+                                  (or (digit-char-p (char line pos))
+                                      (find (char-upcase (char line pos)) "ABCDEF"))
+                                  (digit-char-p (char line pos))))
+                   do (incf pos))
+             (push (list :type :number :value (parse-integer (subseq line start pos) :radix radix)) result)))
+         (read-operator ()
+           (let ((start pos))
+             (loop while (and (< pos len)
+                              (find (char line pos) '(#\+ #\- #\* #\/ #\% #\# #\< #\> #\= #\~))
+                        do (incf pos))
+             (push (list :type :symbol :value (subseq line start pos)) result)))
+         (read-identifier ()
+           (let ((start pos))
+             (loop while (and (< pos len)
+                              (or (alphanumericp (char line pos))
+                                  (char= (char line pos) #\_)))
+                   do (incf pos))
+             (push (list :type (if (lua-keyword-p (subseq line start pos)) :keyword :symbol)
+                         :value (subseq line start pos))
+                   result))))
+      (loop while (< pos len) do
+        (skip-whitespace)
+        (when (>= pos len) (return))
+        (let ((c (char line pos)))
+          (cond
+            ((char= c #\") (read-string))
+            ((and (char= c #\-) (< (1+ pos) len) (char= (char line (1+ pos)) #\-))
+             (loop while (and (< pos len) (not (char= (char line pos) #\Newline)))
+                   do (incf pos)))
+            ((digit-char-p c) (read-number))
+            ((alpha-char-p c) (read-identifier))
+            ((char= c #\_) (read-identifier))
+            (t (read-operator)))))
+    (nreverse result)))
+
+(defun lua-lex-source (source)
+  "Lex complete Lua SOURCE string into token stream."
+  (let ((all-tokens '()))
+    (dolist (line (split-sequence:split-sequence #\Newline source))
+      (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+        (unless (or (zerop (length trimmed))
+                    (char= #\; (char trimmed 0))
+                    (and (>= (length trimmed) 2) (char= (char trimmed 0) #\-) (char= (char trimmed 1) #\-)))
+          (setf all-tokens (append all-tokens (lua-lex-line trimmed))))))
+    all-tokens))
+
+(defun lua-lex-token ()
+  "Read next token from *standard-input*."
+  (declare (special *lua-lex-token-buffer*))
+  (cond
+    ((and (boundp '*lua-lex-token-buffer*) *lua-lex-token-buffer*)
+     (prog1 (first *lua-lex-token-buffer*)
+       (setf *lua-lex-token-buffer* (rest *lua-lex-token-buffer*))))
+    (t
+     (let ((line (read-line *standard-input* nil nil)))
+       (when line
+         (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+           (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
+             (setf *lua-lex-token-buffer* (lua-lex-line trimmed))
+             (lua-lex-token))))))))
+
+(defun lua-token-list ()
+  "Return a thunk that reads tokens from *standard-input* using lua-lex-token."
+  (lambda ()
+    (let ((token (lua-lex-token)))
+      (when token
+        (cons token (funcall (lua-token-list)))))))
   (let ((tokens '())
         (line 1)
         (column 0)
@@ -240,7 +335,7 @@ Return a list of tokens, each token is a plist:
                                :line start-line
                                :column start-column)
                          tokens)))))))
-    tokens))
+    tokens)))
 
 (defun count-equals (source start-pos)
   "Count the number of consecutive = characters starting at START-POS in SOURCE."

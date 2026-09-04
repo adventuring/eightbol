@@ -211,3 +211,25 @@
                     (char= #\/ (char trimmed 0)))
           (setf all-tokens (nconc all-tokens (scumm-lex-line trimmed))))))
     all-tokens))
+
+(defun scumm-lex-token ()
+   "Read next token from *standard-input*."
+   (declare (special *scumm-lex-token-buffer*))
+   (cond
+     ((and (boundp '*scumm-lex-token-buffer*) *scumm-lex-token-buffer*)
+      (prog1 (first *scumm-lex-token-buffer*)
+        (setf *scumm-lex-token-buffer* (rest *scumm-lex-token-buffer*))))
+     (t
+      (let ((line (read-line *standard-input* nil nil)))
+        (when line
+          (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+            (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
+              (setf *scumm-lex-token-buffer* (scumm-lex-line trimmed))
+              (scumm-lex-token))))))))
+
+(defun scumm-token-list ()
+   "Return a thunk that reads tokens from *standard-input* using scumm-lex-token."
+   (lambda ()
+     (let ((token (scumm-lex-token)))
+       (when token
+         (cons token (funcall (scumm-token-list)))))))

@@ -219,3 +219,25 @@ Supports decimal/hex/octal/binary/dword number literals, strings, and atoms."
         (unless (zerop (length trimmed))
           (setf all-tokens (nconc all-tokens (zil-lex-line trimmed))))))
     all-tokens))
+
+(defun zil-lex-token ()
+   "Read next token from *standard-input*."
+   (declare (special *zil-lex-token-buffer*))
+   (cond
+     ((and (boundp '*zil-lex-token-buffer*) *zil-lex-token-buffer*)
+      (prog1 (first *zil-lex-token-buffer*)
+        (setf *zil-lex-token-buffer* (rest *zil-lex-token-buffer*))))
+     (t
+      (let ((line (read-line *standard-input* nil nil)))
+        (when line
+          (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+            (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
+              (setf *zil-lex-token-buffer* (zil-lex-line trimmed))
+              (zil-lex-token))))))))
+
+(defun zil-token-list ()
+   "Return a thunk that reads tokens from *standard-input* using zil-lex-token."
+   (lambda ()
+     (let ((token (zil-lex-token)))
+       (when token
+         (cons token (funcall (zil-token-list)))))))

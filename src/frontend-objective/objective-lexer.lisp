@@ -333,3 +333,25 @@ Handles quoted strings, operators, identifiers, and Objective-C specific syntax.
             tokens)))
 
 (provide 'objective-lexer)
+
+(defun objective-lex-token ()
+   "Read next token from *standard-input*."
+   (declare (special *objective-lex-token-buffer*))
+   (cond
+     ((and (boundp '*objective-lex-token-buffer*) *objective-lex-token-buffer*)
+      (prog1 (first *objective-lex-token-buffer*)
+        (setf *objective-lex-token-buffer* (rest *objective-lex-token-buffer*))))
+     (t
+      (let ((line (read-line *standard-input* nil nil)))
+        (when line
+          (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+            (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
+              (setf *objective-lex-token-buffer* (objective-lex-line trimmed))
+              (objective-lex-token))))))))
+
+(defun objective-token-list ()
+   "Return a thunk that reads tokens from *standard-input* using objective-lex-token."
+   (lambda ()
+     (let ((token (objective-lex-token)))
+       (when token
+         (cons token (funcall (objective-token-list))))))
