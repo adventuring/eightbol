@@ -68,9 +68,13 @@
                                :depends-on ("eightbol-tests"))
                               (:file "backend-m68k-tests"
                                :depends-on ("eightbol-tests"))
-                              (:file "backend-stack-tests"
-                               :depends-on ("eightbol-tests"))
-                               )))
+                               (:file "backend-stack-tests"
+                                :depends-on ("eightbol-tests"))
+                               (:file "frontend-comprehensive-tests"
+                                :depends-on ("eightbol-tests"))
+                               (:file "backend-comprehensive-ast-tests"
+                                :depends-on ("eightbol-tests"))
+                                )))
   :perform (asdf:test-op (o c)
                              (let ((suites '(:eightbol :backend-matrix :ast-optimize
                                              :backend-output :parser-structure
@@ -94,6 +98,8 @@
                                              :ast-node-construction :lexer-performance
                                              :cross-frontend-consistency :keyword-coverage
                                              :parser-integration
+                                             :frontend-ast-generation
+                                             :backend-ast-comprehensive
                                              )))
                             (dolist (suite suites)
                               (format t "~&;; Running suite ~s...~%" suite)
