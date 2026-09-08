@@ -250,6 +250,13 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
        (with-accumulator-value (0)
          (format out "~%~10Tlda #0"))
        (emit-6502-store-byte-n out target class-id (1- w) w))
+      (to-self
+       ;; SET target TO SELF: store the Self pointer (2-byte address) into target
+       (format out "~%~10Tlda Self")
+       (emit-6502-store-byte-n out to-self class-id 0 w)
+       (when (> w 1)
+         (format out "~%~10Tlda (Self + 1)")
+         (emit-6502-store-byte-n out to-self class-id 1 w)))
       (t
        (let ((val-w (expression-operand-width value)))
          (dotimes (i (min val-w w))

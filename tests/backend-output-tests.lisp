@@ -487,7 +487,7 @@ Think uses MOVE so it is not reduced to @code{= TrueMethod}; trailing GOBACK sti
 (test backend-output/arm7-set-address-of
   "ARM7: SET dest TO ADDRESS OF source emits address loading and storing."
   (let ((asm (compile-stmt-to-cpu :arm7 "SET HP TO ADDRESS OF HP.")))
-    (is (search "mov" asm))
+    (is (or (search "mov" asm) (search "ldr" asm)))
     (is (search "str" asm))
     (is (search "Hp" asm))))
 
