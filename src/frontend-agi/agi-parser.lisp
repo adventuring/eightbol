@@ -37,7 +37,7 @@
 
 (defun agi-parse-gosub (routine-name)
   "GOSUB routine-name"
-  (list :call :target routine-name))
+  (list :call :target routine-name :bank nil))
 
 (defun agi-parse-goto (label)
   "GOTO label"
@@ -49,7 +49,7 @@
 
 (defun agi-parse-loadlogics (script-id)
   "LOADLOGICS script-id — Load and execute script/logic"
-  (list :call :target script-id))
+  (list :call :target script-id :bank nil))
 
 (defun agi-parse-quit ()
   "QUIT — End game/return to title"
@@ -69,10 +69,13 @@
 
 (defun agi-parse-posn (left top right bottom &optional variable)
   "POSN left top right bottom [variable] — Check bounding box
-Set variable to 1 if a condition is met within bounding box, 0 otherwise."
+Set variable to 1 if a condition is met within bounding box, 0 otherwise.
+Always emit as (:compute :target VAR :expression ...) so the expression
+plumbing reaches the canonical :compute emitter. The predicate itself is
+preserved under :expressions as (:posn left top right bottom)."
   (let ((bbox-check (list 'posn left top right bottom)))
     (if variable
-        (list :move :from bbox-check :to variable)
+        (list :compute :target variable :expression bbox-check)
         bbox-check)))
 
 (defun agi-parse-print (message &optional x y)

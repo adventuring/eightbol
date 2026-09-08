@@ -240,9 +240,9 @@
     (compile-m6800-store-a result)))
 
 (def-m6800-statement :subtract
-  (assert-pic-decimal-subtract-compiled :m6800 statement)
+  (assert-pic-decimal-subtract-compiled :m6800 full-statement)
   (multiple-value-bind (minuend subtrahend)
-      (subtract-statement-minuend-and-subtrahend statement)
+      (subtract-statement-minuend-and-subtrahend full-statement)
     (let* ((result (or (getf statement :giving) minuend))
            (bcd-p (when result (usage-bcd-p result))))
       (compile-m6800-load-a minuend)
@@ -401,4 +401,38 @@
     (format *output-stream*  "~&~8tJSR  DoInput")
     ;; Store result to target
     (compile-m6800-store-a target)))
+
+(def-m6800-statement :set
+  (let ((identifier (getf statement :identifier))
+        (op (getf statement :operation))
+        (value (getf statement :value)))
+    (cond
+      ((eq op :to)
+       (cond
+         ((null value)
+          (compile-m6800-load-a 0)
+          (compile-m6800-store-a identifier))
+         ((and (listp value) (eq (first value) :address-of))
+          (let ((src (second value)))
+            (format *output-stream*  "~&~8tLDX     ~a" (bare-data-assembly-symbol src *class-id*))
+            (format *output-stream*  "~&~8tSTX     ~a" (bare-data-assembly-symbol identifier *class-id*))))
+         ((and (listp value) (member (first value) '(:self "Self" self) :test #'equal))
+          (format *output-stream*  "~&~8tSTX     ~a" (bare-data-assembly-symbol identifier *class-id*)))
+         (t
+          (compile-m6800-load-a value)
+          (compile-m6800-store-a identifier))))
+      ((eq op :up-by)
+       (compile-m6800-load-a identifier)
+       (format *output-stream*  "~&~8tTAB")
+       (compile-m6800-load-a value)
+       (format *output-stream*  "~&~8tABA")
+       (compile-m6800-store-a identifier))
+      ((eq op :down-by)
+       (compile-m6800-load-a identifier)
+       (format *output-stream*  "~&~8tTAB")
+       (compile-m6800-load-a value)
+       (format *output-stream*  "~&~8tSBA")
+       (compile-m6800-store-a identifier))
+      (t
+       (format *output-stream*  "~&~8t; Unsupported SET operation ~s for m6800" op)))))
 

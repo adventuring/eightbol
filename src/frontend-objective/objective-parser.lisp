@@ -185,7 +185,7 @@
         (keyword-display expr-list
                          (lambda (_d exprs)
                            (declare (ignore _d))
-                           (list :display exprs))))
+                           (make-print-node exprs))))
        
        (accept-statement
         (keyword-accept ident
@@ -279,26 +279,26 @@
      (list :set lhs rhs)))
 
 (defun parse/obj-return (stmt)
+  "Convert Objective-C return to EightBol :exit-method node."
   (destructuring-bind (expr) stmt
     (if expr
-        (list :exit-method :value expr)
+        (list :compute :target 'return-register :expression expr)
         '(:exit-method))))
 
 (defun parse/obj-display (stmt)
-  "Parse DISPLAY statement to AST move/output nodes.
-   Generates a MOVE statement for each expression."
+  "Parse DISPLAY statement to :print AST node."
   (destructuring-bind (exprs) stmt
-    (list :display :values exprs)))
+    (list :print :expressions (ensure-list exprs))))
 
 (defun parse/obj-accept (stmt)
-  "Parse ACCEPT statement to AST move/input node."
+  "Parse ACCEPT statement to :input AST node."
   (destructuring-bind (var) stmt
-    (list :accept :target var)))
+    (list :input :variables (list var))))
 
 (defun parse/obj-speak (stmt)
-   "Parse SPEAK statement to AST dialogue node."
+   "Parse SPEAK statement to :dialogue AST node."
    (destructuring-bind (exprs) stmt
-     (list :speak :values exprs)))
+     (list :dialogue :speaker "Narrator" :text (first (ensure-list exprs)))))
 
 (defun parse/obj-copy (stmt)
    "Parse COPY statement to AST copy node."

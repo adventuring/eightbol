@@ -48,27 +48,133 @@ SM83, @code{pul pc} on the cp1610, @code{rts} on the m68k, and so on).
 @cindex 64tass
 @cindex 6502 registers
 
-Output uses 64tass assembler syntax.  Register usage: @code{A} is the
-accumulator (the calling-convention register), @code{X} carries
-subscript indices or temporary values, and @code{Y} carries slot
-offsets.  Array fetches use @code{X}; slot-of-self fetches use
-@code{Y}.
+Output uses 64tass assembler syntax.  The assembler directives include
+@code{.block}/@code{.bend} for local label scopes, @code{.byte} for data,
+@code{.fill} for zero-initialized storage, and @code{.LogFault} for
+runtime fault signaling.
 
-@table @asis
-@item @code{INVOKE Var "M"}
-Emits @code{.CallMethod  Call@var{Type}M, @var{Type}Class} (a Phantasia
-OOPS macro expanding to @code{jsr DoCallMethod}), not a bare
-@code{jsr Invoke@dots{}} label.
-@item @code{CALL @var{name} IN LIBRARY}
-Emits @code{jsr Lib.@var{name}} for a resident-library call.
-@item @code{CALL SERVICE @var{name}}
-Emits a service-dispatch call whose bank is resolved at link time
-(@code{.FarCall} / @code{.FarJSR}).
-@item @code{LOG FAULT}
-Emits @code{.LogFault "@var{code}"}, a 4-character fault string.
-@item @code{BREAK}
-Emits @code{brk}.
-@end table
+@menu
+* 6502 Registers and Calling Convention::
+* 6502 AST Node Implementation::
+* 6502 Memory Layout::
+@end menu
+
+@node 6502 Registers and Calling Convention
+@subsection Register Conventions
+
+@itemize
+@item @code{A} (Accumulator) — the calling-convention register.  Single-byte
+return values ride here; arguments are passed in A for unary calls.
+@item @code{X} (Index) — subscript indices for array fetches, or temporary
+storage during complex operations.  Holds the low byte when loading a
+16-bit value in combination with A.
+@item @code{Y} (Index) — slot offsets for object slot access.  The pair
+@code{ldy #offset / lda (Self),y} fetches a slot of the current object.
+@item @code{S} (Stack Pointer) — 6502 stack is 256 bytes, page 1.  Used for
+@code{push/pull} during multi-byte arithmetic and for saving registers.
+@end itemize
+
+The OOPS method-label convention produces labels of the form
+@code{Method@var{ClassName}@var{MethodName}}.  Hyphenated COBOL names
+become underscores: @code{Song--Heal--ID} maps to
+@code{Song_Heal_ID}.
+
+@node 6502 AST Node Implementation
+@subsection AST Node Implementation
+
+Each AST node type maps to 6502 assembly sequences as follows:
+
+@itemize
+
+@item @code{:move} — byte-by-byte copy via a loop when widths differ,
+or @code{lda #imm / sta addr} for immediate-to-variable single bytes.
+@code{MOVE NULL TO} pointer zeros the high byte.  Sign extension uses
+@code{bpl} on the sign byte with subsequent zero-fill or $FF-fill.
+
+@item @code{:add} — single-byte: @code{clc / adc rhs / sta result}.
+Multi-byte: little-endian ADC loop from low to high, @code{clc} before
+the first byte.  Optimizations: @code{ADD 1 TO var} emits @code{inc var};
+@code{ADD -1} emits @code{dec var}; power-of-two adds use @code{asl a}
+repeatedly in the accumulator.
+
+@item @code{:subtract} — single-byte: @code{sec / sbc rhs / sta result}.
+Multi-byte: little-endian SBC loop from low to high, @code{sec} before
+the first byte.  Optimizations mirror ADD: @code{DEC} for subtracting 1.
+
+@item @code{:compute} — delegates to @code{:add}/@code{:subtract} handlers
+for expression evaluation, then stores the result.
+
+@item @code{:if} — emits a compare chain that jumps to the ELSE label when
+the condition is false.  Complex conditions use short-circuit logic:
+@code{:and} evaluates left, then right if left succeeded; @code{:or}
+evaluates left, jumps over right if left succeeded.
+
+@item @code{:goto} — unconditional @code{jmp} (plain 6502) or @code{bra}
+(65c02+).  @code{GO TO @dots{} DEPENDING ON} generates a trinary search
+tree of @code{cmp}/@code{beq}/@code{blt}/@code{bge}.
+
+@item @code{:perform} — @code{jsr paragraph} for out-of-line bodies;
+inline bodies emit labeled loops with @code{djnz}, @code{cmp}, or
+conditional branches for TIMES/UNTIL/VARYING variants.
+
+@item @code{:invoke} — emits the Phantasia OOPS macro
+@code{.CallMethod Call@var{Class}@var{Method}, @var{Class}Class} which
+expands to @code{jsr DoCallMethod}.  The object pointer (usually
+@code{Self}) and method table index are passed through global variables.
+
+@item @code{:call} — bare @code{jsr @var{name}}.  Library calls emit
+@code{jsr Lib.@var{name}}.  Far calls (cross-bank) emit
+@code{.FarJSR @var{name}, @var{bank}}.
+
+@item @code{:call-acc} — unary call with argument in A: loads A first,
+then @code{jsr @var{name}} or @code{jsr Lib.@var{name}}.
+
+@item @code{:set} — handles TO, UP BY, DOWN BY, TO NULL, TO ADDRESS OF,
+TO SELF.  @code{SET id UP BY n} delegates to ADD; @code{SET id DOWN BY n}
+delegates to SUBTRACT.
+
+@item @code{:evaluate} — WHEN clauses emit compare-and-branch sequences.
+WHEN OTHER falls through.  Each clause jumps to the end label after
+executing its statements.
+
+@item @code{:inspect} — TALLYING loops with Y-indexed memory scan;
+CONVERTING scans and replaces matching bytes; REPLACING fills with a
+constant byte via @code{djnz}.
+
+@item @code{:string-blt} — Y-indexed block-transfer loop:
+@code{ldy #0 / loop: lda src,y / sta dest,y / iny / cpy #len / bne loop}.
+
+@item @code{:log-fault} — emits @code{.LogFault "@var{code}"}, a 4-character
+fault identifier for the runtime fault handler.
+
+@item @code{:debug-break} — emits @code{.DebugBreak} with the fault code.
+
+@item @code{:goback}, @code{:exit-method}, @code{:exit-program},
+@code{:stop-run} — all emit @code{rts}.
+
+@item @code{:break}, @code{:continue} — emit jumps to the enclosing
+PERFORM loop's break/continue labels (error if not inside a loop).
+
+@end itemize
+
+@node 6502 Memory Layout
+@subsection Memory Layout
+
+The 6502 backend uses little-endian byte ordering for multi-byte values
+in memory.  Zero-page is reserved for temporary variables and pointers:
+
+@itemize
+@item @code{Pointer} / @code{Pointer+1} — 16-bit address for indirect
+access via @code{(Pointer),y}.
+@item @code{WorkALU} — temporary for in-memory ALU operations.
+@item PIC scratch buffers (@code{PicS1_*}, @code{PicS2_*}) — for
+decimal-scaled binary arithmetic.
+@end itemize
+
+BCD arithmetic: the @code{SED} instruction enables decimal mode for
+@code{ADC}/@code{SBC}; @code{CLD} restores binary mode afterward.  The
+RP2A03 lacks decimal mode, so BCD arithmetic uses software correction
+(@code{daa}-style nibble adjustment after each binary addition).
 
 CPU-specific instruction sets (64tass format):
 
@@ -76,12 +182,13 @@ CPU-specific instruction sets (64tass format):
 @item @code{:6502}
 Plain 6502: @code{jmp} for unconditional branches; @code{SED}/@code{CLD}
 for BCD arithmetic; undocumented opcodes (@code{lax}, @code{dcp}) where
-helpful.
+helpful and enabled by policy.
 @item @code{:65c02}
 Adds @code{bra}, @code{stz}, @code{trb}, @code{tsb}; no undocumented
-opcodes.
+opcodes.  @code{stz} clears memory without touching A.
 @item @code{:65c816}
-Like the 65c02 in emulation mode; 64tass syntax.
+Like the 65c02 in emulation mode; native 24-bit addressing with
+@code{.FarJSR}.  64tass syntax.
 @item @code{:huc6280}
 Like the 65c02; bank switching via macros.  Executes all 6502
 instructions; delegates code generation to the 6502 backend.
@@ -97,34 +204,290 @@ packed-decimal arithmetic uses software correction routines instead
 @cindex Z80 registers
 
 Output is lowercase Z80 assembly in the common dialect (@code{ld a,(hl)},
-and so on).  Registers: @code{A} is the accumulator and calling-
-convention register; @code{HL} is the pointer/result register;
-@code{BC} is the count; @code{DE} is a destination pointer or temp
-(preferred over the stack).  Control flow uses @code{jp}, @code{jr},
-@code{call}, @code{ret}, and @code{djnz}.
+@code{jr nz}, and so on).  Labels use PascalCase; paragraph names
+derived from COBOL stabby-case retain hyphens.
+
+@menu
+* Z80 Registers and Calling Convention::
+* Z80 AST Node Implementation::
+* Z80 Memory Layout::
+@end menu
+
+@node Z80 Registers and Calling Convention
+@subsection Register Conventions
+
+@itemize
+@item @code{A} (Accumulator) — the calling-convention register.  Single-byte
+return values ride here; single-byte arguments are passed in A.
+@item @code{HL} — 16-bit pointer and result register.  Used for 16-bit
+arithmetic, addressing (@code{ld hl,(addr)}), and stack-relative access.
+@item @code{BC} — count register for loops and string operations.
+Holds loop counters; also used as a second 8-bit register via @code{B} alone.
+@item @code{DE} — destination pointer and temporary.  Preferred over the
+stack for holding intermediate 16-bit values.  @code{ex de,hl} swaps HL
+and DE for common patterns.
+@item @code{SP} (Stack Pointer) — 16-bit stack pointer.  Call/return uses
+@code{call}/@code{ret}; 16-bit push/pop pairs preserve registers.
+@item @code{IX}, @code{IY} — index registers for complex memory access.
+Not used by generated code but available for hand-written additions.
+@end itemize
+
+Method labels follow the same OOPS convention as the 6502:
+@code{Method@var{ClassName}@var{MethodName}}.
+
+@node Z80 AST Node Implementation
+@subsection AST Node Implementation
+
+Each AST node type maps to Z80 assembly sequences as follows:
+
+@itemize
+
+@item @code{:move} — single-byte: @code{ld a,(src) / ld (dest),a}.
+16-bit: @code{ld hl,(src) / ld (dest),hl}.  BCD-to-binary and
+binary-to-BCD conversions use @code{rrca}/@code{daa} sequences for
+packed-decimal moves.
+
+@item @code{:add} — single-byte: @code{ld b,a / ld a,(src) / add a,b / ld (dest),a}.
+16-bit: @code{ld hl,to / ex de,hl / ld hl,from / add hl,de / ld (dest),hl}.
+BCD mode uses the @code{daa} instruction after each @code{adc}.
+
+@item @code{:subtract} — single-byte: @code{ld b,a / ld a,minuend / sub subtrahend / ld (dest),a}.
+16-bit: uses @code{or a} to clear carry, then @code{sbc hl,de} for
+@code{minuend - subtrahend}.  BCD mode applies nibble correction after
+@code{sbc}.
+
+@item @code{:compute} — evaluates the expression via @code{compile-z80-load}
+into A (width=1) or HL (width=2), then stores to the target.
+
+@item @code{:if} — emits a compare that jumps to the ELSE label when
+false.  Two-byte compares push HL, load the other operand into DE, and
+use @code{sbc hl,de} to compare.  Single-byte compares use @code{cp}
+and branch accordingly.  Short-circuit @code{:and}/@code{:or} follow the
+same pattern as the 6502 backend.
+
+@item @code{:goto} — unconditional @code{jp @var{label}}.  DEPENDING ON
+generates a compare chain with @code{cp n / jp z,@dots{}}.
+
+@item @code{:perform} — @code{call paragraph} for out-of-line bodies.
+Inline bodies emit labeled loops: TIMES uses B as counter with @code{djnz};
+UNTIL tests at loop start; VARYING increments the variable after each
+iteration.
+
+@item @code{:invoke} — emits @code{call Invoke@var{Class}@var{Method}}.
+For @code{:returning}, stores the result from A (single byte) or HL
+(16-bit) to the target variable.
+
+@item @code{:call} — bare @code{call @var{name}}.  Library calls emit
+@code{call Lib.@var{name}}.
+
+@item @code{:call-acc} — loads the argument into A, then @code{call}.
+
+@item @code{:set} — handles TO, UP BY, DOWN BY, TO ADDRESS OF, TO SELF.
+Delegates to ADD/SUBTRACT handlers for the UP BY/DOWN BY variants.
+
+@item @code{:evaluate} — WHEN clauses emit compare-and-branch sequences
+using @code{cp} for single bytes or @code{sbc hl,de} for 16-bit subjects.
+WHEN OTHER falls through.  WHEN ANY always executes.  THROUGH clauses
+test both lower and upper bounds.
+
+@item @code{:inspect} — TALLYING scans memory with HL and increments a
+counter variable; CONVERTING scans and replaces matching bytes;
+REPLACING fills a region with a constant byte using @code{djnz}.
+
+@item @code{:string-blt} — Z80 block-transfer loop:
+@code{ld hl,src / ld de,dest / ld bc,len / loop: ld a,(hl) / ld (de),a /
+inc hl / inc de / dec bc / ld a,b / or c / jr nz,loop}.
+
+@item @code{:shift-left} — for single bytes: load into A, then @code{add a,a}
+repeatedly.  For 16-bit values loaded into HL, left shift uses
+@code{add hl,hl} or the @code{sla hl} undocumented instruction.
+
+@item @code{:shift-right} — @code{srl a} for unsigned, @code{sra a} for
+signed, repeated for multi-bit shifts.
+
+@item @code{:log-fault} — emits a comment; the actual fault mechanism is
+platform-defined.
+
+@item @code{:goback}, @code{:exit-method}, @code{:exit-program},
+@code{:stop-run}, @code{:exit} — all emit @code{ret}.
+
+@item @code{:break}, @code{:continue} — emit @code{jp @var{label}} to
+the enclosing PERFORM loop's break/continue label.
+
+@end itemize
+
+@node Z80 Memory Layout
+@subsection Memory Layout
+
+The Z80 backend uses little-endian byte ordering for 16-bit values.
+There is no dedicated zero-page; temporary 16-bit storage is allocated
+in the data segment.  The stack grows downward from high memory.
+
+String and array operands are addressed via HL pointing into the data
+section.  The BC register holds counts for block operations.
+
+BCD arithmetic on the Z80 uses the @code{daa} instruction for packed
+decimal correction after each addition or subtraction.  Binary-to-BCD
+conversion uses a divide-by-10 loop with @code{sbc hl,de} and nibble
+assembly.
 
 @node SM83 ABI
 @section Sharp SM83 (Game Boy)
 
 @cindex RGBDS
+@cindex SM83 registers
 
 Output is RGBDS assembler syntax (@code{ld a,[hl]}, @code{jr nz}, and so
 on).  The register conventions mirror the Z80: @code{A} accumulator,
 @code{HL} pointer/result, @code{BC} count, @code{DE} destination/temp.
 
+@subsubsection Register Conventions
+
+@table @asis
+@item @code{A}
+Accumulator and calling-convention register.  Holds 8-bit values; paired
+with @code{H} and @code{L} for 16-bit operations.
+@item @code{HL}
+16-bit pointer and result register.  Used for address calculations and
+16-bit load/store operations.
+@item @code{BC}
+Count register, typically for loop counters or subscript indices.
+@item @code{DE}
+Destination pointer and temporary register.  Preferred over stack for
+passing addresses.
+@end table
+
+@subsubsection Calling Conventions
+
+@itemize
+@item Methods are invoked via @code{call Method@var{ClassName}@var{MethodName}}.
+@item Return value rides in @code{A} (8-bit) or @code{HL} (16-bit).
+@item Methods return with @code{ret}.
+@item Local calls use @code{call} directly; library calls emit
+@code{call CallLib@var{Name}}; banked calls emit
+@code{call @var{Bank}:@var{Name}}.
+@end itemize
+
+@subsubsection AST Implementation
+
+The SM83 backend dispatches through the generic @code{compile-statement}
+function.  The main entry point @code{compile-to-assembly} produces
+RGBDS @code{SECTION} directives and emits methods with labels of the form
+@code{Method@var{Class}@var{Method}}.  A custom entry label (from
+@code{:assembly-entry}) precedes the dispatch label, and both receive a
+@code{::} suffix for RGBDS visibility.
+
+Expression loading via @code{compile-sm83-load} emits either
+@code{ld a,} for 8-bit or @code{ld hl,} for 16-bit values.  The backend
+supports subscripted access (index scaled via @code{BC}), @code{:of}
+slot-of-self fetches (base address in @code{HL}, offset added), and
+bitwise operations (@code{and}, @code{or}, @code{xor}, @code{cpl}).
+
+Conditions use @code{cp} (compare to @code{B}) for 8-bit or @code{sbc}
+with @code{HL} for 16-bit, branching via @code{jr nz} or @code{jr z}.
+Evaluation (EVALUATE statement) generates a chain of @code{cp}/@code{jr}
+pairs with local labels of the form @code{.when@n}.
+
+Multi-byte BCD arithmetic uses the @code{daa} instruction after each
+add/subtract byte, looping over the operand bytes from low to high with
+@code{adc} (add with carry) for subsequent bytes.
+
 @node cp1610 ABI
 @section Intellivision cp1610
 
 @cindex as1600
+@cindex cp1610 registers
 
-Output is as1600 assembler syntax.  The cp1610 uses the classic
-instruction set @code{MVII} (move immediate), @code{MVI} (load),
-@code{MVO} (store), @code{ADDR}, and @code{SUBR}.  A single 16-bit
-register carries the calling-convention value.
+Output is as1600 assembler syntax.  The cp1610 is a 16-bit RISC-like CPU
+with eight general-purpose registers.
+
+@subsubsection Register Conventions
+
+@table @asis
+@item @code{R0}–@code{R7}
+16-bit general-purpose registers.
+@item @code{R5}
+Return address register for @code{JSR R5}.  Subroutine calls push the
+return address into R5; the called routine returns via @code{JR R5}.
+@item @code{R6}
+Stack pointer.
+@item @code{R0}
+Calling-convention register.  8-bit EIGHTBOL values occupy the low byte.
+@end table
+
+@subsubsection Calling Conventions
+
+@itemize
+@item Methods are invoked via @code{JSR R5, Method@var{ClassName}@var{MethodName}}.
+@item Arguments and return values ride in R0 (low byte for 8-bit values).
+@item Methods return with @code{JR R5}.
+@item @code{:assembly-entry} on the first statement creates a custom entry
+label that is equated to the dispatch label.
+@end itemize
+
+@subsubsection Instruction Set
+
+The backend uses the classic cp1610 instruction mnemonics:
+
+@table @asis
+@item @code{MVII #imm, R@n}
+Move immediate 16-bit value into register.
+@item @code{MVI addr, R@n}
+Load 16-bit value from memory into register.
+@item @code{MVO R@n, addr}
+Store register value to memory.
+@item @code{ADDR R@m, R@n}
+Add register to register (R@n += R@m).
+@item @code{SUBR R@m, R@n}
+Subtract register from register (R@n -= R@m).
+@item @code{MOVR R@m, R@n}
+Copy register to register.
+@item @code{CMPR R@m, R@n}
+Compare registers (sets flags from R@m - R@n).
+@item @code{TSTR R@n}
+Test register for zero.
+@item @code{SLL / SARC}
+Shift left logical / arithmetic right shift (for bit operations).
+@item @code{JR R5}
+Return from subroutine.
+@end table
+
+@subsubsection AST Implementation
+
+The cp1610 backend is implemented in @code{src/backend-cp1610/backend-cp1610.lisp}.
+The @code{compile-to-assembly} function expects a @code{:program} AST node and
+loads copybook tables before emitting code.  It outputs a @code{ROMW 16} header
+followed by @code{PROC}/@code{ENDP} pairs for each method.
+
+Method labels follow the pattern @code{Method@var{Class}@var{Method}} in PascalCase
+(hyphens removed, segments concatenated).  A custom assembly entry from
+@code{:assembly-entry} replaces the dispatch label; the dispatch label is then
+equated to it.
+
+Expression loading via @code{compile-cp1610-load} handles:
+@itemize
+@item Immediate values via @code{MVII #, R0}
+@item Memory variables via @code{MVI @var{Name}, R0}
+@item Subscripted access: index in R0 scaled for element size, base address
+loaded to R4, then indirect load via @code{MVI@ R4, R0}
+@item Slot-of-self: slot offset added to @code{Self} pointer in R4
+@end itemize
+
+Conditions are evaluated in @code{compile-cp1610-condition}.  Comparison
+operators (=, ≠, <, >, ≤, ≥) load both operands into R0/R1, emit @code{CMPR R1, R0},
+and branch based on flags (@code{BEQ}, @code{BNEQ}, @code{BLT}, @code{BLE},
+@code{BGT}, @code{BGE}).  Boolean conditions (@code{:is-zero},
+@code{:is-not-zero}) use @code{TSTR R0}.
+
+BCD arithmetic for the cp1610 uses software correction routines that adjust
+each nybble after addition or subtraction, implemented in
+@code{%cp1610-bcd-correct}.  Shift operations emit @code{SLL} (shift left)
+or @code{SARC} (arithmetic shift right) counts via bit manipulation.
 
 @node m6800 ABI
 @section Motorola 6800
 
+@cindex m6800
 @cindex Vectrex
 
 A minimal m6800 emitter intended for Vectrex-style Motorola-family
@@ -132,19 +495,118 @@ workflows.  Uses plain 6800 mnemonics (@code{LDAA}, @code{STAA},
 @code{CMPA}, @code{BEQ}, @code{BNE}, @code{JSR}, @code{JMP}, @code{RTS})
 with direct symbols for generated labels.
 
+@subsubsection Register Conventions
+
+@table @asis
+@item @code{A}
+8-bit accumulator.  The calling-convention register.
+@item @code{X}
+16-bit index register.  Used for addressing and loop counters.
+@item @code{SP}
+Stack pointer.
+@end table
+
+@subsubsection Calling Conventions
+
+@itemize
+@item Methods are invoked via @code{JSR Method@var{Class}@var{Method}}.
+@item Return value rides in @code{A}.
+@item Methods return with @code{RTS}.
+@end itemize
+
+@subsubsection AST Implementation
+
+The m6800 backend follows the same pattern as the other backends: the
+@code{compile-to-assembly} function produces methods with PascalCase labels
+of the form @code{Method@var{Class}@var{Method}}, with @code{:assembly-entry}
+creating a custom entry label.  Expression loading emits @code{LDAA} for
+immediates or memory loads, and the condition compilation follows the same
+branch-on-inverse logic used throughout Eightbol.
+
 @node m68k ABI
 @section Motorola 68000
 
 @cindex 68000
+@cindex m68k registers
 
-Targets the Motorola 68000 instruction set only.  Data registers
-@code{D0}--@code{D7}, address registers @code{A0}--@code{A7} (@code{A7}
-is the stack pointer).  Instructions: @code{move}, @code{add},
-@code{sub}, @code{cmp}, @code{and}, @code{or}, @code{eor}, @code{not},
-@code{neg}, @code{clr}; control: @code{jsr}, @code{jmp}, @code{rts},
-@code{bra}, and the conditional branches.  Operand sizes are @code{.b}
-(byte), @code{.w} (word), and @code{.l} (long).  The calling-convention
-value rides in @code{D0}.
+Targets the Motorola 68000 instruction set only (not 68010, 68020, etc.).
+Output uses GAS/AT&T-style assembly with the @code{move} family of
+instructions and the 68000-specific branch instructions.
+
+@subsubsection Register Conventions
+
+@table @asis
+@item @code{D0}–@code{D7}
+Data registers.  @code{D0} is the calling-convention register (accumulator).
+@item @code{A0}–@code{A7}
+Address registers.  @code{A7} is the stack pointer.
+@item @code{D1}
+Temporary register for expression evaluation.
+@item @code{A0}
+Address temporary, used for pointer arithmetic in slot-of-self fetches and
+subscripted access.
+@end table
+
+@subsubsection Calling Conventions
+
+@itemize
+@item Methods are invoked via @code{jsr Method@var{Class}@var{Method}}.
+@item Return value rides in @code{D0}.
+@item Methods return with @code{rts}.
+@item Local calls use @code{jsr} directly; banked calls emit
+@code{jsr @var{Bank}:@var{Name}}.
+@end itemize
+
+@subsubsection Instruction Set
+
+The backend emits 68000 instructions in AT&T syntax (@code{move.b},
+@code{move.w}, @code{add.w}, etc.).  Sizes are denoted with suffixes:
+@code{.b} (byte), @code{.w} (word), @code{.l} (long).
+
+@table @asis
+@item @code{move.@var{sz} @var{src}, @var{dst}}
+General move; source and destination separated by comma.
+@item @code{add.@var{sz} @var{src}, @var{dst}}
+Add source to destination register or memory.
+@item @code{sub.@var{sz} @var{src}, @var{dst}}
+Subtract source from destination.
+@item @code{cmp.@var{sz} @var{src}, @var{dst}}
+Compare (sets flags from dst - src).
+@item @code{bra / bne / beq / bge / ble / blt / bgt}
+Unconditional and conditional branches (word displacement).
+@item @code{jsr / jmp / rts}
+Jump to subroutine, jump, return from subroutine.
+@item @code{lea @var{addr}, %a0}
+Load effective address into A0 (used for pointer setup).
+@end table
+
+@subsubsection AST Implementation
+
+The m68k backend is implemented in @code{src/backend-m68k/backend-m68k.lisp}.
+The @code{compile-to-assembly} function produces a @code{.text} section header
+and emits method labels with PascalCase names of the form
+@code{Method@var{Class}@var{Method}}.
+
+Expression loading via @code{compile-m68k-load} emits @code{move.@var{sz} #val, %d0}
+for immediates, @code{move.@var{sz} @var{name}, %d0} for variables, or
+complex sequences for slots and subscripts.  The backend uses the helper
+@code{m68k-size-suffix} to convert width (1 for byte, 2 for word) to the
+appropriate @code{.b} or @code{.w} suffix.
+
+Slot-of-self access loads the object pointer via @code{move.l Self, %a0},
+then accesses the slot at an offset with @code{move.@var{sz} @var{offset}(%a0), %d0}.
+Subscripted access computes the element address in @code{%a0} by scaling the
+index (add.w %d0, %d0 for 16-bit elements) and loading the base address.
+
+Conditions in @code{compile-m68k-condition} emit a @code{cmp.@var{sz}} and
+branch on the inverse condition (@code{bne} when the true branch should be
+taken if equal).  EVALUATE generates a chain of comparisons with local
+labels of the form @code{.L@n}.
+
+BCD arithmetic uses the 68000's built-in @code{abcd} (add decimal) and
+@code{sbcd} (subtract decimal) instructions on byte operands, with
+@code{moveq #0, %%d2} and @code{move %%ccr, %%d2} to manage the extend
+bit between multi-byte operations.
 
 @node i286 ABI
 @section Intel 80286
@@ -164,6 +626,7 @@ destination pointer, @code{CX} count; segments @code{CS}, @code{DS},
 
 @cindex Thumb
 @cindex GAS
+@cindex armv4t
 
 Targets the Game Boy Advance ARM7TDMI (@code{armv4t}).  Thumb is the
 default code path for size, using unified GAS syntax with
@@ -173,6 +636,94 @@ Instructions used: @code{movs}, @code{ldr}/@code{ldrb}/@code{ldrh},
 @code{b}/@code{bl}/@code{bne}@dots{}, @code{bx lr}.  Register usage:
 @code{r0} is the value and calling-convention register; @code{r1},
 @code{r2}, @code{r3} are scratch and address registers.
+
+@subsubsection Register Conventions
+
+@table @asis
+@item @code{r0}
+Calling-convention register.  Holds argument values and return values.
+@item @code{r1}–@code{r3}
+Scratch registers and address temporaries.  Used for expression evaluation
+and pointer setup.
+@item @code{r13} (SP)
+Stack pointer (managed by the runtime).
+@item @code{r14} (LR)
+Link register, holds return address from @code{bl} calls.
+@item @code{r15} (PC)
+Program counter.
+@end table
+
+@subsubsection Directives
+
+Every method in the ARM7 backend is preceded by the @code{.thumb_func}
+directive.  This tells the assembler (and linker) that the symbol is a
+Thumb function entry point, which is required for correct interworking
+between ARM and Thumb code:
+
+@example
+        .thumb_func
+MethodGameHeroHealth:
+        @@ ... method body ...
+        bx      lr
+@end example
+
+The header emitted at the start of each compilation unit:
+
+@example
+        .arch   armv4t
+        .cpu    arm7tdmi
+        .thumb
+        .syntax unified
+@end example
+
+@subsubsection Calling Conventions
+
+@itemize
+@item Methods are invoked via @code{bl Method@var{Class}@var{Method}}.
+@item Return value rides in @code{r0}.
+@item Methods return with @code{bx lr} (branch-exchange to link register).
+@item @code{:assembly-entry} on the first statement creates a custom entry
+label before the dispatch label, both marked with @code{.thumb_func}.
+@end itemize
+
+@subsubsection AST Implementation
+
+The ARM7 backend is implemented in @code{src/backend-arm7/backend-arm7.lisp}.
+The @code{compile-to-assembly} function emits the architecture and syntax
+directives, then iterates over methods.  Each method body is compiled by
+@code{compile-arm7-method}, which wraps the body with @code{.thumb_func}
+and an optional custom entry label.
+
+Expression loading via @code{compile-arm7-load} handles:
+@itemize
+@item Immediate values via @code{movs r0, #@var{val}}
+@item Memory variables via @code{ldr r2, =@var{name}} followed by
+@code{ldrb/ldrh r0, [r2]}
+@item Slot-of-self: loads @code{Self} pointer into r2, then accesses
+at offset with @code{ldrb r0, [r2, #@var{offset}]}
+@item Subscripted access: index in r0 scaled by element size, base
+address in r2, then @code{ldrb/ldrh r0, [r2, r0]}
+@end itemize
+
+Bitwise operations use the Thumb-specific suffixed forms (@code{ands},
+@code{orrs}, @code{eors}, @code{mvns}) that update condition flags.
+
+Conditions in @code{compile-arm7-condition} emit @code{cmp r0, r1} after
+loading operands into r0 and r1, then branch with the inverse condition
+(@code{bne} when the true branch should be taken if equal).  EVALUATE
+generates a chain of comparisons with local labels of the form
+@code{.L@n}.
+
+BCD arithmetic for ARM7 uses software correction sequences: after each
+@code{adds} or @code{subs}, the code checks and adjusts each nibble
+(@code{and r1, r0, #0x0F}; @code{cmp r1, #10}; @code{addge r0, r0, #6};
+and similar for the high nibble with @code{0xA0} and @code{0x60}).  The
+backend's @code{compile-arm7-add} and @code{compile-arm7-subtract}
+implement this for multi-byte operands.
+
+Break and continue in inline PERFORM loops are handled by dynamic
+variables @code{*arm7-break-label*} and @code{*arm7-continue-label*}
+that capture the loop's end and continue labels respectively.
 
 @node F8 ABI
 @section Fairchild F8 (Channel F)
@@ -186,6 +737,177 @@ Emits Fairchild F8 assembly with the Turner/Fairchild mnemonics: the
 @code{BR}/@code{BZ}/@code{BNZ}@dots{}, and subroutine call/return
 @code{PI}/@code{POP}.  16-bit values use scratch 10 (lo) and 11 (hi);
 scratch 6--9 are code-generation temporaries.
+
+@subsubsection Register Conventions
+
+@table @asis
+@item @code{A}
+8-bit accumulator.  The calling-convention register; holds 8-bit values.
+@item @code{DC0}
+16-bit data counter (address register).  Used for memory accesses via
+@code{LM} (load via DC0) and @code{ST} (store via DC0).
+@item @code{DC1}
+Secondary 16-bit data counter (available for string operations).
+@item @code{H} (hidden pointer)
+An implicit 16-bit pointer into memory adjacent to DC0; accessed via
+@code{LR H, DC0} (copy DC0 to H) and @code{LR DC0, H} (copy H to DC0).
+@item @code{Q} (hidden counter)
+An implicit counter used by @code{LM} and @code{ST} for automatic
+increment after each access.
+@item @code{IS} (index stack pointer)
+Points to the index stack; @code{LR} instructions access scratch registers.
+@item @code{PC}
+Program counter.
+@item @code{DC}
+Data counter of the system bus.
+@item @code{AC} (arithmetic unit counter)
+Controls the arithmetic unit.
+@end table
+
+@subsubsection Scratch Registers
+
+The F8 has an index stack with 16 scratch registers (0–15) accessible via
+@code{LR} (load register) instructions:
+
+@table @asis
+@item @code{0}–@code{5}
+General-purpose temporaries.
+@item @code{6}
+Array index for subscripted access.
+@item @code{7}
+Temporary, used as loop count in string operations.
+@item @code{8}–@code{9}
+Temporaries for boolean and comparison operations.
+@item @code{10}
+Low byte of 16-bit temporaries (used with register 11 for hi).
+@item @code{11}
+High byte of 16-bit temporaries (used with register 10 for lo).
+@item @code{12}–@code{13}
+Temporaries, used for 16-bit arithmetic intermediate values.
+@end table
+
+@subsubsection Instruction Set
+
+@table @asis
+@item @code{LI @var{imm}}
+Load immediate into accumulator.
+@item @code{LM}
+Load memory byte via DC0, increment DC0.
+@item @code{ST}
+Store accumulator to memory via DC0, increment DC0.
+@item @code{DCI @var{addr}}
+Load immediate address into DC0.
+@item @code{LR @var{n}, A}
+Load from scratch register n into accumulator.
+@item @code{LR A, @var{n}}
+Load accumulator into scratch register n.
+@item @code{LR @var{n}, H}
+Copy DC0 low byte to scratch register n (for pointer save/restore).
+@item @code{LR H, DC0}
+Copy DC0 low byte from H hidden register to DC0.
+@item @code{LR DC0, H}
+Copy H hidden register to DC0 (high part from scratch).
+@item @code{AS @var{n}}
+Add scratch register n to accumulator (with carry).
+@item @code{ADC}
+Add with carry from extended bit.
+@item @code{AI @var{imm}}
+Add immediate to accumulator.
+@item @code{CI @var{imm}}
+Compare immediate to accumulator.
+@item @code{PI @var{addr}}
+Program interrupt: call subroutine at address (pushes return address).
+@item @code{POP}
+Pop return address from stack and branch to it.
+@item @code{JMP @var{addr}}
+Unconditional jump.
+@item @code{BR @var{addr}}
+Branch (relative, short).
+@item @code{BZ / BNZ @var{addr}}
+Branch if accumulator is zero / not zero.
+@item @code{BM / BP @var{addr}}
+Branch if minus / plus (sign bit).
+@item @code{BZ / BNZ / BNC}
+Branch if zero / not zero / no carry.
+@item @code{SL 1 / SR 1}
+Shift left / shift right by one bit.
+@item @code{COM}
+Complement accumulator (logical NOT).
+@item @code{INC / DS @var{n}}
+Increment accumulator / decrement scratch register n.
+@item @code{NI / OI / XI}
+Logical AND / OR / XOR with immediate.
+@item @code{NS @var{n}}
+Logical AND accumulator with scratch register n.
+@item @code{XS @var{n}}
+Logical XOR accumulator with scratch register n.
+@item @code{LNK}
+Link: add carry bit to accumulator (used after ADC).
+@end table
+
+@subsubsection Calling Conventions
+
+@itemize
+@item Methods are invoked via @code{PI Method@var{Class}@var{Method}}.
+@item Return value rides in @code{A}.
+@item Methods return with @code{POP}.
+@item @code{:assembly-entry} on the first statement creates a custom entry
+label before the dispatch label.
+@end itemize
+
+@subsubsection AST Implementation
+
+The F8 backend is implemented in @code{src/backend-f8/backend-f8.lisp}.
+The @code{compile-to-assembly} function expects a @code{:program} AST node
+and loads copybook tables before emitting code.
+
+Method labels follow the pattern @code{Method@var{Class}@var{Method}} in
+PascalCase.  A custom assembly entry from @code{:assembly-entry} replaces
+the dispatch label; the dispatch label is then emitted on the line after
+the custom entry.
+
+Expression loading via @code{compile-f8-load} handles:
+@itemize
+@item Immediate 8-bit values via @code{LI @var{val}}.
+@item Immediate 16-bit values via @code{LI} into scratch 10 (low), then
+scratch 11 (high).
+@item Memory variables: @code{DCI @var{name}} loads the address into DC0,
+then @code{LM} loads the low byte (and a second @code{LM} for the high byte
+for 16-bit values).
+@item Subscripted access: index in scratch 6, base address via
+@code{DCI}, then @code{%f8-dc0-bump-by-count} loops to advance DC0 by
+the index.
+@item Slot-of-self: @code{%f8-self-pointer-to-dc0} loads the Self pointer
+into DC0 via two @code{LM} instructions and @code{LR 10/11, A}, then
+@code{%f8-dc0-add-slot-offset} adds the slot offset.
+@end itemize
+
+16-bit arithmetic uses scratch 10 (low) and 11 (high) as the primary
+temporary, with scratch 12-13 for intermediate values.  The helper
+@code{%f8-add-16} emits the sequence @code{LR A, 10; AS 12; LR 10, A;
+LR A, 11; LNK; AS 13; LR 11, A} to add @code{12:13} to @code{10:11}.
+Negation uses @code{%f8-negate-16-10} for two's complement in place.
+
+BCD arithmetic for F8 uses software correction because F8 lacks a
+decimal-adjust instruction.  The backend implements this in
+@code{compile-f8-add} and @code{compile-f8-subtract}: after each
+byte-wise add or subtract with @code{AS} and @code{ASD} (add/subtract
+with carry from extend bit), the code adjusts each nibble by testing and
+adding $06 or $60 when necessary.
+
+Conditions in @code{compile-f8-condition} use the F8's compare-immediate
+(@code{CI}) and branch instructions.  For 8-bit comparisons, operands are
+loaded into the accumulator and a scratch register, then @code{XS} (XOR)
+and @code{BNZ} check equality, or the accumulator is compared directly.
+For 16-bit comparisons, the backend uses the subtraction-with-borrow
+sequence and checks the high byte for sign (@code{BM}) or zero (@code{BZ}
+plus @code{BP}).
+
+EVALUATE generates a chain of comparisons with local labels of the form
+@code{_@var{prefix}@var{n}} (e.g., @code{_eval3}).  Each @code{WHEN}
+clause emits a @code{:is-zero} test for the null terminator, then
+compares the subject to the phrase expression and branches to the next
+label on mismatch.
 
 @node Error Conditions
 @appendix Error Conditions and Fault Codes

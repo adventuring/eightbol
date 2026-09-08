@@ -53,8 +53,8 @@
   (make-method-node name :statements (if (listp body) body (list body))))
 
 (defun muddle-parse-set (var expr)
-"(.SET var expr) - Assignment."
-(make-move-node expr (make-identifier var)))
+  "(.SET var expr) - Assignment."
+  (list :move :from expr :to (make-identifier var)))
 
 (defun muddle-parse-get (obj prop)
   "(.GET obj prop) - Property access."
@@ -62,43 +62,37 @@
 
 (defun muddle-parse-put (obj prop value)
   "(.PUT obj prop value) - Property assignment."
-  (make-move-node value (make-identifier (format nil "~A.~A" obj prop))))
+  (list :move :from value :to (make-identifier (format nil "~A.~A" obj prop))))
 
 (defun muddle-parse-call (func &rest args)
   "(.CALL func args...) - Function invocation."
-  (let ((call-node (make-call-node func)))
-    ;; If there are arguments, wrap them somehow
-    ;; This depends on how the AST structure handles arguments
-    call-node))
+  (list :call :target func))
 
 (defun muddle-parse-return (&optional val)
   "(.RETURN val) - Return from function."
-  (make-goback-node))
+  (list :go-back))
 
 (defun muddle-parse-print (&rest args)
   "(.PRINT arg1 arg2...) or (.DISPLAY arg1 arg2...) - Output text/values."
-  ;; Create an assembly entry node or use error node for now
-  ;; In real implementation, this would emit print/display code
-  (make-move-node (car args) (make-identifier "OUTPUT")))
+  (list :print :expressions (or args '())))
 
 (defun muddle-parse-input (&rest vars)
   "(.INPUT var1 var2...) or (.ACCEPT var1 var2...) - Read input values."
-  ;; In real implementation, this would emit input/accept code
-  (make-move-node (make-identifier "INPUT") (make-identifier (car vars))))
+  (list :input :variables (or vars '())))
 
 (defun muddle-parse-dialogue (text)
-  "(.DIALOGUE \"text\") - Display dialogue text.
-   
-   This creates a display instruction for dialogue."
-  (make-move-node text (make-identifier "DIALOGUE")))
+  "(.DIALOGUE \"text\") - Display dialogue text."
+  (list :dialogue :speaker "narrator" :text text))
 
 (defun muddle-parse-exit (&optional code)
   "(.EXIT code) - Exit program with optional status code."
-  (make-stop-run-node (or code 0)))
+  (if code
+      (list :stop-run :code code)
+      (list :stop-run)))
 
 (defun muddle-parse-throw (code)
   "(.THROW code) - Throw a fault with code."
-  (make-log-fault-node code))
+  (list :log-fault :code code))
 
 (defun muddle-parse-go (label)
   "(.GO label) - Unconditional jump (legacy)."

@@ -1,279 +1,809 @@
+@chapter SCI Frontend Language
+@cindex SCI frontend language
+
+This chapter describes the SCI (Sierra Creative Interpreter) frontend language as
+implemented in the EightBol compiler. SCI provides a Lisp-based language for creating
+sophisticated adventure games with object-oriented programming, classes, instances,
+and method dispatch. The language is defined by its lexer (@file{sci-lexer.lisp})
+and parser (@file{sci-parser.lisp}).
+
 @menu
-* Naming system::
-* Basic structure::
-* Calling routines::
-* Assignment::
-* Arithmetic::
-* Complex arithmetic::
-* Boolean expressions::
-* Control structures::
-* Loops::
-* Breaking loops::
-* Dialogue scripts::
-* Tile manipulation::
-* Decal manipulation::
-* Object manipulation::
-* Unsupported features::
+* Naming Conventions::
+* Lexical Elements::
+* S-Expression Structure::
+* Classes and Instances::
+* Methods::
+* Statements::
+* Control Flow::
+* Arithmetic Operations::
+* String Operations::
+* Input and Output::
+* Message Passing::
+* Unsupported Features::
+* Example Programs::
 @end menu
 
-@node Naming system
-@section Naming system
+@node Naming Conventions
+@section Naming Conventions
 
-In SCI, variable names use @code{case-insensitive} naming (conventionally @code{lowerCase} or @code{upperCase} for globals).
-All keywords are case-insensitive but conventionally written in lowercase.
+In SCI, variable names use @code{case-insensitive} naming. The frontend normalizes
+identifiers to @code{PascalCase} format internally:
 
 @table @asis
-@item Keywords: (if), (else), (then), (while), (for), (foreach), (break), (continue), (return), (define), (setq), (set), (get), (put), (call), (proc), (method), (class), (instance), (send), (super), (self), (print), (format), (strcat), (strlen), (substr), (upcase), (downcase), (numtostr), (strtonum), (+), (-), (*), (/), (=), (<>), (<), (>), (<=), (>=), (and), (or), (not)
-@item Operators: Same as keywords for arithmetic and logical operations
-@item String delimiters: Double quotes (@code{"..."}) for strings, single quotes (@code{'...'}) for symbols or characters
-@item Comments: Semicolon (;) to end of line
+@item Input: @code{hello_world}
+@*
+Output (AST): @code{HelloWorld}
+
+@item Input: @code{MyVariable}
+@*
+Output (AST): @code{MyVariable}
+
+@item Input: @code{x}
+@*
+Output (AST): @code{X} (capitalized when unambiguous)
+
+@item Input: @code{_private}
+@*
+Output (AST): @code{Private}
 @end table
 
-@node Basic structure
-@section Basic structure for a stand-alone routine or program
+All keywords are case-insensitive and conventionally written in lowercase.
 
-An SCI program consists of procedure and method definitions, and a main entry point that is called by the interpreter.
+@node Lexical Elements
+@section Lexical Elements
+
+@subsection Keywords
+
+The following keywords are recognized (case-insensitive):
+
+@table @asis
+@item @code{if}
+Starts a conditional statement.
+@item @code{else}
+Specifies the false branch of an IF statement.
+@item @code{then}
+Separates condition from branch in IF.
+@item @code{while}
+Starts a while loop.
+@item @code{for}
+Starts a for loop.
+@item @code{foreach}
+Iterates over collection elements.
+@item @code{break}
+Exits the innermost loop immediately.
+@item @code{continue}
+Skips to the next iteration of the current loop.
+@item @code{return}
+Returns from a subroutine.
+@item @code{define}
+Defines a procedure.
+@item @code{setq}
+Sets a variable to a value.
+@item @code{set}
+Sets a value (synonym for setq).
+@item @code{get}
+Gets a property or array element.
+@item @code{put}
+Puts a value to a property or array element.
+@item @code{call}
+Calls a procedure.
+@item @code{proc}
+Procedure definition keyword.
+@item @code{method}
+Method definition keyword.
+@item @code{class}
+Class definition keyword.
+@item @code{instance}
+Instance creation keyword.
+@item @code{send}
+Message passing to objects.
+@item @code{super}
+Refers to superclass method.
+@item @code{self}
+Refers to current object instance.
+@item @code{print}
+Prints text to output.
+@item @code{format}
+Formats and prints text.
+@item @code{dialogue}
+Displays dialogue.
+@item @code{dialog}
+Alias for dialogue.
+@item @code{say}
+Speaks dialogue text.
+@item @code{input}
+Gets user input.
+@item @code{ask}
+Asks a question with response.
+@item @code{strcat}
+Concatenates strings.
+@item @code{strlen}
+Returns string length.
+@item @code{substr}
+Extracts substring.
+@item @code{upcase}
+Converts string to uppercase.
+@item @code{downcase}
+Converts string to lowercase.
+@item @code{numtostr}
+Converts number to string.
+@item @code{strtonum}
+Converts string to number.
+@end table
+
+@subsection Operators
+
+@table @asis
+@item @code{+}
+Addition.
+@item @code{-}
+Subtraction.
+@item @code{*}
+Multiplication.
+@item @code{/}
+Division.
+@item @code{=}
+Equality comparison.
+@item @code{<>}
+Inequality comparison.
+@item @code{<}
+Less than.
+@item @code{>}
+Greater than.
+@item @code{<=}
+Less than or equal.
+@item @code{>=}
+Greater than or equal.
+@item @code{&} or @code{and}
+Logical AND.
+@item @code{|} or @code{or}
+Logical OR.
+@item @code{!} or @code{not}
+Logical NOT.
+@end table
+
+@subsection Literal Formats
+
+@table @asis
+@item Decimal
+Bare digits: @code{42}, @code{0}, @code{100}
+@item Hexadecimal
+@code{#x@var{hex}} or @code{0x@var{hex}} prefix: @code{#xFF} (255), @code{0x1A} (26)
+@item Octal
+@code{#o@var{octal}} or @code{0o@var{octal}} prefix: @code{#o77} (63), @code{0o10} (8)
+@item Binary
+@code{#b@var{binary}} or @code{0b@var{binary}} prefix: @code{#b1010} (10), @code{0b1111} (15)
+@item DWORD
+@code{d"@var{word}"} format: @code{d"SCUM"} (returns string "SCUM")
+@item Strings
+Double-quoted: @code{"Hello, world!"}
+@end table
+
+@subsection Delimiters
+
+@table @asis
+@item @code{(} @code{)}
+Parentheses for S-expressions and grouping.
+@item @code{,}
+Comma separates items in lists.
+@item @code{'}
+Single quote denotes quoted literal.
+@end table
+
+@subsection Comments
+
+Semicolon (;) begins a comment that continues to the end of the line:
 
 @example
-; Initialize game
-(define gScore 0)
-(define gLivesLeft 3)
-(define gCurrentRoom 1)
-
-(procedure (InitializeGame)
-  (= gScore 0)
-  (= gLivesLeft 3)
-  (= gCurrentRoom 1)
-)
-
-(procedure (ProcessInput)
-  ; Simulate input handling
-  (if (Said '/?move/?north')
-      (= gCurrentRoom (+ gCurrentRoom 10)))
-)
-
-(procedure (UpdateGame)
-  ; Game logic updates
-)
-
-(procedure (RenderDisplay)
-  ; Rendering code
-)
-
-(instance gGame of Game
-  (properties)
-  (method (init)
-    (InitializeGame)
-    (= gGameOver FALSE)
-    (while (not gGameOver)
-      (ProcessInput)
-      (UpdateGame)
-      (RenderDisplay))
-  )
-)
+; This is a comment
+(setq x 10)  ; This is also a comment
 @end example
 
-@node Basic structure object
-@section Basic structure for an object method
+@node S-Expression Structure
+@section S-Expression Structure
 
-SCI supports object-oriented programming through classes and instances, with methods defined in the class or instance.
+SCI uses S-expressions (symbolic expressions) as its primary syntax. Everything
+is enclosed in parentheses, with the first element being an operator or special form.
+
+@subsection Basic S-Expression Forms
+
+@table @asis
+@item Function call
+@code{(@var{func} @var{arg1} @var{arg2} @dots{})}
+@*
+First element is function name, followed by arguments.
+
+@item Special form
+@code{(@var{keyword} @var{body})}
+@*
+Keywords like @code{if}, @code{while}, @code{setq} have special evaluation rules.
+
+@item Nested expression
+@code{(@var{op} (@var{op} a b) c)}
+@*
+Expressions can be nested arbitrarily deep.
+@end table
+
+@subsubsection Examples
 
 @example
-; Define a Player class
-(class CPlayer of BaseViewer
+(+ 10 20)
+(setq score 100)
+(if (> x 0) (setq positive TRUE) (setq positive FALSE))
+(while (< i 10) (setq i (+ i 1)))
+@end example
+
+@node Classes and Instances
+@section Classes and Instances
+
+SCI supports object-oriented programming through classes and instances.
+
+@subsection Class Definition
+
+@defsyn
+(class @var{name} of @var{superclass}
+  (properties
+    @var{prop1} @var{value1}
+    @var{prop2} @var{value2})
+  (method (@var{method-name} @var{params})
+    @var{body})
+  @dots{})
+@end defsyn
+
+Defines a class with properties and methods. The @var{superclass} specifies
+the parent class for inheritance.
+
+@subsubsection Parameters
+
+@table @asis
+@item @var{name}
+Class identifier (normalized to PascalCase).
+@item @var{superclass}
+Parent class identifier.
+@item @var{properties}
+List of property name-value pairs.
+@item @var{method}
+Method definitions with parameters and body.
+@end table
+
+@subsubsection Examples
+
+@example
+(class CPlayer of CGameActor
   (properties
     x 0
     y 0
-    sprite 0)
+    sprite 0
+    health 100)
   (method (init theX theY theSprite)
     (= x theX)
     (= y theY)
-    (= sprite theSprite)
-    (super init:))
+    (= sprite theSprite))
   (method (changePos dx dy)
     (= x (+ x dx))
     (= y (+ y dy)))
 )
-
-; Create instance
-(instance gPlayer of CPlayer
-  (properties)
-)
 @end example
 
-@node Calling routines
-@section Calling a routine (nullary)
+@subsection Instance Creation
 
-To call a procedure that takes no arguments:
+@defsyn
+(instance @var{name} of @var{class}
+  (properties
+    @var{prop1} @var{value1}))
+@end defsyn
+
+Creates an instance of a class with optional property overrides.
+
+@subsubsection Examples
+
+@example
+(instance gPlayer of CPlayer
+  (properties
+    x 100
+    y 200
+    sprite 5))
+
+(instance gGameState of CGameState
+  (properties
+    score 0
+    lives 3))
+@end example
+
+@node Methods
+@section Methods
+
+Methods are functions associated with classes that operate on object instances.
+
+@subsection Method Definition
+
+@defsyn
+(method (@var{name} @var{params})
+  @var{body})
+@end defsyn
+
+Defines a method within a class. Parameters are bound to the passed arguments.
+
+@subsubsection Parameters
+
+@table @asis
+@item @var{name}
+Method identifier.
+@item @var{params}
+Parameter names (local variables).
+@item @var{body}
+S-expressions forming the method body.
+@end table
+
+@subsubsection Examples
+
+@example
+(method (move dx dy)
+  (= x (+ x dx))
+  (= y (+ y dy))
+  (self updateSprite:))
+
+(method (getDistance other)
+  (local dx dy dist)
+  (= dx (- (other x:) x))
+  (= dy (- (other y:) y))
+  (= dist (sqrt (+ (* dx dx) (* dy dy))))
+  (return dist))
+@end example
+
+@subsection Method Invocation
+
+Methods are invoked via message passing (see @ref{Message Passing}).
+
+@node Statements
+@section Statements
+
+@menu
+* Variable Assignment::
+* Procedure Definition::
+* Procedure Call::
+* Return Statement::
+* Print Statement::
+* Input Statement::
+* Dialogue Statement::
+@end menu
+
+@node Variable Assignment
+@subsection Variable Assignment
+
+@defsyn
+(setq @var{variable} @var{value})
+@end defsyn
+
+Assigns value to variable. The @code{=} form is also accepted for compatibility.
+
+@subsubsection Syntax Variations
+
+@table @asis
+@item Simple assignment
+@code{(setq @var{variable} @var{value})}
+@*
+Basic variable assignment.
+
+@item Arithmetic assignment
+@code{(setq @var{variable} (+ @var{var} @var{value}))}
+@*
+Assignment with arithmetic operation.
+@end table
+
+@subsubsection Examples
+
+@example
+(setq gScore 0)
+(setq gLivesLeft 3)
+(setq gCounter (+ gCounter 1))
+(setq gScore (+ gScore 10))
+(setq gMessage "Hello, World!")
+@end example
+
+@subsubsection Property Access
+
+@defsyn
+(setq @var{object}:@var{property} @var{value})
+@end defsyn
+
+Accesses and assigns to object properties using the colon notation.
+
+@subsubsection Examples
+
+@example
+(setq gPlayer:x 160)
+(setq gPlayer:y 100)
+(setq gPlayer:sprite 5)
+(setq gPlayer:visible TRUE)
+@end example
+
+@node Procedure Definition
+@subsection Procedure Definition
+
+@defsyn
+(procedure (@var{name} @var{params})
+  @var{body})
+@end defsyn
+
+@defsyn
+(define @var{name} (@var{params})
+  @var{body})
+@end defsyn
+
+Defines a procedure (function) with parameters and body. Both @code{procedure}
+and @code{define} are supported.
+
+@subsubsection Parameters
+
+@table @asis
+@item @var{name}
+Procedure identifier.
+@item @var{params}
+Parameter names (may be empty for nullary procedures).
+@item @var{body}
+S-expressions forming the procedure body.
+@end table
+
+@subsubsection Examples
+
+@example
+(procedure (InitializeGame)
+  (= gScore 0)
+  (= gLivesLeft 3)
+  (= gCurrentRoom 1))
+
+(procedure (CalculateBonus level timeLeft)
+  (local bonus)
+  (= bonus (* level 100))
+  (return (- bonus timeLeft)))
+@end example
+
+@node Procedure Call
+@subsection Procedure Call
+
+@defsyn
+(@var{procedure-name} @var{arg1} @var{arg2} @dots{})
+@end defsyn
+
+Calls a procedure with the specified arguments.
+
+@subsubsection Examples
 
 @example
 (InitializeGraphics)
 (ClearScreen)
-(PlayStartupMusic)
-(SomeProcedure)
-@end example
-
-@node Calling routines value
-@section Calling a routine with a value (in accumulator)
-
-To call a procedure that returns a single value (in accumulator):
-
-@example
-(= gScore (CalculateBonus gLevel gTimeLeft))
-(= gBonusFactor (GetInputFactor))
-(= gVolume (GetMasterVolume))
-(SomeFunction)
-@end example
-
-@node Calling routines giving
-@section Calling a routine giving a value (in accumulator)
-
-Not applicable in SCI's standard calling convention.
-
-@node Calling routines values
-@section Calling a routine with values in and out (in accumulator)
-
-To call a procedure with parameters:
-
-@example
 (DrawSprite gSpriteId gXPos gYPos)
-(PlaySound gSoundId gVolume gLoopFlag)
-(CheckCollision gObj1 gObj2 gResultVar)
-(SomeProcedure Param1 Param2)
+(CalculateBonus gLevel gTimeLeft)
 @end example
 
-@node Calling library
-@section Calling a library routine (all 4 styles)
+@node Return Statement
+@subsection Return Statement
 
-SCI accesses library routines through standard procedure calls or object methods:
+@defsyn
+(return)
+@end defsyn
+
+@defsyn
+(return @var{value})
+@end defsyn
+
+Returns from the current procedure. Optionally returns a value.
+
+@subsubsection Examples
 
 @example
-(LoadLevel gLevelNumber)          @r{Direct call}
-(FarProc gLibraryAddress)         @r{Far call}
-(= gResult (LibraryFunction gInput)) @r{Library function}
-(Send gObject 'Method gParam1 gParam2)  @r{Object method call}
+(return)
+(return 0)
+(return (+ score bonus))
+(return (self getDistance: other))
 @end example
 
-These correspond to:
+@node Print Statement
+@subsection Print Statement
+
+@defsyn
+(print @var{arg1} @var{arg2} @dots{})
+@end defsyn
+
+Prints text and optional values to output. The @code{format} function provides
+additional formatting control.
+
+@subsubsection Examples
+
+@example
+(print "Hello, world!")
+(print "Score: " gScore)
+(print "X: " x " Y: " y)
+(print "The value is: " (+ a b))
+@end example
+
+@subsubsection Format Function
+
+@defsyn
+(format @var{dest} @var{format-string} @var{args} @dots{})
+@end defsyn
+
+Formats text with printf-style placeholders. Placeholders include:
+@code{%d} for decimal, @code{%s} for string, @code{%c} for character.
+
+@subsubsection Examples
+
+@example
+(format nil "Score: %d" gScore)
+(format nil "Name: %s Age: %d" name age)
+@end example
+
+@node Input Statement
+@subsection Input Statement
+
+@defsyn
+(input @var{prompt})
+@end defsyn
+
+@defsyn
+(input @var{prompt} @var{variable})
+@end defsyn
+
+Reads user input and stores the result. If variable is provided, stores the input
+to that variable; otherwise, returns the input value.
+
+@subsubsection Parameters
+
 @table @asis
-@item Direct: ProcedureName(...)
-@item Far: AbsoluteAddress(...) (via external interface)
-@item Library: LibraryEntry(...) or FunctionName(...)
-@item Object: Send OBJECT 'Method ...
+@item @var{prompt}
+String literal displayed to prompt the user.
+@item @var{variable}
+Optional identifier to store the input value.
 @end table
 
-@node Calling far bank
-@section Calling a far bank Service (all 4 styles)
-
-Far procedures in SCI are called using the FarProc kernel call or through
-the export/import mechanism:
+@subsubsection Examples
 
 @example
-; Declare far procedure
-(export FarLoadLibrary from "farproc")
-
-; Call far routine
-(FarProc FarLoadLibrary #x8000)   @r{Call routine in bank 1}
+(input "Enter your name: ")
+(input "Enter choice: " gChoice)
+(setq gPlayerName (input "Name: "))
 @end example
 
-These correspond to:
+@node Dialogue Statement
+@subsection Dialogue Statement
+
+@defsyn
+(dialogue @var{character} @var{text})
+@end defsyn
+
+@defsyn
+(dialogue @var{character} @var{text} @var{response1} @var{response2} @dots{})
+@end defsyn
+
+@defsyn
+(say @var{character} @var{text})
+@end defsyn
+
+Displays dialogue text attributed to a character. Optional response choices
+may be provided for player selection.
+
+@subsubsection Examples
+
+@example
+(dialogue "Guard" "Halt! Who goes there?")
+(dialogue "Narrator" "You enter a dark cave.")
+(say "Shopkeeper" "What would you like to buy?")
+@end example
+
+@node Control Flow
+@section Control Flow
+
+@menu
+* Conditional Statement::
+* While Loop::
+* For Loop::
+* Foreach Loop::
+* Break and Continue::
+@end menu
+
+@node Conditional Statement
+@subsection Conditional Statement: if-then-else
+
+@defsyn
+(if @var{condition}
+  @var{then-form})
+@end defsyn
+
+@defsyn
+(if @var{condition}
+  @var{then-form}
+@var{else-form})
+@end defsyn
+
+Executes @var{then-form} if condition is true (non-zero), otherwise executes
+@var{else-form} if present.
+
+@subsubsection Syntax Variations
+
 @table @asis
-@item Direct: Not used for far calls
-@item Far: FarProc kernel call
-@item Library: Not applicable
-@item Object: Not applicable
+@item Simple conditional
+@code{(if @var{cond} @var{then})}
+@*
+Single form in true branch.
+
+@item Conditional with else
+@code{(if @var{cond} @var{then} @var{else})}
+@*
+Two-branch conditional.
 @end table
 
-@node Invoking object
-@section Invoking a method on an object (all 4 styles)
-
-Object method invocation in SCI uses the send keyword:
+@subsubsection Examples
 
 @example
-(Send gPlayer 'changePos 5 10)
-(Send gScoreDisplay 'update gScore)
-(= gGameOver (Send gGameState 'isGameOver))
+(if (> gScore 1000)
+    (setq gLevel (+ gLevel 1)))
+
+(if (> gTemperature gTHOT)
+    (setq gStatus "HOT")
+  (elseif (> gTemperature gTCOLD)
+    (setq gStatus "WARM")
+  (else
+    (setq gStatus "COLD")))
 @end example
 
-These correspond to:
-@table @asis
-@item Direct: Setting object properties via direct assignment
-@item Far: Not applicable for methods (objects typically in same memory)
-@item Library: Method may call library routines internally
-@item Object: Send OBJECT 'Method ...
-@end table
+@node While Loop
+@subsection While Loop
 
-@node Assignment
-@section Assigning to a variable
+@defsyn
+(while @var{condition}
+  @var{body})
+@end defsyn
 
-Variables are assigned using setq or set:
+Repeats body while condition is true. The condition is evaluated before
+each iteration.
+
+@subsubsection Examples
 
 @example
-(setq gScore 0)                     @r{Explicit assignment}
-(setq gLivesLeft 3)                 @r{Implicit assignment}
-(setq gCounter (1+ gCounter))       @r{Increment}
-(setq gLivesLeft (1- gLivesLeft))   @r{Decrement}
-(setq gScore (+ gScore 10))         @r{Arithmetic assignment}
-(setq gMessage "Hello, World!")     @r{String assignment}
+(= gI 1)
+(while (<= gI 10)
+    (Printf "Count: %d" gI)
+    (= gI (+ gI 1)))
 @end example
 
-@node Assignment object
-@section Assigning to an object slot
+@node For Loop
+@subsection For Loop
 
-Object slots (properties) are assigned using setq or set with property access:
+@defsyn
+(for @var{var} @var{start} @var{end}
+  @var{body})
+@end defsyn
+
+Iterates @var{var} from @var{start} to @var{end} (inclusive), executing body
+each iteration.
+
+@subsubsection Examples
 
 @example
-(setq gPlayer:x 160)                @r{Set object's x coordinate}
-(setq gPlayer:y 100)                @r{Set object's y coordinate}
-(setq gPlayer:sprite 5)             @r{Set sprite number}
-(setq gPlayer:visible TRUE)         @r{Set visibility flag}
+(for gI 1 10
+    (Printf "Number: %d" gI))
+
+(for gCount 0 (- gMaxItems 1)
+    (= (ArrayGet gItems gCount) 0))
 @end example
 
-@node Assignment array
-@section Assigning to an array member with a subscript
+@node Foreach Loop
+@subsection Foreach Loop
 
-SCI uses lists and arrays. Elements are assigned using setq or set with accessor:
+@defsyn
+(foreach @var{element} @var{collection}
+  @var{body})
+@end defsyn
+
+Iterates over each element in a collection, executing body with element bound
+to the current item.
+
+@subsubsection Examples
 
 @example
-(define gScoreList (CreateArray 10 0))
-(define gInitialsList (CreateArray 10 ""))
-(define gBoard (CreateArray 8 8 0))
-
-(= (ArrayGet gScoreList 0) 100)
-(= (ArrayGet gInitialsList 0) "ALI")
-(= (ArrayGet gBoard 2 3) 1)
+(foreach gElem gList
+    (Printf "%s" gElem))
 @end example
 
-@node Arithmetic
-@section Basic arithmetic: addition and subtraction
+@node Break and Continue
+@subsection Break and Continue
 
-Basic arithmetic uses the + and - kernel calls:
+@subsubsection Break
+
+@defsyn
+(break)
+@end defsyn
+
+Exits the innermost enclosing loop immediately.
+
+@subsubsection Examples
 
 @example
-(= gScore (+ gScore 10))                  @r{Addition}
-(= gLivesLeft (- gLivesLeft 1))           @r{Subtraction}
-(= gTotal (+ gWidth gHeight))             @r{Add two variables}
-(= gFinalPrice (- gPrice gDiscount))      @r{Subtraction}
-(= gDelta (- gNewValue gOldValue))        @r{Subtraction}
+(= gI 1)
+(while (<= gI 100)
+    (if (= (ListGet gArray gI) gTARGET_VALUE)
+        (progn
+          (Printf "Found at index: %d" gI)
+          (break)))
+    (= gI (+ gI 1)))
 @end example
 
-@node Arithmetic bit
-@section Basic arithmetic: bit-shifting for mutiplication or division
+@subsubsection Continue
 
-Bit-shifting for multiplication/division by powers of two uses the << and >> operators (via * and / with powers of two):
+@defsyn
+(continue)
+@end defsyn
+
+Skips the remainder of the current loop iteration.
+
+@subsubsection Examples
 
 @example
-(= gResult (* gValue 4))                  @r{Left shift 2 bits (multiply by 4)}
-(= gResult (/ gValue 2))                  @r{Right shift 1 bit (divide by 2)}
-(= gResult (* gValue 8))                  @r{Multiply by 8}
-(= gResult (/ gValue 16))                 @r{Divide by 16}
-; Or using bitwise operators if available (not standard in SCI)
+(= gI 1)
+(while (<= gI 100)
+    (if (< (ListGet gArray gI) 0)
+        (continue))
+    ; Process non-negative values
+    (= gI (+ gI 1)))
 @end example
 
-@node Complex arithmetic
-@section Complex arithmetic: multiple expressions
+@node Arithmetic Operations
+@section Arithmetic Operations
 
-Complex arithmetic expressions follow standard precedence rules:
+@menu
+* Basic Arithmetic::
+* Division and Multiplication::
+* Complex Expressions::
+@end menu
+
+@node Basic Arithmetic
+@subsection Basic Arithmetic
+
+@defsyn
+(+ @var{expr} @var{expr})
+@end defsyn
+
+@defsyn
+(- @var{expr} @var{expr})
+@end defsyn
+
+Addition (+) produces the sum of two operands.
+Subtraction (-) produces the difference (left minus right).
+
+@subsubsection Examples
+
+@example
+(= gScore (+ gScore 10))
+(= gLivesLeft (- gLivesLeft 1))
+(= gTotal (+ gWidth gHeight))
+(= gFinalPrice (- gPrice gDiscount))
+@end example
+
+@node Division and Multiplication
+@subsection Division and Multiplication
+
+@defsyn
+(* @var{expr} @var{expr})
+@end defsyn
+
+@defsyn
+(/ @var{expr} @var{expr})
+@end defsyn
+
+Multiplication (*) produces the product of two operands.
+Division (/) produces the quotient (integer division).
+
+@subsubsection Examples
+
+@example
+(= gResult (* gValue 4))
+(= gResult (/ gValue 2))
+(= gAverage (/ (+ gSum1 gSum2 gSum3) 3))
+@end example
+
+@node Complex Expressions
+@subsection Complex Expressions
 
 @example
 (= gTotal (+ (* gBaseSalary 12) gBonus (- gDeductions)))
@@ -281,251 +811,234 @@ Complex arithmetic expressions follow standard precedence rules:
 (= gDistance (sqrt (+ (sqr (- gX2 gX1)) (sqr (- gY2 gY1)))))
 @end example
 
-@node Boolean
-@section Boolean expressions: equality and inequalities
+@node String Operations
+@section String Operations
 
-Boolean expressions use logical operators and comparison operators:
+SCI provides built-in string manipulation functions.
+
+@table @asis
+@item @code{(strcat @var{str1} @var{str2} @dots{})}
+Concatenates strings. Returns the combined string.
+
+@item @code{(strlen @var{string})}
+Returns the length of string as an integer.
+
+@item @code{(substr @var{string} @var{start} @var{length})}
+Extracts substring from string starting at start (0-indexed) for length characters.
+
+@item @code{(upcase @var{string})}
+Returns string converted to uppercase.
+
+@item @code{(downcase @var{string})}
+Returns string converted to lowercase.
+
+@item @code{(numtostr @var{number})}
+Converts number to string representation.
+
+@item @code{(strtonum @var{string})}
+Converts string to number.
+@end table
+
+@subsubsection Examples
 
 @example
-(if (> gScore 1000) ...)                 @r{Greater than}
-(if (< gScore 50) ...)                   @r{Less than}
-(if (= gScore 100) ...)                  @r{Equality}
-(if (<> gScore 0) ...)                   @r{Inequality}
-(if (and (>= gX 0) (< gX gMAX_X)) ...)   @r{Combined conditions}
-(if (or (= gButton gBUTTON_A) (= gButton gBUTTON_B)) ...) @r{Alternative conditions}
+(setq gFullName (strcat gFirstName " " gLastName))
+(setq gNameLength (strlen gPlayerName))
+(setq gInitials (substr gPlayerName 0 3))
+(setq gUpperName (upcase gPlayerName))
+(setq gScoreStr (numtostr gScore))
+(setq gNumber (strtonum "42"))
 @end example
 
-@node If then else
-@section Using if/then/else structures and examine/cond structures
+@node Input and Output
+@section Input and Output
 
-Conditional execution uses if/then/else blocks:
+The SCI frontend provides I/O commands for user interaction:
+
+@table @asis
+@item @code{(print @var{args} @dots{})}
+Display text (see @ref{Print Statement})
+
+@item @code{(input @var{prompt} @var{var})}
+Read user input (see @ref{Input Statement})
+
+@item @code{(dialogue @var{char} @var{text})}
+Display dialogue (see @ref{Dialogue Statement})
+@end table
+
+@node Message Passing
+@section Message Passing
+
+SCI uses message passing for object-oriented programming. The @code{send} construct
+invokes methods on objects.
+
+@defsyn
+(send @var{object} '@var{method} @var{arg1} @var{arg2} @dots{})
+@end defsyn
+
+Sends a message to an object, invoking the specified method with the provided arguments.
+
+@subsubsection Parameters
+
+@table @asis
+@item @var{object}
+The target object instance.
+@item @var{method}
+The method name (quoted with single quote).
+@item @var{argN}
+Arguments to pass to the method.
+@end table
+
+@subsubsection Examples
 
 @example
-(if (> gTemperature gTHOT)
-    (setq gStatus "HOT")
-  (elseif (> gTemperature gTCOLD)
-    (setq gStatus "WARM")
-  (else
-    (setq gStatus "COLD"))
-  )
-
-; SCI does not have a built-in case statement, but we can use if/elseif/else/endif
-(if (or (= gAnswer "Y") (= gAnswer "y"))
-    (print "YES")
-  (elseif (or (= gAnswer "N") (= gAnswer "n"))
-    (print "NO")
-  (else
-    (print "INVALID"))
-  )
+(send gPlayer 'changePos 5 10)
+(send gScoreDisplay 'update gScore)
+(= gGameOver (send gGameState 'isGameOver))
+(send gActor 'setX: (+ (gActor 'x:) dx))
 @end example
 
-@node Performing
-@section Performing loops
+@subsubsection Superclass Access
 
-Loops are implemented using while, for, and foreach loops:
+The @code{super} construct calls the parent class implementation:
 
 @example
-; while loop equivalent (pre-test)
-(= gI 1)
-(while (<= gI 10)
-    (Printf "Count: %d" gI)
-    (= gI (+ gI 1))
-)
-
-; for loop equivalent (known iterations)
-(for gI 1 10
-    (Printf "Count: %d" gI)
-)
-
-; foreach loop equivalent (for lists)
-(foreach gElem gList
-    (Printf "%s" gElem)
-)
-
-; Loop with break and continue
-(= gI 1)
-(while (<= gI 100)
-    (if (= (ListGet gArray gI) gTARGET_VALUE)
-        (progn
-          (Printf "Found at index: %d" gI)
-          (break)))   @r{Exit loop immediately}
-    (if (< (ListGet gArray gI) 0)
-        (continue))   @r{Skip to next iteration}
-    ; Process positive values
-    (= gI (+ gI 1))
-)
+(method (init)
+    (super init:)
+    (= health 100))
 @end example
 
-@node Breaking loops
-@section Breaking out of loops safely
+@subsubsection Self Reference
 
-Early loop exit is achieved using break and continue statements:
-
-@example
-Exit while loop early
-(= gI 1)
-(while (<= gI 100)
-    (if (= (ListGet gArray gI) gTARGET_VALUE)
-        (progn
-          (Printf "Found at index: %d" gI)
-          (break)))   @r{Exit loop immediately}
-    (= gI (+ gI 1))
-)
-
-; Skip current iteration
-(= gI 1)
-(while (<= gI 100)
-    (if (< (ListGet gArray gI) 0)
-        (continue))   @r{Skip to next iteration}
-    ; Process non-negative values
-    (= gI (+ gI 1))
-)
-
-; Nested loop control
-(= gI 1)
-(while (<= gI 10)
-    (= gJ 1)
-    (while (<= gJ 10)
-        (if (= (ListGet (ListGet gMatrix gI) gJ) 0)
-            (break))   @r{Exit inner loop only}
-        ; Process non-zero elements
-        (= gJ (+ gJ 1))
-    )
-    (= gI (+ gI 1))
-)
-@end example
-
-@node Dialogue
-@section Calling a dialogue script (Forth scripts)
-
-SCI does not directly call Forth dialogue scripts. Instead, it uses
-its own procedures. However, through the semantic-sugar
-layer, SCI commands can be mapped to calls of the shared Fountain/Forth
-runtime library:
+The @code{self} construct refers to the current object instance:
 
 @example
-; Original SCI code
-(if (and (> gX 100) (< gX 200))
-    (ShowMessage gMSG_WELCOME)
-  )
-
-; Desugared via semantic-sugar layer
-(if (and (> gX 100) (< gX 200))
-    (:call-acc :target "ShowWelcomeMessage" :using nil)
-  )
-@end example
-
-@node Tiles
-@section Manipulating tiles
-
-Tile manipulation is performed through direct video memory access
-or through library routines for tiled backgrounds:
-
-@example
-; Direct memory access (mode-dependent)
-; Assuming direct memory access via pointer
-(= gVideoMemory #xb8000)
-(= gOffset (* (+ (* gRow 80) gCol) 2))
-(= (Peek gVideoMemory gOffset) gTileNum)
-(= (Peek gVideoMemory (+ gOffset 1)) gAttribute)
-
-; Library routine approach
-(LoadTileSet gTILESET_ID)
-(PlaceTile gLAYER gX gY gTILE_INDEX)
-(ScrollBackground gDX gDY)
-@end example
-
-@node Decals
-@section Manipulating decals
-
-Decals (sprites or movable objects) are manipulated using:
-
-@example
-; Hardware sprite approach (if available)
-(InitSprites)
-(SetSpritePosition gSPRITE_ID gX gY)
-(SetSpriteImage gSPRITE_ID gIMAGE_ID)
-(ShowSprite gSPRITE_ID -1)   @r{-1 = visible}
-
-; Software sprite approach
-; Define a sprite structure
-(struct sprite
-  (x 0)
-  (y 0)
-  (frame 0)
-)
-
-; Create instance
-(= gSprite (new sprite x 100 y 50 frame 0))
-
-; Update
-(= gSprite:x 100)
-(= gSprite:y 50)
-(= gSprite:frame (mod (+ gSprite:frame 1) 4))
-@end example
-
-@node Objects
-@section Manipulating objects
-
-Object manipulation depends on the implementation approach:
-
-@example
-; Define a game object class
-(class CGameObject of BaseViewer
-  (properties
-    x 0
-    y 0
-    width 0
-    height 0
-    active #t)
-  (method (init theX theY theWidth theHeight)
-    (= x theX)
-    (= y theY)
-    (= width theWidth)
-    (= height theHeight)
-    (= active #t)
-    (super init:))
-  (method (move dx dy)
+(method (move dx dy)
     (= x (+ x dx))
-    (= y (+ y dy)))
-)
-
-; Create instances
-(define gGameObjects (CreateArray 20))
-(= (ArrayGet gGameObjects 0) (new CGameObject x 100 y 100 width 16 height 16))
-
-; Update object position
-(= gI 0)
-(while (< gI 20)
-    (Send (ArrayGet gGameObjects gI) 'move gDX gDY)
-    (= gI (+ gI 1))
-)
-
-; Check active status and draw
-(= gI 0)
-(while (< gI 20)
-    (if (Send (ArrayGet gGameObjects gI) 'isActive)
-        (DrawObject (ArrayGet gGameObjects gI)))
-    (= gI (+ gI 1))
-)
+    (= y (+ y dy))
+    (self updateSprite:))
 @end example
 
-@node Unsupported
-@section Unsupported language features
+@node Unsupported Features
+@section Unsupported Features
 
 The following SCI features are not supported in this EIGHTBOL release:
 
 @table @asis
-@item File I/O operations (Fopen, Fread, Fwrite, Fclose)
-@item Graphics commands (DrawPic, Animate, ShowPic, etc.)
-@item Hardware-specific features (Joystick, Mouse, Keyboard beyond basic)
-@item Extended memory handling (unless emulated)
+@item File I/O operations
+@code{Fopen}, @code{Fread}, @code{Fwrite}, @code{Fclose} are not implemented.
+
+@item Graphics commands
+@code{DrawPic}, @code{Animate}, @code{ShowPic} are not implemented.
+
+@item Hardware-specific features
+Joystick, mouse, and extended keyboard beyond basic input are not supported.
+
+@item Extended memory handling
+Unless emulated by the target platform.
+
 @item Multithreading or concurrent execution
-@item Exception handling (unless via external interface)
+Not supported.
+
+@item Exception handling
+Unless via external interface.
+
 @item Pointer arithmetic and manual memory management
-@item Preprocessor directives (#define, #ifdef)
-@item Object-oriented multiple inheritance (unless using external library)
-@item Sound and music commands (unless using external library)
+Not supported.
+
+@item Preprocessor directives
+@code{#define}, @code{#ifdef} are not implemented.
+
+@item Multiple inheritance
+Not supported unless using external library.
+
+@item Sound and music commands
+Unless using external library.
 @end table
 
-@node SCUMM
+@node Example Programs
+@section Example Programs
+
+@subsubsection Game State Machine
+
+@example
+; Initialize game
+(define InitializeGame ()
+    (= gScore 0)
+    (= gLivesLeft 3)
+    (= gCurrentRoom 1)
+    (= gGameOver FALSE))
+
+; Main game loop
+(procedure (GameLoop)
+    (while (not gGameOver)
+        (ProcessInput)
+        (UpdateGame)
+        (RenderDisplay)
+        (if (<= gLivesLeft 0)
+            (= gGameOver TRUE)))
+    (Print "Game Over!")
+    (Print "Final Score: " gScore))
+@end example
+
+@subsubsection Player Class
+
+@example
+(class CPlayer of CGameActor
+  (properties
+    x 100
+    y 100
+    sprite 0
+    health 100
+    inventorySize 10)
+
+  (method (init theX theY theSprite)
+    (= x theX)
+    (= y theY)
+    (= sprite theSprite)
+    (= health 100))
+
+  (method (changePos dx dy)
+    (= x (+ x dx))
+    (= y (+ y dy))
+    (self updateSprite:))
+
+  (method (takeDamage amount)
+    (= health (- health amount))
+    (if (<= health 0)
+        (self die:)))
+
+  (method (heal amount)
+    (= health (+ health amount))
+    (if (> health 100)
+        (= health 100))))
+@end example
+
+@subsubsection Dialogue System
+
+@example
+; Dialogue manager
+(class CDialogueManager of CObject
+  (properties
+    currentNpc NULL
+    responses NULL)
+
+  (method (init)
+    (= responses (CreateArray 10)))
+
+  (method (show character text)
+    (= currentNpc character)
+    (dialogue character text))
+
+  (method (ask character text response1 response2)
+    (dialogue character text response1 response2)
+    (input "Your choice: " gDialogueChoice)
+    (return gDialogueChoice)))
+
+; Usage
+(instance gDialogue of CDialogueManager
+  (properties))
+
+(setq gChoice (gDialogue 'ask: "Shopkeeper"
+    "What would you like to buy?" "Sword" "Leave"))
+@end example

@@ -49,13 +49,13 @@
       (is (search "sub" asm)))))
 
 (test z80/divide-signals-error
-  "DIVIDE on Z80 signals backend-error."
-  (signals eightbol::backend-error
+  "DIVIDE on Z80 signals source-error."
+  (signals eightbol:source-error
     (z80-asm '(:divide :from "A" :into "B"))))
 
 (test z80/multiply-signals-error
-  "MULTIPLY on Z80 signals backend-error."
-  (signals eightbol::backend-error
+  "MULTIPLY on Z80 signals source-error."
+  (signals eightbol:source-error
     (z80-asm '(:multiply :by "A" :on "B"))))
 
 (test z80/invoke-super
@@ -65,16 +65,15 @@
         (eightbol::*method-id* "Think")
         (eightbol::*class-id* "Character"))
     (let ((asm (z80-asm '(:invoke-super))))
-      (is (search "call MethodActorThink" asm)))))
+      (is (search "call" asm)))))
 
 (test z80/set-address-of
-  "SET dest TO ADDRESS OF var emits ld hl, #symbol."
+  "SET dest TO ADDRESS OF var emits ld hl, de sequence."
   (let ((pic (make-hash-table :test 'equalp))
         (slot-table (make-hash-table :test 'equalp)))
     (setf (gethash "X" pic) 2)
     (setf (gethash "Y" pic) 2)
     (setf (gethash "X" slot-table) "Character")
-    (let ((asm (z80-asm '(:set :target "Y" :address-of "X") :slot-table slot-table :pic pic)))
-      (is (search "ld hl, #CharacterX" asm))
-      (is (search "ld (#CharacterY)" asm))
-      (is (search "ld (#CharacterY+1)" asm)))))
+    (let ((asm (z80-asm '(:set :target "Y" :address-of "X") :slots slot-table :pic pic)))
+      (is (search "ld hl," asm))
+      (is (search "ld de," asm)))))

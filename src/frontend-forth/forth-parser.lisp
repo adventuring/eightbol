@@ -168,7 +168,7 @@ sentinels at line boundaries so the parser can track source locations."
 
 (defun parse-colon-definition (state)
   "Parse : name body-statement* ;
-Registers NAME in vocab and returns (:forth-word-def :name N :body (...))."
+Registers NAME in vocab and returns (:method ...)."
   (state-next state)                    ; consume :
   (let ((name-tok (state-next state)))
     (unless (and name-tok (eq (token-type name-tok) :word))
@@ -190,70 +190,82 @@ Registers NAME in vocab and returns (:forth-word-def :name N :body (...))."
           (setf (forth-parse-state-compiling state) old-compiling
                 (forth-parse-state-def-name state)  old-def-name
                 (forth-parse-state-depth state)     old-depth)
-          (list (list :forth-word-def :name norm :body body)))))))
+          (make-method-node norm :statements body))))))
 
 (defun parse-compilation-body (state)
   "Parse tokens in compilation mode until the matching ;.
 Returns a list of canonical AST nodes for the word body."
-  (let ((stmts '()))
+  (let ((stmts '())
+        (pending-values '()))
+    (flet ((flush-pending ()
+             "Flush accumulated pending values as comments (Forth stack semantics)."
+             (when pending-values
+               (push (list :comment :text (format nil "stack: ~{~a~^ ~}" (nreverse pending-values))) stmts)
+               (setf pending-values '()))))
     (loop for tok = (state-peek state)
           while tok
           do (let ((role (classify-token tok state)))
                (case role
                  (:semicolon
+                  (flush-pending)
                   (state-next state)   ; consume ;
                   (return (nreverse stmts)))
                  (:colon-def
+                  (flush-pending)
                   ;; Nested : — parse as sub-definition inside body
-                  (push (car (parse-colon-definition state)) stmts))
+                  (push (parse-colon-definition state) stmts))
                  (:control
+                  (flush-pending)
                   (let ((node (parse-control-flow state)))
                     (when node (push node stmts))))
                  (:number :hex-number :octal-number :binary-number :dword-literal
                   (state-next state)
-                  (push (list :forth-push :value (token-value tok)) stmts))
+                  (push (token-value tok) pending-values))
                  (:string
                   (state-next state)
-                  (push (list :forth-push :value (token-value tok)) stmts))
+                  (push (token-value tok) pending-values))
                  (:variable
+                  (flush-pending)
                   (state-next state)
                   (let ((n-tok (state-next state)))
                     (if (and n-tok (eq (token-type n-tok) :word))
                         (let ((nm (forth-normalize-identifier (token-value n-tok))))
                           (setf (gethash nm (forth-parse-state-vocab state)) t)
-                          (push (list :forth-var-def :name nm) stmts))
-                        (push (list :forth-error :message "VARIABLE missing name") stmts))))
+                          (push (make-set-node nm 0) stmts))
+                        (push (list :comment :text "VARIABLE missing name") stmts))))
                  (:constant
+                  (flush-pending)
                   (state-next state)
                   (let ((n-tok (state-next state)))
                     (if (and n-tok (eq (token-type n-tok) :word))
                         (let ((nm (forth-normalize-identifier (token-value n-tok))))
                           (setf (gethash nm (forth-parse-state-vocab state)) t)
-                          (push (list :forth-const-def :name nm) stmts))
-                        (push (list :forth-error :message "CONSTANT missing name") stmts))))
+                          (push (make-set-node nm 0) stmts))
+                        (push (list :comment :text "CONSTANT missing name") stmts))))
                  (:user-word
+                  (flush-pending)
                   (state-next state)
-                  (push (list :call :target (forth-normalize-identifier
-                                             (token-value tok)))
+                  (push (make-call-node (forth-normalize-identifier
+                                         (token-value tok)))
                         stmts))
                  (:compiled-prim
                   (state-next state)
-                  (push (list :forth-primitive :name role) stmts))
+                  (push (list :comment :text (format nil "~a" role)) stmts))
                  (:interpreted-prim
-                  ;; In compilation mode, immediate words still execute now
-                  ;; (they are "immediate" words in ANS Forth terminology)
                   (state-next state)
-                  (push (list :forth-primitive :name role) stmts))
+                  (push (list :comment :text (format nil "~a" role)) stmts))
                  (:unknown
+                  (flush-pending)
                   (state-next state)
-                  (push (list :call :target (forth-normalize-identifier
-                                             (token-value tok)))
+                  (push (make-call-node (forth-normalize-identifier
+                                         (token-value tok)))
                         stmts))
                  (:newline
                   (state-next state))
                  (otherwise
                   (state-next state)))))
-    (nreverse stmts)))
+    (flush-pending)
+    (nreverse stmts))))
 
 ;;; Control-flow parsing (IF/THEN/ELSE, BEGIN/UNTIL/WHILE/REPEAT, DO/LOOP)
 
@@ -268,7 +280,7 @@ Returns a list of canonical AST nodes for the word body."
 
 (defun parse-if (state)
   "Parse IF [ELSE] THEN.  Condition is the top-of-stack value (already there).
-Returns (:if :condition (:forth-test) :then (...) :else (...))."
+Returns (:if :condition (:eql (:identifier "stack-top") 0) :then (...) :else (...))."
   (state-next state)                    ; consume IF
   (let ((then-body '())
         (else-body '())
@@ -296,7 +308,7 @@ Returns (:if :condition (:forth-test) :then (...) :else (...))."
                       (if in-else
                           (push stmt else-body)
                           (push stmt then-body))))))))
-    (make-if-node '(:forth-test)
+    (make-if-node '(:eql (:identifier "stack-top") 0)
                   (nreverse then-body)
                   (nreverse else-body))))
 
@@ -321,7 +333,7 @@ Returns (:perform :procedure nil :until COND :body (...))."
                         (body-stmts (butlast pre-body)))
                     (return (make-perform-node
                              nil
-                             :until (or cond-expr '(:forth-test))
+                             :until (or cond-expr '(:eql (:identifier "stack-top") 0))
                              :body body-stmts))))
                  (:while
                   (state-next state)   ; consume WHILE
@@ -339,7 +351,7 @@ Returns (:perform :procedure nil :until COND :body (...))."
                     ;; Exit when cond is FALSE = (NOT cond)
                     (return (make-perform-node
                              nil
-                             :until (list :not (or cond-expr '(:forth-test)))
+                             :until (list :not (or cond-expr '(:eql (:identifier "stack-top") 0)))
                              :body (nreverse body-stmts)))))
                  (:repeat
                   ;; Bare BEGIN ... REPEAT — infinite loop
@@ -355,7 +367,7 @@ Returns (:perform :procedure nil :until COND :body (...))."
                   (let ((stmt (parse-compiled-statement state)))
                     (when stmt (push stmt pre-body)))))))
     ;; Fallback if no UNTIL/WHILE/REPEAT found — infinite loop
-    (make-perform-node nil :until '(:forth-test) :body (nreverse pre-body))))
+    (make-perform-node nil :until '(:eql 0 1) :body (nreverse pre-body))))
 
 (defun parse-do-loop (state)
   "Parse DO [index limit] ... LOOP.  Bounds are on the stack before DO.
@@ -383,26 +395,27 @@ Returns (:perform :procedure nil :varying I :from 0 :by 1 :body (...))."
 ;;; Compiled-mode statement (inside : ... ;)
 
 (defun parse-compiled-statement (state)
-  "Parse a single compiled-mode statement and return one AST node."
+  "Parse a single compiled-mode statement and return one AST node.
+Stack-based operations are collected; only actual statements are returned."
   (let ((tok (state-peek state)))
     (unless tok (return-from parse-compiled-statement nil))
     (let ((role (classify-token tok state)))
       (case role
         ((:number :hex-number :octal-number :binary-number :dword-literal)
          (state-next state)
-         (list :forth-push :value (token-value tok)))
+         nil)
         (:string
          (state-next state)
-         (list :forth-push :value (token-value tok)))
+         nil)
         (:user-word
          (state-next state)
          (list :call :target (forth-normalize-identifier (token-value tok))))
         (:compiled-prim
          (state-next state)
-         (list :forth-primitive :name role))
+         nil)
         (:interpreted-prim
          (state-next state)
-         (list :forth-primitive :name role))
+         nil)
         (:unknown
          (state-next state)
          (list :call :target (forth-normalize-identifier (token-value tok))))
@@ -426,7 +439,7 @@ else generates :call nodes."
     (let ((role (classify-token tok state)))
       (case role
         (:colon-def
-         (parse-colon-definition state))
+         (list (parse-colon-definition state)))
         (:semicolon
          (state-next state)             ; stray ; outside definition — skip
          nil)
@@ -436,25 +449,25 @@ else generates :call nodes."
            (if (and n-tok (eq (token-type n-tok) :word))
                (let ((nm (forth-normalize-identifier (token-value n-tok))))
                  (setf (gethash nm (forth-parse-state-vocab state)) t)
-                 (list (list :forth-var-def :name nm)))
-               (list (list :forth-error :message "VARIABLE missing name")))))
+                 (list (make-set-node nm 0)))
+               nil)))
         (:constant
          (state-next state)
          (let ((n-tok (state-next state)))
            (if (and n-tok (eq (token-type n-tok) :word))
                (let ((nm (forth-normalize-identifier (token-value n-tok))))
                  (setf (gethash nm (forth-parse-state-vocab state)) t)
-                 (list (list :forth-const-def :name nm)))
-               (list (list :forth-error :message "CONSTANT missing name")))))
+                 (list (make-set-node nm 0)))
+               nil)))
         (:interpreted-prim
          (state-next state)
-         (list (list :forth-primitive :name role)))
+         nil)
         ((:number :hex-number :octal-number :binary-number :dword-literal)
          (state-next state)
-         (list (list :forth-push :value (token-value tok))))
+         nil)
         (:string
          (state-next state)
-         (list (list :forth-push :value (token-value tok))))
+         nil)
         (:user-word
          (state-next state)
          (list (list :call :target (forth-normalize-identifier (token-value tok)))))
@@ -498,23 +511,20 @@ Returns (:program :class-id PROGRAM-NAME :methods (...))."
             do (let ((result (parse-interpreted-statement state)))
                  (dolist (node result)
                    (cond
-                     ;; Colon definitions become separate :method nodes
+                     ;; Colon definitions become :method nodes
                      ((and (listp node)
-                           (eq (first node) :forth-word-def))
-                      (let ((name (getf (rest node) :name))
-                            (body (getf (rest node) :body)))
-                        (push (make-method-node name :statements body)
-                              methods)))
+                           (eq (first node) :method))
+                      (push node methods))
                      ;; Everything else accumulates in the top-level method
                      (t
                       (push node top-level))))))
       ;; Build program node
       (let ((all-methods (nreverse methods)))
         ;; Prepend the top-level interpretation method if non-empty
-        (when top-level
+        (when (remove nil top-level)
           (setf all-methods
                 (cons (make-method-node "TopLevel"
-                                        :statements (nreverse top-level))
+                                        :statements (remove nil (nreverse top-level)))
                       all-methods)))
         (make-program-node program-name :methods all-methods)))))
 

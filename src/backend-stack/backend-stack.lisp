@@ -114,8 +114,25 @@ COBOL stabby-case supported."
             (stack-symbol (format nil "~a" method)))))
 
 (def-stack-statement :call (ast-node-data)
-  (let ((target (getf ast-node-data :target)))
-    (format *output-stream* "~10Tcall ~a~%" (stack-symbol target))))
+  (let ((target (getf ast-node-data :target))
+        (bank (getf ast-node-data :bank))
+        (libraryp (getf ast-node-data :library))
+        (returning (getf ast-node-data :returning))
+        (using (getf ast-node-data :using)))
+    (cond
+      (libraryp
+       (format *output-stream* "~10T; CALL ~a IN LIBRARY~%" target)
+       (format *output-stream* "~10Tcall Lib.~a~%" (stack-symbol target)))
+      (bank
+       (format *output-stream* "~10T; CALL ~a IN BANK ~a~%" target bank)
+       (format *output-stream* "~10Tcall Bank~a.~a~%" bank (stack-symbol target)))
+      (t
+       (format *output-stream* "~10Tcall ~a~%" (stack-symbol target))))
+    (when using
+      (format *output-stream* "~10T; USING ~a~%" using)
+      (format *output-stream* "~10Tpush ~a~%" using))
+    (when returning
+      (format *output-stream* "~10Tpop ~a~%" returning))))
 
 (def-stack-statement :if (ast-node-data)
   (let ((condition (getf ast-node-data :condition))
@@ -144,13 +161,13 @@ COBOL stabby-case supported."
     (format *output-stream* "~10Tpop ~a~%" to)))
 
 (def-stack-statement :subtract (ast-node-data)
-  (let ((from (getf ast-node-data :from))
-        (from-target (getf ast-node-data :from-target)))
-    (format *output-stream* "~10T; SUBTRACT ~a from ~a~%" from from-target)
-    (format *output-stream* "~10Tpush ~a~%" from-target)
-    (format *output-stream* "~10Tpush ~a~%" from)
+  (let ((subtrahend (getf ast-node-data :subtrahend))
+        (minuend (getf ast-node-data :from)))
+    (format *output-stream* "~10T; SUBTRACT ~a from ~a~%" subtrahend minuend)
+    (format *output-stream* "~10Tpush ~a~%" minuend)
+    (format *output-stream* "~10Tpush ~a~%" subtrahend)
     (format *output-stream* "~10Tsub~%")
-    (format *output-stream* "~10Tpop ~a~%" from-target)))
+    (format *output-stream* "~10Tpop ~a~%" minuend)))
 
 ;;; Dialogue, Print, and Input statement handlers
 
@@ -188,6 +205,315 @@ Reads input and stores into target identifier."
     (format *output-stream* "~10Tcall DoInput")
     ;; Store result to target
     (format *output-stream* "~10Tpop ~a~%" target)))
+
+(def-stack-statement :call-acc (ast-node-data)
+  "Emit accumulator-based call. Loads value into accumulator then calls target."
+  (let ((target (getf ast-node-data :target))
+        (value (getf ast-node-data :value)))
+    (when value
+      (format *output-stream* "~10T; call-acc value: ~a~%" value)
+      (format *output-stream* "~10Tpush ~a~%" value))
+    (format *output-stream* "~10Tcall ~a~%" (stack-symbol target))))
+
+(def-stack-statement :compute (ast-node-data)
+  "Emit COMPUTE statement — evaluates expression and stores to target."
+  (let ((target (getf ast-node-data :target))
+        (expression (getf ast-node-data :expression)))
+    (format *output-stream* "~10T; COMPUTE ~a = ~a~%" target expression)
+    (format *output-stream* "~10Tpush ~a~%" expression)
+    (format *output-stream* "~10Tpop ~a~%" target)))
+
+(def-stack-statement :set (ast-node-data)
+  "Emit SET statement — variable assignment with variants."
+  (let ((target (getf ast-node-data :target))
+        (value (getf ast-node-data :value))
+        (up-by (getf ast-node-data :up-by))
+        (down-by (getf ast-node-data :down-by))
+        (by-expr (getf ast-node-data :by))
+        (address-of (getf ast-node-data :address-of))
+        (to-self (getf ast-node-data :to-self)))
+    (cond
+      (up-by
+       (format *output-stream* "~10T; SET ~a UP BY ~a~%" up-by by-expr)
+       (format *output-stream* "~10Tpush ~a~%" up-by)
+       (format *output-stream* "~10Tpush ~a~%" by-expr)
+       (format *output-stream* "~10Tadd~%")
+       (format *output-stream* "~10Tpop ~a~%" up-by))
+      (down-by
+       (format *output-stream* "~10T; SET ~a DOWN BY ~a~%" down-by by-expr)
+       (format *output-stream* "~10Tpush ~a~%" down-by)
+       (format *output-stream* "~10Tpush ~a~%" by-expr)
+       (format *output-stream* "~10Tsub~%")
+       (format *output-stream* "~10Tpop ~a~%" down-by))
+      ((and address-of target)
+       (format *output-stream* "~10T; SET ADDRESS OF ~a TO ~a~%" target address-of)
+       (format *output-stream* "~10Tpushaddr ~a~%" address-of)
+       (format *output-stream* "~10Tpopaddr ~a~%" target))
+      (to-self
+       (format *output-stream* "~10T; SET TO SELF~%")
+       (format *output-stream* "~10Tpush Self~%")
+       (format *output-stream* "~10Tpop ~a~%" to-self))
+      (t
+       (format *output-stream* "~10T; SET ~a TO ~a~%" target value)
+       (format *output-stream* "~10Tpush ~a~%" value)
+       (format *output-stream* "~10Tpop ~a~%" target)))))
+
+(def-stack-statement :evaluate (ast-node-data)
+  "Emit EVALUATE statement — multi-way branch."
+  (let ((subject (getf ast-node-data :subject))
+        (when-clauses (getf ast-node-data :when-clauses)))
+    (format *output-stream* "~10T; EVALUATE ~a~%" subject)
+    (format *output-stream* "~10Tpush ~a~%" subject)
+    (let ((end-label (format nil "eval_end_~d" (random 100000))))
+      (dolist (clause (ensure-list when-clauses))
+        (cond
+          ((eq (first clause) :when-other)
+           (format *output-stream* "~10T; WHEN OTHER~%")
+           (dolist (s (ensure-list (second clause)))
+             (compile-statement :stack (first s) (rest s))))
+          ((eq (first clause) :when)
+           (let ((phrases (second clause))
+                 (stmts (third clause))
+                 (next-label (format nil "eval_next_~d" (random 100000))))
+             (format *output-stream* "~10T; WHEN ~a~%" phrases)
+             (format *output-stream* "~10Tpush ~a~%" phrases)
+             (format *output-stream* "~10Tcmp~%")
+             (format *output-stream* "~10Tjnz ~a~%" next-label)
+             (dolist (s (ensure-list stmts))
+               (compile-statement :stack (first s) (rest s)))
+             (format *output-stream* "~10Tjmp ~a~%" end-label)
+             (format *output-stream* "~a:~%" next-label)))))
+      (format *output-stream* "~a:~%" end-label))))
+
+(def-stack-statement :goto (ast-node-data)
+  "Emit GOTO statement — unconditional or conditional jump."
+  (let ((target (getf ast-node-data :target))
+        (targets (getf ast-node-data :targets))
+        (depending-on (getf ast-node-data :depending-on)))
+    (if depending-on
+        (progn
+          (format *output-stream* "~10T; GO TO ... DEPENDING ON~%")
+          (format *output-stream* "~10Tpush ~a~%" depending-on)
+          (let ((n (length (or targets (list target)))))
+            (dotimes (i (1- n))
+              (format *output-stream* "~10Tpush ~a~%" depending-on)
+              (format *output-stream* "~10Tpush ~d~%" (1+ i))
+              (format *output-stream* "~10Tcmp~%")
+              (format *output-stream* "~10Tjz ~a~%" (stack-symbol (format nil "~a" (nth i (or targets (list target)))))))
+            (format *output-stream* "~10Tjmp ~a~%" (stack-symbol (format nil "~a" (nth (1- n) (or targets (list target))))))))
+        (format *output-stream* "~10Tjmp ~a~%" (stack-symbol (format nil "~a" (or target (first targets))))))))
+
+(def-stack-statement :perform (ast-node-data)
+  "Emit PERFORM statement — loop or procedure execution."
+  (let ((procedure (getf ast-node-data :procedure))
+        (times (getf ast-node-data :times))
+        (until (getf ast-node-data :until))
+        (varying (getf ast-node-data :varying))
+        (from (getf ast-node-data :from))
+        (by (getf ast-node-data :by))
+        (body (getf ast-node-data :body)))
+    (cond
+      ((and body until)
+       (let ((loop-label (format nil "perf_loop_~d" (random 100000)))
+             (end-label (format nil "perf_end_~d" (random 100000))))
+         (format *output-stream* "~10T; PERFORM ... UNTIL~%")
+         (format *output-stream* "~a:~%" loop-label)
+         (format *output-stream* "~10Tpush ~a~%" until)
+         (format *output-stream* "~10Tjz ~a~%" end-label)
+         (dolist (s (ensure-list body))
+           (compile-statement :stack (first s) (rest s)))
+         (format *output-stream* "~10Tjmp ~a~%" loop-label)
+         (format *output-stream* "~a:~%" end-label)))
+      ((and body times)
+       (let ((loop-label (format nil "perf_loop_~d" (random 100000)))
+             (end-label (format nil "perf_end_~d" (random 100000))))
+         (format *output-stream* "~10T; PERFORM ... TIMES~%")
+         (format *output-stream* "~10Tpush ~a~%" times)
+         (format *output-stream* "~10Tpush 0~%")
+         (format *output-stream* "~a:~%" loop-label)
+         (format *output-stream* "~10Tcmp~%")
+         (format *output-stream* "~10Tjz ~a~%" end-label)
+         (dolist (s (ensure-list body))
+           (compile-statement :stack (first s) (rest s)))
+         (format *output-stream* "~10Tdec~%")
+         (format *output-stream* "~10Tjmp ~a~%" loop-label)
+         (format *output-stream* "~a:~%" end-label)))
+      ((and body varying)
+       (let ((loop-label (format nil "perf_loop_~d" (random 100000)))
+             (end-label (format nil "perf_end_~d" (random 100000)))
+             (init-val (or from 0))
+             (incr (or by 1)))
+         (format *output-stream* "~10T; PERFORM ... VARYING~%")
+         (format *output-stream* "~10Tpush ~a~%" init-val)
+         (format *output-stream* "~10Tpop ~a~%" varying)
+         (format *output-stream* "~a:~%" loop-label)
+         (when until
+           (format *output-stream* "~10Tpush ~a~%" until)
+           (format *output-stream* "~10Tjz ~a~%" end-label))
+         (dolist (s (ensure-list body))
+           (compile-statement :stack (first s) (rest s)))
+         (format *output-stream* "~10Tpush ~a~%" varying)
+         (format *output-stream* "~10Tpush ~a~%" incr)
+         (format *output-stream* "~10Tadd~%")
+         (format *output-stream* "~10Tpop ~a~%" varying)
+         (format *output-stream* "~10Tjmp ~a~%" loop-label)
+         (format *output-stream* "~a:~%" end-label)))
+      (body
+       (format *output-stream* "~10T; PERFORM inline body requires UNTIL, TIMES, or VARYING~%"))
+      (times
+       (let ((loop-label (format nil "perf_loop_~d" (random 100000)))
+             (end-label (format nil "perf_end_~d" (random 100000))))
+         (format *output-stream* "~10T; PERFORM ~a TIMES~%" procedure)
+         (format *output-stream* "~10Tpush ~a~%" times)
+         (format *output-stream* "~10Tpush 0~%")
+         (format *output-stream* "~a:~%" loop-label)
+         (format *output-stream* "~10Tcmp~%")
+         (format *output-stream* "~10Tjz ~a~%" end-label)
+         (format *output-stream* "~10Tcall ~a~%" (stack-symbol procedure))
+         (format *output-stream* "~10Tdec~%")
+         (format *output-stream* "~10Tjmp ~a~%" loop-label)
+         (format *output-stream* "~a:~%" end-label)))
+      (until
+       (let ((loop-label (format nil "perf_loop_~d" (random 100000)))
+             (end-label (format nil "perf_end_~d" (random 100000))))
+         (format *output-stream* "~10T; PERFORM ~a UNTIL~%" procedure)
+         (format *output-stream* "~a:~%" loop-label)
+         (format *output-stream* "~10Tcall ~a~%" (stack-symbol procedure))
+         (format *output-stream* "~10Tpush ~a~%" until)
+         (format *output-stream* "~10Tjz ~a~%" end-label)
+         (format *output-stream* "~10Tjmp ~a~%" loop-label)
+         (format *output-stream* "~a:~%" end-label)))
+      (procedure
+       (format *output-stream* "~10T; PERFORM ~a~%" procedure)
+       (format *output-stream* "~10Tcall ~a~%" (stack-symbol procedure))))))
+
+(def-stack-statement :break (_)
+  "Emit BREAK — exit enclosing loop."
+  (declare (ignore _))
+  (format *output-stream* "~10T; BREAK~%"))
+
+(def-stack-statement :continue (_)
+  "Emit CONTINUE — jump to next iteration of enclosing loop."
+  (declare (ignore _))
+  (format *output-stream* "~10T; CONTINUE~%"))
+
+(def-stack-statement :string-blt (ast-node-data)
+  "Emit STRING BLT — block transfer of string data."
+  (let ((source (getf ast-node-data :source))
+        (dest (getf ast-node-data :dest))
+        (length (or (getf ast-node-data :length) 64)))
+    (format *output-stream* "~10T; STRING BLT ~a -> ~a (~d bytes)~%" source dest length)
+    (format *output-stream* "~10Tpush ~a~%" source)
+    (format *output-stream* "~10Tpush ~a~%" dest)
+    (format *output-stream* "~10Tpush ~d~%" length)
+    (format *output-stream* "~10Tcall string_blt~%")))
+
+(def-stack-statement :inspect (ast-node-data)
+  "Emit INSPECT statement — string analysis and transformation."
+  (let ((target (getf ast-node-data :target))
+        (tallying (getf ast-node-data :tallying))
+        (converting (getf ast-node-data :converting))
+        (to (getf ast-node-data :to))
+        (by (getf ast-node-data :by)))
+    (format *output-stream* "~10T; INSPECT ~a~%" target)
+    (format *output-stream* "~10Tpush ~a~%" target)
+    (cond
+      (tallying
+       (format *output-stream* "~10Tpush ~a~%" tallying)
+       (format *output-stream* "~10Tcall inspect_tallying~%"))
+      ((and converting to)
+       (format *output-stream* "~10Tpush ~a~%" converting)
+       (format *output-stream* "~10Tpush ~a~%" to)
+       (format *output-stream* "~10Tcall inspect_converting~%"))
+      (by
+       (format *output-stream* "~10Tpush ~a~%" by)
+       (format *output-stream* "~10Tcall inspect_replacing~%")))))
+
+(def-stack-statement :log-fault (ast-node-data)
+  "Emit LOG FAULT statement."
+  (let ((code (getf ast-node-data :code))
+        (data (getf ast-node-data :data)))
+    (format *output-stream* "~10T; LOG FAULT ~a" code)
+    (when data
+      (format *output-stream* " DATA=~a" data))
+    (format *output-stream* "~%")
+    (format *output-stream* "~10Tpush ~a~%" code)
+    (when data
+      (format *output-stream* "~10Tpush ~a~%" data))
+    (format *output-stream* "~10Tcall log_fault~%")))
+
+(def-stack-statement :debug-break (ast-node-data)
+  "Emit DEBUG BREAK statement."
+  (let ((code (getf ast-node-data :code)))
+    (format *output-stream* "~10T; DEBUG BREAK ~a~%" code)
+    (format *output-stream* "~10Tpush ~a~%" code)
+    (format *output-stream* "~10Tcall debug_break~%")))
+
+(def-stack-statement :invoke-super (ast-node-data)
+  "Emit INVOKE SUPER — call parent class method."
+  (declare (ignore ast-node-data))
+  (format *output-stream* "~10T; INVOKE SUPER~%")
+  (format *output-stream* "~10Tcall Method~a~a~%"
+          (stack-symbol *class-id*)
+          (stack-symbol (format nil "~a" *method-id*))))
+
+(def-stack-statement :shift-left (ast-node-data)
+  "Emit SHIFT LEFT statement."
+  (let ((target (getf ast-node-data :target))
+        (count (getf ast-node-data :count 1)))
+    (format *output-stream* "~10T; SHIFT LEFT ~a BY ~d~%" target count)
+    (format *output-stream* "~10Tpush ~a~%" target)
+    (dotimes (_ count)
+      (format *output-stream* "~10Tpush 2~%")
+      (format *output-stream* "~10Tmul~%"))
+    (format *output-stream* "~10Tpop ~a~%" target)))
+
+(def-stack-statement :shift-right (ast-node-data)
+  "Emit SHIFT RIGHT statement."
+  (let ((target (getf ast-node-data :target))
+        (count (getf ast-node-data :count 1)))
+    (format *output-stream* "~10T; SHIFT RIGHT ~a BY ~d~%" target count)
+    (format *output-stream* "~10Tpush ~a~%" target)
+    (dotimes (_ count)
+      (format *output-stream* "~10Tpush 2~%")
+      (format *output-stream* "~10Tdiv~%"))
+    (format *output-stream* "~10Tpop ~a~%" target)))
+
+(def-stack-statement :paragraph (ast-node-data)
+  "Emit paragraph label."
+  (let ((name (first ast-node-data)))
+    (when name
+      (format *output-stream* "~%~a:~%" (stack-symbol (format nil "~a" name))))))
+
+(def-stack-statement :comment (ast-node-data)
+  "Emit comment."
+  (format *output-stream* "~10T; ~a~%"
+          (let ((text (first ast-node-data)))
+            (if (listp text)
+                (format nil "~{~a~^~%        ; ~}" text)
+                (princ-to-string text)))))
+
+(def-stack-statement :copy (ast-node-data)
+  "COPY statement — should have been expanded at lex time."
+  (error "EIGHTBOL/STACK: COPY ~s should have been expanded at lex time"
+         (getf ast-node-data :name)))
+
+(def-stack-statement :divide (ast-node-data)
+  "DIVIDE is unsupported (compile-time error)."
+  (error "EIGHTBOL/STACK: DIVIDE is unsupported"))
+
+(def-stack-statement :multiply (ast-node-data)
+  "MULTIPLY is unsupported (compile-time error)."
+  (error "EIGHTBOL/STACK: MULTIPLY is unsupported"))
+
+(def-stack-statement :assembly-entry (ast-node-data)
+  "Emit assembly entry label."
+  (let ((label (getf ast-node-data :label)))
+    (format *output-stream* "~%~a:~%" (stack-symbol label))))
+
+(def-stack-statement :service-bank (_)
+  "Service bank metadata — no-op for stack."
+  (declare (ignore _)))
 
 ;;; Fallback for unimplemented statements
 

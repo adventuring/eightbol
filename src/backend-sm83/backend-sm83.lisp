@@ -128,10 +128,18 @@
 
 (def-sm83-statement :call-acc
   (let* ((target (getf (rest statement) :target))
-         (using (getf (rest statement) :using)))
+         (using (getf (rest statement) :using))
+         (bank (getf (rest statement) :bank))
+         (library (getf (rest statement) :library)))
     (when using
       (compile-sm83-load using))
-    (format *output-stream* "~&~8tcall    ~a" (sm83-symbol (format nil "~a" target)))))
+    (cond
+      (bank
+       (format *output-stream* "~&~8tcall    ~a:~a" (sm83-symbol bank) (sm83-symbol target)))
+      (library
+       (format *output-stream* "~&~8tcall    CallLib~a" (sm83-symbol target)))
+      (t
+       (format *output-stream* "~&~8tcall    ~a" (sm83-symbol target))))))
 
 (def-sm83-statement :if
   (compile-sm83-if statement))
@@ -197,55 +205,10 @@
          (getf ast-node-data :name)))
 
 (def-sm83-statement :divide
-  (let* ((divisor (getf ast-node-data :divisor))
-         (into (getf ast-node-data :into))
-         (by (getf ast-node-data :by))
-         (source (or by into))
-         (dest (or (getf ast-node-data :giving) into))
-         (signed (operand-signed-p (or source dest))))
-    (if (and (expression-constant-p divisor)
-             (power-of-two-p (expression-constant-value divisor)))
-        (let ((shift (log2 (expression-constant-value divisor))))
-          (when (or (operand-bcd-p source) (operand-bcd-p dest))
-            (error 'source-error
-                   :message "DIVIDE: cannot use with USAGE DECIMAL operands"
-                   :detail (list :divisor divisor :source source :dest dest)))
-          (unless (zerop shift)
-            (compile-sm83-load (or source dest) 1)
-            (dotimes (_ shift)
-              (if signed
-                  (format *output-stream* "~&~8tsra     a")
-                  (format *output-stream* "~&~8tsrl     a")))
-            (when (stringp (or source dest))
-              (format *output-stream* "~&~8tld      (~a), a" (sm83-symbol (or source dest))))))
-        (error 'source-error
-               :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
-               :detail (format nil "DIVIDE by ~s" divisor)))))
+   (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :sm83 :detail ast-node-data))
 
-(def-sm83-statement :multiply
-  (let* ((multiplier (getf ast-node-data :multiplier))
-         (by (getf ast-node-data :by))
-         (giving (getf ast-node-data :giving))
-         (source (or giving by))
-         (dest (or giving by)))
-    (if (and (expression-constant-p multiplier)
-             (power-of-two-p (expression-constant-value multiplier)))
-        (let ((shift (log2 (expression-constant-value multiplier)))
-              (target (or source dest)))
-          (declare (ignore target))
-          (when (or (operand-bcd-p source) (operand-bcd-p dest))
-            (error 'source-error
-                   :message "MULTIPLY: cannot use with USAGE DECIMAL operands"
-                   :detail (list :multiplier multiplier :source source :dest dest)))
-          (unless (zerop shift)
-            (compile-sm83-load (or source dest) 1)
-            (dotimes (_ shift)
-              (format *output-stream* "~&~8tsla      a"))
-            (when (stringp (or source dest))
-              (format *output-stream* "~&~8tld      (~a), a" (sm83-symbol (or source dest))))))
-        (error 'source-error
-               :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
-               :detail (format nil "MULTIPLY by ~s" multiplier)))))
+ (def-sm83-statement :multiply
+   (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :sm83 :detail ast-node-data))
 
 (def-sm83-statement :invoke-super
   (unless (gethash *class-id* *parent-classes*)

@@ -19,13 +19,11 @@
 ;;; Parser action functions for Burgermistress
 
 (defun burgermistress-parse-program (statements)
-  "Top-level program node from list of statement nodes."
-  (let ((main-statements '()))
-    (dolist (stmt statements)
-      (push stmt main-statements))
-    (make-program-node "Main"
-                       :data (when main-statements
-                               (list (cons 'main-block (nreverse main-statements)))))))
+  "Top-level program node from list of statement nodes.
+Wraps statements in a TopLevel method (canonical form)."
+  (make-program-node "Main"
+                     :methods (list (make-method-node "TopLevel"
+                                                     :statements (remove nil statements)))))
 
 (defun burgermistress-parse-if-then (cond then-stmt)
   "IF condition THEN statement"
@@ -97,8 +95,8 @@
   (make-input-node (ensure-list variables) :prompt prompt))
 
 (defun burgermistress-parse-prolog-goal (functor args)
-  "Prolog-like goal: functor(arg1, arg2, …)"
-  (apply #'make-prolog-goal (cons functor (ensure-list args))))
+  "Prolog-like goal → emit as canonical :call node."
+  (make-call-node (string functor) :args (or args '())))
 
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)
@@ -194,8 +192,8 @@
        (goal)
        (goal-list comma goal
         (lambda (goals g) (nconc goals (list g)))))
-      
-      ;; Prolog-like goal
+
+      ;; Prolog-like goal → :call node
       (goal
        (ident lparen expression-list rparen
         (lambda (functor args) (burgermistress-parse-prolog-goal functor args)))
@@ -235,31 +233,31 @@
        (string
         (lambda (s) s))
        (expression plus expression
-        (lambda (l r) (make-expression-add l r)))
+        (lambda (l r) (list :add l r)))
        (expression minus expression
-        (lambda (l r) (make-expression-subtract l r)))
+        (lambda (l r) (list :subtract l r)))
        (expression times expression
-        (lambda (l r) (make-expression-multiply l r)))
+        (lambda (l r) (list :* l r)))
        (expression divide expression
-        (lambda (l r) (make-expression-divide l r)))
+        (lambda (l r) (list :/ l r)))
        (expression equal expression
-        (lambda (l r) (make-conditional-eq l r)))
+        (lambda (l r) (list '= l r)))
        (expression ne expression
-        (lambda (l r) (make-conditional-ne l r)))
+        (lambda (l r) (list '/= l r)))
        (expression lt expression
-        (lambda (l r) (make-conditional-lt l r)))
+        (lambda (l r) (list '< l r)))
        (expression gt expression
-        (lambda (l r) (make-conditional-gt l r)))
+        (lambda (l r) (list '> l r)))
        (expression le expression
-        (lambda (l r) (make-conditional-le l r)))
+        (lambda (l r) (list '<= l r)))
        (expression ge expression
-        (lambda (l r) (make-conditional-ge l r)))
+        (lambda (l r) (list '>= l r)))
        (expression and expression
-        (lambda (l r) (make-conditional-and l r)))
+        (lambda (l r) (list :and l r)))
        (expression or expression
-        (lambda (l r) (make-conditional-or l r)))
+        (lambda (l r) (list :or l r)))
        (not expression
-        (lambda (e) (make-conditional-not e)))
+        (lambda (e) (list :not e)))
        (lparen expression rparen
         (lambda (e) e))))))
 

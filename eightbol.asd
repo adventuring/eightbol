@@ -221,6 +221,8 @@
                                          :depends-on ("backend-forth-part1"))
                                         (:file "backend-forth-tables"
                                          :depends-on ("backend-forth-part1"))))
+                          (:module "backend-stack"
+                           :components ((:file "backend-stack")))
 
                           ;; Main entry point
                           (:file "main"
@@ -231,5 +233,5 @@
                                                   "frontend-pascal" "frontend-sci"
                                                   "frontend-scumm" "frontend-smalltalk"
                                                   "frontend-zil" "eightbol-compile"
-                                                  "backend-forth")))))
+                                                  "backend-forth" "backend-stack")))))
   :in-order-to ((test-op (test-op :eightbol-test))))

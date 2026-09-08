@@ -298,6 +298,10 @@ EXAMPLE: fortran-normalize-identifier \"my_variable\" → \"MyVariable\""
 
 (provide 'fortran-lexer)
 
+(defun fortran-lex (source)
+  "Lex FORTRAN SOURCE string into token list for YACC."
+  (fortran-lex-source source))
+
 (defun fortran-lex-token ()
    "Read next token from *standard-input*."
    (declare (special *fortran-lex-token-buffer*))

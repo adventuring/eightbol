@@ -93,11 +93,11 @@
 
 (defun scumm-make-program-node (name &key data methods)
   "Create a program AST node."
-  (list :program :name name :data data :methods (or methods nil)))
+  (list :program :class-id name :data data :methods (or methods nil)))
 
 (defun scumm-make-method-node (name &key statements)
   "Create a method/procedure AST node."
-  (list :method :name name :statements (or statements nil)))
+  (list :method :method-id name :statements (or statements nil)))
 
 (defun scumm-make-if-node (cond then-stmts &optional else-stmts)
   "Create an if-conditional AST node."
@@ -137,11 +137,11 @@
 
 (defun scumm-make-print-node (args)
   "Create a print AST node."
-  (list :print :args args))
+  (list :print :expressions args))
 
 (defun scumm-make-input-node (var &key prompt)
   "Create an input AST node."
-  (let ((node (list :input :variable var)))
+  (let ((node (list :input :variables (list var))))
     (when prompt (setf node (append node (list :prompt prompt))))
     node))
 

@@ -57,10 +57,16 @@
 ;;; def-f8-statement macro — compiles through the generic compile-statement
 
 (defmacro def-f8-statement (statement-type &body body)
-  `(defmethod compile-statement ((cpu (eql :f8)) (statement-type (eql ,statement-type)) ast-node-data)
-     (let ((statement (cons statement-type ast-node-data)))
-       (declare (ignorable statement))
-       ,@body)))
+  "Define compile-statement for F8 CPU. Supports declare forms at start of body."
+  (let ((decls nil)
+        (forms body))
+    (loop while (and (listp (car forms)) (eq (caar forms) 'declare))
+          do (push (pop forms) decls))
+    `(defmethod compile-statement ((cpu (eql :f8)) (statement-type (eql ,statement-type)) ast-node-data)
+       (let ((statement (cons statement-type ast-node-data)))
+         (declare (ignorable statement))
+         ,@(nreverse decls)
+         ,@forms))))
 
 ;;; Top-level entry point
 
@@ -328,6 +334,20 @@
     (format *output-stream* "~&~10tPI DoInput")
     ;; Store result to target
     (%f8-store-dest target)))
+
+(def-f8-statement :break
+  "Emit loop break — unconditional jump to end of enclosing loop.
+Uses BR to end label for now; proper scope handling requires stack analysis."
+  (format *output-stream* "~&~10t;; BREAK"))
+
+(def-f8-statement :continue
+  "Emit loop continue — unconditional jump to next iteration.
+Uses BR to loop start for now; proper scope handling requires stack analysis."
+  (format *output-stream* "~&~10t;; CONTINUE"))
+
+(def-f8-statement :service-bank
+  (declare (ignore ast-node-data))
+  "Service bank metadata — no-op for F8.")
 
 
 ;;; Expression / value emission

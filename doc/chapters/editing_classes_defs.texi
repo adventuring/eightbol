@@ -1,107 +1,610 @@
+@c editing_classes_defs.texi — OOPS System and Classes.Defs Format
+@node OOPS System
+@chapter OOPS System and Classes.Defs
+
+The Object-Oriented Programming System (OOPS) in EIGHTBOL provides a
+class-based inheritance model for all game entities. The OOPS system
+is defined using a COBOL-like syntax in @file{Classes.Defs}, which
+EIGHTBOL compiles to efficient assembly for the target CPU.
+
 @menu
-* Class hierarchy::
-* Basic-Object::
-* Slots and types::
-* Processing with Skyline-Tool::
+* Why OOPS?::
+* Class Hierarchy Overview::
+* Classes.Defs File Format::
+* Slots and Data Definitions::
+* Method Definitions::
+* Inheritance and Polymorphism::
+* Integration with Eightbol::
+* Example Classes.Defs::
 @end menu
 
-@node Class hierarchy
-@section Class hierarchy
+@node Why OOPS?
+@section Why OOPS?
 
-All objects in EIGHTBOL-based programs inherit from the Basic-Object
-class, which provides fundamental functionality common to all game
-entities. The class hierarchy is defined in the Classes.Defs file using
-COBOL-style class definitions, regardless of which front-end language
-is used to manipulate those classes.
+EIGHTBOL's OOPS system addresses several needs for game development on
+8-bit and 16-bit platforms:
 
-@node Basic-Object
-@section Basic-Object (unchangeable)
+@itemize @bullet
+@item Memory efficiency through inheritance and shared method tables
+@item Polymorphism enables uniform handling of diverse entity types
+@item Encapsulation keeps slot access contained within methods
+@item The COBOL-like syntax is familiar to business and game developers
+@item Generated assembly is optimized for constrained hardware
+@end itemize
 
-The Basic-Object class is the root of all inheritance hierarchies in
-EIGHTBOL. It contains essential slots that are present in every object
-and cannot be removed or modified through inheritance. These include:
+All object instances share the same memory layout for inherited slots,
+with each subclass adding its own slots at higher offsets. This allows
+the runtime to pass a single pointer to any object and access any slot
+through class-specific offset tables.
+
+@node Class Hierarchy Overview
+@section Class Hierarchy Overview
+
+The class hierarchy begins with @code{Basic-Object}, an abstract base
+class providing slots required by the runtime system:
 
 @table @asis
-@item id — Unique identifier for the object
+@item id — Unique identifier (pointer-sized)
 @item x — Horizontal position coordinate
 @item y — Vertical position coordinate
 @item layer — Display layer priority
 @item flags — Boolean status flags
-@item script — Associated script or behavior
+@item script — Associated script or behavior pointer
 @end table
 
-Attempts to modify or remove these slots will result in compilation
-errors, as they are required by the runtime system for basic object
-management and rendering.
+All other classes inherit from @code{Basic-Object}, either directly or
+through intermediate classes. The hierarchy is declared using the
+@code{INHERITS} clause in each class definition.
 
-@node Slots and types
-@section Slots and types
+@example
+CLASS-ID. Actor.
+INHERITS Basic-Object.
+@end example
+
+Subclasses add their own slots and methods, and may override inherited
+methods by defining a method with the same name.
+
+@node Classes.Defs File Format
+@section Classes.Defs File Format
+
+A @file{Classes.Defs} file contains one or more class definitions,
+each following this structure:
+
+@example
+IDENTIFICATION DIVISION.
+CLASS-ID. ClassName.
+[AUTHOR. author-name.]
+[DATE-WRITTEN. date.]
+[INHERITS ParentClass.]
+
+ENVIRONMENT DIVISION.
+
+OBJECT.
+    DATA DIVISION.
+        WORKING-STORAGE SECTION.
+        @i{slot definitions}
+    PROCEDURE DIVISION.
+        @i{method definitions}
+END OBJECT.
+
+END CLASS ClassName.
+@end example
+
+Each class definition may include:
+
+@table @asis
+@item CLASS-ID — The class name (must be unique)
+@item INHERITS — Parent class name (optional, defaults to Basic-Object)
+@item DATA DIVISION — Slot (instance variable) declarations
+@item PROCEDURE DIVISION — Method definitions
+@end table
+
+Comments use the COBOL convention: an asterisk (@code{*}) in column 7
+marks a full-line comment.
+
+@node Slots and Data Definitions
+@section Slots and Data Definitions
+
+Slots define the data stored in each instance of a class. Within the
+OBJECT's DATA DIVISION, each slot is declared using standard COBOL
+WORKING-STORAGE syntax.
+
 @menu
-* Numerics::
-* Arrays of numerics::
-* Character strings::
+* Numeric Slots::
+* Array Slots::
+* Character String Slots::
+* BCD and Display Slots::
+* Initial Values::
 @end menu
 
-@node Numerics
-### Subsection Numerics
+@node Numeric Slots
+@subsection Numeric Slots
 
-Numeric slots store integer values and are defined using the PICTURE
-clause with 9s for digits. They support arithmetic operations and
-can be used in mathematical expressions.
-
-@example
-01  counter        PIC 9(4)    VALUE 0.
-01  score          PIC 9(6)    VALUE 0.
-01  lives-left     PIC 9       VALUE 3.
-@end example
-
-@node Arrays of numerics
-### Subsection Arrays of numerics
-
-Arrays of numeric values are defined using the OCCURS clause. They
-allow storing multiple related values that can be accessed by index.
+Numeric slots store integer values and support arithmetic operations.
+Define them with the PICTURE clause using 9s for digits:
 
 @example
-01  high-scores.
-    05  score-entry OCCURS 10 TIMES.
-        10  initials  PIC XXX.
-        10  points    PIC 9(6).
+05  counter        PIC 9(4)    USAGE BINARY    VALUE 0.
+05  score          PIC 9(6)    USAGE BINARY    VALUE 0.
+05  lives-left    PIC 9       USAGE BINARY    VALUE 3.
+05  speed         PIC S99     USAGE BINARY    VALUE 10.
+05  position      PIC 9999    USAGE BINARY    VALUE 0.
 @end example
 
-@node Character strings
-### Subsection Character strings
+The PICTURE clause determines the storage size:
 
-Character strings store textual data and are defined using the PICTURE
-clause with As for alphabetic characters or Xs for alphanumeric characters.
+@table @asis
+@item PIC 9(n) — n decimal digits, stored in ceiling(n/2) bytes (BCD) or n bytes (BINARY)
+@item PIC S9(n) — n decimal digits with sign, one extra bit (S counts as one nybble)
+@end table
+
+@node Array Slots
+@subsection Array Slots
+
+Arrays are declared with the OCCURS clause:
 
 @example
-01  player-name    PIC X(20)   VALUE SPACES.
-01  level-title    PIC A(30)   VALUE "Level One".
-01  message-box    PIC X(80)   VALUE SPACES.
+05  high-scores.
+    10  entry OCCURS 10 TIMES.
+        15  initials    PIC XXX.
+        15  points      PIC 9(6).
+05  damage-table.
+    10  damage OCCURS 32 TIMES PIC 9(4) USAGE BINARY.
 @end example
 
-@node Processing with Skyline-Tool
-@section Processing with Skyline-Tool
+Access array elements using subscripts:
 
-Before compilation with EIGHTBOL, class definitions often require
-processing with Skyline-Tool to resolve dependencies, generate
-metadata, and prepare the class hierarchy for use by the various
-front-end languages. Skyline-Tool performs several important functions:
+@example
+MOVE points OF entry(1) TO Score.
+ADD 5 TO damage OF damage-table(12).
+@end example
+
+@node Character String Slots
+@subsection Character String Slots
+
+Character strings store text data using X (alphanumeric) or A
+(alphabetic) PICTURE characters:
+
+@example
+05  player-name    PIC X(20)   VALUE SPACES.
+05  message-text   PIC X(80)   VALUE SPACES.
+05  title          PIC A(30)   VALUE SPACES.
+@end example
+
+String assignment uses the MOVE statement with STRING DELIMITED BY SIZE:
+
+@example
+STRING "Player One" DELIMITED BY SIZE
+    INTO player-name.
+@end example
+
+@node BCD and Display Slots
+@subsection BCD and Display Slots
+
+BCD (Binary Coded Decimal) stores values as decimal digits, one nybble
+per digit. This is useful when exact decimal representation is required:
+
+@example
+05  decimal-value  PIC 99    USAGE DECIMAL    VALUE 0.
+05  score-decimal  PIC 9(6)  USAGE DECIMAL    VALUE 0.
+@end example
+
+DISPLAY usage stores values as ASCII characters:
+
+@example
+05  display-count  PIC 99    USAGE DISPLAY    VALUE 0.
+@end example
+
+@node Initial Values
+@subsection Initial Values
+
+The VALUE clause specifies the initial value for a slot. Omitted slots
+contain undefined (garbage) data until explicitly assigned.
+
+@example
+05  health         PIC 9999    USAGE BINARY    VALUE 100.
+05  name           PIC X(20)   VALUE SPACES.
+05  flags          PIC 99      USAGE BINARY    VALUE 0.
+05  multiplier     PIC 9       USAGE BINARY    VALUE 1.
+@end example
+
+Numeric literals in VALUE must match the slot's PICTURE size.
+
+@node Method Definitions
+@section Method Definitions
+
+Methods are defined within the OBJECT's PROCEDURE DIVISION. Each method
+has its own IDENTIFICATION DIVISION and PROCEDURE DIVISION.
+
+@menu
+* Method Structure::
+* Method Parameters::
+* Method Body Statements::
+* Method Return Values::
+* Special Methods::
+@end menu
+
+@node Method Structure
+@subsection Method Structure
+
+A method definition follows this pattern:
+
+@example
+IDENTIFICATION DIVISION.
+METHOD-ID. "MethodName".
+PROCEDURE DIVISION.
+    @i{statements}
+    GOBACK.
+END METHOD "MethodName".
+@end example
+
+The method body contains statements in the selected frontend language.
+GOBACK returns control to the caller; EXIT METHOD is also supported.
+
+@node Method Parameters
+@subsection Method Parameters
+
+Parameters are declared after METHOD-ID using the USING clause:
+
+@example
+IDENTIFICATION DIVISION.
+METHOD-ID. "TakeDamage" USING Damage-Value.
+PROCEDURE DIVISION.
+    SUBTRACT Damage-Value FROM HP.
+    GOBACK.
+END METHOD "TakeDamage".
+@end example
+
+Parameters are local to the method and do not persist in the instance.
+
+@node Method Body Statements
+@subsection Method Body Statements
+
+The method body may contain any supported statement types. In the COBOL
+frontend, these include:
 
 @itemize @bullet
-@item Resolves inheritance relationships between classes
-@item Generates virtual method tables for object-oriented dispatch
-@item Computes memory layouts for object instances
-@item Produces header files for use with assembly language code
-@item Validates slot definitions and detects conflicts
+@item MOVE — Assign values to slots
+@item ADD/SUBTRACT — Arithmetic operations
+@item COMPUTE — Complex arithmetic expressions
+@item IF/THEN/ELSE/END-IF — Conditional execution
+@item PERFORM — Loops and procedure calls
+@item INVOKE — Call methods on objects
+@item INVOKE SUPER — Call inherited method implementation
 @end itemize
 
-Skyline-Tool is typically invoked as part of the build process before
-running EIGHTBOL:
+Example with conditional logic:
 
 @example
-skyline-tool process Classes.Defs
-bin/eightbol -l cobol -c 6502 -o game.asm main.cobol
+IDENTIFICATION DIVISION.
+METHOD-ID. "Think".
+PROCEDURE DIVISION.
+    IF HP IS EQUAL TO 0 THEN
+        INVOKE Self "Kill"
+    ELSE
+        IF HP < MaxHP THEN
+            INVOKE Self "Regenerate"
+        END-IF
+    END-IF
+    GOBACK.
+END METHOD "Think".
 @end example
 
-@node AGI
+@node Method Return Values
+@subsection Method Return Values
+
+Methods may return a value in the accumulator using RETURNING:
+
+@example
+IDENTIFICATION DIVISION.
+METHOD-ID. "GetHealth" RETURNING Current-HP.
+PROCEDURE DIVISION.
+    MOVE HP TO Current-HP.
+    GOBACK.
+END METHOD "GetHealth".
+@end example
+
+For void methods (no return value), simply end with GOBACK or EXIT METHOD.
+
+@node Special Methods
+@subsection Special Methods
+
+Certain method names have special meaning:
+
+@table @asis
+@item Think — Called every frame for game logic updates
+@item Kill — Called when the entity is destroyed or removed
+@item Create — Constructor-like initialization (if supported)
+@end table
+
+The Think method is particularly important; EIGHTBOL automatically
+calls Think on all active entities each frame:
+
+@example
+IDENTIFICATION DIVISION.
+METHOD-ID. "Think".
+PROCEDURE DIVISION.
+    PERFORM Update-AI.
+    PERFORM Check-Bounds.
+    GOBACK.
+END METHOD "Think".
+@end example
+
+@node Inheritance and Polymorphism
+@section Inheritance and Polymorphism
+
+Subclasses inherit all slots and methods from their parent class.
+Inheritance is declared with INHERITS:
+
+@example
+CLASS-ID. Monster.
+INHERITS Actor.
+@end example
+
+The subclass automatically has access to parent's slots and methods.
+
+@subsection Slot Inheritance
+
+All slots from parent classes are available in the subclass. The
+runtime maintains a single slot offset table for each class, so code
+can access slots uniformly regardless of the actual instance type.
+
+@subsection Method Overriding
+
+Subclasses may override inherited methods by defining a method with the
+same name. The overriding method completely replaces the inherited
+implementation:
+
+@example
+* Parent class
+CLASS-ID. Actor.
+OBJECT.
+    DATA DIVISION.
+        WORKING-STORAGE SECTION.
+        05  HP    PIC 9999  USAGE BINARY  VALUE 100.
+    PROCEDURE DIVISION.
+        IDENTIFICATION DIVISION.
+        METHOD-ID. "TakeDamage".
+        PROCEDURE DIVISION.
+            SUBTRACT 10 FROM HP.
+            GOBACK.
+        END METHOD "TakeDamage".
+END OBJECT.
+END CLASS Actor.
+
+* Subclass overrides TakeDamage
+CLASS-ID. Boss.
+INHERITS Actor.
+OBJECT.
+    PROCEDURE DIVISION.
+        IDENTIFICATION DIVISION.
+        METHOD-ID. "TakeDamage".
+        PROCEDURE DIVISION.
+            SUBTRACT 5 FROM HP.
+            IF HP < 1000 THEN
+                INVOKE Self "Enter-Rage-Mode"
+            END-IF
+            GOBACK.
+        END METHOD "TakeDamage".
+END OBJECT.
+END CLASS Boss.
+@end example
+
+@subsection Invoking Super
+
+To call the parent class's implementation of an overridden method, use
+INVOKE SUPER:
+
+@example
+IDENTIFICATION DIVISION.
+METHOD-ID. "TakeDamage".
+PROCEDURE DIVISION.
+    INVOKE SUPER "TakeDamage".
+    IF HP < MaxHP THEN
+        INVOKE Self "Show-Damage-Number"
+    END-IF
+    GOBACK.
+END METHOD "TakeDamage".
+@end example
+
+INVOKE SUPER calls the current method name on the parent class.
+
+@node Integration with Eightbol
+@section Integration with Eightbol
+
+The OOPS system integrates with EIGHTBOL's compilation pipeline:
+
+@menu
+* Compilation Flow::
+* Generated Assembly Structure::
+* Virtual Method Tables::
+* Copybook Generation::
+@end menu
+
+@node Compilation Flow
+@subsection Compilation Flow
+
+@enumerate
+@item
+Skyline-Tool processes Classes.Defs and generates slot offset tables
+and copybook files (e.g., @file{*Slots.cpy})
+
+@item
+EIGHTBOL parses the frontend source code, resolving slot references
+against the copybook tables
+
+@item
+The AST is built with class metadata including :class-id and :methods
+
+@item
+The backend compiles the AST to CPU-specific assembly
+@end enumerate
+
+@node Generated Assembly Structure
+@subsection Generated Assembly Structure
+
+For each class, EIGHTBOL generates:
+
+@itemize @bullet
+@item A @code{ClassName} structure definition with slot offsets
+@item Method entry points with labels like @code{MethodClassNameMethodName}
+@item Optional virtual method table (VMT) for polymorphic dispatch
+@end itemize
+
+Example 6502 output structure:
+
+@example
+.segment "Object"
+
+; Structure for class Character
+Character:
+.word 0              ; HP (offset 0)
+.word 0              ; MaxHP (offset 2)
+
+; Method Think
+MethodCharacterThink:
+    ldy #HP - Character
+    lda (Self), y
+    ...
+@end example
+
+@node Virtual Method Tables
+@subsection Virtual Method Tables
+
+For platforms requiring polymorphic dispatch, Skyline-Tool generates
+VMT structures. The VMT contains pointers to method implementations:
+
+@example
+.segment "VMT"
+
+; Virtual Method Table for Character
+CharacterVMT:
+    .word MethodCharacterThink
+    .word MethodCharacterKill
+    .word MethodCharacterHeal
+@end example
+
+@node Copybook Generation
+@subsection Copybook Generation
+
+Skyline-Tool generates copybook files containing slot definitions for
+each class. These copybooks are included in source files to declare
+slots:
+
+@example
+* Phantasia-Globals-Slots.cpy — Generated copybook
+* Character-Slots.cpy — Slot definitions for Character class
+@end example
+
+Including a copybook pulls in the slot declarations:
+
+@example
+COPY Phantasia-Globals-Slots.
+COPY Character-Slots.
+@end example
+
+@node Example Classes.Defs
+@section Example Classes.Defs
+
+The following is a complete example showing typical class definitions:
+
+@example
+000010 IDENTIFICATION DIVISION.
+000020 CLASS-ID. Character.
+000030 AUTHOR. Game-Developer.
+000040 DATE-WRITTEN. 2026.
+000050
+000060 ENVIRONMENT DIVISION.
+000070
+000080 OBJECT.
+000090     DATA DIVISION.
+000100         WORKING-STORAGE SECTION.
+000110* Basic combat stats
+000120         05  HP              PIC 9999 USAGE BINARY  VALUE 100.
+000130         05  MaxHP           PIC 9999 USAGE BINARY  VALUE 100.
+000140         05  Attack-Power    PIC 999  USAGE BINARY  VALUE 10.
+000150         05  Defense         PIC 999  USAGE BINARY  VALUE 5.
+000160
+000170* State tracking
+000180         05  Is-Alive        PIC 9    USAGE BINARY  VALUE 1.
+000190         05  Stun-Timer      PIC 99   USAGE BINARY  VALUE 0.
+000200
+000210* Name storage
+000220         05  Character-Name  PIC X(20) VALUE SPACES.
+000230
+000240* Array of recent damage taken
+000250         05  Damage-History.
+000260             10  Damage OCCURS 8 TIMES PIC 999 USAGE BINARY.
+000270
+000280     PROCEDURE DIVISION.
+000290
+000300         IDENTIFICATION DIVISION.
+000310         METHOD-ID. "Think".
+000320         PROCEDURE DIVISION.
+000330* Process state updates each frame
+000340             IF Is-Alive IS EQUAL TO 0 THEN
+000350                 INVOKE Self "Kill"
+000360             END-IF
+000370
+000380             IF Stun-Timer > 0 THEN
+000390                 SUBTRACT 1 FROM Stun-Timer
+000400             END-IF
+000410
+000420             GOBACK.
+000430         END METHOD "Think".
+000440
+000450         IDENTIFICATION DIVISION.
+000460         METHOD-ID. "TakeDamage" USING Damage.
+000470         PROCEDURE DIVISION.
+000480* Apply damage reduction from defense
+000490             COMPUTE Temporary = Damage * (100 - Defense) / 100
+000500             SUBTRACT Temporary FROM HP
+000510
+000520* Record damage in history (shift register)
+000530             PERFORM Shift-Damage-History
+000540             MOVE Damage TO Damage OF Damage-History(1)
+000550
+000560             IF HP < 0 THEN
+000570                 MOVE 0 TO HP
+000580                 MOVE 0 TO Is-Alive
+000590             END-IF
+000600
+000610             GOBACK.
+000620         END METHOD "TakeDamage".
+000630
+000640         IDENTIFICATION DIVISION.
+000650         METHOD-ID. "Heal" USING Amount.
+000660         PROCEDURE DIVISION.
+000670             ADD Amount TO HP
+000680             IF HP > MaxHP THEN
+000690                 MOVE MaxHP TO HP
+000700             END-IF
+000710             GOBACK.
+000720         END METHOD "Heal".
+000730
+000740         IDENTIFICATION DIVISION.
+000750         METHOD-ID. "Kill".
+000760         PROCEDURE DIVISION.
+000770             MOVE 0 TO HP
+000780             MOVE 0 TO Is-Alive
+000790             GOBACK.
+000800         END METHOD "Kill".
+000810
+000820 END OBJECT.
+000830
+000840 END CLASS Character.
+@end example
+
+This example demonstrates:
+
+@itemize @bullet
+@item Numeric slots with BINARY usage and initial values
+@item Array slots with OCCURS
+@item Character string slots
+@item Methods with parameters (TakeDamage, Heal)
+@item Methods without parameters (Think, Kill)
+@item Conditional logic with IF/THEN/ELSE
+@item Self-invocation for internal method calls
+@item Arithmetic with COMPUTE
+@end itemize
+

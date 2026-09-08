@@ -65,6 +65,7 @@ supported processor.
 @include chapters/smalltalk.texi
 @include chapters/zil_zork_implementation_language.texi
 @include chapters/abi_formats_and_assembler_syntax.texi
+@include chapters/calling_from_assembly.texi
 
 @node Appendix. Minifont code
 @appendix Minifont code

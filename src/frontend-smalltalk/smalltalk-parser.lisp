@@ -32,14 +32,14 @@ Renamed from normalize-identifier to avoid collision with COBOL lexer's normaliz
 (defun smalltalk-make-move-node (target value)
   "Create an assignment AST node (MOVE in COBOL terminology)."
   (list :move
-        :target (smalltalk-normalize-identifier target)
-        :value value))
+        :variables (list (smalltalk-normalize-identifier target))
+        :expressions (list value)))
 
 (defun smalltalk-make-invoke-node (receiver selector)
   "Create a message send (method invocation) AST node."
   (list :invoke
-        :receiver receiver
-        :selector (smalltalk-normalize-identifier selector)))
+        :object receiver
+        :method (smalltalk-normalize-identifier selector)))
 
 (defun smalltalk-make-literal-string (s)
   "Create a string literal AST node."
@@ -54,27 +54,27 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
 
 (defun smalltalk-make-print-node (args)
   "Create a print/output statement AST node."
-  (list :print :args args))
+  (list :print :expressions args))
 
 (defun smalltalk-make-input-node (&key var prompt)
   "Create an input/read statement AST node."
-  (list :input :var var :prompt prompt))
+  (list :input :variables (list var) :prompt prompt))
 
 (defun smalltalk-make-if-node (condition true-branch &key false-branch)
   "Create an if/conditional statement AST node."
-  (list :if :condition condition :true-branch true-branch :false-branch false-branch))
+  (list :if :condition condition :then true-branch :else false-branch))
 
 (defun smalltalk-make-while-node (condition body)
   "Create a while loop AST node (converted to :perform)."
   (list :perform :body body :until (list :not condition)))
 
 (defun smalltalk-make-block-node (&key params expressions)
-  "Create a code block AST node."
-  (list :block :params params :expressions expressions))
+  "Create a code block AST node (residual - convert to perform with body)."
+  (list :perform :body expressions))
 
 (defun smalltalk-make-call-node (target &key args)
   "Create a function call AST node."
-  (list :call :target target :using args))
+  (list :call :target target))
 
 (defun smalltalk-make-perform-node (body &key until varying)
   "Create a loop/perform AST node."

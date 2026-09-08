@@ -101,20 +101,20 @@
      (io-stmt)
      (expression))
 
-    ;;  I/O Statements 
+    ;;  I/O Statements
     (io-stmt
      (put expression
           (lambda (val)
-            (list :put :value val)))
+            (list :print :expressions (list val))))
      (get ident
           (lambda (var)
-            (list :get :target (lingo-make-ident var))))
+            (list :input :variables (list (lingo-make-ident var)))))
      (input ident
             (lambda (var)
-              (list :input :target (lingo-make-ident var))))
+              (list :input :variables (list (lingo-make-ident var)))))
      (print expression
             (lambda (val)
-              (list :print :value val))))
+              (list :print :expressions (list val)))))
 
     ;;  Assignments 
     (assignment
@@ -122,32 +122,34 @@
      (move-stmt)
      (property-stmt))
 
-    ;;  Set Statement 
+    ;;  Set Statement
     (set-stmt
      (set ident to expression
           (lambda (target value)
-            (make-move-node (lingo-make-ident target) value))))
+            (list :move :from value :to (lingo-make-ident target)))))
 
-    ;;  Move Statement 
+    ;;  Move Statement
     (move-stmt
      (on expression to ident
          (lambda (value target)
-           (make-move-node value (lingo-make-ident target)))))
+           (list :move :from value :to (lingo-make-ident target)))))
 
-    ;;  Property Statement 
+    ;;  Property Statement (map to move for slot assignment)
     (property-stmt
      (property ident-list
                (lambda (idents)
-                 (list :property-decl :identifiers idents))))
+                 (declare (ignore idents))
+                 (list :comment "Property declaration"))))
 
-    ;;  Call Statement 
+    ;;  Call Statement
     (call-stmt
      (call expression |(| arg-list |)|
            (lambda (target args)
-             (make-invoke-node target)))
+             (declare (ignore args))
+             (list :invoke :class "Unknown" :method target)))
      (call ident
            (lambda (target)
-             (make-invoke-node (lingo-make-ident target)))))
+             (list :call :target (lingo-make-ident target)))))
 
     ;;  Copy Statement 
     (copy-stmt
@@ -155,42 +157,43 @@
            (lambda (filename)
              (list :copy :name filename))))
 
-    ;;  Loop Statements 
+    ;;  Loop Statements
     (loop-stmt
      (for ident in expression to expression step expression do statement-list end
        (lambda (var start end step body)
-         (make-perform-node (lingo-make-ident var)
-                            :from start :to end :by step
-                            :body body)))
+         (list :perform :procedure (lingo-make-ident var)
+               :from start :to end :by step :body body)))
      (while expression do statement-list end
        (lambda (cond body)
-         body))
+         (declare (ignore cond))
+         (list :comment "While loop body")))
      (repeat statement-list until expression end
        (lambda (body cond)
-         body)))
+         (declare (ignore cond))
+         (list :comment "Repeat loop body"))))
     
-    ;;  Conditional Statements 
+    ;;  Conditional Statements
     (if-stmt
      (if expression then statement-list endif
          (lambda (cond then-stmts)
-           (make-if-node cond then-stmts nil)))
+           (list :if :condition cond :then then-stmts :else '())))
      (if expression then statement-list else statement-list endif
          (lambda (cond then-stmts else-stmts)
-           (make-if-node cond then-stmts else-stmts))))
+           (list :if :condition cond :then then-stmts :else else-stmts))))
 
-    ;;  Return Statement 
+    ;;  Return Statement
     (return-stmt
      (return
-       (lambda () (make-goback-node)))
+       (lambda () (list :go-back)))
      (return expression
              (lambda (val)
-               (make-move-node val "RESULT"))))
+               (list :move :from val :to "RESULT"))))
 
-    ;;  Goto Statement 
+    ;;  Goto Statement
     (goto-stmt
      (goto ident
            (lambda (target)
-             (make-goto-node (lingo-make-ident target)))))
+             (list :goto :target (lingo-make-ident target)))))
 
     ;;  Expression Parsing 
     (expression
@@ -242,7 +245,7 @@
      (mult-expr / primary-expr
                 (lambda (l r) (make-expression-divide l r))))
 
-    ;;  Primary Expressions 
+    ;;  Primary Expressions
     (primary-expr
      (literal)
      (ident)
@@ -250,13 +253,15 @@
           (lambda (e) e))
      (primary-expr |.| ident
                    (lambda (obj prop)
-                     (make-qualified-identifier (lingo-make-ident prop) obj)))
+                     (list :of (lingo-make-ident prop) obj)))
      (primary-expr |:| ident |(| arg-list |)|
                    (lambda (obj method args)
-                     (list :method-call :object obj :method (lingo-make-ident method))))
+                     (declare (ignore args))
+                     (list :invoke :class obj :method (lingo-make-ident method))))
      (ident |(| arg-list |)|
             (lambda (func args)
-              (list :function-call :name (lingo-make-ident func)))))
+              (declare (ignore args))
+              (list :call :target (lingo-make-ident func)))))
 
     ;;  Literals 
     (literal
@@ -298,39 +303,39 @@
 
 (defun make-conditional-or (left right)
   "Create a conditional OR node."
-  (list :or left right))
+  (list 'or left right))
 
 (defun make-conditional-and (left right)
   "Create a conditional AND node."
-  (list :and left right))
+  (list 'and left right))
 
 (defun make-conditional-not (expr)
   "Create a conditional NOT node."
-  (list :not expr))
+  (list 'not expr))
 
 (defun make-conditional-eq (left right)
   "Create an equality comparison node."
-  (list :eq left right))
+  (list '= left right))
 
 (defun make-conditional-ne (left right)
   "Create a not-equal comparison node."
-  (list :neq left right))
+  (list '/= left right))
 
 (defun make-conditional-lt (left right)
   "Create a less-than comparison node."
-  (list :lt left right))
+  (list '< left right))
 
 (defun make-conditional-gt (left right)
   "Create a greater-than comparison node."
-  (list :gt left right))
+  (list '> left right))
 
 (defun make-conditional-le (left right)
   "Create a less-than-or-equal comparison node."
-  (list :le left right))
+  (list '<= left right))
 
 (defun make-conditional-ge (left right)
   "Create a greater-than-or-equal comparison node."
-  (list :ge left right))
+  (list '>= left right))
 
 (defun make-expression-add (left right)
   "Create an addition expression node."
@@ -338,32 +343,27 @@
 
 (defun make-expression-subtract (left right)
   "Create a subtraction expression node."
-  (list :subtract :from left :from-target right))
+  (list :subtract :subtrahend right :from left))
 
 (defun make-expression-multiply (left right)
   "Create a multiplication expression node."
-  (list :compute :target 'result :expression (list :* left right)))
+  (list :compute :target 'result :expression (list '* left right)))
 
 (defun make-expression-divide (left right)
   "Create a division expression node."
-  (list :compute :target 'result :expression (list :/ left right)))
-
-(defun make-goto-node (label)
-  "Create a goto (unconditional jump) AST node."
-  (list :goto :target label))
+  (list :compute :target 'result :expression (list '/ left right)))
 
 (defun make-qualified-identifier (prop obj)
   "Create a qualified identifier (object.property) AST node."
-  (list :property :object obj :name prop))
+  (list :of prop obj))
 
 (defun make-perform-node (var &key from to by body)
   "Create a perform/loop AST node."
-  (let ((node (list :perform :varying var)))
-    (when from (setf node (append node (list :from from))))
-    (when to (setf node (append node (list :to to))))
-    (when by (setf node (append node (list :by by))))
-    (when body (setf node (append node (list :body body))))
-    node))
+  (list* :perform :procedure var
+         (append (when from `(:from ,from))
+                 (when to `(:to ,to))
+                 (when by `(:by ,by))
+                 (when body `(:body ,body)))))
 
 (defun make-move-node (value target)
   "Create a move/assignment AST node."
@@ -371,15 +371,9 @@
 
 (defun make-if-node (cond then-stmts else-stmts)
   "Create an if-conditional AST node."
-  (let ((node (list :if :condition cond :then then-stmts)))
-    (when else-stmts (setf node (append node (list :else else-stmts))))
-    node))
+  (list :if :condition cond :then then-stmts :else (or else-stmts '())))
 
-(defun make-invoke-node (target &key args)
+(defun make-invoke-node (class method &key args)
   "Create an invocation (method/function call) AST node."
   (declare (ignore args))
-  (list :invoke :target target))
-
-(defun make-goback-node ()
-  "Create a return/goback AST node."
-  (list :goback))
+  (list :invoke :class class :method method))

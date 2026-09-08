@@ -123,6 +123,13 @@
   (let ((statement (cons :call ast-node-data)))
     (compile-m68k-call statement)))
 
+(def-m68k-statement :call-acc
+  (let ((target (getf ast-node-data :target))
+        (bank (getf ast-node-data :bank)))
+    (if bank
+        (format *output-stream* "~&~10tjsr     ~a:~a" (m68k-symbol bank) (m68k-symbol target))
+        (format *output-stream* "~&~10tjsr     ~a" (m68k-symbol target)))))
+
 (def-m68k-statement :if
   (let ((statement (cons :if ast-node-data)))
     (compile-m68k-if statement)))

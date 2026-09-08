@@ -133,9 +133,9 @@ Identifiers are normalized to PascalCase."
     (labels ((peek () (nth i chars))
              (next-char () (prog1 (nth i chars) (incf i)))
              (peek-ahead (n) (nth (+ i n) chars))
-             (eof? () (>= i (length chars)))
+             (at-end? () (>= i (length chars)))
              (skip-whitespace ()
-               (loop while (and (not (eof?)) (find (peek) '(#\Space #\Tab #\Return #\Newline)))
+               (loop while (and (not (at-end?)) (find (peek) '(#\Space #\Tab #\Return #\Newline)))
                      do (next-char)))
              (flush-token (start end type)
                (let ((text (coerce (subseq chars start end) 'string)))
@@ -147,36 +147,36 @@ Identifiers are normalized to PascalCase."
                  (multiple-value-bind (val fmt) (basic-parse-number-literal text)
                    (if val
                        ;; Consume the appropriate number of characters
-                       (progn
-                         (loop while (and (not (eof?)) 
-                                         (or (digit-char-p (peek))
-                                             (char= (peek) #\&)
-                                             (member (char-upcase (peek)) '(#\O #\H #\B #\D))))
-                               do (next-char))
-                         (flush-token start i :number))
-                       ;; Fall back to regular decimal number parsing
-                       (progn
-                         (loop while (and (not (eof?)) (digit-char-p (peek)))
-                               do (next-char))
-                         (flush-token start i :number))))))
-             (scan-string (start)
-               (next-char) ; skip opening quote
-               (loop while (and (not (eof?)) (char/= (peek) #\"))
-                     do (next-char))
-               (when (not (eof?)) (next-char)) ; skip closing quote
-               (flush-token (1+ start) (1- i) :string))
-             (scan-identifier (start)
-               (loop while (and (not (eof?))
-                                (or (alphanumericp (peek))
-                                    (char= (peek) #\$)
-                                    (char= (peek) #\_)))
-                     do (next-char))
-               (let ((text (coerce (subseq chars start i) 'string)))
-                 (push (cons :ident (basic-normalize-identifier text)) tokens)))))
-      (loop until (eof?)
+                        (progn
+                          (loop while (and (not (at-end?)) 
+                                          (or (digit-char-p (peek))
+                                              (char= (peek) #\&)
+                                              (member (char-upcase (peek)) '(#\O #\H #\B #\D))))
+                                do (next-char))
+                          (flush-token start i :number))
+                        ;; Fall back to regular decimal number parsing
+                        (progn
+                          (loop while (and (not (at-end?)) (digit-char-p (peek)))
+                                do (next-char))
+                          (flush-token start i :number))))))
+              (scan-string (start)
+                (next-char) ; skip opening quote
+                (loop while (and (not (at-end?)) (char/= (peek) #\"))
+                      do (next-char))
+                (when (not (at-end?)) (next-char)) ; skip closing quote
+                (flush-token (1+ start) (1- i) :string))
+              (scan-identifier (start)
+                (loop while (and (not (at-end?))
+                                 (or (alphanumericp (peek))
+                                     (char= (peek) #\$)
+                                     (char= (peek) #\_)))
+                      do (next-char))
+                (let ((text (coerce (subseq chars start i) 'string)))
+                  (push (cons :ident (basic-normalize-identifier text)) tokens)))))
+      (loop until (at-end?)
             do (skip-whitespace)
                (cond
-                 ((eof?) (return))
+                 ((at-end?) (return))
                  ((char= (peek) #\") (scan-string i))
                  ((digit-char-p (peek)) (scan-number i))
                  ((or (alphanumericp (peek))
@@ -184,13 +184,13 @@ Identifiers are normalized to PascalCase."
                       (char= (peek) #\_)) (scan-identifier i))
                  ((char= (peek) #\&)
                   ;; Might be start of prefixed number
-                  (if (and (not (eof?)) (digit-char-p (peek-ahead 1)))
+                   (if (and (not (at-end?)) (digit-char-p (peek-ahead 1)))
                       (scan-number i)
                       (let ((op1 (string (next-char))))
                         (flush-token (1- i) i :op))))
-                 (t
-                  (let ((op1 (string (next-char)))
-                        (op2 (when (not (eof?)) (string (peek)))))
+                  (t
+                   (let ((op1 (string (next-char)))
+                         (op2 (when (not (at-end?)) (string (peek)))))
                     (cond
                       ((and op2 (string= op2 "=")
                             (member (concatenate 'string op1 op2) '("=<" ">=" "<>")

@@ -122,7 +122,7 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
 
   (defun basic-parse-gosub-library (name)
     "GOSUB \"name\" IN LIBRARY — resident library call (jsr Lib.Name)."
-    (list :call :target name :bank nil :library t))
+    (list :call :target name :bank :library))
 
   (defun basic-parse-gosub-method (name object)
     "GOSUB \"method\" ON object — OOPS method invocation."
@@ -130,7 +130,7 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
 
   (defun basic-parse-gosub-service (name)
     "GOSUB \"name\" SERVICE — service-dispatch call, bank resolved at link time."
-    (list :call :service name :bank nil))
+    (list :call :target name :bank :service))
 
   (defun basic-parse-return ()
     "RETURN"
@@ -544,6 +544,8 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
        (() (constantly ""))
        (error-line anything (lambda (_ a) a))))))
 
+(defvar *basic-current-class* "Program")
+
 ;;; Entry point functions
 (defun basic-lex (source)
   "Lex BASIC source string into token list for YACC."
@@ -556,13 +558,14 @@ The line number and label are used to create BASIC_Lnnnnnn labels."
   "Parse BASIC source string and return AST."
   (let ((*basic-current-class* "Program")
         (*yacc-debug* nil))
-    (yacc:parse-with-lexer
-     *basic-parser*
-     (lambda ()
-       (let ((tokens (basic-lex-source source)))
-         (lambda ()
-           (when tokens
-             (pop tokens))))))))
+    (let ((tokens (basic-lex-source source)))
+      (yacc:parse-with-lexer
+       *basic-parser*
+       (lambda ()
+         (when tokens
+           (let ((tok (pop tokens)))
+             (when tok
+               (values (first tok) (second tok))))))))))
 
 (defun basic-make-parser ()
   "Return the BASIC YACC parser function."

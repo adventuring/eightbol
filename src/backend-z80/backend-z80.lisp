@@ -174,55 +174,8 @@
                     (princ-to-string text)))))
     (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
                   (getf (rest statement) :name)))
-    (:divide
-     (let* ((divisor (getf (rest statement) :divisor))
-            (into (getf (rest statement) :into))
-            (by (getf (rest statement) :by))
-            (source (or by into))
-            (dest (or (getf (rest statement) :giving) into))
-            (signed (operand-signed-p (or source dest))))
-       (if (and (expression-constant-p divisor)
-                (power-of-two-p (expression-constant-value divisor)))
-           (let ((shift (log2 (expression-constant-value divisor)))
-                 (target (or source dest)))
-             (when (or (operand-bcd-p source) (operand-bcd-p dest))
-               (error 'source-error
-                      :message "DIVIDE: cannot use with USAGE DECIMAL operands"
-                      :detail (list :divisor divisor :source source :dest dest)))
-             (unless (zerop shift)
-               (compile-z80-load out target class-id slot-table const-table pic-width-table 1)
-               (dotimes (_ shift)
-                 (if signed
-                     (format out "~&~10tsra a")
-                     (format out "~&~10tsrl a")))
-               (when (stringp target)
-                 (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))
-           (error 'source-error
-                  :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
-                  :detail (format nil "DIVIDE by ~s" divisor)))))
-    (:multiply
-     (let* ((multiplier (getf (rest statement) :multiplier))
-            (by (getf (rest statement) :by))
-            (giving (getf (rest statement) :giving))
-            (source (or giving by))
-            (dest (or giving by)))
-       (if (and (expression-constant-p multiplier)
-                (power-of-two-p (expression-constant-value multiplier)))
-           (let ((shift (log2 (expression-constant-value multiplier)))
-                 (target (or source dest)))
-             (when (or (operand-bcd-p source) (operand-bcd-p dest))
-               (error 'source-error
-                      :message "MULTIPLY: cannot use with USAGE DECIMAL operands"
-                      :detail (list :multiplier multiplier :source source :dest dest)))
-             (unless (zerop shift)
-               (compile-z80-load out target class-id slot-table const-table pic-width-table 1)
-               (dotimes (_ shift)
-                 (format out "~&~10tadd a, a"))
-               (when (stringp target)
-                 (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))
-           (error 'source-error
-                  :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
-                  :detail (format nil "MULTIPLY by ~s" multiplier)))))
+     (:divide (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :z80 :detail statement))
+     (:multiply (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :z80 :detail statement))
 
     (:invoke-super
      (unless (gethash *class-id* *parent-classes*)
@@ -544,7 +497,8 @@
 
 (defun compile-z80-call-acc (out statement class-id slot-table const-table pic-width-table)
   (let* ((target (getf (rest statement) :target))
-         (using (getf (rest statement) :using)))
+         (using (getf (rest statement) :using))
+         (library (getf (rest statement) :library)))
     (when using
       (let ((width (operand-width using pic-width-table)))
         (if (> width 1)
@@ -555,7 +509,9 @@
               (compile-z80-load out using class-id slot-table const-table pic-width-table)
               (setf *z80-accumulator-expression* :trash)))))
     (let ((name (z80-symbol (format nil "~a" target))))
-      (format out "~&~10tcall ~a" name))))
+      (if library
+          (format out "~&~10tcall Lib.~a" name)
+          (format out "~&~10tcall ~a" name)))))
 
 ;;; IF
 

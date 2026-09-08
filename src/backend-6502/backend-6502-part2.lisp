@@ -112,14 +112,6 @@ Only nil when X is in *working-storage* with a VALUE (a manifest constant, not a
   (and (expression-constant-p (getf (rest expression) :from))
        (expression-constant-p (getf (rest expression) :subtrahend))))
 
-(defun expression-constant-p-multiply (expression)
-  (and (expression-constant-p (getf (rest expression) :multiplier))
-       (expression-constant-p (getf (rest expression) :by))))
-
-(defun expression-constant-p-divide (expression)
-  (and (expression-constant-p (getf (rest expression) :numerator))
-       (expression-constant-p (getf (rest expression) :denominator))))
-
 (defun expression-constant-p-bit-and (expression)
   (and (expression-constant-p (second expression))
        (expression-constant-p (third expression))))
@@ -162,8 +154,6 @@ compile-time-known assembly expression."
     (setf (gethash :address-of table) #'expression-constant-p-address-of)
     (setf (gethash :add table) #'expression-constant-p-add)
     (setf (gethash :subtract table) #'expression-constant-p-subtract)
-    (setf (gethash :multiply table) #'expression-constant-p-multiply)
-    (setf (gethash :divide table) #'expression-constant-p-divide)
     (setf (gethash :bit-and table) #'expression-constant-p-bit-and)
     (setf (gethash :bit-or table) #'expression-constant-p-bit-or)
     (setf (gethash :low table) #'expression-constant-p-low)
@@ -232,14 +222,14 @@ or a @code{string=} type error on the head.
           (emit-6502-value (getf (rest expression) :subtrahend))))
 
 (defun expression-constant-value-multiply (expression)
-  (format nil "(~a * ~a)"
-          (emit-6502-value (getf (rest expression) :multiplier))
-          (emit-6502-value (getf (rest expression) :by))))
+  (error 'backend-error
+    :message "MULTIPLY/DIVIDE not supported - unsupported operation"
+    :cpu :6502 :detail expression))
 
 (defun expression-constant-value-divide (expression)
-  (format nil "(~a / ~a)"
-          (emit-6502-value (getf (rest expression) :numerator))
-          (emit-6502-value (getf (rest expression) :denominator))))
+  (error 'backend-error
+    :message "MULTIPLY/DIVIDE not supported - unsupported operation"
+    :cpu :6502 :detail expression))
 
 (defun expression-constant-value-bit-or (expression)
   (format nil "(~{~a~^ | ~})"
@@ -274,8 +264,6 @@ when used in an absolute-store context."
     (setf (gethash :address-of table) #'expression-constant-value-address-of)
     (setf (gethash :add table) #'expression-constant-value-add)
     (setf (gethash :subtract table) #'expression-constant-value-subtract)
-    (setf (gethash :multiply table) #'expression-constant-value-multiply)
-    (setf (gethash :divide table) #'expression-constant-value-divide)
     (setf (gethash :bit-or table) #'expression-constant-value-bit-or)
     (setf (gethash :bit-and table) #'expression-constant-value-bit-and)
     (setf (gethash :bit-xor table) #'expression-constant-value-bit-xor)
@@ -421,39 +409,17 @@ treat as bare NAME (immediate lda #), not an instance slot."
                                         (getf (rest expression) :subtrahend)
                                         class-id)))
 
-      ;; Arithmetic: a * k (k must be power of 2)
+      ;; Arithmetic: a * k — multiply not supported
       ((and (listp expression) (eq (first expression) :multiply))
-       (let ((e1 (getf (rest expression) :multiplier)) (e2 (getf (rest expression) :by)))
-         (cond
-	 ((and (expression-constant-p e2)
-                 (power-of-two-p (expression-constant-value e2)))
-	  (with-accumulator-value (expression)
-	    (let ((shift (log2 (expression-constant-value e2))))
-                (emit-6502-load-expression out e1 class-id)
-                (dotimes (_ shift) (format out "~%~10Tasl a")))))
-	 ((and (expression-constant-p e1)
-                 (power-of-two-p (expression-constant-value e1)))
-	  (with-accumulator-value (expression)
-	    (let ((shift (log2 (expression-constant-value e1))))
-                (emit-6502-load-expression out e2 class-id)
-                (dotimes (_ shift) (format out "~%~10Tasl a")))))
-	 (t (error 'backend-error
-		 :message "6502: multiply by non-power-of-2 requires software routine"
-		 :cpu :6502 :detail (list :multiply e1 e2))))))
+       (error 'backend-error
+         :message "MULTIPLY/DIVIDE not supported - unsupported operation"
+         :cpu :6502 :detail expression))
 
-      ;; Arithmetic: a / k (k must be power of 2)
+      ;; Arithmetic: a / k — divide not supported
       ((and (listp expression) (eq (first expression) :divide))
-       (let ((e1 (getf (rest expression) :numerator)) (e2 (getf (rest expression) :denominator)))
-         (when (expression-constant-p e2)
-	 (let ((shift (log2 (expression-constant-value e2))))
-	   (when (and shift (not (zerop shift)) (integerp shift))
-	     (with-accumulator-value (expression)
-                 (emit-6502-load-expression out e1 class-id)
-                 (dotimes (_ shift) (format out "~%~10Tlsr a")))
-	     (return-from emit-6502-load-expression))))
-         (error 'backend-error
-                :message "6502: divide by non-power-of-2 requires software routine"
-                :cpu :6502 :detail (list :divide e1 e2))))
+       (error 'backend-error
+         :message "MULTIPLY/DIVIDE not supported - unsupported operation"
+         :cpu :6502 :detail expression))
 
       ;; Subscripted array: base(index) — load index into X, then lda base, x
       ((and (listp expression) (eq (first expression) :subscript))

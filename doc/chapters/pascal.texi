@@ -1,571 +1,1136 @@
+@c -*-texinfo-*-
+@c pascal.texi - Pascal Frontend Documentation
+@c Part of the EightBol Compiler
+@setchapternewpage odd
+@chapter Pascal Frontend
+
+@cindex Pascal frontend
+@cindex Pascal syntax
+@cindex Pascal keywords
+@cindex Pascal operators
+
+This chapter describes the Pascal frontend of the EightBol compiler. The
+frontend translates Pascal source code into an abstract syntax tree (AST)
+that is subsequently processed by the code generation backends. The
+frontend supports a simplified Pascal dialect designed for game development
+and embedded systems programming.
+
 @menu
-* Naming system::
-* Basic structure::
-* Calling routines::
+* Lexical Analysis::
+* Program Structure::
+* Procedures and Methods::
+* Variables and Types::
+* Expressions::
 * Assignment::
-* Arithmetic::
-* Complex arithmetic::
-* Boolean expressions::
-* Control structures::
+* Control Structures::
 * Loops::
-* Breaking loops::
-* Dialogue scripts::
-* Tile manipulation::
-* Decal manipulation::
-* Object manipulation::
-* Unsupported features::
+* Procedure Calls::
+* Method Invocation::
+* Library Calls::
+* Input and Output::
+* Error Handling::
+* Dialogue and Narrative::
+* Copybook Inclusion::
+* Record Types::
+* Arrays::
+* Operators Reference::
+* Unsupported Features::
 @end menu
 
-@node Naming system
-@section Naming system
+@node Lexical Analysis
+@section Lexical Analysis
 
-In Pascal, variable names use @code{case-insensitive} naming (conventionally @code{CamelCase} or @code{snake_case}).
-All keywords are case-insensitive but conventionally written in lowercase.
+The Pascal lexer (@code{pascal-lex-source}) converts the input character
+stream into a sequence of tokens. It recognizes keywords, operators,
+literals, identifiers, and punctuation.
+
+@subheading Keywords
+
+Keywords are case-insensitive and conventionally written in lowercase.
+The following keywords are recognized by the lexer:
 
 @table @asis
-@item Keywords: and, array, begin, case, const, destructor, division, do, downto, else, end, file, for, function, goto, if, implementation, in, label, mod, nil, not, object, of, or, packed, procedure, program, record, repeat, set, shl, shr, string, then, to, type, unit, until, uses, var, while, with, xor
-@item Operators: +, -, *, /, div, mod, =, <>, <, >, <=, >=, and, or, not, <<, >>
-@item String delimiters: Single quotes (@code{'...'}) or double quotes (@code{"..."}) for string literals
-@item Comments: Curly braces (@code{@{ ... @}) or (* ... *) or // to end of line
+@item @code{and} - Logical AND operator
+@item @code{array} - Array type declaration (syntax only)
+@item @code{begin} - Block start
+@item @code{case} - Case statement start
+@item @code{copy} - Copybook inclusion
+@item @code{div} - Integer division
+@item @code{do} - Loop body marker
+@item @code{end} - Block end
+@item @code{endcase} - Case statement end
+@item @code{exit} - Exit from loop or procedure
+@item @code{fault} - Fault logging
+@item @code{for} - For loop
+@item @code{goback} - Return from procedure
+@item @code{goto} - Unconditional jump
+@item @code{if} - Conditional statement
+@item @code{in} - Library or bank reference
+@item @code{input} - Input statement
+@item @code{library} - Library routine modifier
+@item @code{log} - Logging statement
+@item @code{method} - Method declaration
+@item @code{move} - Assignment (alternate syntax)
+@item @code{next} - Loop body marker
+@item @code{not} - Logical NOT operator
+@item @code{of} - Case clause marker
+@item @code{on} - Object reference
+@item @code{or} - Logical OR operator
+@item @code{procedure} - Procedure declaration
+@item @code{print} - Print statement
+@item @code{protocol} - Protocol declaration
+@item @code{read} - Read statement
+@item @code{return} - Return statement (alternate)
+@item @code{step} - For loop step
+@item @code{stop} - Stop program
+@item @code{then} - Conditional marker
+@item @code{to} - For loop target
+@item @code{until} - Post-test loop condition
+@item @code{var} - Variable declaration
+@item @code{while} - Pre-test loop
+@item @code{write} - Write statement
+@item @code{dialogue} - Dialogue statement
 @end table
 
-@node Basic structure
-@section Basic structure for a stand-alone routine or program
+@subheading Operators
 
-A Pascal program consists of a program heading, optional uses clause, block of declarations and statements.
+The following operators are recognized:
 
-@example
-program GameLogic;
-
-uses
-  SysUtils;
-
-var
-  Score: Integer = 0;
-  LivesLeft: Integer = 3;
-  CurrentRoom: Integer = 1;
-
-procedure InitializeGame;
-begin
-  Score := 0;
-  LivesLeft := 3;
-  CurrentRoom := 1;
-end;
-
-procedure ProcessInput;
-var
-  Input: string;
-begin
-  ReadLn(Input);
-  if Input = 'MOVE NORTH' then
-    CurrentRoom := CurrentRoom + 10;
-end;
-
-procedure UpdateGame;
-begin
-  // Game logic updates
-end;
-
-procedure RenderDisplay;
-begin
-  // Rendering code
-end;
-
-begin
-  InitializeGame;
-  while LivesLeft > 0 do
-  begin
-    ProcessInput;
-    UpdateGame;
-    RenderDisplay;
-  end;
-end.
-@end example
-
-@node Basic structure object
-@section Basic structure for an object method
-
-Pascal supports object-oriented programming through classes and methods.
-
-@example
-type
-  TPlayer = class
-  private
-    FX: Integer;
-    FY: Integer;
-    FSprite: Integer;
-  public
-    constructor Create(X, Y, Sprite: Integer);
-    procedure Move(DX, DY: Integer);
-    property X: Integer read FX write FX;
-    property Y: Integer read FY write FY;
-    property Sprite: Integer read FSprite write FSprite;
-  end;
-
-constructor TPlayer.Create(X, Y, Sprite: Integer);
-begin
-  inherited Create;
-  FX := X;
-  FY := Y;
-  FSprite := Sprite;
-end;
-
-procedure TPlayer.Move(DX, DY: Integer);
-begin
-  FX := FX + DX;
-  FY := FY + DY;
-end;
-
-var
-  Player: TPlayer;
-
-begin
-  Player := TPlayer.Create(100, 100, 5);
-  // Use player
-end.
-@end example
-
-@node Calling routines
-@section Calling a routine (nullary)
-
-To call a procedure or function that takes no arguments:
-
-@example
-InitializeGraphics;
-ClearScreen;
-PlayStartupMusic;
-SomeProcedure;
-@end example
-
-@node Calling routines value
-@section Calling a routine with a value (in accumulator)
-
-To call a function that returns a single value:
-
-@example
-Score := CalculateBonus(Level, TimeLeft);
-BonusFactor := GetInputFactor;
-Volume := GetMasterVolume;
-SomeFunction;
-@end example
-
-@node Calling routines giving
-@section Calling a routine giving a value (in accumulator)
-
-Not applicable in Pascal's standard calling convention.
-
-@node Calling routines values
-@section Calling a routine with values in and out (in accumulator)
-
-To call a procedure with parameters:
-
-@example
-DrawSprite(SpriteId, XPos, YPos);
-PlaySound(SoundId, Volume, LoopFlag);
-CheckCollision(Obj1, Obj2, ResultVar);
-SomeProcedure(Param1, Param2);
-@end example
-
-@node Calling library
-@section Calling a library routine (all 4 styles)
-
-Pascal accesses library routines through standard procedure/function calls or object methods:
-
-@example
-LoadLevel(LevelNumber);          @r{Direct call}
-FarProc(LibraryAddress);         @r{Far call}
-Result := LibraryFunction(Input); @r{Library function}
-Object.Method(Param1, Param2);   @r{Object method call}
-@end example
-
-These correspond to:
 @table @asis
-@item Direct: ProcedureName(...) or FunctionName(...)
-@item Far: AbsoluteAddress(...) (via external unit)
-@item Library: LibraryEntry(...) or FunctionName(...)
-@item Object: OBJECT.MethodName(...)
+@item @code{+} - Addition
+@item @code{-} - Subtraction
+@item @code{*} - Multiplication
+@item @code{/} - Division
+@item @code{=} - Equality or assignment
+@item @code{<>} - Not equal
+@item @code{<} - Less than
+@item @code{>} - Greater than
+@item @code{<=} - Less than or equal
+@item @code{>=} - Greater than or equal
+@item @code{:} - Label separator or type qualifier
+@item @code{.} - Record field access
 @end table
 
-@node Calling far bank
-@section Calling a far bank Service (all 4 styles)
+@subheading Comments
 
-Far procedures in Pascal are called using external units or the absolute directive:
+Pascal supports three comment styles:
 
 @example
-// Declare far procedure
-procedure FarLoadLibrary(Addr: LongWord); external 'farproc' name 'FarLoadLibrary';
-
-// Call far routine
-FarLoadLibrary($8000);   @r{Call routine in bank 1}
+@{ This is a brace comment @}
+(* This is a parenthesized-star comment *)
+// This is a line comment
 @end example
 
-These correspond to:
-@table @asis
-@item Direct: Not used for far calls
-@item Far: External procedure call
-@item Library: Not applicable
-@item Object: Not applicable
-@end table
+Line comments extend to the end of the line. Lines beginning with @code{;}
+are treated as comment lines and ignored.
 
-@node Invoking object
-@section Invoking a method on an object (all 4 styles)
+@subheading String Delimiters
 
-Object method invocation in Pascal uses dot notation:
+Strings may be delimited by single quotes or double quotes:
 
 @example
-Player.Move(5, 10);
-ScoreDisplay.Update(Score);
-GameOver := GameState.IsGameOver;
+'Hello, World!'
+"Also valid string syntax"
 @end example
 
-These correspond to:
+@node Program Structure
+@section Program Structure
+
+A Pascal program or procedure consists of a procedure declaration with a
+body delimited by @code{BEGIN} and @code{END}.
+
+@subheading Syntax
+
+@example
+PROCEDURE MyProcedure
+BEGIN
+  @var{statements}
+END
+@end example
+
+@subheading Examples
+
+@example
+PROCEDURE InitializeGame
+BEGIN
+  Score := 0
+  LivesLeft := 3
+END
+@end example
+
+@example
+PROCEDURE MainLoop
+BEGIN
+  ProcessInput
+  UpdateGame
+  RenderDisplay
+END
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Procedure names must be valid identifiers (alphanumeric and underscore)
+@item At least one statement is required between BEGIN and END
+@item Empty procedures are allowed (no statements)
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item The parser produces a program node containing a method node
+@item The method node contains the list of statements
+@end itemize
+
+@node Procedures and Methods
+@section Procedures and Methods
+
+Procedures define named blocks of code that can be called from other parts
+of the program. Methods are procedures associated with a class or object.
+
+@subheading Standalone Procedure
+
+@example
+PROCEDURE DoSomething
+BEGIN
+  @var{statements}
+END
+@end example
+
+@subheading Method on Object
+
+@example
+PROCEDURE Move ON Player
+BEGIN
+  X := X + DeltaX
+  Y := Y + DeltaY
+END
+@end example
+
+The @code{ON} keyword associates the procedure with a specific object or
+class. The generated method name becomes @code{ClassName#MethodName}.
+
+@subheading Library Procedure
+
+@example
+PROCEDURE DrawSprite IN LIBRARY
+BEGIN
+  @var{statements}
+END
+@end example
+
+Library procedures are called with the @code{:library} flag set.
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Procedure identifier: valid identifier name
+@item Object identifier (after ON): valid identifier name
+@item Body: zero or more statements
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item Method node with name: @code{ProcedureName} for standalone
+@item Method node with name: @code{ClassName#MethodName} for methods
+@end itemize
+
+@node Variables and Types
+@section Variables and Types
+
+Variables are declared using the @code{VAR} keyword. Type declarations are
+simplified in this dialect.
+
+@subheading Syntax
+
+@example
+VAR variableName : type
+VAR score : INTEGER
+VAR name : STRING
+@end example
+
+@subheading Basic Types
+
 @table @asis
-@item Direct: Setting object properties via property assignment
-@item Far: Not applicable for methods (objects typically in same memory)
-@item Library: Method may call library routines internally
-@item Object: METHOD invocation on object instance
+@item @code{INTEGER} - Signed integer value
+@item @code{REAL} - Floating-point value
+@item @code{STRING} - Character string
+@item @code{BOOLEAN} - True/false value
+@item @code{CHAR} - Single character
 @end table
+
+@subheading Examples
+
+@example
+VAR counter : INTEGER
+VAR playerX : INTEGER
+VAR message : STRING
+VAR isActive : BOOLEAN
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Variable names: alphanumeric with underscores, case-insensitive
+@item Type names: recognized type keywords
+@end itemize
+
+@subheading Note
+
+The current parser treats variable declarations semantically but the
+grammar focuses on executable statements. Variable storage allocation is
+handled by the code generation backend.
+
+@node Expressions
+@section Expressions
+
+Expressions combine literals, variables, and operators to produce values.
+
+@subheading Primary Expressions
+
+@example
+42                    @r{Integer literal}
+3.14159              @r{Real literal}
+"Hello"              @r{String literal}
+myVariable           @r{Identifier}
+@end example
+
+@subheading Parenthesized Expressions
+
+@example
+(x + y)
+((a - b) * c)
+@end example
+
+@subheading Record Field Access
+
+@example
+player.X
+sprite.Position.Y
+data.Field1.Field2
+@end example
+
+@subheading Array Subscript Access
+
+@example
+scores[0]
+matrix[row][col]
+items[index]
+@end example
+
+@subheading Arithmetic Expressions
+
+@example
+x + y                @r{Addition}
+x - y                @r{Subtraction}
+x * y                @r{Multiplication}
+x / y                @r{Division}
+@end example
+
+@subheading Relational Expressions
+
+@example
+x = y                @r{Equal}
+x <> y               @r{Not equal}
+x < y                @r{Less than}
+x > y                @r{Greater than}
+x <= y               @r{Less or equal}
+x >= y               @r{Greater or equal}
+@end example
+
+@subheading Logical Expressions
+
+@example
+a AND b              @r{Logical AND}
+a OR b               @r{Logical OR}
+NOT a                @r{Logical NOT}
+@end example
+
+@subheading Operator Precedence
+
+@enumerate
+@item Parentheses: highest precedence
+@item Unary: NOT, unary minus
+@item Multiplicative: *, /
+@item Additive: +, -
+@item Relational: =, <>, <, >, <=, >=
+@item Logical AND
+@item Logical OR: lowest precedence
+@end enumerate
 
 @node Assignment
-@section Assigning to a variable
+@section Assignment
 
-Variables are assigned using the assignment operator (:=):
+Variables are assigned values using the assignment operator (@code{:=})
+or the @code{MOVE} keyword.
 
-@example
-Score := 0;                           @r{Explicit assignment}
-LivesLeft := 3;                       @r{Implicit assignment}
-Counter := Counter + 1;               @r{Increment}
-LivesLeft := LivesLeft - 1;           @r{Decrement}
-Score := Score + 10;                  @r{Arithmetic assignment}
-Message := 'Hello, World!';           @r{String assignment}
-@end example
-
-@node Assignment object
-@section Assigning to an object slot
-
-Object slots (properties) are assigned using property assignment:
+@subheading Standard Assignment
 
 @example
-Player.X := 160;                      @r{Set object's x coordinate}
-Player.Y := 100;                      @r{Set object's y coordinate}
-Player.Sprite := 5;                   @r{Set sprite number}
-Player.Visible := True;               @r{Set visibility flag}
+@var{variable} := @var{expression}
 @end example
 
-@node Assignment array
-@section Assigning to an array member with a subscript
-
-Array elements are assigned using indexing:
+@subheading Examples
 
 @example
-var
-  ScoreList: array[0..9] of Integer;
-  InitialsList: array[0..9] of string;
-  Board: array[0..7, 0..7] of Integer;
-
-begin
-  ScoreList[0] := 100;
-  InitialsList[0] := 'ALI';
-  Board[2][3] := 1;
-end.
+Score := 0
+Counter := Counter + 1
+Total := Price + Tax
+Message := "Game Over"
 @end example
 
-@node Arithmetic
-@section Basic arithmetic: addition and subtraction
+@subheading MOVE Assignment
 
-Basic arithmetic uses the + and - operators:
+The @code{MOVE} keyword provides an alternate syntax for assignment:
 
 @example
-Score := Score + 10;                  @r{Addition}
-LivesLeft := LivesLeft - 1;           @r{Subtraction}
-Total := Width + Height;              @r{Add two variables}
-FinalPrice := Price - Discount;       @r{Subtraction}
-Delta := NewValue - OldValue;         @r{Subtraction}
+MOVE @var{expression} TO @var{variable}
 @end example
-
-@node Arithmetic bit
-@section Basic arithmetic: bit-shifting for mutiplication or division
-
-Bit-shifting for multiplication/division by powers of two uses the shl and shr operators:
 
 @example
-Result := Value shl 2;                @r{Left shift 2 bits (multiply by 4)}
-Result := Value shr 1;                @r{Right shift 1 bit (divide by 2)}
-Result := Value * 4;                  @r{Multiply by 4}
-Result := Value div 2;                @r{Divide by 2}
-Result := Value * 8;                  @r{Multiply by 8}
-Result := Value div 16;               @r{Divide by 16}
+MOVE 10 TO Score
+MOVE X + Y TO Total
 @end example
 
-@node Complex arithmetic
-@section Complex arithmetic: multiple expressions
-
-Complex arithmetic expressions follow standard precedence rules:
+@subheading Array Element Assignment
 
 @example
-Total := (BaseSalary * 12) + Bonus - Deductions;
-Average := (Sum1 + Sum2 + Sum3) / 3.0;
-Distance := Sqrt(Sqr(X2 - X1) + Sqr(Y2 - Y1));
+Scores[0] := 100
+Matrix[Row][Col] := Value
 @end example
 
-@node Boolean
-@section Boolean expressions: equality and inequalities
-
-Boolean expressions use logical operators and comparison operators:
+@subheading Record Field Assignment
 
 @example
-if Score > 1000 then ...              @r{Greater than}
-if Score < 50 then ...                @r{Less than}
-if Score = 100 then ...               @r{Equality}
-if Score <> 0 then ...                @r{Inequality}
-if (X >= 0) and (X < MAX_X) then ...  @r{Combined conditions}
-if (Button = BUTTON_A) or (Button = BUTTON_B) then ... @r{Alternative conditions}
+Player.X := 160
+Player.Y := 100
+Sprite.Frame := 0
 @end example
 
-@node If then else
-@section Using if/then/else structures and examine/cond structures
+@subheading Valid Inputs
 
-Conditional execution uses if/then/else/end blocks:
+@itemize @bullet
+@item Target: variable name, array element, or record field
+@item Expression: any valid expression
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item AST node: @code{(:move :from @var{expr} :to @var{target})}
+@end itemize
+
+@node Control Structures
+@section Control Structures
+
+Conditional execution is provided through @code{IF/THEN/ELSE} and
+@code{CASE/OF/ENDCASE} statements.
+
+@subheading IF/THEN/ELSE
 
 @example
-if Temperature > THOT then
-  Status := 'HOT'
-else if Temperature > TCOLD then
-  Status := 'WARM'
-else
-  Status := 'COLD';
-
-case Answer of
-  'Y', 'y': Response := 'YES';
-  'N', 'n': Response := 'NO';
-  else    Response := 'INVALID';
-end;
+IF @var{condition} THEN
+  @var{then-statements}
+ELSE
+  @var{else-statements}
+END
 @end example
 
-Pascal does not have an EXAMINE/COND structure; case statement serves
-a similar purpose for multi-way branching.
-
-@node Performing
-@section Performing loops
-
-Loops are implemented using for, while, and repeat-until loops:
+@subsubheading Simple IF
 
 @example
-// for loop equivalent (known iterations)
-for I := 1 to 10 do
-  Writeln('Count: ', I);
-
-// while loop equivalent (pre-test)
-I := 1;
-while I <= 10 do
-begin
-  Writeln('Count: ', I);
-  Inc(I);
-end;
-
-// repeat-until loop equivalent (post-test)
-repeat
-  Write('Continue? (Y/N): ');
-  ReadLn(Response);
-until UpCase(Response) = 'Y';
-
-// for loop with break and continue
-for I := 1 to 100 do
-begin
-  if Array[I] = TARGET_VALUE then
-  begin
-    Writeln('Found at index: ', I);
-    Break;                    @r{Exit loop immediately}
-  end;
-  if Array[I] < 0 then
-    Continue;                 @r{Skip to next iteration}
-  // Process positive values
-end;
+IF Score > 100 THEN
+  Bonus := Bonus + 10
+END
 @end example
 
-@node Breaking loops
-@section Breaking out of loops safely
-
-Early loop exit is achieved using Break and Continue statements:
+@subsubheading IF with ELSE
 
 @example
-Exit for loop early
-for I := 1 to 100 do
-begin
-  if Array[I] = TARGET_VALUE then
-  begin
-    Writeln('Found at index: ', I);
-    Break;                    @r{Exit loop immediately}
-  end;
-end;
-
-// Skip current iteration
-for I := 1 to 100 do
-begin
-  if Array[I] < 0 then
-    Continue;                 @r{Skip to next iteration}
-  // Process non-negative values
-end;
-
-// Nested loop control
-for I := 1 to 10 do
-begin
-  for J := 1 to 10 do
-  begin
-    if Matrix[I][J] = 0 then
-      Break;                @r{Exit inner loop only}
-    // Process non-zero elements
-  end;
-end;
+IF Lives > 0 THEN
+  ContinueGame
+ELSE
+  GameOver
+END
 @end example
 
-@node Dialogue
-@section Calling a dialogue script (Forth scripts)
-
-Pascal does not directly call Forth dialogue scripts. Instead, it uses
-its own procedures. However, through the semantic-sugar
-layer, Pascal commands can be mapped to calls of the shared Fountain/Forth
-runtime library:
+@subsubheading Nested IF
 
 @example
-// Original Pascal code
-if (X > 100) and (X < 200) then
-  ShowMessage(MSG_WELCOME);
-
-// Desugared via semantic-sugar layer
-if ((X > 100) and (X < 200)) then
-  (:call-acc :target "ShowWelcomeMessage" :using nil);
-end;
+IF Temperature > 100 THEN
+  Status := "HOT"
+ELSE IF Temperature > 50 THEN
+  Status := "WARM"
+ELSE
+  Status := "COLD"
+END
 @end example
 
-@node Tiles
-@section Manipulating tiles
-
-Tile manipulation is performed through direct video memory access
-or through library routines for tiled backgrounds:
+@subheading CASE Statement
 
 @example
-// Direct memory access (mode-dependent)
-// Assuming direct memory access via pointer
-var
-  VideoMemory: Pointer;
-  Offset: Integer;
-begin
-  VideoMemory := Ptr($B8000);
-  Offset := (Row * 80 + Col) * 2;
-  PByteArray(VideoMemory)^[Offset] := TileNum;
-  PByteArray(VideoMemory)^[Offset + 1] := Attribute;
-end;
-
-// Library routine approach
-LoadTileSet(TileSetId);
-PlaceTile(Layer, X, Y, TileIndex);
-ScrollBackground(DX, DY);
+CASE @var{expression} OF
+  @var{value1} : @var{statements}
+  @var{value2} : @var{statements}
+  ELSE : @var{default-statements}
+ENDCASE
 @end example
 
-@node Decals
-@section Manipulating decals
-
-Decals (sprites or movable objects) are manipulated using:
+@subsubheading Examples
 
 @example
-// Hardware sprite approach (if available)
-InitSprites;
-SetSpritePosition(SpriteId, X, Y);
-SetSpriteImage(SpriteId, ImageId);
-ShowSprite(SpriteId, -1);   @r{-1 = visible}
-
-// Software sprite approach
-type
-  TSprite = record
-    X, Y, Frame: Integer;
-  end;
-
-var
-  Sprite: TSprite;
-
-begin
-  Sprite.X := 100;
-  Sprite.Y := 50;
-  Sprite.Frame := 0;
-
-  Sprite.X := 100;
-  Sprite.Y := 50;
-  Sprite.Frame := (Sprite.Frame + 1) mod 4;
-end.
+CASE Direction OF
+  1 : MoveNorth
+  2 : MoveSouth
+  3 : MoveEast
+  4 : MoveWest
+  ELSE : Beep
+ENDCASE
 @end example
-
-@node Objects
-@section Manipulating objects
-
-Object manipulation depends on the implementation approach:
 
 @example
-// Using classes
-type
-  TGameObject = class
-  private
-    FX, FY: Integer;
-    FWidth, FHeight: Integer;
-    FActive: Boolean;
-  public
-    constructor Create(X, Y, Width, Height: Integer);
-    procedure Move(DX, DY: Integer);
-    property X: Integer read FX write FX;
-    property Y: Integer read FY write FY;
-    property Width: Integer read FWidth write FWidth;
-    property Height: Integer read FHeight write FHeight;
-    property Active: Boolean read FActive write FActive;
-  end;
-
-constructor TGameObject.Create(X, Y, Width, Height: Integer);
-begin
-  inherited Create;
-  FX := X;
-  FY := Y;
-  FWidth := Width;
-  FHeight := Height;
-  FActive := True;
-end;
-
-procedure TGameObject.Move(DX, DY: Integer);
-begin
-  FX := FX + DX;
-  FY := FY + DY;
-end;
-
-var
-  GameObjects: array[0..19] of TGameObject;
-  I: Integer;
-
-begin
-  for I := 0 to 19 do
-    GameObjects[I] := TGameObject.Create(100, 100, 16, 16);
-  for I := 0 to 19 do
-  begin
-    GameObjects[I].Move(DX, DY);
-    if GameObjects[I].Active then
-      DrawObject(GameObjects[I]);
-  end;
-end.
+CASE KeyPressed OF
+  0 : Score := Score + 10
+  1 : Score := Score + 20
+  2 : Score := Score + 50
+ENDCASE
 @end example
 
-@node Unsupported
-@section Unsupported language features
+@subheading Valid Inputs
 
-The following Pascal features are not supported in this EIGHTBOL release:
+@itemize @bullet
+@item Condition: any boolean expression
+@item Case values: integer literals
+@item ELSE clause: optional
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item IF: @code{(:if :condition @var{cond} :then @var{then-stmts} :else @var{else-stmts})}
+@item CASE: @code{(:evaluate :subject @var{expr} :when-clauses @var{clauses})}
+@end itemize
+
+@node Loops
+@section Loops
+
+Five loop constructs are supported: pre-test (@code{WHILE}), post-test
+(@code{UNTIL}), post-test with pre-condition (@code{DO/NEXT/WHILE}),
+post-test with post-condition (@code{DO/NEXT/UNTIL}), and counting
+(@code{FOR}).
+
+@subheading WHILE Loop
+
+Pre-test loop that continues while condition is true:
+
+@example
+WHILE @var{condition} NEXT
+  @var{statements}
+END
+@end example
+
+@example
+WHILE Lives > 0 NEXT
+  ProcessGameFrame
+END
+@end example
+
+@subheading UNTIL Loop
+
+Post-test loop that continues until condition becomes true:
+
+@example
+UNTIL @var{condition} NEXT
+  @var{statements}
+END
+@end example
+
+@example
+UNTIL KeyPressed = ESC NEXT
+  UpdateAnimation
+END
+@end example
+
+@subheading DO/NEXT/WHILE Loop
+
+Post-test loop with pre-condition check:
+
+@example
+DO NEXT WHILE @var{condition}
+  @var{statements}
+END
+@end example
+
+The body executes at least once, then repeats while the condition is true.
+
+@subheading DO/NEXT/UNTIL Loop
+
+Post-test loop with post-condition check:
+
+@example
+DO NEXT UNTIL @var{condition}
+  @var{statements}
+END
+@end example
+
+The body executes at least once, then repeats until the condition becomes true.
+
+@subheading FOR Loop
+
+Counting loop with optional step:
+
+@example
+FOR @var{variable} FROM @var{start} TO @var{end} STEP @var{step} NEXT
+  @var{statements}
+END
+@end example
+
+@subsubheading Examples
+
+@example
+FOR I FROM 1 TO 10 NEXT
+  Score := Score + 10
+END
+@end example
+
+@example
+FOR X FROM 0 TO 79 STEP 2 NEXT
+  DrawPixel X, Y
+END
+@end example
+
+@example
+FOR Index FROM Length DOWNTO 0 STEP -1 NEXT
+  Items[Index] := 0
+END
+@end example
+
+@subheading Exit from Loop
+
+Use @code{EXIT} to break out of a loop:
+
+@example
+FOR I FROM 1 TO 100 NEXT
+  IF Items[I] = Target THEN
+    EXIT
+  END
+END
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item WHILE/UNTIL: condition expression
+@item FOR: variable name, start/end expressions, optional step expression (default: 1)
+@item Step can be positive or negative
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item WHILE: @code{(:perform :until @var{cond})}
+@item UNTIL: @code{(:perform :until (NOT @var{cond}))}
+@item FOR: @code{(:perform :varying @var{var} :from @var{start} :by @var{step} :until @var{cond})}
+@end itemize
+
+@node Procedure Calls
+@section Procedure Calls
+
+Procedures are called using the @code{CALL} keyword or by using the
+procedure name directly as a statement.
+
+@subheading Syntax
+
+@example
+CALL @var{procedure-name}
+@var{procedure-name}
+@end example
+
+@subheading Examples
+
+@example
+CALL InitializeGame
+ClearScreen
+LoadLevel CurrentLevel
+PlaySound Explosion
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Procedure name: valid identifier
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item AST node: @code{(:call :target @var{name})}
+@end itemize
+
+@node Method Invocation
+@section Method Invocation
+
+Methods on objects are invoked using the @code{CALL ... ON} syntax.
+
+@subheading Syntax
+
+@example
+CALL @var{method-name} ON @var{object-name}
+@end example
+
+@subheading Examples
+
+@example
+CALL Move ON Player
+CALL Draw ON SpriteManager
+CALL Update ON GameState
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Method name: valid identifier
+@item Object name: valid identifier referring to an object instance
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item AST node: @code{(:invoke :class @var{object} :method @var{method})}
+@end itemize
+
+@node Library Calls
+@section Library Calls
+
+Procedures in external libraries or different memory banks are called
+using the @code{CALL ... IN} syntax.
+
+@subheading Syntax
+
+@example
+CALL @var{procedure-name} IN @var{bank-number}
+CALL @var{procedure-name} IN LIBRARY
+@end example
+
+@subheading Examples
+
+@example
+CALL LoadBank1 IN 1
+CALL DrawSprite IN LIBRARY
+CALL PlayMusic IN 3
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Procedure name: valid identifier
+@item Bank number: integer literal (for bank calls)
+@item LIBRARY keyword (for library calls)
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item Bank call: @code{(:call :target @var{name} :bank @var{bank})}
+@item Library call: @code{(:call :target @var{name} :library T)}
+@end itemize
+
+@node Input and Output
+@section Input and Output
+
+Input and output statements provide basic I/O capabilities.
+
+@subheading PRINT Statement
+
+Output a value or string:
+
+@example
+PRINT @var{expression}
+PRINT "@var{string}"
+@end example
+
+@example
+PRINT Score
+PRINT "Level Complete!"
+PRINT "Score: " + Score
+@end example
+
+@subheading WRITE Statement
+
+Alternate syntax for output:
+
+@example
+WRITE @var{expression}
+WRITE "@var{string}"
+@end example
+
+@subheading INPUT Statement
+
+Read input into a variable:
+
+@example
+INPUT @var{variable-name}
+@end example
+
+@example
+INPUT PlayerName
+INPUT Guess
+@end example
+
+@subheading READ Statement
+
+Alternate syntax for input:
+
+@example
+READ @var{variable-name}
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item PRINT/WRITE: expression or string literal
+@item INPUT/READ: variable name
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item PRINT/WRITE: @code{(:print :expressions (@var{expr}))}
+@item INPUT/READ: @code{(:input :variables (@var{var}))}
+@end itemize
+
+@node Error Handling
+@section Error Handling
+
+Error handling is provided through fault logging and program termination.
+
+@subheading LOG FAULT Statement
+
+Log a fault condition:
+
+@example
+LOG FAULT @var{error-code}
+@end example
+
+@example
+LOG FAULT 1
+LOG FAULT ErrorCode
+@end example
+
+@subheading STOP Statement
+
+Terminate program execution:
+
+@example
+STOP @var{exit-code}
+@end example
+
+@example
+STOP 0
+STOP ExitCode
+@end example
+
+@subheading EXIT Statement
+
+Exit from current loop or procedure:
+
+@example
+EXIT
+@end example
+
+@example
+FOR I FROM 1 TO 100 NEXT
+  IF Found THEN
+    EXIT
+  END
+END
+@end example
+
+@subheading GOBACK Statement
+
+Return from procedure:
+
+@example
+GOBACK
+@end example
+
+@example
+PROCEDURE CheckBounds
+BEGIN
+  IF X < 0 THEN
+    GOBACK
+  END
+END
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item LOG FAULT: integer expression
+@item STOP: integer expression
+@item EXIT/GOBACK: none
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item LOG FAULT: @code{(:log-fault :code @var{code})}
+@item STOP: @code{(:stop-run :code @var{code})}
+@item EXIT: @code{(:exit-method)}
+@item GOBACK: @code{(:goback)}
+@end itemize
+
+@node Dialogue and Narrative
+@section Dialogue and Narrative
+
+The @code{DIALOGUE} statement displays narrative text, typically for game
+storytelling.
+
+@subheading Syntax
+
+@example
+DIALOGUE "@var{text}"
+@end example
+
+@subheading Examples
+
+@example
+DIALOGUE "Welcome to the game!"
+DIALOGUE "You found a treasure chest."
+DIALOGUE "The door creaks open slowly."
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Text: string literal
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item AST node: @code{(:dialogue :speaker "narrator" :text @var{text})}
+@end itemize
+
+@node Copybook Inclusion
+@section Copybook Inclusion
+
+Copybooks are source files containing shared declarations that can be
+included in multiple programs.
+
+@subheading Syntax
+
+@example
+COPY "@var{filename}";
+@end example
+
+@subheading Examples
+
+@example
+COPY "common/types.pas";
+COPY "game/constants.pas";
+@end example
+
+@subheading Note
+
+The semicolon after the filename is optional.
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Filename: string literal with file path
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item AST node: @code{(:copy :name @var{filename})}
+@end itemize
+
+@node Record Types
+@section Record Types
+
+Records group related data items of different types. While the current
+parser does not have explicit record type declarations, record field
+access is supported through the dot operator.
+
+@subheading Syntax
+
+@example
+@var{record-variable}.@var{field}
+@end example
+
+@subheading Examples
+
+@example
+Player.X := 100
+Player.Y := 50
+Item.Data.Count := 0
+@end example
+
+@subheading Nested Records
+
+@example
+Customer.Address.City := "Springfield"
+Customer.Address.Zip := 12345
+@end example
+
+@subheading Record Assignment
+
+@example
+Player := NewPlayer
+Player.X := ScreenWidth / 2
+Player.Y := ScreenHeight / 2
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Record variable: variable of record type
+@item Field: identifier naming a field within the record
+@end itemize
+
+@subheading Note
+
+Record type definitions are not explicitly parsed; the backend handles
+record layout and field access. See the COBOL frontend for copybook-based
+record definitions.
+
+@node Arrays
+@section Arrays
+
+Arrays provide indexed access to collections of elements of the same type.
+
+@subheading Single-Dimensional Arrays
+
+@example
+@var{array}[@var{index}]
+Scores[0]
+Items[Index]
+Data[Count]
+@end example
+
+@subheading Multi-Dimensional Arrays
+
+@example
+@var{array}[@var{dim1}][@var{dim2}]
+Matrix[Row][Col]
+Table[X][Y][Z]
+@end example
+
+@subheading Array Assignment
+
+@example
+Scores[0] := 100
+Items[I] := Items[I] + 1
+Matrix[Row][Col] := Value
+@end example
+
+@subheading Valid Inputs
+
+@itemize @bullet
+@item Index: integer expression
+@item Multiple indices for multi-dimensional arrays
+@end itemize
+
+@subheading Outputs
+
+@itemize @bullet
+@item Subscript access: @code{(:subscript @var{array} @var{index})}
+@end itemize
+
+@subheading Note
+
+Array declarations and bounds checking are handled by the backend.
+The frontend supports subscript access syntax only.
+
+@node Operators Reference
+@section Operators Reference
+
+@subheading Arithmetic Operators
 
 @table @asis
-@item File I/O operations (assign, reset, rewrite, close, read, write)
-@item Graphics commands (Graph unit: line, circle, floodfill, etc.)
-@item Hardware-specific features (joystick, mouse, keyboard beyond basic)
-@item Extended memory handling (unless emulated)
-@item Multithreading or concurrent execution
-@item Exception handling (try, except, finally, raise)
-@item Pointer arithmetic and manual memory management
-@item Preprocessor directives ($define, $ifdef)
-@item Object-oriented multiple inheritance (unless using interfaces)
-@item Generics and anonymous methods (unless using modern Pascal)
+@item @code{+} - Binary addition; combines two values
+@item @code{-} - Binary subtraction; subtracts right from left
+@item @code{*} - Multiplication; multiplies two values
+@item @code{/} - Division; divides left by right
 @end table
 
-@node SCI
+@subheading Relational Operators
+
+@table @asis
+@item @code{=} - Equality; true if operands are equal
+@item @code{<>} - Inequality; true if operands differ
+@item @code{<} - Less than
+@item @code{>} - Greater than
+@item @code{<=} - Less than or equal
+@item @code{>=} - Greater than or equal
+@end table
+
+@subheading Logical Operators
+
+@table @asis
+@item @code{AND} - Logical AND; true if both operands true
+@item @code{OR} - Logical OR; true if either operand true
+@item @code{NOT} - Logical NOT; inverts boolean value
+@end table
+
+@subheading Assignment Operators
+
+@table @asis
+@item @code{:=} - Assignment; assigns value to variable
+@item @code{MOVE} - Alternate assignment syntax
+@end table
+
+@subheading Precedence
+
+Highest to lowest:
+@enumerate
+@item Parentheses
+@item Unary (NOT, -)
+@item Multiplicative (*, /)
+@item Additive (+, -)
+@item Relational (=, <>, <, >, <=, >=)
+@item Logical AND
+@item Logical OR
+@end enumerate
+
+@node Unsupported Features
+@section Unsupported Features
+
+The following Pascal features are not supported in this frontend:
+
+@table @asis
+@item @strong{File I/O} - @code{assign}, @code{reset}, @code{rewrite}, @code{close}, @code{blockread}, @code{blockwrite}
+@item @strong{Graphics} - @code{graph}, @code{initgraph}, @code{setcolor}, @code{circle}, @code{line}, @code{rectangle}
+@item @strong{Pointer types} - Pointer declarations and pointer arithmetic
+@item @strong{Sets} - Set types and set operations
+@item @strong{With statement} - @code{WITH record DO} construct
+@item @strong{Labeled GOTO} - @code{GOTO label} (labels without the statement structure)
+@item @strong{Procedural parameters} - Procedures as parameters to other procedures
+@item @strong{Function results} - Function return value assignment
+@item @strong{Type declarations} - Explicit type definitions (@code{TYPE T = ...})
+@item @strong{Enumerated types} - @code{(red, green, blue)}
+@item @strong{Subrange types} - @code{1..10}
+@item @strong{Exception handling} - @code{TRY}, @code{EXCEPT}, @code{FINALLY}, @code{RAISE}
+@item @strong{Units and modules} - @code{INTERFACE}, @code{IMPLEMENTATION}, @code{USES}
+@item @strong{Inline assembly} - @code{ASM} blocks
+@item @strong{Procedural variables} - Variable procedures
+@item @strong{Records with methods} - Methods inside records (use classes instead)
+@item @strong{Class operators} - Operator overloading
+@item @strong{Generics} - Generic types and procedures
+@item @strong{Anonymous methods} - Inline procedure literals
+@item @strong{Property definitions} - @code{PROPERTY} keyword
+@item @strong{Exception handling} - @code{TRY}, @code{EXCEPT}, @code{FINALLY}
+@item @strong{Preprocessor} - @code{$DEFINE}, @code{$IFDEF}, @code{$INCLUDE}
+@end table
+
+@subheading Alternative Approaches
+
+@itemize @bullet
+@item For file I/O: Use CALL to library routines
+@item For graphics: Use CALL to graphics library routines
+@item For records: Access fields using dot notation
+@item For types: Use COBOL copybooks via COPY statement
+@end itemize

@@ -1,0 +1,682 @@
+@chapter Calling Eightbol from Assembly
+
+@cindex calling from assembly
+@cindex native assembly
+@cindex interop
+
+This chapter describes how to call Eightbol-compiled methods and routines
+from hand-written assembly code. Understanding these conventions is essential
+when you need to integrate performance-critical code, access hardware
+directly, or bridge Eightbol's object-oriented layer with lower-level
+routines.
+
+@menu
+* Why Call from Assembly::         Use cases and motivations
+* Method Call Protocol::           How Eightbol dispatches method calls
+* Parameter Passing::              How data moves between assembly and Eightbol
+* Return Values::                  Getting results back
+* Calling by CPU::                  Conventions for each processor
+* Service Bank Calls::             The service dispatch system
+* Examples::                        Working assembly examples
+@end menu
+
+@node Why Call from Assembly
+@section Why Call from Assembly
+
+@cindex use cases
+@cindex inline assembly
+@cindex performance
+
+You may need to call Eightbol methods from assembly in several scenarios:
+
+@itemize
+@item Integrating hardware access code that cannot be expressed in
+higher-level languages
+@item Hot paths where hand-optimized assembly outperforms generated code
+@item Calling existing assembly libraries or system routines that Eightbol
+does not directly support
+@item Debugging by instrumenting method entry/exit from assembly wrappers
+@end itemize
+
+Eightbol's OOPS system uses a consistent calling convention across all
+backends: a single return value passes through the machine's primary
+register, and all other data moves through global variables.
+
+@node Method Call Protocol
+@section Method Call Protocol
+
+@cindex OOPS
+@cindex method dispatch
+@cindex DoCallMethod
+
+Eightbol uses a message-passing OOPS (Object-Oriented Programming System)
+model inspired by Smalltalk and Phantasia. Every method is a labeled
+subroutine following these rules:
+
+@itemize
+@item Method entry label follows the OOPS convention:
+@code{Method@var{ClassName}@var{MethodName}}
+@item Hyphenated COBOL names become underscores:
+@code{Song--Heal--ID} becomes @code{MethodSongHealID}
+@item Methods receive the object pointer in a global variable named
+@code{Self}
+@item Methods return via the platform's standard return instruction
+(@code{rts}, @code{ret}, @code{jr}, etc.)
+@end itemize
+
+@subsubsection The DoCallMethod Dispatcher
+
+On the 6502 family, method calls route through a dispatcher macro:
+
+@example
+.CallMethod Call@var{ClassName}@var{MethodName}, @var{ClassName}Class
+@end example
+
+This macro loads the method's dispatch address from the class's method
+table and jumps to it. The class pointer is passed to allow superclass
+method lookup.
+
+@node Parameter Passing
+@section Parameter Passing
+
+@cindex parameters
+@cindex globals
+
+Eightbol passes parameters through global variables, not the stack. This
+simplifies calling conventions and matches the 8-bit tradition of
+register-starved architectures.
+
+@itemize
+@item Single arguments: passed in the calling-convention register (A on
+6502, A on Z80, R0 on ARM7, D0 on m68k)
+@item Multiple arguments: first in the calling register, rest in global
+variables
+@item Arrays and structures: a pointer to the data in the calling register
+or a global
+@end itemize
+
+@subsubsection Global Variables
+
+All class slots and method-local temporaries are accessed through the
+@code{Self} pointer for instance data, or as absolute addresses for
+globals. The slot offset is known at compile time from the copybook
+definition.
+
+@node Return Values
+@section Return Values
+
+@cindex return values
+@cindex accumulator
+
+Every backend returns a single value in the machine's primary register:
+
+@table @asis
+@item 6502 / 65c02 / 65c816 / HuC6280 / RP2A03
+@code{A} (accumulator, 8-bit) or @code{A/X} combined (16-bit little-endian)
+@item Z80 / SM83
+@code{A} (8-bit) or @code{HL} (16-bit)
+@item cp1610
+@code{R0} (low byte for 8-bit)
+@item m68k
+@code{D0} (data register 0)
+@item ARM7
+@code{R0}
+@item F8
+@code{A} (accumulator)
+@item i286
+@code{AX}
+@end table
+
+If a method returns no value, the register contents after the call are
+undefined.
+
+@node Calling by CPU
+@section Calling Conventions by CPU
+
+Each CPU family has specific conventions that hand-written assembly must
+follow to interoperate with Eightbol code.
+
+@menu
+* 6502 Calling::                   6502, 65c02, 65c816, HuC6280, RP2A03
+* Z80 Calling::                   Zilog Z80
+* SM83 Calling::                  Sharp SM83 (Game Boy)
+* cp1610 Calling::                Intellivision
+* m68k Calling::                  Motorola 68000
+* ARM7 Calling::                  ARM7TDMI (Game Boy Advance)
+* F8 Calling::                    Fairchild F8 (Channel F)
+* i286 Calling::                   Intel 80286
+@end menu
+
+@node 6502 Calling
+@subsection 6502 Family Calling Convention
+
+@cindex 6502 calling convention
+
+@subsubsection Register Usage
+
+@table @asis
+@item @code{A}
+Calling-convention register. Holds 8-bit arguments and return values.
+@item @code{X}
+16-bit operations combine A (low) with X (high).
+@item @code{Y}
+Slot offset index for object slot access.
+@item @code{S}
+Stack pointer (page 1, 256 bytes).
+@end table
+
+@subsubsection Method Invocation
+
+To call an Eightbol method from 6502 assembly:
+
+@example
+;; Set Self pointer to your object
+        lda #<MyObject
+        sta Self
+        lda #>MyObject
+        sta Self+1
+
+;; Call the method
+        jsr     MethodGameHeroTakeDamage
+@end example
+
+@subsubsection Passing Arguments
+
+For unary calls (argument in A):
+
+@example
+        lda     #5                      ; argument = 5
+        jsr     MethodGameHeroHeal
+        sta     Result                  ; return value in A
+@end example
+
+@subsubsection Method Entry
+
+Eightbol methods begin with slot access using Y-indexed addressing:
+
+@example
+MethodGameHeroTakeDamage:
+        ldy     #SlotOffsetOfHealth     ; health field
+        lda     (Self),y                ; load current health
+        sbc     DamageAmount            ; subtract damage
+        sta     (Self),y                ; store back
+        rts
+@end example
+
+@node Z80 Calling
+@subsection Zilog Z80 Calling Convention
+
+@cindex Z80 calling convention
+
+@subsubsection Register Usage
+
+@table @asis
+@item @code{A}
+Calling-convention register. Holds 8-bit arguments and return values.
+@item @code{HL}
+16-bit register pair. Holds 16-bit arguments, return values, and
+addresses.
+@item @code{BC}
+Count register for loops and string operations.
+@item @code{DE}
+Destination pointer and temporary.
+@end table
+
+@subsubsection Method Invocation
+
+@example
+;; Set Self pointer
+        ld      hl, MyObject
+        ld      (Self), hl
+
+;; Call method
+        call    MethodGameHeroTakeDamage
+        ld      a, l                   ; return value in L for 16-bit
+@end example
+
+@subsubsection Passing Arguments
+
+For 8-bit arguments in A:
+
+@example
+        ld      a, 5                   ; argument
+        call    MethodGameHeroHeal
+        ld      (Result), a            ; return value in A
+@end example
+
+For 16-bit arguments in HL:
+
+@example
+        ld      hl, 1234h              ; 16-bit argument
+        call    MethodSomeRoutine
+        ld      (Result), hl           ; return value in HL
+@end example
+
+@node SM83 Calling
+@subsection Sharp SM83 (Game Boy) Calling Convention
+
+@cindex SM83 calling convention
+
+The SM83 uses the same conventions as the Z80, with RGBDS syntax:
+
+@example
+;; Set Self pointer
+        ld      hl, MyObject
+        ld      [Self], hl
+
+;; Call method
+        call    MethodGameHeroTakeDamage
+        ld      a, l                   ; return value
+@end example
+
+@node cp1610 Calling
+@subsection Intellivision cp1610 Calling Convention
+
+@cindex cp1610 calling convention
+
+@subsubsection Register Usage
+
+@table @asis
+@item @code{R0}–@code{R7}
+16-bit general-purpose registers.
+@item @code{R5}
+Return address register. @code{JSR R5, addr} pushes return; @code{JR R5} returns.
+@item @code{R6}
+Stack pointer.
+@end table
+
+@subsubsection Method Invocation
+
+@example
+;; Set Self pointer (R4 is conventional for object pointer)
+        MVII    #MyObject, R4
+        MVO     R4, Self
+
+;; Call method
+        JSR     R5, MethodGameHeroTakeDamage
+
+;; Return value in R0 (low byte for 8-bit)
+        MVO     R0, Result
+@end example
+
+@subsubsection Passing Arguments
+
+@example
+;; 16-bit argument in R0
+        MVII    #5, R0
+        JSR     R5, MethodGameHeroHeal
+        MOVR    R0, R1                 ; copy return value
+@end example
+
+@node m68k Calling
+@subsection Motorola 68000 Calling Convention
+
+@cindex m68k calling convention
+
+@subsubsection Register Usage
+
+@table @asis
+@item @code{D0}
+Calling-convention register. Holds arguments and return values.
+@item @code{D1}–@code{D7}
+Data registers for temporaries.
+@item @code{A0}
+Address temporary for pointer arithmetic.
+@item @code{A7}
+Stack pointer.
+@end table
+
+@subsubsection Method Invocation
+
+@example
+;; Set Self pointer
+        lea     Self, %a0
+        move.l  %a4, (%a0)            ; assuming object in A4
+
+;; Call method
+        jsr     MethodGameHeroTakeDamage
+
+;; Return value in D0
+        move.l  %d0, Result
+@end example
+
+@subsubsection Passing Arguments
+
+@example
+;; 16-bit argument in D0
+        move.w  #5, %d0
+        jsr     MethodGameHeroHeal
+        move.w  %d0, Result
+@end example
+
+@node ARM7 Calling
+@subsection ARM7TDMI Calling Convention
+
+@cindex ARM7 calling convention
+@cindex Thumb
+
+@subsubsection Register Usage
+
+@table @asis
+@item @code{r0}
+Calling-convention register. Holds arguments and return values.
+@item @code{r1}–@code{r3}
+Scratch registers for temporaries.
+@item @code{r13} (SP)
+Stack pointer.
+@item @code{r14} (LR)
+Link register. Holds return address from @code{bl} calls.
+@end table
+
+@subsubsection Method Invocation
+
+@example
+        .thumb_func
+        .global CallGameHeroTakeDamage
+CallGameHeroTakeDamage:
+        ldr     r1, =Self
+        str     r4, [r1]              ; assuming object in r4
+
+        bl      MethodGameHeroTakeDamage
+        bx      lr                     ; return to caller
+@end example
+
+@subsubsection Passing Arguments
+
+@example
+        movs    r0, #5                ; argument in r0
+        bl      MethodGameHeroHeal
+        ldr     r1, =Result
+        strb    r0, [r1]              ; store return value
+@end example
+
+@node F8 Calling
+@subsection Fairchild F8 Calling Convention
+
+@cindex F8 calling convention
+
+@subsubsection Register Usage
+
+@table @asis
+@item @code{A}
+8-bit accumulator. Calling-convention register.
+@item @code{DC0}
+16-bit data counter. Used for memory addressing.
+@item @code{IS}
+Index stack pointer for scratch register access.
+@end table
+
+@subsubsection Method Invocation
+
+@example
+;; Set Self pointer (using scratch registers 10/11 for 16-bit)
+        LI      #<MyObject
+        LR      10, A
+        LI      #>MyObject
+        LR      11, A
+
+;; Store to Self global
+        DCI     Self
+        LM                      ; load high byte of Self
+        LR      11, A
+        LM                      ; load low byte
+        LR      10, A
+
+;; Call method
+        PI      MethodGameHeroTakeDamage
+@end example
+
+@subsubsection Passing Arguments
+
+@example
+        LI      5                     ; argument in A
+        PI      MethodGameHeroHeal
+        LR      10, A                 ; store return value
+@end example
+
+@node i286 Calling
+@subsection Intel 80286 Calling Convention
+
+@cindex i286 calling convention
+
+@subsubsection Register Usage
+
+@table @asis
+@item @code{AX}
+Calling-convention register. Holds arguments and return values.
+@item @code{BX}, @code{SI}, @code{DI}
+Temporaries and addressing.
+@item @code{CX}
+Count register for loops.
+@end table
+
+@subsubsection Method Invocation
+
+@example
+;; Set Self pointer
+        mov     ax, seg Self
+        mov     ds, ax
+        mov     bx, [bp+4]            ; object address from stack
+
+        mov     ax, seg Self
+        mov     ds, ax
+        lea     si, Self
+        mov     [si], bx
+
+;; Call method
+        call    MethodGameHeroTakeDamage
+        mov     [Result], ax
+@end example
+
+@node Service Bank Calls
+@section Service Bank Calls
+
+@cindex service bank
+@cindex dispatch
+@cindex .Dispatch
+
+Service banks provide a layer-1 dispatch mechanism for calling routines
+across bank boundaries. The system uses a Look-Up Table (LUT) that maps
+service names to bank numbers.
+
+@menu
+* Service Bank LUT::              How the dispatch table works
+* Calling Services from Assembly:: Invoking services from hand-written code
+@end menu
+
+@node Service Bank LUT
+@subsection Service Bank LUT
+
+The service bank LUT is built from @code{.Dispatch} directives in bank
+assembly files. Each dispatch entry maps a service name to a bank:
+
+@example
+.Dispatch        ServiceAudio, AudioBank
+.Dispatch        ServiceVideo, VideoBank
+.Dispatch        ServiceInput, InputBank
+@end example
+
+When Eightbol encounters @code{CALL SERVICE Audio}, it looks up
+@code{ServiceAudio} in the LUT, finds bank @code{AudioBank}, and emits
+a far call:
+
+@example
+.FarJSR  ServiceAudio, AudioBank
+@end example
+
+@node Calling Services from Assembly
+@subsection Calling Services from Assembly
+
+To call a service from hand-written assembly, use the same dispatch
+mechanism:
+
+@example
+;; 6502 example: call Audio service
+        .FarJSR  ServiceAudio, AudioBank
+@end example
+
+The service routine receives any arguments through the standard calling
+convention and returns results the same way.
+
+@node Examples
+@section Examples
+
+This section provides complete, working examples of calling Eightbol
+methods from native assembly for each supported CPU.
+
+@menu
+* 6502 Examples::                 Working 6502 assembly examples
+* Z80 Examples::                  Working Z80 assembly examples
+* ARM7 Examples::                 Working ARM7 Thumb examples
+@end menu
+
+@node 6502 Examples
+@subsection 6502 Assembly Examples
+
+@subsubsection Calling a Method with No Arguments
+
+@example
+;; 6502 (64tass syntax)
+;; Assume: GameHero object at label HeroObject
+
+        ;; Set up Self pointer
+        lda     #<HeroObject
+        sta     Self
+        lda     #>HeroObject
+        sta     Self+1
+
+        ;; Call the method
+        jsr     MethodGameHeroDie
+
+        ;; Continue with execution
+        rts
+@end example
+
+@subsubsection Calling a Method with Return Value
+
+@example
+;; 6502: Call Heal method, get result in accumulator
+
+        ;; Set up Self pointer
+        lda     #<HeroObject
+        sta     Self
+        lda     #>HeroObject
+        sta     Self+1
+
+        ;; Call the method
+        jsr     MethodGameHeroHeal
+
+        ;; Return value is in A
+        sta     HealthAfterHeal
+        rts
+@end example
+
+@subsubsection Calling a Method with Argument
+
+@example
+;; 6502: Call TakeDamage with argument in A
+
+        lda     #5                      ; damage amount = 5
+        jsr     MethodGameHeroTakeDamage
+
+        ;; Return value in A (remaining health)
+        sta     NewHealth
+        rts
+@end example
+
+@node Z80 Examples
+@subsection Z80 Assembly Examples
+
+@subsubsection Calling a Method with No Arguments
+
+@example
+; Z80 (sjasmplus syntax)
+; Assume: GameHero object at label HeroObject
+
+        ld      hl, HeroObject
+        ld      (Self), hl
+
+        call    MethodGameHeroDie
+
+        ret
+@end example
+
+@subsubsection Calling a Method with Return Value
+
+@example
+; Z80: Call Heal method, get result in L (16-bit) or A (8-bit)
+
+        ld      hl, HeroObject
+        ld      (Self), hl
+
+        call    MethodGameHeroHeal
+
+        ld      a, l                   ; for 16-bit result
+        ld      (HealthAfterHeal), a
+        ret
+@end example
+
+@subsubsection Calling a Method with Argument
+
+@example
+; Z80: Call TakeDamage with 8-bit argument in A
+
+        ld      a, 5                   ; damage amount
+        call    MethodGameHeroTakeDamage
+
+        ld      (NewHealth), a
+        ret
+@end example
+
+@node ARM7 Examples
+@subsection ARM7 Thumb Examples
+
+@subsubsection Calling a Method with No Arguments
+
+@example
+        .thumb
+        .syntax unified
+        .arch armv4t
+        .cpu arm7tdmi
+
+        .thumb_func
+        .global CallHeroDie
+CallHeroDie:
+        ldr     r1, =Self
+        movs    r0, #<HeroObject
+        lsls    r0, r0, #16
+        adds    r0, #>HeroObject
+        str     r0, [r1]
+
+        bl      MethodGameHeroDie
+        bx      lr
+@end example
+
+@subsubsection Calling a Method with Argument
+
+@example
+        .thumb_func
+        .global CallHeroTakeDamage
+CallHeroTakeDamage:
+        @ Argument in r0 (damage amount)
+
+        ldr     r1, =Self
+        movs    r2, #<HeroObject
+        lsls    r2, r2, #16
+        adds    r2, #>HeroObject
+        str     r2, [r1]
+
+        bl      MethodGameHeroTakeDamage
+
+        @ Return value in r0
+        ldr     r1, =NewHealth
+        strb    r0, [r1]
+        bx      lr
+@end example
+
+@node Index
+@section Index
+
+@printindex cp
+
+@bye

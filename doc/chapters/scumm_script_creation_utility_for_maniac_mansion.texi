@@ -1,514 +1,1055 @@
+@chapter SCUMM Frontend Language
+@cindex SCUMM frontend language
+
+This chapter describes the SCUMM (Script Creation Utility for Maniac Mansion) frontend
+language as implemented in the EightBol compiler. SCUMM provides a high-level language
+for creating classic point-and-click adventure games, supporting actors, rooms, objects,
+and verb-based interaction. The language is defined by its lexer (@file{scumm-lexer.lisp})
+and parser (@file{scumm-parser.lisp}).
+
 @menu
-* Naming system::
-* Basic structure::
-* Calling routines::
-* Assignment::
-* Arithmetic::
-* Complex arithmetic::
-* Boolean expressions::
-* Control structures::
-* Loops::
-* Breaking loops::
-* Dialogue scripts::
-* Tile manipulation::
-* Decal manipulation::
-* Object manipulation::
-* Unsupported features::
+* Naming Conventions::
+* Lexical Elements::
+* Program Structure::
+* Statements::
+* Control Flow::
+* Arithmetic Operations::
+* Boolean Expressions::
+* Actor and Object Definitions::
+* Input and Output::
+* Dialogue System::
+* Arrays and Subscripts::
+* Unsupported Features::
+* Example Programs::
 @end menu
 
-@node Naming system
-@section Naming system
+@node Naming Conventions
+@section Naming Conventions
 
-In SCUMM, variable names use @code{case-insensitive} naming (conventionally @code{lower_case_with_underscores}).
-All keywords are case-insensitive but conventionally written in lowercase.
+In SCUMM, variable names use @code{case-insensitive} naming. The frontend normalizes
+identifiers to @code{camelCase} format internally:
 
 @table @asis
-@item Keywords: if, else, endif, while, endwhile, for, endfor, break, continue, return, define, set, get, put, call, exit, goto, label, assert, wait, stop, start, fade, restore, save, restart, version
-@item Operators: +, -, *, /, %, =, ==, !=, <, >, <=, >=, &&, ||, !
-@item String delimiters: Double quotes (@code{"..."}) for strings
-@item Comments: Two slashes (//) to end of line
+@item Input: @code{player_score}
+@*
+Output (AST): @code{playerScore}
+
+@item Input: @code{HelloWorld}
+@*
+Output (AST): @code{helloWorld}
+
+@item Input: @code{x}
+@*
+Output (AST): @code{x} (unchanged)
 @end table
 
-@node Basic structure
-@section Basic structure for a stand-alone routine or program
+All keywords are case-insensitive but conventionally written in lowercase.
 
-A SCUMM script consists of statements and function definitions that are executed sequentially unless altered by control flow.
+@node Lexical Elements
+@section Lexical Elements
+
+@subsection Keywords
+
+The following keywords are recognized (case-insensitive):
+
+@table @asis
+@item @code{if}
+Starts a conditional statement.
+@item @code{else}
+Specifies the false branch of an IF statement.
+@item @code{endif}
+Marks the end of an IF block (optional, for readability).
+@item @code{while}
+Starts a while loop.
+@item @code{endwhile}
+Marks the end of a while loop.
+@item @code{for}
+Starts a for loop.
+@item @code{endfor}
+Marks the end of a for loop.
+@item @code{break}
+Exits the innermost loop immediately.
+@item @code{continue}
+Skips to the next iteration of the current loop.
+@item @code{return}
+Returns from a subroutine.
+@item @code{define}
+Defines a subroutine.
+@item @code{set}
+Assigns a value to a variable.
+@item @code{get}
+Gets a value from a variable (synonym for identifier reference).
+@item @code{put}
+Stores a value (synonym for assignment target).
+@item @code{call}
+Calls a subroutine.
+@item @code{exit}
+Exits the program.
+@item @code{goto}
+Jumps to a label.
+@item @code{label}
+Defines a label.
+@item @code{assert}
+Asserts a condition is true.
+@item @code{wait}
+Waits for a condition.
+@item @code{stop}
+Stops execution.
+@item @code{start}
+Starts execution.
+@item @code{fade}
+Performs a fade effect.
+@item @code{restore}
+Restores game state.
+@item @code{save}
+Saves game state.
+@item @code{restart}
+Restarts the game.
+@item @code{version}
+Prints version information.
+@item @code{to}
+Separates for loop variable initialization.
+@item @code{end}
+Marks the end of a define block.
+@item @code{dialogue}
+Displays dialogue.
+@item @code{print}
+Prints text to output.
+@item @code{input}
+Gets user input.
+@end table
+
+@subsection Operators
+
+@table @asis
+@item @code{+}
+Addition.
+@item @code{-}
+Subtraction.
+@item @code{*}
+Multiplication.
+@item @code{/}
+Division.
+@item @code{\%}
+Modulo (remainder).
+@item @code{=}
+Assignment.
+@item @code{==}
+Equality comparison.
+@item @code{!=}
+Inequality comparison.
+@item @code{<}
+Less than.
+@item @code{>}
+Greater than.
+@item @code{<=}
+Less than or equal.
+@item @code{>=}
+Greater than or equal.
+@item @code{&&}
+Logical AND.
+@item @code{||}
+Logical OR.
+@item @code{!}
+Logical NOT.
+@end table
+
+@subsection Literal Formats
+
+@table @asis
+@item Decimal
+Bare digits: @code{42}, @code{0}, @code{100}
+@item Hexadecimal
+@code{0x@var{hex}} prefix: @code{0xFF} (255), @code{0x1A} (26)
+@item Octal
+@code{0o@var{octal}} prefix: @code{0o77} (63), @code{0o10} (8)
+@item Binary
+@code{0b@var{binary}} prefix: @code{0b1010} (10), @code{0b1111} (15)
+@item DWORD
+@code{0d"@var{word}"} format: @code{0d"SCUM"} (returns string "SCUM")
+@item Strings
+Double-quoted: @code{"Hello, world!"}
+@end table
+
+@subsection Delimiters
+
+@table @asis
+@item @code{(} @code{)}
+Parentheses for grouping and function calls.
+@item @code{[} @code{]}
+Brackets for array subscripting.
+@item @code{;}
+Semicolon terminates statements.
+@item @code{,}
+Comma separates items.
+@end table
+
+@node Program Structure
+@section Program Structure
+
+A SCUMM program consists of statements and function definitions executed sequentially
+unless altered by control flow.
+
+@subsection Standalone Routines
 
 @example
 // Initialize game
-set score 0
-set lives-left 3
-set current-room 1
+set score 0;
+set livesLeft 3;
+set currentRoom 1;
 
-initialize-game()
-while (not game-over) {
-    process-input()
-    update-game()
-    render-display()
+initializeGame();
+while (not gameOver) {
+    processInput();
+    updateGame();
+    renderDisplay();
 }
+@end example
 
-// Function definitions
-to initialize-game
-    set score 0
-    set lives-left 3
-    set current-room 1
-end
+@subsection Subroutine Definition
 
-to process-input
-    // Simulate input handling
-    if (get-key "right") then
-        set current-room (current-room + 10)
-    endif
-end
-
-to update-game
-    // Game logic updates
-end
-
-to render-display
-    // Rendering code
+@example
+to initializeGame
+    set score 0;
+    set livesLeft 3;
+    set currentRoom 1;
 end
 @end example
 
-@node Basic structure object
-@section Basic structure for an object method
+@node Statements
+@section Statements
 
-SCUMM supports object-oriented programming through objects and methods (similar to actor-based programming).
+@menu
+* Assignment Statement::
+* Call Statements::
+* Return Statement::
+* Goto Statement::
+* Print Statement::
+* Input Statement::
+* Dialogue Statement::
+@end menu
+
+@node Assignment Statement
+@subsection Assignment Statement
+
+@defsyn
+set @var{variable} = @var{expression};
+@end defsyn
+
+Assigns the value of expression to variable.
+
+@subsubsection Syntax Variations
+
+@table @asis
+@item Simple assignment
+@code{set @var{variable} = @var{value};}
+@*
+Basic variable assignment.
+
+@item Arithmetic assignment
+@code{set @var{variable} = @var{expr} @var{op} @var{expr};}
+@*
+Assignment with arithmetic operation.
+
+@item Compound assignment
+@code{set @var{variable} = (@var{expr});}
+@*
+Assignment with parentheses for grouping.
+@end table
+
+@subsubsection Examples
 
 @example
-// Define an actor (object)
+set score 0;
+set livesLeft 3;
+set counter = (counter + 1);
+set livesLeft = (livesLeft - 1);
+set message = "Hello, World!";
+set position = ((x + dx) * scale);
+@end example
+
+@subsubsection Valid Ranges
+
+Variables store integer values. The valid range depends on the backend target:
+@itemize @bullet
+@item 8-bit targets: 0-255 (unsigned)
+@item 16-bit targets: 0-65535 (unsigned)
+@item Larger ranges for multi-byte storage
+@end itemize
+
+@node Call Statements
+@subsection Call Statements
+
+@subsubsection Nullary Call
+
+@defsyn
+call @var{routine}();
+@end defsyn
+
+Calls a function that takes no arguments.
+
+@subsubsection Examples
+
+@example
+initializeGraphics();
+clearScreen();
+playStartupMusic();
+someProcedure();
+@end example
+
+@subsubsection Call with Arguments
+
+@defsyn
+call @var{routine} @var{arg1}, @var{arg2}, @dots{};
+@end defsyn
+
+Calls a function with the specified arguments.
+
+@subsubsection Examples
+
+@example
+drawSprite spriteId xPos yPos;
+playSound soundId volume loopFlag;
+checkCollision obj1 obj2 resultVar;
+someProcedure param1 param2;
+@end example
+
+@subsubsection Call with Return Value
+
+@defsyn
+set @var{variable} = call @var{routine}();
+@end defsyn
+
+Calls a function and stores the return value in variable.
+
+@subsubsection Examples
+
+@example
+set score = (calculateBonus level timeLeft);
+set bonusFactor = getInputFactor();
+set volume = getMasterVolume();
+@end example
+
+@node Return Statement
+@subsection Return Statement
+
+@defsyn
+return;
+@end defsyn
+
+@defsyn
+return @var{expression};
+@end defsyn
+
+Returns from a subroutine. Optionally returns a value.
+
+@subsubsection Examples
+
+@example
+return;
+return 0;
+return (score + bonus);
+@end example
+
+@node Goto Statement
+@subsection Goto Statement
+
+@defsyn
+goto @var{label};
+@end defsyn
+
+Transfers control to the labeled statement.
+
+@subsubsection Examples
+
+@example
+goto MainLoop;
+goto ErrorHandler;
+goto Retry;
+@end example
+
+@node Print Statement
+@subsection Print Statement
+
+@defsyn
+print "@var{message}";
+@end defsyn
+
+@defsyn
+print "@var{format}", @var{expr1}, @var{expr2}, @dots{};
+@end defsyn
+
+Prints text and optional expression values to output.
+
+@subsubsection Examples
+
+@example
+print "Hello, world!";
+print "Score: ", score;
+print "X: ", x, " Y: ", y;
+print "Total: ", (a + b);
+@end example
+
+@subsubsection Output
+
+Generates a :print AST node. The actual rendering depends on the backend target.
+
+@node Input Statement
+@subsection Input Statement
+
+@defsyn
+input "@var{prompt}" @var{variable};
+@end defsyn
+
+Reads user input and stores the result in variable, displaying the prompt.
+
+@subsubsection Parameters
+
+@table @asis
+@item @var{prompt}
+String literal displayed to prompt the user.
+@item @var{variable}
+Identifier to store the input value.
+@end table
+
+@subsubsection Examples
+
+@example
+input "Enter your name: " playerName;
+input "Enter choice: " choice;
+@end example
+
+@subsubsection Input Types
+
+The backend determines the input type based on context:
+@itemize @bullet
+@item Numeric contexts expect integer input
+@item String contexts allow text input
+@end itemize
+
+@node Dialogue Statement
+@subsection Dialogue Statement
+
+@defsyn
+dialogue @var{character} "@var{text}";
+@end defsyn
+
+@defsyn
+dialogue @var{character} "@var{text}", @var{response1}, @var{response2}, @dots{};
+@end defsyn
+
+Displays dialogue text attributed to a character. Optional response choices
+may be provided for player selection.
+
+@subsubsection Parameters
+
+@table @asis
+@item @var{character}
+Identifier or string naming the speaking character.
+@item @var{text}
+String literal containing the dialogue text.
+@item @var{responseN}
+Optional response choices for player selection.
+@end table
+
+@subsubsection Examples
+
+@example
+dialogue guard "Halt! Who goes there?";
+dialogue narrator "You enter a dark cave.";
+dialogue shopkeeper "What would you like to buy?" "Sword" "Shield" "Leave";
+@end example
+
+@node Control Flow
+@section Control Flow
+
+@menu
+* Conditional Statement::
+* While Loop::
+* For Loop::
+* Break and Continue::
+@end menu
+
+@node Conditional Statement
+@subsection Conditional Statement: if-then-else
+
+@defsyn
+if (@var{condition}) @var{statement}
+@end defsyn
+
+@defsyn
+if (@var{condition}) @var{statement1} else @var{statement2} endif
+@end defsyn
+
+Executes statement1 if condition is true, otherwise executes statement2.
+The else clause is optional.
+
+@subsubsection Syntax Variations
+
+@table @asis
+@item Simple conditional
+@code{if (@var{condition}) @var{statement}}
+@*
+Single statement in true branch.
+
+@item Conditional with else
+@code{if (@var{condition}) @var{stmt1} else @var{stmt2} endif}
+@*
+Two-branch conditional.
+
+@item Block with braces
+@code{if (@var{condition}) @{ @var{statements} @}}
+@*
+Multiple statements in braces form a block.
+@end table
+
+@subsubsection Examples
+
+@example
+if (temperature > THOT) then
+    set status "HOT"
+endif
+
+if (score > 1000) then
+    set level = (level + 1);
+else
+    set lives = (lives - 1);
+endif
+
+if ((x > 100) && (x < 200)) then
+    print "In range!";
+endif
+@end example
+
+@node While Loop
+@subsection While Loop
+
+@defsyn
+while (@var{condition}) @var{statement} endwhile
+@end defsyn
+
+Repeats statement while condition is true. The condition is evaluated before
+each iteration.
+
+@subsubsection Syntax Variations
+
+@table @asis
+@item Single statement
+@code{while (@var{condition}) @var{statement} endwhile}
+@*
+Loop with single statement body.
+
+@item Block form
+@code{while (@var{condition}) @{ @var{statements} @}}
+@*
+Multiple statements in braces.
+@end table
+
+@subsubsection Examples
+
+@example
+set i 1;
+while (i <= 10) {
+    print "Count: ", i;
+    set i = (i + 1);
+}
+endwhile
+@end example
+
+@node For Loop
+@subsection For Loop
+
+@defsyn
+for @var{variable} = @var{start} to @var{end} @var{statement} endfor
+@end defsyn
+
+Iterates variable from start to end (inclusive), executing statement each iteration.
+Variable is automatically incremented by 1 after each iteration.
+
+@subsubsection Syntax Variations
+
+@table @asis
+@item Single statement
+@code{for @var{v} = @var{s} to @var{e} @var{stmt} endfor}
+@*
+Loop with single statement body.
+
+@item Block form
+@code{for @var{v} = @var{s} to @var{e} @{ @var{statements} @}}
+@*
+Multiple statements in braces.
+@end table
+
+@subsubsection Examples
+
+@example
+for i = 1 to 10 {
+    print "Number: ", i;
+}
+endfor
+
+for count = 0 to (maxItems - 1) {
+    set (inventory count) = 0;
+}
+endfor
+@end example
+
+@node Break and Continue
+@subsection Break and Continue
+
+@subsubsection Break
+
+@defsyn
+break;
+@end defsyn
+
+Exits the innermost enclosing loop immediately. Control transfers to the
+statement following the loop.
+
+@subsubsection Examples
+
+@example
+set i 1;
+while (i <= 100) {
+    if ((scoreList i) == TARGET_VALUE) then
+        print "Found at index: ", i;
+        break;
+    endif
+    set i = (i + 1);
+}
+@end example
+
+@subsubsection Continue
+
+@defsyn
+continue;
+@end defsyn
+
+Skips the remainder of the current loop iteration and proceeds to the next iteration.
+
+@subsubsection Examples
+
+@example
+set i 1;
+while (i <= 100) {
+    if ((scoreList i) < 0) then
+        set i = (i + 1);
+        continue;
+    endif
+    // Process non-negative values
+    set i = (i + 1);
+}
+@end example
+
+@node Arithmetic Operations
+@section Arithmetic Operations
+
+@menu
+* Addition and Subtraction::
+* Multiplication and Division::
+* Modulo::
+* Bit Shifting::
+@end menu
+
+@node Addition and Subtraction
+@subsection Addition and Subtraction
+
+@defsyn
+@var{expr} + @var{expr}
+@end defsyn
+
+@defsyn
+@var{expr} - @var{expr}
+@end defsyn
+
+Addition (+) produces the sum of two operands.
+Subtraction (-) produces the difference (left minus right).
+
+@subsubsection Examples
+
+@example
+set score = (score + 10);
+set livesLeft = (livesLeft - 1);
+set total = (width + height);
+set finalPrice = (price - discount);
+@end example
+
+@node Multiplication and Division
+@subsection Multiplication and Division
+
+@defsyn
+@var{expr} * @var{expr}
+@end defsyn
+
+@defsyn
+@var{expr} / @var{expr}
+@end defsyn
+
+Multiplication (*) produces the product of two operands.
+Division (/) produces the quotient (integer division).
+
+@subsubsection Examples
+
+@example
+set result = (value * 4);
+set average = ((sum1 + sum2 + sum3) / 3);
+set area = (width * height);
+@end example
+
+@node Modulo
+@subsection Modulo
+
+@defsyn
+@var{expr} % @var{expr}
+@end defsyn
+
+Returns the remainder of integer division (left divided by right).
+
+@subsubsection Examples
+
+@example
+set frame = ((currentFrame + 1) % 4);
+set remainder = (x % 10);
+@end example
+
+@node Bit Shifting
+@subsection Bit Shifting
+
+For multiplication or division by powers of 2:
+
+@defsyn
+@var{expr} << @var{bits}
+@end defsyn
+
+@defsyn
+@var{expr} >> @var{bits}
+@end defsyn
+
+Left shift (<<) multiplies by 2^bits.
+Right shift (>>) divides by 2^bits (integer division).
+
+@subsubsection Examples
+
+@example
+set result = (value << 2);    @r{; Multiply by 4}
+set result = (value >> 1);    @r{; Divide by 2}
+@end example
+
+@node Boolean Expressions
+@section Boolean Expressions
+
+@menu
+* Comparison Operators::
+* Logical Operators::
+* Combined Conditions::
+@end menu
+
+@node Comparison Operators
+@subsection Comparison Operators
+
+@table @asis
+@item @code{==}
+Equality. Returns true if operands are equal.
+@item @code{!=}
+Inequality. Returns true if operands differ.
+@item @code{<}
+Less than.
+@item @code{>}
+Greater than.
+@item @code{<=}
+Less than or equal.
+@item @code{>=}
+Greater than or equal.
+@end table
+
+@subsubsection Examples
+
+@example
+if (score == 100) then ...
+if (score != 0) then ...
+if (x < MAX_X) then ...
+if (count >= MIN_COUNT) then ...
+@end example
+
+@node Logical Operators
+@subsection Logical Operators
+
+@table @asis
+@item @code{&&}
+Logical AND. True if both operands are true.
+@item @code{||}
+Logical OR. True if either operand is true.
+@item @code{!}
+Logical NOT. Inverts the boolean value.
+@end table
+
+@subsubsection Examples
+
+@example
+if ((x >= 0) && (x < MAX_X)) then ...
+if ((button == BUTTON_A) || (button == BUTTON_B)) then ...
+if (!done) then ...
+@end example
+
+@node Combined Conditions
+@subsection Combined Conditions
+
+Complex conditions combine multiple comparisons:
+
+@example
+if ((health > 0) && (ammo > 0) && (keys > 0)) then
+    set canFight = 1;
+endif
+
+if ((age < 13) || (age > 65)) then
+    set discountEligible = 1;
+endif
+@end example
+
+@node Actor and Object Definitions
+@section Actor and Object Definitions
+
+SCUMM supports actor-based object definitions with properties and methods.
+
+@subsection Actor Definition
+
+@defsyn
+actor @var{name}
+    properties
+        @var{prop1} @var{value1}
+        @var{prop2} @var{value2}
+    methods
+        method @var{name} @var{params}
+            @var{statements}
+        end
+    end
+end
+@end defsyn
+
+Defines an actor (game object) with properties and methods.
+
+@subsubsection Examples
+
+@example
 actor player
     properties
         x 100
         y 100
         sprite 5
+        visible true
     methods
         method move dx dy
-            set x (x + dx)
-            set y (y + dy)
+            set x = (x + dx);
+            set y = (y + dy);
         end
     end
 end
-
-// Create instance (implicitly done by the actor definition)
-// Access via the actor name
-end
 @end example
 
-@node Calling routines
-@section Calling a routine (nullary)
+@subsection Method Invocation
 
-To call a function that takes no arguments:
+@defsyn
+@var{actor}#@var{method} @var{args};
+@end defsyn
+
+Calls a method on an actor instance.
+
+@subsubsection Examples
 
 @example
-initialize-graphics()
-clear-screen()
-play-startup-music()
-some-procedure()
+player#move 5 10;
+gameState#update score;
+ui#draw healthBar;
 @end example
 
-@node Calling routines value
-@section Calling a routine with a value (in accumulator)
+@node Input and Output
+@section Input and Output
 
-To call a function that returns a single value:
+The SCUMM frontend provides I/O commands for user interaction:
 
-@example
-set score (calculate-bonus level time-left)
-set bonus-factor (get-input-factor)
-set volume (get-master-volume)
-some-function()
-@end example
-
-@node Calling routines giving
-@section Calling a routine giving a value (in accumulator)
-
-Not applicable in SCUMM's standard calling convention.
-
-@node Calling routines values
-@section Calling a routine with values in and out (in accumulator)
-
-To call a function with parameters:
-
-@example
-draw-sprite sprite-id x-pos y-pos
-play-sound sound-id volume loop-flag
-check-collision obj1 obj2 result-var
-some-procedure param1 param2
-@end example
-
-@node Calling library
-@section Calling a library routine (all 4 styles)
-
-SCUMM accesses library routines through standard function calls or object methods:
-
-@example
-load-level level-number          @r{Direct call}
-far-proc library-address         @r{Far call}
-set result (library-function input)  @r{Library function}
-object#method param1 param2      @r{Object method call}
-@end example
-
-These correspond to:
 @table @asis
-@item Direct: FunctionName(...)
-@item Far: AbsoluteAddress(...) (via external interface)
-@item Library: LibraryEntry(...) or FunctionName(...)
-@item Object: OBJECT#MethodName(...)
+@item @code{print "@var{msg}"}
+Display text (see @ref{Print Statement})
+
+@item @code{input "@var{prompt}" @var{var}}
+Read user input (see @ref{Input Statement})
+
+@item @code{dialogue @var{char} "@var{text}"}
+Display dialogue (see @ref{Dialogue Statement})
 @end table
 
-@node Calling far bank
-@section Calling a far bank Service (all 4 styles)
+@node Dialogue System
+@section Dialogue System
 
-Far procedures in SCUMM are called using absolute addresses or through
-the external function interface:
+The dialogue system handles NPC conversations and player responses.
 
-@example
-// Declare far procedure
-extern void farLoadLibrary(uint32_t addr);
-
-// Call far routine
-farLoadLibrary(0x8000);   @r{Call routine in bank 1}
-@end example
-
-These correspond to:
-@table @asis
-@item Direct: Not used for far calls
-@item Far: External function call
-@item Library: Not applicable
-@item Object: Not applicable
-@end table
-
-@node Invoking object
-@section Invoking a method on an object (all 4 styles)
-
-Object method invocation in SCUMM uses the hash notation:
+@subsection Simple Dialogue
 
 @example
-player#move 5 10
-score-display#update score
-game-state#is-game-over
+dialogue guard "Halt! Who goes there?";
 @end example
 
-These correspond to:
-@table @asis
-@item Direct: Setting object properties via property assignment
-@item Far: Not applicable for methods (objects typically in same memory)
-@item Library: Method may call library routines internally
-@item Object: OBJECT#MethodName(...) invocation
-@end table
-
-@node Assignment
-@section Assigning to a variable
-
-Variables are assigned using the set command:
+@subsection Dialogue with Responses
 
 @example
-set score 0                     @r{Explicit assignment}
-set lives-left 3                @r{Implicit assignment}
-set counter (counter + 1)       @r{Increment}
-set lives-left (lives-left - 1) @r{Decrement}
-set score (score + 10)          @r{Arithmetic assignment}
-set message "Hello, World!"     @r{String assignment}
+dialogue shopkeeper "What would you like?" "Sword" "Shield" "Leave";
 @end example
 
-@node Assignment object
-@section Assigning to an object slot
+The responses are presented as choices for the player to select.
 
-Object slots (properties) are assigned using set with dot notation:
+@node Arrays and Subscripts
+@section Arrays and Subscripts
+
+@menu
+* Array Declaration::
+* Subscript Access::
+@end menu
+
+@node Array Declaration
+@subsection Array Declaration
+
+SCUMM supports arrays using list syntax:
 
 @example
-set player.x 160                @r{Set object's x coordinate}
-set player.y 100                @r{Set object's y coordinate}
-set player.sprite 5             @r{Set sprite number}
-set player.visible true         @r{Set visibility flag}
+set scoreList = [0 0 0 0 0 0 0 0 0 0];
+set initialsList = ["" "" "" "" "" "" "" "" "" ""];
+set board = [[0 0 0 0] [0 0 0 0] [0 0 0 0] [0 0 0 0]];
 @end example
 
-@node Assignment array
-@section Assigning to an array member with a subscript
+@node Subscript Access
+@subsection Subscript Access
 
-SCUMM uses lists and arrays. Elements are assigned using set with indexing:
+@defsyn
+set (@var{array} @var{index}) = @var{value};
+@end defsyn
+
+Accesses or modifies an array element at the specified index.
+
+@subsubsection Examples
 
 @example
-set score-list [0 0 0 0 0 0 0 0 0 0]
-set initials-list ["" "" "" "" "" "" "" "" "" ""]
-set board [[0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0] [0 0 0 0 0 0 0 0]]
-
-set (score-list 0) 100
-set (initials-list 0) "ALI"
-set (board 2 3) 1
+set (scoreList 0) = 100;
+set (initialsList 0) = "ALI";
+set (board 2 3) = 1;
+set value = (inventory count);
 @end example
 
-@node Arithmetic
-@section Basic arithmetic: addition and subtraction
+@subsubsection Notes
 
-Basic arithmetic uses the + and - operators:
+@itemize @bullet
+@item Arrays are zero-indexed
+@item Multi-dimensional arrays use multiple subscripts
+@item Index must be within bounds
+@end itemize
 
-@example
-set score (score + 10)                  @r{Addition}
-set lives-left (lives-left - 1)         @r{Subtraction}
-set total (width + height)              @r{Add two variables}
-set final-price (price - discount)      @r{Subtraction}
-set delta (new-value - old-value)       @r{Subtraction}
-@end example
-
-@node Arithmetic bit
-@section Basic arithmetic: bit-shifting for mutiplication or division
-
-Bit-shifting for multiplication/division by powers of two uses the << and >> operators (if available) or multiplication/division:
-
-@example
-set result (value << 2)                 @r{Left shift 2 bits (multiply by 4)}
-set result (value >> 1)                 @r{Right shift 1 bit (divide by 2)}
-set result (value * 4)                  @r{Multiply by 4}
-set result (value / 2)                  @r{Divide by 2}
-set result (value * 8)                  @r{Multiply by 8}
-set result (value / 16)                 @r{Divide by 16}
-@end example
-
-@node Complex arithmetic
-@section Complex arithmetic: multiple expressions
-
-Complex arithmetic expressions follow standard precedence rules:
-
-@example
-set total ((base-salary * 12) + bonus - deductions)
-set average ((sum1 + sum2 + sum3) / 3.0)
-set distance (sqrt ((x2 - x1)^2 + (y2 - y1)^2))
-@end example
-
-@node Boolean
-@section Boolean expressions: equality and inequalities
-
-Boolean expressions use logical operators and comparison operators:
-
-@example
-if (score > 1000) then ...              @r{Greater than}
-if (score < 50) then ...                @r{Less than}
-if (score == 100) then ...              @r{Equality}
-if (score != 0) then ...                @r{Inequality}
-if ((x >= 0) && (x < MAX_X)) then ...   @r{Combined conditions}
-if ((button == BUTTON_A) || (button == BUTTON_B)) then ... @r{Alternative conditions}
-@end example
-
-@node If then else
-@section Using if/then/else structures and examine/cond structures
-
-Conditional execution uses if/then/else/endif blocks:
-
-@example
-if (temperature > THOT) then
-    set status "HOT"
-elseif (temperature > TCOLD) then
-    set status "WARM"
-else
-    set status "COLD"
-endif
-
-switch (answer) {
-    case "Y":
-    case "y":
-        set response "YES"
-        break
-    case "N":
-    case "n":
-        set response "NO"
-        break
-    default:
-        set response "INVALID"
-        break
-}
-@end example
-
-SCUMM does not have an EXAMINE/COND structure; switch statement serves
-a similar purpose for multi-way branching.
-
-@node Performing
-@section Performing loops
-
-Loops are implemented using while/endwhile and for/endfor loops:
-
-@example
-// while/endwhile loop equivalent (pre-test)
-set i 1
-while (i <= 10) {
-    print "Count: " i
-    set i (i + 1)
-}
-
-// for/endfor loop equivalent (known iterations)
-for (set i 1; i <= 10; set i (i + 1)) {
-    print "Count: " i
-}
-
-// Loop with break and continue
-set i 1
-while (i <= 100) {
-    if (score-list i == TARGET_VALUE) then
-        print "Found at index: " i
-        break                    @r{Exit loop immediately}
-    endif
-    if (score-list i < 0) then
-        continue                 @r{Skip to next iteration}
-    endif
-    // Process positive values
-    set i (i + 1)
-}
-@end example
-
-@node Breaking loops
-@section Breaking out of loops safely
-
-Early loop exit is achieved using break and continue statements:
-
-@example
-Exit while/endwhile loop early
-set i 1
-while (i <= 100) {
-    if (score-list i == TARGET_VALUE) then
-        print "Found at index: " i
-        break                    @r{Exit loop immediately}
-    endif
-    set i (i + 1)
-}
-
-// Skip current iteration
-set i 1
-while (i <= 100) {
-    if (score-list i < 0) then
-        continue                 @r{Skip to next iteration}
-    endif
-    // Process non-negative values
-    set i (i + 1)
-}
-
-// Nested loop control
-set i 1
-while (i <= 10) {
-    set j 1
-    while (j <= 10) {
-        if (board i j == 0) then
-            break                @r{Exit inner loop only}
-        endif
-        // Process non-zero elements
-        set j (j + 1)
-    endwhile
-    set i (i + 1)
-}
-@end example
-
-@node Dialogue
-@section Calling a dialogue script (Forth scripts)
-
-SCUMM does not directly call Forth dialogue scripts. Instead, it uses
-its own functions. However, through the semantic-sugar
-layer, SCUMM commands can be mapped to calls of the shared Fountain/Forth
-runtime library:
-
-@example
-// Original SCUMM code
-if ((x > 100) && (x < 200)) then
-    show-message MSG-WELCOME
-endif
-
-// Desugared via semantic-sugar layer
-if ((x > 100) && (x < 200)) then
-    (:call-acc :target "ShowWelcomeMessage" :using nil)
-endif
-@end example
-
-@node Tiles
-@section Manipulating tiles
-
-Tile manipulation is performed through direct video memory access
-or through library routines for tiled backgrounds:
-
-@example
-// Direct memory access (mode-dependent)
-// Assuming direct memory access via pointer
-set video-memory #xb8000
-set offset (* (+ (* row 80) col) 2)
-set (peek video-memory offset) tile-num
-set (peek video-memory (+ offset 1)) attribute
-
-// Library routine approach
-load-tile-set TILESET-ID
-place-tile LAYER X Y TILE-INDEX
-scroll-background DX DY
-@end example
-
-@node Decals
-@section Manipulating decals
-
-Decals (sprites or movable objects) are manipulated using:
-
-@example
-// Hardware sprite approach (if available)
-init-sprites
-set-sprite-position SPRITE-ID X Y
-set-sprite-image SPRITE-ID IMAGE-ID
-show-sprite SPRITE-ID -1   @r{-1 = visible}
-
-// Software sprite approach
-set sprite-x 100
-set sprite-y 50
-set sprite-frame 0
-
-set sprite-x 100
-set sprite-y 50
-set sprite-frame ((sprite-frame + 1) mod 4)
-@end example
-
-@node Objects
-@section Manipulating objects
-
-Object manipulation depends on the implementation approach:
-
-@example
-// Using actors (objects)
-actor game-object
-    properties
-        x 0
-        y 0
-        width 0
-        height 0
-        active true
-    methods
-        method move dx dy
-            set x (x + dx)
-            set y (y + dy)
-        end
-    end
-end
-
-// Create instances (implicitly by defining multiple actors or using factory)
-// For simplicity, assume we have a way to create multiple instances
-// In SCUMM, actors are typically defined in the script and accessed by name
-
-// Update object position (example for one object)
-game-object#move DX DY
-
-// Check active status and draw
-if (game-object active) then
-    draw-object game-object
-endif
-@end example
-
-@node Unsupported
-@section Unsupported language features
+@node Unsupported Features
+@section Unsupported Features
 
 The following SCUMM features are not supported in this EIGHTBOL release:
 
 @table @asis
-@item File I/O operations (open, read, write, close)
-@item Graphics commands (draw-line, draw-circle, fill-polygon, blit)
-@item Hardware-specific features (joystick, mouse, keyboard beyond basic)
-@item Extended memory handling (unless emulated)
+@item File I/O operations
+@code{open}, @code{read}, @code{write}, @code{close} are not implemented.
+
+@item Graphics commands
+@code{draw-line}, @code{draw-circle}, @code{fill-polygon}, @code{blit} are not implemented.
+
+@item Hardware-specific features
+Joystick, mouse, and extended keyboard beyond basic input are not supported.
+
+@item Extended memory handling
+Unless emulated by the target platform.
+
 @item Multithreading or concurrent execution
-@item Exception handling (try, catch, finally, throw)
+Not supported.
+
+@item Exception handling
+@code{try}, @code{catch}, @code{finally}, @code{throw} are not implemented.
+
 @item Pointer arithmetic and manual memory management
-@item Preprocessor directives (#define, #ifdef)
-@item Object-oriented multiple inheritance (unless using external library)
-@item Sound and music commands (unless using external library)
+Not supported.
+
+@item Preprocessor directives
+@code{#define}, @code{#ifdef} are not implemented.
+
+@item Multiple inheritance
+Not supported unless via external library.
+
+@item Sound and music commands
+Unless using external library.
 @end table
 
-@node SmallTalk
+@node Example Programs
+@section Example Programs
+
+@subsubsection Game State Machine
+
+@example
+// Initialize game state
+set score = 0;
+set livesLeft = 3;
+set currentRoom = 1;
+set gameOver = 0;
+
+// Main game loop
+while (not gameOver) {
+    processInput();
+    updateGame();
+    renderDisplay();
+    if (livesLeft <= 0) then
+        set gameOver = 1;
+    endif
+}
+
+// Game over handler
+print "Game Over!";
+print "Final Score: ", score;
+@end example
+
+@subsubsection Inventory System
+
+@example
+actor inventory
+    properties
+        slots 20
+        selected 0
+    methods
+        method add item
+            set (items selected) = item;
+            set selected = (selected + 1);
+        end
+
+        method get index
+            return (items index);
+        end
+    end
+end
+
+// Use inventory
+inventory#add SWORD;
+set myItem = inventory#get 0;
+@end example
+
+@subsubsection Dialogue Engine
+
+@example
+to showDialogue character text response1 response2
+    dialogue character text;
+    if (response1 != "") then
+        print "1. ", response1;
+    endif
+    if (response2 != "") then
+        print "2. ", response2;
+    endif
+    input "Your choice: " choice;
+    return choice;
+end
+
+// In game
+set response = showDialogue "Guard" "Halt! Who goes there?" "I am a friend" "I have a key";
+if (response == 1) then
+    print "The guard lets you pass.";
+else
+    print "The guard shakes his head.";
+endif
+@end example

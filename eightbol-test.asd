@@ -38,44 +38,63 @@
                               :depends-on ("eightbol-tests"))
                              (:file "backend-6502-classification-tests"
                               :depends-on ("eightbol-tests"))
-                              (:file "backend-f8-tests"
-                               :depends-on ("eightbol-tests"))
-                              (:file "backend-sm83-tests"
-                               :depends-on ("eightbol-tests"))
+                             (:file "backend-f8-tests"
+                              :depends-on ("eightbol-tests"))
+                             (:file "backend-sm83-tests"
+                              :depends-on ("eightbol-tests"))
                              (:file "expression-constant-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "numeric-precision-all-backends"
                               :depends-on ("eightbol-tests"))
-                              (:file "numeric-precision-tests"
-                               :depends-on ("eightbol-tests"))
+                             (:file "numeric-precision-tests"
+                              :depends-on ("eightbol-tests"))
                               (:file "lua-parser-tests"
-                                :depends-on ("eightbol-tests"))
+                               :depends-on ("eightbol-tests"))
                               (:file "frontend-lexer-parser-tests"
-                                :depends-on ("eightbol-tests"))
-                              ;; (:file "forth-tests"
-                              ;;   :depends-on ("eightbol-tests"))
-                              )))
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-65c02-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-65c816-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-huc6280-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-rp2a03-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-arm7-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-i286-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-m6800-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-m68k-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-stack-tests"
+                               :depends-on ("eightbol-tests"))
+                               )))
   :perform (asdf:test-op (o c)
-                            (let ((suites '(:eightbol :backend-matrix :ast-optimize
-                                            :backend-output :parser-structure
-                                            :compile-regression :copybook-generation
-                                            :service-bank-lut :backend-cp1610
-                                            :backend-z80 :backend-operand-kinds
+                             (let ((suites '(:eightbol :backend-matrix :ast-optimize
+                                             :backend-output :parser-structure
+                                             :compile-regression :copybook-generation
+                                             :service-bank-lut :backend-cp1610
+                                             :backend-z80 :backend-operand-kinds
                                              :backend-f8 :backend-sm83
                                              :backend-6502-classification
-                                            :expression-constant :numeric-precision
-                                            :numeric-precision-all-backends
-                                            :pic-1-bit :s-decimal
-                                            :eightbol-cp1610-6502-parity
-                                            :dartmouth-basic-parity
-                                            :frontend-lexers :frontend-parsers
-                                            :lexer-consistency :parser-error-handling
-                                            :ast-node-construction :lexer-performance
-                                            :cross-frontend-consistency :keyword-coverage
-                                            :parser-integration
-                                            ;; :forth-frontend  -- disabled temporarily
-                                            )))
+                                             :backend-65c02 :backend-65c816
+                                             :backend-huc6280 :backend-rp2a03
+                                             :backend-arm7 :backend-i286
+                                             :backend-m6800 :backend-m68k
+                                             :backend-stack
+                                             :expression-constant :numeric-precision
+                                             :numeric-precision-all-backends
+                                             :pic-1-bit :s-decimal
+                                             :eightbol-cp1610-6502-parity
+                                             :dartmouth-basic-parity
+                                             :frontend-lexers :frontend-parsers
+                                             :lexer-consistency :parser-error-handling
+                                             :ast-node-construction :lexer-performance
+                                             :cross-frontend-consistency :keyword-coverage
+                                             :parser-integration
+                                             )))
                             (dolist (suite suites)
                               (format t "~&;; Running suite ~s...~%" suite)
                                (funcall (intern "RUN!" :fiveam) suite)))))
-

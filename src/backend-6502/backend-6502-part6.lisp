@@ -261,76 +261,16 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
            (dotimes (i (- w val-w))
              (emit-6502-store-byte-n out target class-id (+ val-w i) w))))))))
 
-;;; DIVIDE statement — divisor must be constant power-of-two; emit LSR.
+;;; DIVIDE/MULTIPLY not supported — emit compile-time error.
 (defun compile-6502-divide (out statement class-id)
-  (let* ((divisor (safe-getf (rest statement) :divisor))
-         (into-id (safe-getf (rest statement) :into))
-         (giving (safe-getf (rest statement) :giving))
-         (by-dividend (safe-getf (rest statement) :by))
-         (source (if by-dividend by-dividend into-id))
-         (dest (or giving into-id)))
-    (unless (and (expression-constant-p divisor)
-                 (power-of-two-p (expression-constant-value divisor)))
-      (error 'backend-error
-             :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
-             :cpu :6502 :detail statement))
-    (when (or (operand-bcd-p source) (operand-bcd-p dest))
-      (error 'backend-error
-             :message "DIVIDE: cannot use with USAGE DECIMAL operands"
-             :cpu :6502 :detail statement))
-    (let ((shift (log2 (expression-constant-value divisor)))
-          (w (operand-width dest)))
-      (when (zerop shift)
-        (return-from compile-6502-divide))
-      (if (= w 1)
-	(progn
-	  (emit-6502-load-expression out source class-id)
-	  (dotimes (_ shift) (format out "~%~10Tlsr a"))
-	  (emit-6502-store-byte-n out dest class-id 0 1))
-	(do ((i 0 (1+ i))
-	     (op source (if (= i 0) source dest)))
-	    ((>= i shift))
-	  (emit-6502-load-byte-n out op class-id 0 w)
-	  (format out "~%~10Tlsr a")
-	  (emit-6502-store-byte-n out dest class-id 0 w)
-	  (emit-6502-load-byte-n out op class-id 1 w)
-	  (format out "~%~10Tror a")
-	  (emit-6502-store-byte-n out dest class-id 1 w))))))
+  (error 'backend-error
+    :message "MULTIPLY/DIVIDE not supported - unsupported operation"
+    :cpu :6502 :detail statement))
 
-;;; MULTIPLY statement — multiplier must be constant power-of-two; emit ASL.
 (defun compile-6502-multiply (out statement class-id)
-  (let* ((multiplier (safe-getf (rest statement) :multiplier))
-         (by-id (safe-getf (rest statement) :by))
-         (giving (safe-getf (rest statement) :giving))
-         (source (or giving by-id))
-         (dest (or giving by-id)))
-    (unless (and (expression-constant-p multiplier)
-                 (power-of-two-p (expression-constant-value multiplier)))
-      (error 'backend-error
-             :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
-             :cpu :6502 :detail statement))
-    (when (or (operand-bcd-p source) (operand-bcd-p dest))
-      (error 'backend-error
-             :message "MULTIPLY: cannot use with USAGE DECIMAL operands"
-             :cpu :6502 :detail statement))
-    (let ((shift (log2 (expression-constant-value multiplier)))
-          (w (operand-width dest)))
-      (when (zerop shift)
-        (return-from compile-6502-multiply))
-      (if (= w 1)
-	(progn
-	  (emit-6502-load-expression out source class-id)
-	  (dotimes (_ shift) (format out "~%~10Tasl a"))
-	  (emit-6502-store-byte-n out dest class-id 0 1))
-	(do ((i 0 (1+ i))
-	     (op source (if (= i 0) source dest)))
-	    ((>= i shift))
-	  (emit-6502-load-byte-n out op class-id 0 w)
-	  (format out "~%~10Tasl a")
-	  (emit-6502-store-byte-n out dest class-id 0 w)
-	  (emit-6502-load-byte-n out op class-id 1 w)
-	  (format out "~%~10Trol a")
-	  (emit-6502-store-byte-n out dest class-id 1 w))))))
+  (error 'backend-error
+    :message "MULTIPLY/DIVIDE not supported - unsupported operation"
+    :cpu :6502 :detail statement))
 
 ;;; PERFORM statement
 
@@ -565,12 +505,6 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
 (define-6502-statement :compute (ast-node-data)
   (compile-6502-compute *standard-output* (statement :compute ast-node-data) *class-id*))
 
-(define-6502-statement :divide (ast-node-data)
-  (compile-6502-divide *standard-output* (statement :divide ast-node-data) *class-id*))
-
-(define-6502-statement :multiply (ast-node-data)
-  (compile-6502-multiply *standard-output* (statement :multiply ast-node-data) *class-id*))
-
 (define-6502-statement :set (ast-node-data)
   (compile-6502-set *standard-output* (statement :set ast-node-data) *class-id*))
 
@@ -618,7 +552,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
   (compile-6502-goto (statement :goto ast-node-data)))
 
 (define-6502-statement :paragraph (ast-node-data)
-  (compile-6502-paragraph (cons :paragraph ast-node-data)))
+  (compile-6502-paragraph (cons :paragraph ast-node-data) cpu *class-id* *method-id*))
 
 (define-6502-statement :evaluate (ast-node-data)
   (compile-6502-evaluate *standard-output* (statement :evaluate ast-node-data) cpu))

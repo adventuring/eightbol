@@ -192,7 +192,7 @@
   (compile-6502-goto *output-stream* (rp2a03-stmt :goto ast-node-data) *class-id* *method-id*))
 
 (def-rp2a03-statement :paragraph
-  (compile-6502-paragraph *output-stream* (rp2a03-stmt :paragraph ast-node-data) *class-id* *method-id*))
+  (compile-6502-paragraph (rp2a03-stmt :paragraph ast-node-data) :rp2a03 *class-id* *method-id*))
 
 (def-rp2a03-statement :evaluate
   (compile-6502-evaluate *output-stream* (rp2a03-stmt :evaluate ast-node-data) :rp2a03))
@@ -203,6 +203,16 @@
 (def-rp2a03-statement :copy
   (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
          (getf ast-node-data :name)))
+
+(def-rp2a03-statement :invoke-super
+  (declare (ignore ast-node-data))
+  (unless (gethash *class-id* *parent-classes*)
+    (load-classes))
+  (if-let (parent-class (gethash *class-id* *parent-classes*))
+    (format *output-stream* "~&~10tjsr Method~a~a~%"
+            (to-identifier parent-class)
+            (to-identifier *method-id*))
+    (error "Can't figure out parent class of ~a" *class-id*)))
 
 (def-rp2a03-statement :dialogue
   "Emit dialogue call with text string, speaker, and optional phonemes.
