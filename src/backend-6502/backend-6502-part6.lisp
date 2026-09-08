@@ -485,6 +485,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
   (format *standard-output* "~%~10Trts~%"))
 
 (define-6502-statement :move (ast-node-data)
+  (emit-assembly-source-line-comment *standard-output* ast-node-data)
   (compile-6502-move *standard-output* (statement :move ast-node-data) *class-id*))
 
 (define-6502-statement :invoke (ast-node-data)

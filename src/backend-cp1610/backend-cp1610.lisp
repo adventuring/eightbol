@@ -360,13 +360,15 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
            (progn
              (compile-cp1610-load inner 2 reg)
              (format *output-stream* "~&~10tSARC    ~a, 8" reg)))))
-    ((and (listp expr) (eq (first expr) :add))
-     (compile-cp1610-load (getf (rest expr) :from) width reg)
-     (format *output-stream* "~&~10tMOVR    ~a, R1" reg)
-     (compile-cp1610-load (getf (rest expr) :to) width :r0)
-     (format *output-stream* "~&~10tADDR    R1, ~a" reg))
-    (t
-     (format *output-stream* "~&~10t;; Unsupported load ~s" expr))))
+     ((and (listp expr) (eq (first expr) :add))
+      (compile-cp1610-load (getf (rest expr) :from) width reg)
+      (format *output-stream* "~&~10tMOVR    ~a, R1" reg)
+      (compile-cp1610-load (getf (rest expr) :to) width :r0)
+      (format *output-stream* "~&~10tADDR    R1, ~a" reg))
+     ((eq expr :null)
+      (format *output-stream* "~&~10tMVII    #0, ~a" reg))
+     (t
+      (format *output-stream* "~&~10t;; Unsupported load ~s" expr))))
 
 ;;; MOVE
 
@@ -1001,9 +1003,9 @@ W is the byte width (1 or 2). For w=2, corrects both bytes with carry."
             (format *output-stream* "~&~10tMVII    #~a, R0" (cp1610-symbol src)))
            (t (format *output-stream* "~&~10t;; Unsupported SET ADDRESS OF source ~s" src)))
          (cp1610-store-r0-to-set-target dest target-w)))
-      (to-self
-       (format *output-stream* "~&~10tMOVR    Self, R0")
-       (cp1610-store-r0-to-set-target to-self target-w))
+       (to-self
+        (format *output-stream* "~&~10tMVII    #Self, R0")
+        (cp1610-store-r0-to-set-target to-self target-w))
       (t
        (compile-cp1610-load value)
        (cp1610-store-r0-to-set-target target target-w)))))

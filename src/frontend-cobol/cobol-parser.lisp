@@ -582,7 +582,9 @@ OUTPUT: perform AST plist."
 
 (defun parse/set-to (_set identifier _to expression)
   (declare (ignore _set _to))
-  (list :set :target identifier :value expression))
+  (if (and (stringp expression) (string-equal expression "SELF"))
+      (list :set :to-self identifier)
+      (list :set :target identifier :value expression)))
 
 (defun parse/stop-run (_stop _run)
   (declare (ignore _stop _run))
@@ -1605,14 +1607,14 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           ())
 
          (set-statement
-          (set identifier to expression #'parse/set-to)
-          (set identifier up by expression #'parse/set-up-by)
-          (set identifier down by expression #'parse/set-down-by)
-          (set condition-name to true #'parse/set-condition-unsupported)
+          (set identifier to self #'parse/set-self)
           (set identifier to address of identifier #'parse/set-address-of)
           (set identifier to null #'parse/set-null)
           (set identifier to nulls #'parse/set-nulls-unsupported)
-          (set identifier to self #'parse/set-self))
+          (set condition-name to true #'parse/set-condition-unsupported)
+          (set identifier to expression #'parse/set-to)
+          (set identifier up by expression #'parse/set-up-by)
+          (set identifier down by expression #'parse/set-down-by))
 
          ;; string-operand: identifier, literal, or identifier with reference modification (start:length)
          (string-operand

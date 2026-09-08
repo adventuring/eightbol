@@ -495,7 +495,7 @@ Think uses MOVE so it is not reduced to @code{= TrueMethod}; trailing GOBACK sti
   "ARM7: SET identifier TO SELF emits Self pointer loading and storing."
   (let ((asm (compile-stmt-to-cpu :arm7 "SET HP TO SELF.")))
     (is (search "Self" asm))
-    (is (search "mov" asm))))
+    (is (or (search "mov" asm) (search "ldr" asm)))))
 
 (test backend-output/cp1610-set-literal-to-var
   "CP1610: SET var TO literal loads immediate and stores."
