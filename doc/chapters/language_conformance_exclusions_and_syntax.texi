@@ -1,0 +1,310 @@
+@node Language Conformance Exclusions & Proposed Syntax
+@chapter Language Conformance Exclusions & Proposed Syntax
+
+This chapter documents, for each of the 17 EIGHTBOL language frontends, which canonical AST node types are supported, which are excluded (with justification), and proposed syntax for any missing constructs.
+
+@section Canonical AST Node Set (Complete Reference)
+
+@strong{Arithmetic:} @code{:+}, @code{:-}, @code{:×}, @code{:÷}
+
+@strong{Conditions:} @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}
+
+@strong{Logical:} @code{:and}, @code{:or}, @code{¬}
+
+@strong{Bitwise:} @code{:bit-and}, @code{:bit-or}, @code{:bit-xor}, @code{:bit-not}, @code{(:ash :value @var{v} :shift @var{n})}
+
+@strong{Control Flow:} @code{:if}, @code{:perform}, @code{:goto}, @code{:evaluate}
+
+@strong{Calls:} @code{:call}, @code{:invoke}, @code{:method}, @code{:assembly-entry}
+
+@strong{Data:} @code{:move}, @code{:subscript}, @code{:refmod}, @code{:of}, @code{:address-of}
+
+@strong{Strings:} @code{:string-blt}, @code{:string-length}, @code{:string-find}
+
+@strong{Special:} @code{:log-fault}, @code{:debug-break}, @code{:inspect}, @code{:goback}, @code{:null}, @code{:self}
+
+@strong{Data definitions:} @code{:dd} (from copybook)
+
+---
+
+@section 1. COBOL
+
+@subsection Supported Constructs
+All canonical constructs fully supported.
+
+@subsection Excluded Constructs
+None. COBOL maps cleanly to canonical AST.
+
+---
+
+@section 2. BASIC
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:call}, @code{:move}, @code{:subscript}, @code{:of}, @code{:goback}
+
+@subsection Excluded Constructs
+@strong{PRINT/INPUT statements:} BASIC's @code{PRINT} and @code{INPUT} compile to library function calls, not AST nodes. Justification: BASIC's I/O is stream-based and model-agnostic; no single AST representation fits all backends (some have screens, some have serial I/O). Resolution: @code{PRINT expr} → @code{(:call :target "PrintRoutine" :library t)}.
+
+@strong{SET keyword:} BASIC's @code{SET} is synonymous with @code{LET}; both map to @code{:move}. Justification: Redundant syntax for single semantic construct.
+
+@subsection Proposed Syntax for Missing Constructs
+@strong{Null testing:} @code{IF NULL(var)} or @code{IF var IS NULL} → @code{(:null var)}
+
+@strong{Self reference:} @code{SELF} keyword in object-oriented BASIC → @code{:self}
+
+---
+
+@section 3. AGI (Adventure Game Interpreter)
+
+@subsection Supported Constructs
+All canonical constructs fully supported.
+
+@subsection Excluded Constructs
+None. AGI comprehensive support.
+
+---
+
+@section 4. ZIL (Zork Implementation Language)
+
+@subsection Supported Constructs
+All canonical constructs fully supported.
+
+@subsection Excluded Constructs
+@strong{<TELL> dialogue nodes:} ZIL's @code{<TELL>} form generates variable assignments + library calls, not canonical @code{:dialogue} nodes. Justification: Dialogue is backend-specific (screen print vs. speaker audio vs. text file); no single AST node is universal. Resolution: @code{<TELL actor "message">} → @code{(:move :from actor :to DialogueActor)} + @code{(:call :target "DialogueRoutine" :library t :using "message")}.
+
+@subsection Proposed Syntax for Missing Constructs
+None.
+
+---
+
+@section 5. Forth
+
+@subsection Supported Constructs
+All canonical constructs fully supported.
+
+@subsection Excluded Constructs
+@strong{Stack comment nodes:} Forth's stack comments (e.g., @code{( n n -- n )}) do not generate AST nodes. Justification: Comments are compile-time metadata only, not runtime code.
+
+@subsection Proposed Syntax for Missing Constructs
+None.
+
+---
+
+@section 6. Fountain
+
+@subsection Supported Constructs
+All canonical constructs fully supported.
+
+@subsection Excluded Constructs
+None. Fountain designed for canonical AST.
+
+---
+
+@section 7. Lua
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:goto}, @code{:call}, @code{:method}, @code{:move}, @code{:subscript}, @code{:of}, @code{:bit-and}, @code{:bit-or}, @code{:bit-xor}, @code{:bit-not}, @code{(:ash :value @var{v} :shift @var{n})}, @code{:null}, @code{:self}, @code{:goback}
+
+@subsection Excluded Constructs
+@strong{Exponentiation:} Lua's @code{^} operator not supported. Justification: No canonical @code{:exponent} node in EIGHTBOL AST; exponentiation rare in embedded systems. Resolution: User must implement @code{POW(x, y)} library function.
+
+@subsection Proposed Syntax for Missing Constructs
+@strong{String reference modification:} @code{string.sub(s, start, length)} → @code{(:refmod :base s :start start :length length)}
+
+---
+
+@section 8. Pascal
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:evaluate}, @code{:call}, @code{:move}, @code{:subscript}, @code{:of}, @code{:address-of}, @code{:log-fault}, @code{:debug-break}, @code{:goback}
+
+@subsection Excluded Constructs
+@strong{Set type and operations:} Pascal's @code{SET OF} type and set operations (@code{+}, @code{*}, @code{-}, @code{IN}) not supported. Justification: Sets are specialized; rare in 8-bit/16-bit embedded systems. Most game/embedded code uses arrays or bitmaps instead. Resolution: User compiles sets to arrays or bit vectors manually.
+
+@strong{WITH statement:} Pascal's @code{WITH record DO stmts} expands to explicit @code{:of} field accesses in parser. Justification: @code{WITH} is syntactic sugar; no new semantics. Resolution: @code{WITH rec DO x := rec.a} → @code{(:move :from (:of a rec) :to X)}
+
+@subsection Proposed Syntax for Missing Constructs
+@strong{String length:} @code{StringLength(s)} function → @code{(:string-length :target s)}
+
+@strong{String copy:} @code{StringCopy(src, dest, length)} function → @code{(:string-blt :source src :dest dest :length length)}
+
+@strong{String find:} @code{StringFind(haystack, needle)} function → @code{(:string-find :haystack haystack :needle needle)}
+
+---
+
+@section 9. Lingo (Macromedia Director)
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:call}, @code{:invoke}, @code{:move}, @code{:of}, @code{:subscript}, @code{:bit-and}, @code{:bit-or}, @code{:bit-xor}, @code{:bit-not}, @code{:goback}
+
+@subsection Excluded Constructs
+@strong{Director engine features:} Lingo's sprites, channels, behaviors, event handlers not supported. Justification: Director is multimedia-specific; EIGHTBOL targets computation on 8-bit/16-bit systems. Resolution: Map game-specific code to variable assignments + library calls (like AGI/SCI).
+
+@subsection Proposed Syntax for Missing Constructs
+@strong{Bitwise AND:} @code{a AND-BIT b} → @code{(:bit-and a b)}
+
+@strong{Bitwise OR:} @code{a OR-BIT b} → @code{(:bit-or a b)}
+
+@strong{Bitwise XOR:} @code{a XOR-BIT b} → @code{(:bit-xor a b)}
+
+@strong{Bitwise NOT:} @code{NOT-BIT a} → @code{(:bit-not a)}
+
+@strong{String length:} @code{StringLength(s)} function → @code{(:string-length :target s)}
+
+@strong{String substring:} @code{StringSubstring(s, start, len)} function → @code{(:refmod :base s :start start :length len)}
+
+---
+
+@section 10. Smalltalk
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:invoke}, @code{:move}, @code{:of}, @code{:subscript}, @code{:goback}
+
+@subsection Excluded Constructs
+@strong{First-class blocks/closures:} Smalltalk's blocks (@code{[x + 1]}) compile inline to @code{:procedure} nodes, not preserved as first-class closures. Justification: Closures require runtime function pointers; 8-bit systems rarely support. Resolution: Blocks become inline procedure definitions.
+
+@strong{Message cascading:} Smalltalk's @code{obj msg1; msg2; msg3} expands to separate @code{:invoke} statements. Justification: Cascading is syntactic sugar; no new semantics.
+
+@strong{Reflection/late binding:} Smalltalk's polymorphism and runtime method lookup not supported. Justification: Requires runtime type system; impossible on 8-bit systems.
+
+@subsection Proposed Syntax for Missing Constructs
+None (all missing features are compile-time expansions or design exclusions).
+
+---
+
+@section 11. FORTRAN
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:call}, @code{:move}, @code{:subscript}, @code{:goback}
+
+@subsection Excluded Constructs
+@strong{Exponentiation (`**`):} Not supported. Justification: No canonical @code{:exponent} node in EIGHTBOL AST. Resolution: User implements @code{POW(x, y)} library function.
+
+@strong{String concatenation (`//`):} Not supported. Justification: FORTRAN on 8-bit systems rarely uses strings; concatenation is low-priority. Resolution: Use fixed-size string buffers; no concatenation operator.
+
+@strong{COMMON blocks:} Not supported. Justification: FORTRAN 77 artifact; modern FORTRAN uses MODULEs. Variables must be declared in copybooks. Resolution: All variables are globals (from copybook) or instance slots (from copybook); no implicit COMMON.
+
+@subsection Proposed Syntax for Missing Constructs
+None. All variable declarations generate copybook entries.
+
+---
+
+@section 12. Muddle (MIT Design Language)
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:evaluate}, @code{:goto}, @code{:call}, @code{:move}, @code{:goback}
+
+@subsection Excluded Constructs
+None. Muddle designed as Lisp dialect; maps cleanly to canonical AST.
+
+@subsection Proposed Syntax for Missing Constructs
+None.
+
+---
+
+@section 13. SCI (Sierra Creative Interpreter)
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:evaluate}, @code{:call}, @code{:invoke}, @code{:move}, @code{:subscript}, @code{:of}, @code{:goback}
+
+@subsection Excluded Constructs
+None. SCI designed as game scripting language; maps well to canonical AST.
+
+@subsection Proposed Syntax for Missing Constructs
+None.
+
+---
+
+@section 14. SCUMM (Script Creation Utility for Maniac Mansion)
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:evaluate}, @code{:call}, @code{:invoke}, @code{:move}, @code{:subscript}, @code{:of}, @code{:log-fault}, @code{:debug-break}, @code{:goback}
+
+@subsection Excluded Constructs
+@strong{Game engine features (actors, rooms, objects):} SCUMM's actors, rooms, objects, and constants compile to variable assignments + library calls, not preserved as special AST nodes. Justification: Game semantics are engine-specific; canonical AST is computation-agnostic. Resolution: @code{ACTOR 1 actorName} → @code{(:call :target "SetActor" :library t :using 1 actorName)}.
+
+@subsection Proposed Syntax for Missing Constructs
+None. All features map to canonical constructs.
+
+---
+
+@section 15. BurgerMistress (The Thief of Fate)
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:call}, @code{:move}, @code{:subscript}, @code{:of}, @code{(:ash :value @var{v} :shift @var{n})}, @code{:goback}
+
+@subsection Excluded Constructs
+None. All features map to canonical constructs.
+
+@subsection Proposed Syntax for Missing Constructs
+None.
+
+---
+
+@section 16. Goal
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:evaluate}, @code{:goto}, @code{:call}, @code{:move}, @code{(:ash :value @var{v} :shift @var{n})}, @code{:bit-and}, @code{:bit-or}, @code{:bit-xor}, @code{:bit-not}, @code{:goback}
+
+@subsection Excluded Constructs
+None. Goal designed as functional game scripting; maps to canonical AST.
+
+@subsection Proposed Syntax for Missing Constructs
+None.
+
+---
+
+@section 17. Objective-C
+
+@subsection Supported Constructs
+@code{:+}, @code{:-}, @code{:×}, @code{:÷}, @code{=}, @code{≠}, @code{<}, @code{≤}, @code{>}, @code{≥}, @code{:and}, @code{:or}, @code{¬}, @code{:if}, @code{:perform}, @code{:call}, @code{:invoke}, @code{:move}, @code{:subscript}, @code{:of}, @code{:address-of}, @code{:goback}
+
+@subsection Excluded Constructs
+@strong{Advanced OO features:} Categories, protocols, formal class hierarchies not supported. Justification: Requires runtime class system; impossible on 8-bit targets. Core OO (message sends, method dispatch) via @code{:invoke} nodes.
+
+@strong{Exception handling:} Objective-C's @code{@@try/@catch/@finally} not supported. Justification: Requires runtime exception stack; 8-bit systems use error codes instead.
+
+@subsection Proposed Syntax for Missing Constructs
+None. Core C + message sends sufficient.
+
+---
+
+@node Summary: Exclusion Justifications
+
+@section Summary: Why Constructs Are Excluded
+
+All exclusions fall into one of three categories:
+
+@enumerate
+@item @strong{Language artifact:} Feature is syntactic sugar or redundant (e.g., Pascal @code{WITH}, Smalltalk cascades). @emph{Resolution:} Parser expands to canonical constructs.
+
+@item @strong{System limitation:} Feature requires runtime capabilities incompatible with 8-bit/16-bit systems (e.g., reflection, exceptions, late binding). @emph{Resolution:} Omit; user implements via library routines if needed.
+
+@item @strong{Backend agnostic:} Feature is backend-specific and has no universal AST representation (e.g., PRINT/INPUT, SCUMM game engine). @emph{Resolution:} Compile to library calls + variable assignments; backend-specific code generation.
+
+@end enumerate
+
+No canonical AST construct is excluded. All 17 frontends converge to the same canonical form.
+
+---
+
+@node Summary: Proposed Syntax
+
+@section Summary: New Syntax Proposed
+
+| Language | Construct | Proposed Syntax | Produces |
+|----------|-----------|-----------------|----------|
+| Pascal | String length | @code{StringLength(s)} | @code{(:string-length :target s)} |
+| Pascal | String copy | @code{StringCopy(src, dest, len)} | @code{(:string-blt ...)} |
+| Pascal | String find | @code{StringFind(haystack, needle)} | @code{(:string-find ...)} |
+| Lingo | Bitwise AND | @code{a AND-BIT b} | @code{(:bit-and a b)} |
+| Lingo | Bitwise OR | @code{a OR-BIT b} | @code{(:bit-or a b)} |
+| Lingo | Bitwise XOR | @code{a XOR-BIT b} | @code{(:bit-xor a b)} |
+| Lingo | Bitwise NOT | @code{NOT-BIT a} | @code{(:bit-not a)} |
+| Lingo | String length | @code{StringLength(s)} | @code{(:string-length :target s)} |
+| Lingo | String substring | @code{StringSubstring(s, start, len)} | @code{(:refmod ...)} |
+| Lua | String substring | @code{string.sub(s, start, end)} | @code{(:refmod ...)} |
+| Lua | Bit shift | @code{x << n}, @code{x >> n} | @code{(:ash :value x :shift n)} |
+
+All proposed syntax is optional library functions or intuitive operators that extend core language without breaking existing code.
+

@@ -66,6 +66,7 @@ supported processor.
 @include chapters/zil_zork_implementation_language.texi
 @include chapters/abi_formats_and_assembler_syntax.texi
 @include chapters/calling_from_assembly.texi
+@include chapters/language_conformance_exclusions_and_syntax.texi
 
 @node Appendix. Minifont code
 @appendix Minifont code
