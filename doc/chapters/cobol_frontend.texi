@@ -1289,4 +1289,43 @@ screen codes but not for arithmetic.
        *> Supports -9999 to +9999 (S counts as one nybble)
 @end example
 
+@node Canonical AST Conformance
+@section Canonical AST Conformance
+
+The COBOL frontend conforms to the canonical AST specification defined in
+@code{doc/chapters/frontend_conformance.texi}. Key conformance points:
+
+@subsection AST Node Types
+
+@table @asis
+@item @code{:procedure}
+Standalone paragraphs in the PROCEDURE DIVISION emit @code{:procedure} nodes
+with @code{:name} keyword containing the paragraph name. Example:
+@example
+(:procedure :name "MainPara" :source-file "..." :source-line 40)
+@end example
+
+@item @code{:dd}
+Data definitions in the DATA DIVISION use only @code{:dd} nodes (never
+@code{:data-item}). The @code{:dd} structure maintains @code{:level},
+@code{:label}, and @code{:attr} keys.
+
+@item @code{:copy}
+COPY statements are expanded inline at the lexer level before parsing. No
+@code{:copy} AST nodes appear in the parsed output. If a copybook file cannot
+be found, a compile-time error is signaled.
+
+@item Standard Statement Nodes
+All standard statement nodes (@code{:move}, @code{:if}, @code{:perform},
+@code{:invoke}, @code{:call}, @code{:goback}, @code{:goto}, @code{:string-blt},
+@code{:log-fault}, @code{:debug-break}, @code{:inspect}, @code{:evaluate})
+are emitted in their canonical form as defined in the conformance spec.
+@end table
+
+@subsection Backend Compatibility
+
+All backends (6502, 65c02, 65c816, HuC6280, RP2A03, cp1610, Z80, SM83, m68k,
+i286, ARM7, F8, and stack) have been updated to correctly handle @code{:procedure}
+nodes with @code{:name} keyword extraction for standalone paragraph compilation.
+
 @bye

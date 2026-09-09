@@ -479,7 +479,7 @@ Reads input and stores into target identifier."
       (format *output-stream* "~10Tdiv~%"))
     (format *output-stream* "~10Tpop ~a~%" target)))
 
-(def-stack-statement :paragraph (ast-node-data)
+(def-stack-statement :procedure (ast-node-data)
   "Emit paragraph label."
   (let ((name (first ast-node-data)))
     (when name

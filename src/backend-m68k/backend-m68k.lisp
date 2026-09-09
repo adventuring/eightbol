@@ -168,7 +168,7 @@
   (let ((statement (cons :goto ast-node-data)))
     (compile-m68k-goto statement)))
 
-(def-m68k-statement :paragraph
+(def-m68k-statement :procedure
    (let ((name (first ast-node-data)))
      (when name (format *output-stream* "~&~a:" (paragraph-label (format nil "~a" name))))))
 

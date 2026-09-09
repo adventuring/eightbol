@@ -182,7 +182,7 @@
 (def-sm83-statement :goto
   (compile-sm83-goto statement))
 
-(def-sm83-statement :paragraph
+(def-sm83-statement :procedure
    (let ((name (first ast-node-data)))
      (when name
        (format *output-stream* "~&~a:" (sm83-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name))))))

@@ -157,11 +157,11 @@
      (compile-z80-string-blt out statement class-id slot-table const-table))
     (:goto
      (compile-z80-goto out statement class-id slot-table type-table const-table pic-size-table pic-width-table))
-    (:paragraph
-     (let ((name (if (eq (first statement) :paragraph)
-                     (second statement)
-                     (or (getf (rest statement) :paragraph) (second statement)))))
-       (when name (format out "~&~a:" (paragraph-label (format nil "~a" name))))))
+     (:procedure
+      (let ((name (if (eq (first statement) :procedure)
+                      (getf (rest statement) :name)
+                      (or (getf (rest statement) :name) (getf (rest statement) :paragraph) (second statement)))))
+        (when name (format out "~&~a:" (paragraph-label (format nil "~a" name))))))
     (:evaluate
      (compile-z80-evaluate out statement class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect

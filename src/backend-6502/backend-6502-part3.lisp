@@ -577,10 +577,11 @@ constant expression, or nil."
 (defun compile-6502-paragraph (statement &optional (cpu :6502) (class-id *class-id*) (method-id *method-id*))
   (declare (ignore method-id))
   (let* ((name (cond
-                 ((eq (first statement) :paragraph)
-                  (second statement))
+                 ((eq (first statement) :procedure)
+                  (getf (rest statement) :name))
                  (t
                   (or (safe-getf (rest statement) :label)
+                      (safe-getf (rest statement) :name)
                       (safe-getf (rest statement) :paragraph)
                       (second statement)))))
          (statements (safe-getf (rest statement) :statements)))

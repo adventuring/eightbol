@@ -226,7 +226,7 @@
   (let ((stmt (cons :goto ast-node-data)))
     (compile-f8-goto stmt)))
 
-(def-f8-statement :paragraph
+(def-f8-statement :procedure
    (let ((name (first ast-node-data)))
      (when name (format *output-stream* "~&~a:" (paragraph-label (format nil "~a" name))))))
 

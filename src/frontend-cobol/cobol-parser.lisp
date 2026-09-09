@@ -741,7 +741,10 @@ Emits (:input :variables (list identifier)) AST node."
 
 ;;; GOTO — implemented
 (defun parse/paragraph (name)
-  (list :paragraph (princ-to-string name)))
+  "Emit :procedure node for standalone PROCEDURE DIVISION paragraph.
+Standalone paragraphs are top-level definitions (as opposed to those within METHOD blocks).
+Per canonical AST spec, these emit :procedure nodes with :name keyword."
+  (list :procedure :name (princ-to-string name)))
 
 (defun parse/goto (go token-or-to &optional target)
   "Return (:goto :target …). @code{GO TO name} passes three values (@code{go}, @code{to}, NAME); @code{GO name} passes two (@code{go}, NAME)."

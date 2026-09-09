@@ -1,121 +1,256 @@
 @chapter Fountain Frontend Language
 
-This chapter documents every statement, function, operator, or control structure
-present in the Fountain frontend as defined in its lexer and parser.
+The Fountain frontend compiles Fountain language to the canonical EIGHTBOL AST
+as specified in the frontend_conformance.texi chapter. All output is guaranteed
+to use only canonical node types, with no non-standard AST shapes.
 
-@section @code{identity}
-@subsection Inputs
-Common Lisp function.
+@menu
+* Fountain Canonical AST Mapping::
+* Fountain Arithmetic Syntax::
+* Fountain Control Flow::
+* Fountain String Operations::
+* Fountain Null and Self::
+@end menu
 
-@subsection Outputs
-Common Lisp function.
+@node Fountain Canonical AST Mapping
+@section Canonical AST Node Implementation
 
-@subsection Processing
-Common Lisp function.
+All Fountain language constructs map to canonical AST nodes per the frontend
+conformance specification. The following summarizes the mappings:
 
-@subsection Side-Effects
-Common Lisp function.
+@subsection Assignment and Arithmetic
 
-@section @code{list}
-@subsection Inputs
-Common Lisp function.
+Assignment uses @code{:move} nodes:
+@example
+SET $var TO expression → (:move :from expression :to var)
+@end example
 
-@subsection Outputs
-Common Lisp function.
+Arithmetic operations emit canonical binary operator nodes:
+@example
+SUM OF e1, e2           → (:add :from e1 :to e2 :giving nil)
+DIFFERENCE OF e1, e2    → (:subtract :minuend e1 :subtrahend e2 :giving nil)
+PRODUCT OF e1, e2       → (:multiply :multiplicand e1 :multiplier e2 :giving nil)
+QUOTIENT OF e1, e2      → (:divide :numerator e1 :denominator e2 :giving nil)
+@end example
 
-@subsection Processing
-Common Lisp function.
+Infix arithmetic also maps to canonical nodes:
+@example
+e1 + e2 → (:add :from e1 :to e2 :giving nil)
+e1 - e2 → (:subtract :minuend e1 :subtrahend e2 :giving nil)
+e1 * e2 → (:multiply :multiplicand e1 :multiplier e2 :giving nil)
+e1 / e2 → (:divide :numerator e1 :denominator e2 :giving nil)
+@end example
 
-@subsection Side-Effects
-Common Lisp function.
+@subsection Null and Self References
 
-@section @code{symbolp}
-@subsection Inputs
-Common Lisp function.
+Null value and self-reference literals are mapped to canonical representations:
+@example
+NULL              → :null
+SELF              → :self
+NULLIFY $var      → (:move :from :null :to var)
+$var IS NULL      → (:null var)
+$var IS NOT NULL  → (:not-null var)
+@end example
 
-@subsection Outputs
-Common Lisp function.
+@node Fountain Arithmetic Syntax
+@section Arithmetic Word Syntax
 
-@subsection Processing
-Common Lisp function.
+Fountain provides English-language arithmetic operators that emit canonical
+binary expression nodes:
 
-@subsection Side-Effects
-Common Lisp function.
+@subsection Sum Operation
+@example
+SUM OF expr1, expr2
+  → (:add :from expr1 :to expr2 :giving nil)
+@end example
 
-@section @code{stage/when}
-@subsection Inputs
-@code{_when}: The token @code{when} (ignored).
-@code{conditional}: A conditional expression.
-@code{_comma}: The token @code{,} (ignored).
-@code{clauses}: A list of clauses to perform if the condition is true.
-@code{_stop}: The token @code{.} (ignored).
+@subsection Difference Operation
+@example
+DIFFERENCE OF expr1, expr2
+  → (:subtract :minuend expr1 :subtrahend expr2 :giving nil)
+@end example
 
-@subsection Outputs
-Returns a list representing an @code{if} expression with no else branch: @code{(if conditional clauses)}.
+@subsection Product Operation
+@example
+PRODUCT OF expr1, expr2
+  → (:multiply :multiplicand expr1 :multiplier expr2 :giving nil)
+@end example
 
-@subsection Processing
-The function constructs an @code{if} expression where the @code{conditional} is evaluated, and if true, the @code{clauses} are executed. The ignored parameters (@code{_when}, @code{_comma}, @code{_stop}) are syntactic tokens that are not used in the output.
+@subsection Quotient Operation
+@example
+QUOTIENT OF expr1, expr2
+  → (:divide :numerator expr1 :denominator expr2 :giving nil)
+@end example
 
-@subsection Side-Effects
-None. The function is purely functional and returns a new list without modifying its inputs.
+@subsection Shift Operations
+Bit shift operations use canonical shift nodes:
+@example
+SHIFT LEFT OF expr
+  → (:shift-left expr count)
+SHIFT RIGHT OF expr
+  → (:shift-right expr count)
+@end example
 
-@section @code{stage/if-otherwise}
-@subsection Inputs
-@code{if}: The token @code{if} (ignored).
-@code{conditional}: A conditional expression.
-@code{comma}: The token @code{,} (ignored).
-@code{clauses}: A list of clauses to perform if the condition is true.
-@code{sem}: The token @code{;} (ignored).
-@code{otherwise}: The token @code{otherwise} (ignored).
-@code{otherwise-clauses}: A list of clauses to perform if the condition is false.
-@code{stop}: The token @code{.} (ignored).
+@node Fountain Control Flow
+@section Control Flow Statements
 
-@subsection Outputs
-Returns a list representing an @code{if} expression with both then and else branches: @code{(if conditional clauses otherwise-clauses)}.
+@subsection WHEN Conditional
+WHEN statements map to @code{:if} nodes:
+@example
+WHEN condition THEN
+  statement1
+  statement2
+@end example
+Maps to:
+@example
+(:if :condition condition
+     :then (statement1 statement2)
+     :else nil)
+@end example
 
-@subsection Processing
-The function constructs an @code{if} expression where the @code{conditional} is evaluated. If true, the @code{clauses} are executed; if false, the @code{otherwise-clauses} are executed. The ignored parameters (@code{if}, @code{comma}, @code{sem}, @code{otherwise}, @code{stop}) are syntactic tokens that are not used in the output.
+@subsection UNLESS Conditional
+UNLESS statements are conditionals with negated conditions:
+@example
+UNLESS condition THEN
+  statement1
+@end example
+Maps to:
+@example
+(:if :condition (:not condition)
+     :then (statement1)
+     :else nil)
+@end example
 
-@subsection Side-Effects
-None. The function is purely functional and returns a new list without modifying its inputs.
+@subsection REPEAT Loop
+REPEAT...TIMES constructs map to @code{:perform} nodes:
+@example
+REPEAT 10 TIMES
+  statement1
+  statement2
+@end example
+Maps to:
+@example
+(:perform :procedure nil
+          :times 10
+          :body (statement1 statement2))
+@end example
 
-@section @code{stage/unless}
-@subsection Inputs
-@code{unless}: The token @code{unless} (ignored).
-@code{conditional}: A conditional expression.
-@code{comma}: The token @code{,} (ignored).
-@code{clauses}: A list of clauses to perform if the condition is false.
-@code{stop}: The token @code{.} (ignored).
+@subsection COND Multi-way Dispatch
+COND statements map to @code{:evaluate} nodes with :when/:when-other clauses:
+@example
+COND
+  WHEN condition1
+    statement1
+  WHEN condition2
+    statement2
+  ELSE
+    statement3
+@end example
+Maps to:
+@example
+(:evaluate :clauses
+  ((:when :condition condition1 :statements (statement1))
+   (:when :condition condition2 :statements (statement2))
+   (:when-other :statements (statement3))))
+@end example
 
-@subsection Outputs
-Returns a list representing an @code{if} expression with no then branch: @code{(if conditional nil clauses)}.
+@node Fountain String Operations
+@section String and Memory Operations
 
-@subsection Processing
-The function constructs an @code{if} expression where the @code{conditional} is evaluated. If false, the @code{clauses} are executed (since the then branch is @code{nil}). The ignored parameters (@code{unless}, @code{comma}, @code{stop}) are syntactic tokens that are not used in the output.
+@subsection String Inspection
 
-@subsection Side-Effects
-None. The function is purely functional and returns a new list without modifying its inputs.
+String inspection functions emit @code{:inspect} nodes:
 
-@section @code{stage/repeat}
-@subsection Inputs
-@code{_repeat}: The token @code{repeat} (ignored).
-@code{numeric}: A numeric expression specifying the number of repetitions.
-@code{_times}: The token @code{times} (ignored).
-@code{_colon}: The token @code{:} (ignored).
-@code{clauses}: A list of clauses to repeat.
+@subsubheading LENGTH OF
+@example
+LENGTH OF string
+  → (:inspect :length string)
+@end example
 
-@subsection Outputs
-Returns a list representing a @code{repeat} expression: @code{(repeat numeric clauses)}.
+@subsubheading CHARACTER AT
+@example
+CHARACTER AT index OF string
+  → (:inspect :character string index)
+@end example
 
-@subsection Processing
-The function constructs a @code{repeat} expression that will execute the @code{clauses} @code{numeric} times. The ignored parameters (@code{_repeat}, @code{_times}, @code{_colon}) are syntactic tokens that are not used in the output.
+@subsubheading POSITION OF
+@example
+POSITION OF substring IN string
+  → (:inspect :position string substring)
+@end example
 
-@subsection Side-Effects
-None. The function is purely functional and returns a new list without modifying its inputs.
+@subsubheading COUNT OF
+@example
+COUNT OF substring IN string
+  → (:inspect :count string substring)
+@end example
 
-@c We stop here for brevity. The full list would continue for all 158 functions.
-@c Due to the length, we have only included a few examples.
-@c The complete documentation would follow the same pattern for each function.
+@subsection Array Subscripting
+Array access uses FROM...ELEMENT syntax mapping to @code{:subscript}:
+@example
+FROM $array ELEMENT $index
+  → (:subscript array index)
+@end example
+
+@subsection Reference Modification
+Substring operations map to @code{:refmod}:
+@example
+SUBSTRING OF $str FROM start TO end
+  → (:refmod :base str :start start :length end)
+@end example
+
+@subsection Address-of Operation
+Address-of operations produce canonical nodes:
+@example
+ADDRESS OF $var
+  → (:address-of var)
+@end example
+
+@subsection Block Copy
+Block copy operations produce canonical @code{:string-blt} nodes:
+@example
+BLOCK COPY OF $src TO $dest
+  → (:string-blt :source src :dest dest)
+@end example
+
+@node Fountain Null and Self
+@section Null and Self Reference Support
+
+@subsection NULL Literal
+The NULL literal represents a null pointer or uninitialized value:
+@example
+SET $ptr TO NULL
+  → (:move :from :null :to ptr)
+@end example
+
+@subsection SELF Reference
+The SELF keyword refers to the current object or scope:
+@example
+SET $obj TO SELF
+  → (:move :from :self :to obj)
+@end example
+
+@subsection Null Tests
+Fountain supports two forms of null tests that map to canonical test nodes:
+
+@subsubheading IS NULL Test
+@example
+IF $var IS NULL
+  → (:if :condition (:null var) ...)
+@end example
+
+@subsubheading IS NOT NULL Test
+@example
+IF $var IS NOT NULL
+  → (:if :condition (:not-null var) ...)
+@end example
+
+@subsection Nullification
+The NULLIFY operation sets a variable to null:
+@example
+NULLIFY $var
+  → (:move :from :null :to var)
+@end example
 
 @section Number Literal Formats
 
@@ -136,34 +271,25 @@ Simple fractions are supported and parsed:
 @end itemize
 
 @subsection Binary Literals
-Binary integers are supported using the @code{#b} prefix:
+Binary integers are supported using the @code{0b} prefix:
 @itemize
-@item @code{#b1010} — equals 10 (decimal)
-@item @code{#b1111} — equals 15 (decimal)
+@item @code{0b1010} — equals 10 (decimal)
+@item @code{0b1111} — equals 15 (decimal)
 @end itemize
 
 @subsection Octal Literals
-Octal integers are supported using the @code{#o} prefix:
+Octal integers are supported using the @code{0o} prefix:
 @itemize
-@item @code{#o10} — equals 8 (decimal)
-@item @code{#o77} — equals 63 (decimal)
+@item @code{0o10} — equals 8 (decimal)
+@item @code{0o77} — equals 63 (decimal)
 @end itemize
 
 @subsection Hexadecimal Literals
-Hexadecimal integers are supported in two forms:
-
-@subsubheading modern #x Prefix Format
+Hexadecimal integers are supported using the @code{0x} prefix:
 @itemize
-@item @code{#xFF} — equals 255 (decimal)
-@item @code{#x100} — equals 256 (decimal)
-@item @code{#xDEADBEEF} — large hex value
-@end itemize
-
-@subsubheading Legacy $XXXX Format
-For backward compatibility with existing Phantasia code, a 5-character dollar-prefix format is also supported:
-@itemize
-@item @code{$00FF} — equals 255 (decimal), stored as memory address
-@item @code{$FFFF} — equals 65535 (decimal)
+@item @code{0xFF} — equals 255 (decimal)
+@item @code{0x100} — equals 256 (decimal)
+@item @code{0xDEADBEEF} — large hex value
 @end itemize
 
 @section Identifier Normalization

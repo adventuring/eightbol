@@ -149,8 +149,8 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
     (:string-blt (compile-arm7-string-blt out stmt class-id slot-table const-table))
     (:goto
      (compile-arm7-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
-     (:paragraph
-      (let ((name (or (getf (rest stmt) :paragraph) (second stmt))))
+     (:procedure
+      (let ((name (or (getf (rest stmt) :name) (getf (rest stmt) :paragraph) (second stmt))))
         (when name (format out  "~&~a:" (paragraph-label (format nil "~a" name))))))
     (:evaluate
      (compile-arm7-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))

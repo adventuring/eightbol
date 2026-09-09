@@ -1,0 +1,159 @@
+@node Fountain Frontend
+@section Fountain Frontend
+
+The Fountain frontend is a language front-end for the EIGHTBOL compiler that 
+emits canonical AST nodes per the frontend_conformance.texi specification.
+
+Fountain is a screenwriting and interactive fiction language designed for 
+game scripting and narrative development.
+
+@subsection Canonical AST Node Implementation
+
+The Fountain frontend fully implements the canonical AST specification:
+
+@itemize
+@item @code{:move} — Assignment (SET, MOVE operations)
+@item @code{:add}, @code{:subtract}, @code{:multiply}, @code{:divide} — Arithmetic 
+  operations (SUM OF, DIFFERENCE OF, PRODUCT OF, QUOTIENT OF)
+@item @code{:shift-left}, @code{:shift-right} — Bit shift operations (SHIFT LEFT OF, SHIFT RIGHT OF)
+@item @code{:if} — Conditional statements (WHEN, UNLESS, IF/ELSE)
+@item @code{:perform} — Loops (REPEAT n TIMES, BEGIN/UNTIL, BEGIN/WHILE/REPEAT)
+@item @code{:evaluate} — Multi-way dispatch (COND with WHEN/WHEN-OTHER clauses)
+@item @code{:procedure} — Procedure definitions (scripts)
+@item @code{:goto} — Label jumps (# labels)
+@item @code{:inspect} — String inspection (LENGTH OF, CHARACTER AT, POSITION OF, COUNT OF)
+@item @code{:subscript} — Array access (FROM array ELEMENT index)
+@item @code{:refmod} — Reference modification/substring (SUBSTRING OF...FROM...TO)
+@item @code{:address-of} — Address-of operation (ADDRESS OF var)
+@item @code{:string-blt} — Block copy (BLOCK COPY OF source TO dest)
+@item @code{:null} — Null value literal and tests (NULL, Is Null, Is Not Null)
+@item @code{:self} — Self reference (Self)
+@end itemize
+
+@subsection Arithmetic Word Syntax
+
+Fountain uses English-like syntax for arithmetic operations, all emitting
+canonical binary expression nodes:
+
+@example
+SUM OF e1, e2           → (:add :from e1 :to e2 :giving nil)
+DIFFERENCE OF e1, e2    → (:subtract :minuend e1 :subtrahend e2 :giving nil)
+PRODUCT OF e1, e2       → (:multiply :multiplicand e1 :multiplier e2 :giving nil)
+QUOTIENT OF e1, e2      → (:divide :numerator e1 :denominator e2 :giving nil)
+@end example
+
+Infix operators also produce canonical nodes:
+
+@example
+e1 + e2  → :add
+e1 - e2  → :subtract
+e1 * e2  → :multiply
+e1 / e2  → :divide
+@end example
+
+@subsection Shift Operations
+
+Bit shift operations use English word syntax:
+
+@example
+SHIFT LEFT OF expr      → (:shift-left expr count)
+SHIFT RIGHT OF expr     → (:shift-right expr count)
+@end example
+
+@subsection Control Flow Statements
+
+@code{WHEN} and @code{UNLESS} conditionals emit @code{:if} nodes:
+
+@example
+WHEN condition THEN ... → (:if :condition condition :then stmts :else nil)
+UNLESS condition THEN ..→ (:if :condition (:not condition) :then stmts :else nil)
+@end example
+
+@code{REPEAT n TIMES} emits @code{:perform}:
+
+@example
+REPEAT 10 TIMES ... → (:perform :procedure nil :times 10 :body stmts)
+@end example
+
+@code{COND} statements emit @code{:evaluate}:
+
+@example
+COND WHEN c1 ... ELSE WHEN c2 ... ELSE ... 
+  → (:evaluate :clauses ((:when :condition c1 :statements ...)
+                          (:when :condition c2 :statements ...)
+                          (:when-other :statements ...)))
+@end example
+
+@subsection Null and Self References
+
+The Fountain frontend supports null value and self-reference literals:
+
+@example
+NULL                 → :null
+SELF                 → :self
+NULLIFY $var         → (:move :from :null :to var)
+var Is Null          → (:null var)
+var Is Not Null      → (:not-null var)
+@end example
+
+@subsection String Inspection
+
+String inspection functions emit @code{:inspect} nodes with appropriate
+operation keywords:
+
+@example
+LENGTH OF string             → (:inspect :length string)
+CHARACTER AT n OF string     → (:inspect :character string n)
+POSITION OF substring IN str → (:inspect :position str substring)
+COUNT OF substring IN str    → (:inspect :count str substring)
+@end example
+
+@subsection Array Access
+
+Array subscripting uses FROM...ELEMENT syntax:
+
+@example
+FROM $arr ELEMENT $index → (:subscript arr index)
+@end example
+
+@subsection String Operations
+
+Reference modification and string operations:
+
+@example
+SUBSTRING OF str FROM start TO end  → (:refmod :base str :start start :length end)
+ADDRESS OF var                      → (:address-of var)
+BLOCK COPY OF src TO dest           → (:string-blt :source src :dest dest)
+@end example
+
+@subsection Lexer Features
+
+The Fountain lexer tokenizes source code and normalizes identifiers to PascalCase.
+All keywords are case-insensitive and recognized by token type.
+
+Supported number formats:
+@itemize
+@item Decimal numbers (123, 0)
+@item Hexadecimal (0xFF)
+@item Binary (0b1010)
+@item Octal (0o77)
+@end itemize
+
+@subsection Module Structure
+
+The Fountain frontend is organized into:
+
+@itemize
+@item @code{package.lisp} — Package definition
+@item @code{lexer.lisp} — Tokenization and keyword recognition
+@item @code{parser.lisp} — AST node generation with canonical node emission
+@item @code{tests.lisp} — Conformance tests
+@end itemize
+
+@subsection Implementation Notes
+
+- All arithmetic words produce canonical binary operator nodes, not non-standard nodes
+- SET operations unconditionally emit @code{:move} nodes
+- Control flow structures emit canonical @code{:if} and @code{:perform} nodes
+- String inspection always emits @code{:inspect} nodes with appropriate operation keywords
+- All backends receive canonical AST only; no backend-specific transformations are needed

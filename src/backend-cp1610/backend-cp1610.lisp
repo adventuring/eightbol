@@ -155,8 +155,8 @@
   (let ((stmt (cons :goto ast-node-data)))
     (compile-cp1610-goto stmt)))
 
-(def-cp1610-statement :paragraph
-  (let ((stmt (cons :paragraph ast-node-data)))
+(def-cp1610-statement :procedure
+  (let ((stmt (cons :procedure ast-node-data)))
     (compile-cp1610-paragraph stmt)))
 
 (def-cp1610-statement :evaluate
@@ -1095,9 +1095,9 @@ W is the byte width (1 or 2). For w=2, corrects both bytes with carry."
   (cp1610-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name)))
 
 (defun compile-cp1610-paragraph (stmt)
-  (let ((name (if (eq (first stmt) :paragraph)
-                  (second stmt)
-                  (or (getf (rest stmt) :paragraph) (second stmt)))))
+  (let ((name (if (eq (first stmt) :procedure)
+                  (getf (rest stmt) :name)
+                  (or (getf (rest stmt) :name) (getf (rest stmt) :paragraph) (second stmt)))))
     (when name
       (format *output-stream* "~&~a:" (cp1610-para-label (format nil "~a" name))))))
 

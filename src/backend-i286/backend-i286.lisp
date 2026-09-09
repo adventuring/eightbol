@@ -135,7 +135,7 @@
     (:string-blt (compile-i286-string-blt out stmt class-id slot-table const-table))
     (:goto
      (compile-i286-goto out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
-     (:paragraph
+     (:procedure
       (let ((name (or (getf (rest stmt) :paragraph) (second stmt))))
         (when name (format out "~&~a:" (paragraph-label (format nil "~a" name))))))
     (:evaluate (compile-i286-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))

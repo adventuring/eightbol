@@ -191,8 +191,8 @@
 (def-rp2a03-statement :goto
   (compile-6502-goto *output-stream* (rp2a03-stmt :goto ast-node-data) *class-id* *method-id*))
 
-(def-rp2a03-statement :paragraph
-  (compile-6502-paragraph (rp2a03-stmt :paragraph ast-node-data) :rp2a03 *class-id* *method-id*))
+(def-rp2a03-statement :procedure
+  (compile-6502-paragraph (rp2a03-stmt :procedure ast-node-data) :rp2a03 *class-id* *method-id*))
 
 (def-rp2a03-statement :evaluate
   (compile-6502-evaluate *output-stream* (rp2a03-stmt :evaluate ast-node-data) :rp2a03))

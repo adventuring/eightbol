@@ -203,7 +203,7 @@
   (let ((target (or (getf statement :target) (first (getf statement :targets)))))
     (format *output-stream*  "~&~8tJMP     ~a" (m6800-symbol target))))
 
-(def-m6800-statement :paragraph
+(def-m6800-statement :procedure
    (let ((name (first ast-node-data)))
      (when name
        (format *output-stream*  "~&~a:" (paragraph-label (format nil "~a" name))))))
