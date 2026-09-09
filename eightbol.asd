@@ -27,15 +27,17 @@
             :components ((:file "package")
                          (:file "conditions" :depends-on ("package"))
                          
-                         ;; Core compiler infrastructure
-                         (:file "ast" :depends-on ("package"))
-                         (:file "ast-optimize" :depends-on ("package" "ast"))
-                         (:file "ast-validate"
-                          :depends-on ("package" "ast" "ast-optimize" "conditions"))
-                         (:file "backend" :depends-on ("package" "conditions" "ast"))
-                         (:file "grammar-build" :depends-on ("package" "ast"))
-                         (:file "cobol-copybook"
-                          :depends-on ("package" "conditions" "backend"))
+                          ;; Core compiler infrastructure
+                          (:file "ast" :depends-on ("package"))
+                          (:file "ast-optimize" :depends-on ("package" "ast"))
+                          (:file "ast-validate"
+                           :depends-on ("package" "ast" "ast-optimize" "conditions"))
+                          (:file "backend" :depends-on ("package" "conditions" "ast"))
+                          (:file "grammar-build" :depends-on ("package" "ast"))
+                          (:file "expression-complexity"
+                           :depends-on ("package" "ast"))
+                          (:file "cobol-copybook"
+                           :depends-on ("package" "conditions" "backend"))
                          (:file "eightbol-compile"
                           :depends-on ("package"
                                        "ast"

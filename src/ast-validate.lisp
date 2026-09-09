@@ -207,4 +207,73 @@
   (validate-method-assembly-entry-rules ast)
   (when validate-termination
     (validate-method-terminations ast))
+  (validate-no-unqualified-variables ast)
   ast)
+
+;;; ============================================================================
+;;; VARIABLE ERASURE VALIDATION — Ensure no bare variables remain in AST
+;;; ============================================================================
+
+(defun has-unqualified-variable-p (node &optional (depth 0))
+  "Check if NODE contains any unqualified variable references.
+   
+   Returns: (values found-p error-details)
+   
+   Unqualified variables are bare symbols in positions where they should be
+   qualified with (:global NAME) or (:slot NAME)."
+  (declare (ignorable depth))
+  (cond
+    ((null node) (values nil nil))
+    ((numberp node) (values nil nil))
+    ((stringp node) (values nil nil))
+    ((keywordp node) (values nil nil))
+    ((and (listp node) (eq (first node) :global))
+     ;; (:global NAME) — qualified, OK
+     (values nil nil))
+    ((and (listp node) (eq (first node) :slot))
+     ;; (:slot NAME) — qualified, OK
+     (values nil nil))
+    ((and (listp node) (eq (first node) :of))
+     ;; (:of slot obj) — recurse
+     (multiple-value-bind (found details)
+         (has-unqualified-variable-p (rest node) (1+ depth))
+       (if found (values found details) (values nil nil))))
+    ((and (listp node) (eq (first node) :subscript))
+     ;; (:subscript base idx) — recurse
+     (multiple-value-bind (found details)
+         (has-unqualified-variable-p (rest node) (1+ depth))
+       (if found (values found details) (values nil nil))))
+    ((and (listp node) (eq (first node) :refmod))
+     ;; (:refmod :base b :start s :length l) — recurse
+     (multiple-value-bind (found details)
+         (has-unqualified-variable-p (rest node) (1+ depth))
+       (if found (values found details) (values nil nil))))
+    ((symbolp node)
+     ;; Bare symbol — UNQUALIFIED (ERROR)
+     (values t (list :unqualified-symbol node)))
+    ((listp node)
+     ;; Generic list — recurse
+     (dolist (elem node)
+       (multiple-value-bind (found details)
+           (has-unqualified-variable-p elem (1+ depth))
+         (when found (return-from has-unqualified-variable-p
+                      (values found details)))))
+     (values nil nil))
+    (t (values nil nil))))
+
+(defun validate-no-unqualified-variables (ast)
+  "Signal COMPILER-ERROR if AST contains any unqualified variables.
+   
+   Valid variable forms:
+   - (:global NAME) — qualified global
+   - (:slot NAME) — qualified instance slot
+   - Any literal (number, string, keyword)
+   
+   Returns AST if valid."
+  (multiple-value-bind (found details)
+      (has-unqualified-variable-p ast)
+    (when found
+      (error 'compiler-error
+             :message (format nil "Unqualified variable in AST: ~a~%All variables must be qualified with (:global NAME) or (:slot NAME)~%Details: ~a"
+                              (second details) details)))
+    ast))

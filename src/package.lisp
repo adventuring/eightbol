@@ -154,14 +154,27 @@
        :copybook-not-found
        ;; Include path support
        :include-path
-       ;; Expression constructors
-       :make-expression-add
-       :make-expression-subtract
-       :make-expression-multiply
-       :make-expression-divide
-       :make-expression-shift-left
-       :make-expression-shift-right
-        :make-identifier-literal
-        ;; Constants
-        :+supported-cpus+
+         ;; Expression constructors
+        :make-expression-add
+        :make-expression-subtract
+        :make-expression-multiply
+        :make-expression-divide
+        :make-expression-shift-left
+        :make-expression-shift-right
+         :make-identifier-literal
+         ;; AST node constructors (core)
+         :make-call-node
+         :make-invoke-node
+         :make-declare-node
+         :make-move-node
+         ;; Expression complexity framework
+         :get-available-temps
+         :get-cpu-additional-registers
+         :allocate-temp-with-fallback
+         :extract-declare-node
+         :extract-declared-temps
+         :with-expression-context
+         :signal-expression-too-complex
+         ;; Constants
+         :+supported-cpus+
        ))

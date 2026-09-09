@@ -20,9 +20,11 @@
                               :depends-on ("eightbol-tests"))
                              (:file "backend-operand-kinds-tests"
                               :depends-on ("eightbol-tests"))
-                             (:file "ast-optimize-tests"
-                              :depends-on ("eightbol-tests"))
-                             (:file "backend-cp1610-tests"
+                              (:file "ast-optimize-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "variable-erasure-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-cp1610-tests"
                               :depends-on ("eightbol-tests"))
                              (:file "backend-z80-tests"
                               :depends-on ("eightbol-tests"))
@@ -74,8 +76,10 @@
                               :depends-on ("eightbol-tests"))
                              (:file "optimizer-comprehensive-tests"
                               :depends-on ("eightbol-tests"))
-                             (:file "backend-comprehensive-tests"
-                              :depends-on ("eightbol-tests"))
+                              (:file "backend-comprehensive-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "calling-convention-and-complexity-tests"
+                               :depends-on ("eightbol-tests"))
                              (:file "backend-comprehensive-ast-tests"
                               :depends-on ("eightbol-tests"))
                              
@@ -129,8 +133,9 @@
                               :depends-on ())
                              )))
   :perform (asdf:test-op (o c)
-                              (let ((suites '(:eightbol :backend-matrix :ast-optimize
-                                              :backend-output :parser-structure
+                               (let ((suites '(:eightbol :backend-matrix :ast-optimize
+                                               :variable-erasure
+                                               :backend-output :parser-structure
                                               :compile-regression :copybook-generation
                                               :service-bank-lut :backend-cp1610
                                               :backend-z80 :backend-operand-kinds

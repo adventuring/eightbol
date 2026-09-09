@@ -17,18 +17,27 @@
   (list :move :from from :to to))
 
 (defun make-invoke-node (object method &key args returning)
-  "Build an :invoke AST node."
+  "Build an :invoke AST node. Note: :invoke CANNOT use accumulator for return value."
   (list* :invoke :object object :method method
          (append (when args `(:args ,args))
                  (when returning `(:returning ,returning)))))
 
-(defun make-call-node (target &key args bank library returning)
-  "Build a :call AST node."
-  (list* :call :target target
-         (append (when args `(:args ,args))
-                 (when bank `(:bank ,bank))
-                 (when library `(:library ,library))
-                 (when returning `(:returning ,returning)))))
+(defun make-call-node (target &key args bank library returning type)
+  "Build a :call AST node with calling convention type.
+   
+   TYPE determines accumulator return capability:
+   - :subroutine — local subroutine, can return 1 byte in accumulator
+   - :library — library function, can return 1 byte in accumulator
+   - :far-service — far call to service bank, CANNOT use accumulator for return
+   
+   If not specified, TYPE defaults to :subroutine for local calls and :far-service for bank calls."
+  (let ((inferred-type (or type
+                          (if bank :far-service :subroutine))))
+    (list* :call :target target :type inferred-type
+           (append (when args `(:args ,args))
+                   (when bank `(:bank ,bank))
+                   (when library `(:library ,library))
+                   (when returning `(:returning ,returning))))))
 
 (defun make-if-node (condition then-stmts &optional else-stmts)
   "Build an :if AST node."
@@ -70,6 +79,16 @@ alongside."
 (defun make-assembly-entry-node (label)
   "Build an :assembly-entry AST node."
   (list :assembly-entry :label label))
+
+(defun make-declare-node (declare-type &key variables)
+  "Build a :declare AST node for temporary variable declarations.
+   
+   DECLARE-TYPE: :temp — declares additional temporary variables
+   VARIABLES: list of variable names available for complex expressions
+   
+   Example: (:declare :type :temp :variables (TempVar1 TempVar2))"
+  (list* :declare :type declare-type
+         (when variables `(:variables ,variables))))
 
 (defun make-string-blt-node (source dest &optional length)
   "Build a :string-blt AST node."
@@ -256,3 +275,240 @@ VARIABLES is a list of identifiers to read; PROMPT is optional greeting text."
   "Build a Prolog-like goal structure (functor args…).
 FUNCTOR is the goal predicate name; ARGS are arguments."
   (list* (intern functor) args))
+
+;;; ============================================================================
+;;; VARIABLE ERASURE FRAMEWORK — Resolve all variables to globals/slots/temps
+;;; ============================================================================
+
+;;; Reserved temporary variables (hardware/ABI defined)
+(defparameter +math-temp+ "MathTemp"
+  "1-byte reserved temporary for arithmetic operations (e.g. intermediate byte results).")
+
+(defparameter +multiply-temp+ "MultiplyTemp"
+  "16-bit (word) reserved temporary for multiplication/wide arithmetic.")
+
+(defun make-global-reference (var-name)
+  "Build a (:global NAME) reference."
+  (list :global (string var-name)))
+
+(defun make-slot-reference (var-name)
+  "Build a (:slot NAME) reference for instance slot."
+  (list :slot (string var-name)))
+
+(defun make-temp-reference (temp-name)
+  "Build a reference to a reserved temporary (MathTemp or MultiplyTemp)."
+  (list :global (string temp-name)))
+
+(defun resolve-variable (var-name copybook-slot-table &key object)
+  "Resolve VAR-NAME to copybook entry or reserved temporary.
+   
+   COPYBOOK-SLOT-TABLE is the slot table hash from load-copybook-tables.
+   OBJECT is the enclosing object name (for slot lookups).
+   
+   Returns: (:global NAME), (:slot NAME), or signals error if undefined.
+   
+   Lookup order:
+   1. If OBJECT and VAR-NAME in object's slots → (:slot NAME)
+   2. If VAR-NAME in globals → (:global NAME)
+   3. If VAR-NAME is reserved temp (MathTemp/MultiplyTemp) → (:global NAME)
+   4. Otherwise: error 'undefined-variable"
+  (cond
+    ;; Check if it's a reserved temporary
+    ((member var-name (list +math-temp+ +multiply-temp+) :test #'string-equal)
+     (make-global-reference var-name))
+    
+    ;; Check in slot table (globals are also in slot table)
+    ((and copybook-slot-table (gethash (eightbol::cobol-slot-table-name-key var-name) copybook-slot-table))
+     (let ((origin (gethash (eightbol::cobol-slot-table-name-key var-name) copybook-slot-table)))
+       (if (and object (string-equal origin object))
+           (make-slot-reference var-name)
+           (make-global-reference var-name))))
+    
+    ;; Not found
+    (t (error 'eightbol::compiler-error
+              :message (format nil "Undefined variable: ~a" var-name)))))
+
+(defun resolve-expression (expr copybook-slot-table &key object)
+  "Recursively resolve all variables in EXPR.
+   
+   Replaces bare variable symbols with (:global NAME) or (:slot NAME).
+   Returns updated expression with all variables qualified.
+   
+   EXPR can be:
+   - Number (literal) → unchanged
+   - String (literal) → unchanged
+   - Symbol → resolve to (:global SYM) or (:slot SYM)
+   - (:of slot obj) → recurse, resolve slot and obj
+   - (:subscript base idx) → recurse on both
+   - (:refmod :base b :start s :length l) → recurse on all
+   - List → recurse on all elements"
+  (cond
+    ((null expr) expr)
+    ((numberp expr) expr)
+    ((stringp expr) expr)
+    ((keywordp expr) expr)
+    ((symbolp expr)
+     ;; Bare symbol → resolve to copybook entry
+     (resolve-variable (symbol-name expr) copybook-slot-table :object object))
+    ((and (listp expr) (eq (first expr) :of))
+     ;; (:of slot obj) → resolve slot and obj
+     (list :of
+           (resolve-variable (second expr) copybook-slot-table :object object)
+           (resolve-expression (third expr) copybook-slot-table :object object)
+           (when (fourth expr) (fourth expr))))
+    ((and (listp expr) (eq (first expr) :subscript))
+     ;; (:subscript base idx) → resolve both
+     (list :subscript
+           (resolve-expression (second expr) copybook-slot-table :object object)
+           (resolve-expression (third expr) copybook-slot-table :object object)))
+    ((and (listp expr) (eq (first expr) :refmod))
+     ;; (:refmod :base b :start s :length l)
+     (list :refmod
+           :base (resolve-expression (eightbol::safe-getf (rest expr) :base) copybook-slot-table :object object)
+           :start (resolve-expression (eightbol::safe-getf (rest expr) :start) copybook-slot-table :object object)
+           :length (resolve-expression (eightbol::safe-getf (rest expr) :length) copybook-slot-table :object object)))
+    ((and (listp expr) (eq (first expr) :global))
+     ;; Already qualified
+     expr)
+    ((and (listp expr) (eq (first expr) :slot))
+     ;; Already qualified
+     expr)
+    ((listp expr)
+     ;; Generic list → recurse on elements (preserving structure)
+     (mapcar (lambda (e) (resolve-expression e copybook-slot-table :object object)) expr))
+    (t expr)))
+
+(defun allocate-temp-for-intermediate (expression-type bit-width)
+  "Allocate appropriate reserved temporary for intermediate value.
+   
+   EXPRESSION-TYPE: :arithmetic, :multiply, :divide, etc.
+   BIT-WIDTH: required bit width (1 for byte, 16 for word, etc.)
+   
+   Returns: temporary variable name (MathTemp or MultiplyTemp)
+   
+   Strategy:
+   - Byte operations (≤8 bits) → MathTemp
+   - Word operations (9-16 bits) → MultiplyTemp
+   - Larger → error (not supported yet)"
+  (cond
+    ((and (numberp bit-width) (<= bit-width 8))
+     +math-temp+)
+    ((and (numberp bit-width) (<= bit-width 16))
+     +multiply-temp+)
+    (t (error 'compiler-error
+              :message (format nil "Bit width ~a exceeds reserved temporary capacity" bit-width)))))
+
+(defun erase-locals (ast copybook-slot-table &key object)
+  "Remove all local variables from AST, replacing with globals/slots/temps.
+   
+   Recursively walks AST:
+   - Resolves all variable references
+   - Detects/allocates reserved temps for intermediate values
+   - Errors on undefined variables
+   - Returns updated AST with no bare variable symbols
+   
+   AST can be:
+   - :program node
+   - :method node
+   - Statement list
+   - Single statement
+   - Expression
+   
+   COPYBOOK-SLOT-TABLE: slot table hash from load-copybook-tables
+   OBJECT: current object context (for slot resolution)"
+  (cond
+    ((null ast) ast)
+    ((numberp ast) ast)
+    ((stringp ast) ast)
+    ((keywordp ast) ast)
+    ((symbolp ast)
+     ;; Bare symbol → error (all variables must be resolved before entering erase-locals)
+     (error 'eightbol::compiler-error
+            :message (format nil "Unresolved variable in AST: ~a" ast)))
+    ((and (listp ast) (eq (first ast) :program))
+     ;; (:program :class-id … :data … :methods …)
+     (list :program
+           :class-id (eightbol::safe-getf (rest ast) :class-id)
+           :identification (eightbol::safe-getf (rest ast) :identification)
+           :environment (eightbol::safe-getf (rest ast) :environment)
+           :data (erase-locals (eightbol::ast-data ast) copybook-slot-table :object object)
+           :methods (mapcar (lambda (m) (erase-locals m copybook-slot-table :object object))
+                            (eightbol::ast-methods ast))))
+    ((and (listp ast) (eq (first ast) :method))
+     ;; (:method :method-id … :statements …)
+     (list :method
+           :method-id (eightbol::safe-getf (rest ast) :method-id)
+           :statements (mapcar (lambda (s) (erase-locals s copybook-slot-table :object object))
+                               (eightbol::ast-method-statements ast))))
+    ((and (listp ast) (eq (first ast) :move))
+     ;; (:move :from expr :to id)
+     (list :move
+           :from (resolve-expression (eightbol::safe-getf (rest ast) :from) copybook-slot-table :object object)
+           :to (resolve-expression (eightbol::safe-getf (rest ast) :to) copybook-slot-table :object object)))
+    ((and (listp ast) (eq (first ast) :set))
+     ;; (:set :target id :value expr)
+     (list :set
+           :target (resolve-expression (eightbol::safe-getf (rest ast) :target) copybook-slot-table :object object)
+           :value (resolve-expression (eightbol::safe-getf (rest ast) :value) copybook-slot-table :object object)))
+    ((and (listp ast) (eq (first ast) :compute))
+     ;; (:compute :target id :expression expr)
+     (list :compute
+           :target (resolve-expression (eightbol::safe-getf (rest ast) :target) copybook-slot-table :object object)
+           :expression (resolve-expression (eightbol::safe-getf (rest ast) :expression) copybook-slot-table :object object)))
+    ((and (listp ast) (eq (first ast) :if))
+     ;; (:if :condition cond :then stmts :else stmts)
+     (list :if
+           :condition (resolve-expression (eightbol::safe-getf (rest ast) :condition) copybook-slot-table :object object)
+           :then (mapcar (lambda (s) (erase-locals s copybook-slot-table :object object))
+                         (eightbol::ensure-list (eightbol::safe-getf (rest ast) :then)))
+           :else (mapcar (lambda (s) (erase-locals s copybook-slot-table :object object))
+                         (eightbol::ensure-list (eightbol::safe-getf (rest ast) :else)))))
+    ((and (listp ast) (eq (first ast) :add))
+     ;; (:add :from expr :to id [:giving id])
+     (list* :add
+            :from (resolve-expression (eightbol::safe-getf (rest ast) :from) copybook-slot-table :object object)
+            :to (resolve-expression (eightbol::safe-getf (rest ast) :to) copybook-slot-table :object object)
+            (when (eightbol::safe-getf (rest ast) :giving)
+              (list :giving (resolve-expression (eightbol::safe-getf (rest ast) :giving) copybook-slot-table :object object)))))
+    ((and (listp ast) (eq (first ast) :subtract))
+     ;; (:subtract :subtrahend expr :from expr [:giving id])
+     (list* :subtract
+            :subtrahend (resolve-expression (eightbol::safe-getf (rest ast) :subtrahend) copybook-slot-table :object object)
+            :from (resolve-expression (eightbol::safe-getf (rest ast) :from) copybook-slot-table :object object)
+            (when (eightbol::safe-getf (rest ast) :giving)
+              (list :giving (resolve-expression (eightbol::safe-getf (rest ast) :giving) copybook-slot-table :object object)))))
+    ((and (listp ast) (eq (first ast) :invoke))
+     ;; (:invoke :object obj :method "Name" [:args args] [:returning id])
+     (list* :invoke
+            :object (resolve-expression (eightbol::safe-getf (rest ast) :object) copybook-slot-table :object object)
+            :method (eightbol::safe-getf (rest ast) :method)
+            (when (eightbol::safe-getf (rest ast) :args)
+              (list :args (resolve-expression (eightbol::safe-getf (rest ast) :args) copybook-slot-table :object object)))
+            (when (eightbol::safe-getf (rest ast) :returning)
+              (list :returning (resolve-expression (eightbol::safe-getf (rest ast) :returning) copybook-slot-table :object object)))))
+    ((and (listp ast) (eq (first ast) :string-blt))
+     ;; (:string-blt :source src :dest dst [:length len])
+     (list* :string-blt
+            :source (resolve-expression (eightbol::safe-getf (rest ast) :source) copybook-slot-table :object object)
+            :dest (resolve-expression (eightbol::safe-getf (rest ast) :dest) copybook-slot-table :object object)
+            (when (eightbol::safe-getf (rest ast) :length)
+              (list :length (resolve-expression (eightbol::safe-getf (rest ast) :length) copybook-slot-table :object object)))))
+    ((and (listp ast) (eq (first ast) :perform))
+     ;; (:perform :procedure name [:times expr] [:until cond] [:varying var :from init :by step] [:body stmts])
+     (list* :perform
+            :procedure (eightbol::safe-getf (rest ast) :procedure)
+            (when (eightbol::safe-getf (rest ast) :times)
+              (list :times (resolve-expression (eightbol::safe-getf (rest ast) :times) copybook-slot-table :object object)))
+            (when (eightbol::safe-getf (rest ast) :until)
+              (list :until (resolve-expression (eightbol::safe-getf (rest ast) :until) copybook-slot-table :object object)))
+            (when (eightbol::safe-getf (rest ast) :varying)
+              (list :varying (resolve-expression (eightbol::safe-getf (rest ast) :varying) copybook-slot-table :object object)
+                    :from (resolve-expression (eightbol::safe-getf (rest ast) :from) copybook-slot-table :object object)
+                    :by (resolve-expression (eightbol::safe-getf (rest ast) :by) copybook-slot-table :object object)))
+            (when (eightbol::safe-getf (rest ast) :body)
+              (list :body (mapcar (lambda (s) (erase-locals s copybook-slot-table :object object))
+                                  (eightbol::ensure-list (eightbol::safe-getf (rest ast) :body)))))))
+    ((listp ast)
+     ;; Generic list → recurse on all elements
+     (mapcar (lambda (e) (erase-locals e copybook-slot-table :object object)) ast))
+    (t ast)))
