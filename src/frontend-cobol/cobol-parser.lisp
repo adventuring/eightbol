@@ -422,45 +422,45 @@ Extract statements from PROCEDURE DIVISION and build a :program AST node."
 
 (defun parse/cond-is-zero (expression _is _zero)
   (declare (ignore _is _zero))
-  (list '= expression 0))
+  (list := expression 0))
 
 (defun parse/cond-is-not-zero (expression _is _not _zero)
   (declare (ignore _is _not _zero))
-  (list '/= expression 0))
+  (list :≠ expression 0))
 
 (defun parse/cond-eq (expression1 _op expression2 &optional expression3)
   (declare (ignore _op))
-  (list '= expression1 (or expression3 expression2)))
+  (list := expression1 (or expression3 expression2)))
 
 (defun parse/cond-rel-equal-is (e1 _is _equal _to e2)
-  "Relation @code{(= E1 E2)} from @samp{E1 IS EQUAL TO E2}."
+  "Relation @code{(:= E1 E2)} from @samp{E1 IS EQUAL TO E2}."
   (declare (ignore _is _equal _to))
-  (list '= e1 e2))
+  (list := e1 e2))
 
 (defun parse/cond-rel-equal-omitted (e1 _equal _to e2)
-  "Relation @code{(= E1 E2)} from @samp{E1 EQUAL TO E2}."
+  "Relation @code{(:= E1 E2)} from @samp{E1 EQUAL TO E2}."
   (declare (ignore _equal _to))
-  (list '= e1 e2))
+  (list := e1 e2))
 
 (defun parse/cond-rel-less-is (e1 _is _less _than e2)
-  "Relation @code{(< E1 E2)} from @samp{E1 IS LESS THAN E2}."
+  "Relation @code{(:< E1 E2)} from @samp{E1 IS LESS THAN E2}."
   (declare (ignore _is _less _than))
-  (list '< e1 e2))
+  (list :< e1 e2))
 
 (defun parse/cond-rel-less-omitted (e1 _less _than e2)
-  "Relation @code{(< E1 E2)} from @samp{E1 LESS THAN E2}."
+  "Relation @code{(:< E1 E2)} from @samp{E1 LESS THAN E2}."
   (declare (ignore _less _than))
-  (list '< e1 e2))
+  (list :< e1 e2))
 
 (defun parse/cond-rel-greater-is (e1 _is _greater _than e2)
-  "Relation @code{(> E1 E2)} from @samp{E1 IS GREATER THAN E2}."
+  "Relation @code{(:> E1 E2)} from @samp{E1 IS GREATER THAN E2}."
   (declare (ignore _is _greater _than))
-  (list '> e1 e2))
+  (list :> e1 e2))
 
 (defun parse/cond-rel-greater-omitted (e1 _greater _than e2)
-  "Relation @code{(> E1 E2)} from @samp{E1 GREATER THAN E2}."
+  "Relation @code{(:> E1 E2)} from @samp{E1 GREATER THAN E2}."
   (declare (ignore _greater _than))
-  (list '> e1 e2))
+  (list :> e1 e2))
 
 (defun parse/bit-or (e1 _op e2)
   (declare (ignore _op))

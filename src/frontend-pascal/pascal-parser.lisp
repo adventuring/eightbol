@@ -324,11 +324,11 @@ Keywords are mapped to their symbol forms matching terminal declarations."
     (NUMBER COLON statement-list SEMICOLON
      (lambda (value _colon stmts _semi)
        (declare (ignore _colon _semi))
-       (list :when (list '= value) stmts)))
+       (list :when (list := value) stmts)))
     (NUMBER COLON statement-list
      (lambda (value _colon stmts)
        (declare (ignore _colon))
-       (list :when (list '= value) stmts)))
+       (list :when (list := value) stmts)))
     (ELSE COLON statement-list SEMICOLON
      (lambda (_else _colon stmts _semi)
        (declare (ignore _else _colon _semi))

@@ -260,30 +260,30 @@
                      (lambda (left _op right)
                        (declare (ignore _op))
                        (list :÷ left right)))
-        (expression |== | expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list '= left right)))
-        (expression |~=| expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list '/= left right)))
-        (expression |<| expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list '< left right)))
-        (expression |>| expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list '> left right)))
-        (expression |<=| expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list '<= left right)))
-         (expression |>= | expression
+         (expression |== | expression
                      (lambda (left _op right)
                        (declare (ignore _op))
-                       (list '>= left right)))
+                       (list := left right)))
+         (expression |~=| expression
+                     (lambda (left _op right)
+                       (declare (ignore _op))
+                       (list :≠ left right)))
+         (expression |<| expression
+                     (lambda (left _op right)
+                       (declare (ignore _op))
+                       (list :< left right)))
+         (expression |>| expression
+                     (lambda (left _op right)
+                       (declare (ignore _op))
+                       (list :> left right)))
+         (expression |<=| expression
+                     (lambda (left _op right)
+                       (declare (ignore _op))
+                       (list :≤ left right)))
+          (expression |>= | expression
+                      (lambda (left _op right)
+                        (declare (ignore _op))
+                        (list :≥ left right)))
          (expression |and| expression
                      (lambda (left _and right)
                        (declare (ignore _and))

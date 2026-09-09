@@ -17,25 +17,24 @@
     ("LOOP" . :LOOP)
     ("UNTIL" . :UNTIL)
     ("EXIT" . :EXIT)
-    ("SUB" . :SUB)
-    ("END" . :END)
-    ("FUNCTION" . :FUNCTION)
     ("CALL" . :CALL)
     ("RETURN" . :RETURN)
     ("GOSUB" . :GOSUB)
     ("AND" . :AND)
     ("OR" . :OR)
     ("NOT" . :NOT)
-    ("DIM" . :DIM)
-    ("AS" . :AS)
-    ("INTEGER" . :INTEGER)
-    ("STRING" . :STRING)
-    ("BOOLEAN" . :BOOLEAN)
-    ("DOUBLE" . :DOUBLE)
     ("DIALOGUE" . :DIALOGUE)
-    ("PRINT" . :PRINT)
-    ("INPUT" . :INPUT))
-  "Association list of Burgermistress keywords to token symbols.")
+    ("WHEN" . :WHEN)
+    ;; Logtalk object-oriented extensions
+    ("OBJECT" . :OBJECT)
+    ("END_OBJECT" . :END_OBJECT)
+    ("EXTENDS" . :EXTENDS)
+    ("SELF" . :SELF)
+    ("TRUE" . :TRUE)
+    ("FALSE" . :FALSE))
+  "Association list of Burgermistress keywords to token symbols (Prolog + Logtalk syntax).
+Supports: Prolog facts/rules/queries + Logtalk object definitions and message passing.
+NOTE: PRINT and INPUT have been removed as they were hallucinated.")
 
 (defparameter *burgermistress-operators-alist*
   '(("+" . :PLUS)
@@ -50,8 +49,12 @@
     ("<>" . :NE)
     ("<<" . :LSHIFT)
     (">>" . :RSHIFT)
+    ("::" . :MESSAGE_SEND)
+    (":-" . :RULE)
+    ("?-" . :QUERY)
     ("." . :DOT))
-  "Association list of Burgermistress operators to token symbols.")
+  "Association list of Burgermistress operators to token symbols.
+Includes Logtalk message passing operator (::) and Prolog syntax (:-  ?-).")
 
 ;;; Identifier normalization to Header-Case
 
@@ -181,10 +184,13 @@ dword (&d\"WORD\" or 0d\"WORD\")."
                   (let ((op1 (string (next-char)))
                         (op2 (when (not (eof?)) (string (peek)))))
                     (cond
-                      ((and op2 (member (concatenate 'string op1 op2) '("<<" ">>" "<=" ">=" "<>")
+                      ;; Two-character operators: :: := :- ?- << >> <= >= <>
+                      ((and op2 (member (concatenate 'string op1 op2)
+                                        '("<<" ">>" "<=" ">=" "<>" "::" ":-" "?-")
                                         :test #'string-equal))
                        (next-char)
                        (flush-token (1- i) i :op))
+                      ;; Single-character operators
                       (t (flush-token (1- i) i :op)))))))
       (nreverse tokens))))
 

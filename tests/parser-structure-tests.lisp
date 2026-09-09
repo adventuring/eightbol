@@ -75,7 +75,7 @@
          (if-stmt (find :if (eightbol::ast-method-statements think) :key #'first))
          (cond (getf (rest if-stmt) :condition)))
     (is (not (null cond)))
-    (is (or (eq '= (first cond)) (eq 'equal (first cond)) (member (first cond) '(= equal))))))
+    (is (or (eq := (first cond)) (eq 'equal (first cond)) (member (first cond) '(= equal))))))
 
 (test parser-structure/condition-relation-less
   "IF x IS LESS THAN y produces (< lhs rhs) in condition."
@@ -87,8 +87,8 @@
          (if-stmt (find :if (eightbol::ast-method-statements think) :key #'first))
          (cond (getf (rest if-stmt) :condition)))
     (is (not (null cond)))
-    (is (or (eq '< (first cond)) (eq 'less (first cond))
-            (member (first cond) '(< less) :test #'equal)))))
+    (is (or (eq :< (first cond)) (eq 'less (first cond))
+            (member (first cond) '(:< less) :test #'equal)))))
 
 (test parser-structure/condition-relation-greater
   "IF x IS GREATER THAN y produces (> lhs rhs) in condition."
@@ -101,8 +101,8 @@
                                  :key #'first))
                      :condition)))
     (is (not (null cond)))
-    (is (or (eq '> (first cond)) (eq 'greater (first cond))
-            (member (first cond) '(> greater) :test #'equal)))))
+    (is (or (eq :> (first cond)) (eq 'greater (first cond))
+            (member (first cond) '(:> greater) :test #'equal)))))
 
 ;;;; Expression structure tests
 

@@ -396,44 +396,44 @@ If CONDITION is (lhs IS LESS THAN rhs) or (lhs LESS THAN rhs) etc. (5 elements),
 return (op lhs rhs). Otherwise return CONDITION unchanged."
   (when (listp condition)
     (cond
-      ;; 6-element infix negated equality: (lhs IS NOT EQUAL TO rhs)
-      ((= (length condition) 6)
-       (destructuring-bind (a b c d e f) condition
-         (flet ((token (x str) (string-equal (princ-to-string x) str)))
-           (when (and (token b "IS")
-                      (token c "NOT")
-                      (or (token d "=") (token d "EQUAL"))
-                      (token e "TO"))
-             (return-from normalize-relation-condition
-               (list :not (list '= a f)))))))
-      ;; 4-element infix negated equality: (lhs NOT = rhs) / (lhs NOT EQUAL rhs)
-      ((= (length condition) 4)
-       (destructuring-bind (a b c d) condition
-         (flet ((token (x str) (string-equal (princ-to-string x) str)))
-           (when (and (token b "NOT")
-                      (or (token c "=") (token c "EQUAL")))
-             (return-from normalize-relation-condition
-               (list :not (list := a d)))))))
-      ;; 5-element: (expression is less than expression) or (expression less than expression), etc.
-      ((or (member (length condition) '(4 5)))
-       (destructuring-bind (a b c d e) condition
-         (flet ((token (x str) (string-equal (princ-to-string x) str)))
-           (let ((op (cond ((and (token b "IS") (token c "LESS") (token d "THAN")) '<)
-                           ((and (token b "LESS") (token c "THAN")) '<)
-                           ((and (token b "IS") (token c "GREATER") (token d "THAN")) '>)
-                           ((and (token b "GREATER") (token c "THAN")) '>)
-                           (t nil))))
-             (when op (return-from normalize-relation-condition (list op a e)))))))
-      ;; 3-element: (lhs op rhs) -> (op lhs rhs)
-      ((= (length condition) 3)
-       (let ((a (first condition))
-             (b (second condition))
-             (c (third condition)))
-         (when (member (princ-to-string b) '(/= ≠ <>) :test #'string-equal)
-           (return-from normalize-relation-condition (list 'not (list '= a c))))
-         (when (member (princ-to-string b) '(= equal < less > greater >= ≤ ≥ <=)
-                       :test #'string-equal)
-           (return-from normalize-relation-condition (list b a c)))))
+       ;; 6-element infix negated equality: (lhs IS NOT EQUAL TO rhs)
+       ((= (length condition) 6)
+        (destructuring-bind (a b c d e f) condition
+          (flet ((token (x str) (string-equal (princ-to-string x) str)))
+            (when (and (token b "IS")
+                       (token c "NOT")
+                       (or (token d "=") (token d "EQUAL"))
+                       (token e "TO"))
+              (return-from normalize-relation-condition
+                (list :not (list := a f)))))))
+       ;; 4-element infix negated equality: (lhs NOT = rhs) / (lhs NOT EQUAL rhs)
+       ((= (length condition) 4)
+        (destructuring-bind (a b c d) condition
+          (flet ((token (x str) (string-equal (princ-to-string x) str)))
+            (when (and (token b "NOT")
+                       (or (token c "=") (token c "EQUAL")))
+              (return-from normalize-relation-condition
+                (list :not (list := a d)))))))
+       ;; 5-element: (expression is less than expression) or (expression less than expression), etc.
+       ((or (member (length condition) '(4 5)))
+        (destructuring-bind (a b c d e) condition
+          (flet ((token (x str) (string-equal (princ-to-string x) str)))
+            (let ((op (cond ((and (token b "IS") (token c "LESS") (token d "THAN")) :< )
+                            ((and (token b "LESS") (token c "THAN")) :< )
+                            ((and (token b "IS") (token c "GREATER") (token d "THAN")) :> )
+                            ((and (token b "GREATER") (token c "THAN")) :> )
+                            (t nil))))
+              (when op (return-from normalize-relation-condition (list op a e)))))))
+       ;; 3-element: (lhs op rhs) -> (op lhs rhs)
+       ((= (length condition) 3)
+        (let ((a (first condition))
+              (b (second condition))
+              (c (third condition)))
+          (when (member (princ-to-string b) '(/= ≠ <>) :test #'string-equal)
+            (return-from normalize-relation-condition (list :not (list := a c))))
+          (when (member (princ-to-string b) '(= equal < less > greater >= ≤ ≥ <=)
+                        :test #'string-equal)
+            (return-from normalize-relation-condition (list b a c)))))
       (t condition))))
       
       

@@ -153,22 +153,22 @@ alongside."
   (list :bit-not expr))
 
 (defun make-conditional-eq (e1 e2)
-  (list '= e1 e2))
+  (list := e1 e2))
 
 (defun make-conditional-ne (e1 e2)
-  (list '/= e1 e2))
+  (list :≠ e1 e2))
 
 (defun make-conditional-lt (e1 e2)
-  (list '< e1 e2))
+  (list :< e1 e2))
 
 (defun make-conditional-le (e1 e2)
-  (list '<= e1 e2))
+  (list :≤ e1 e2))
 
 (defun make-conditional-gt (e1 e2)
-  (list '> e1 e2))
+  (list :> e1 e2))
 
 (defun make-conditional-ge (e1 e2)
-  (list '>= e1 e2))
+  (list :≥ e1 e2))
 
 (defun make-conditional-node (op e1 e2)
   "Build a conditional node (OP E1 E2) with a Lisp-style comparison operator."
@@ -190,10 +190,10 @@ alongside."
   (list :not-null expr))
 
 (defun make-conditional-is-zero (expr)
-  (list '= expr 0))
+  (list := expr 0))
 
 (defun make-conditional-is-not-zero (expr)
-  (list '/= expr 0))
+  (list :≠ expr 0))
 
 (defun make-literal-number (n)
   n)

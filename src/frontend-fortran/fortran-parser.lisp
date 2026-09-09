@@ -97,7 +97,7 @@
                       :varying var
                       :from from
                       :by (or by 1)
-                      :until (list '> var to)
+                      :until (list :> var to)
                       :body stmts))
 
 (defun fortran-build-literal (value) value)
@@ -116,12 +116,12 @@
 
 (defun fortran-build-relational (op left right)
   (ecase op
-    (:equal (list '= left right))
-    (:not-equal (list '/= left right))
-    (:less-than (list '< left right))
-    (:greater-than (list '> left right))
-    (:less-equal (list '<= left right))
-    (:greater-equal (list '>= left right))))
+    (:equal (list := left right))
+    (:not-equal (list :≠ left right))
+    (:less-than (list :< left right))
+    (:greater-than (list :> left right))
+    (:less-equal (list :≤ left right))
+    (:greater-equal (list :≥ left right))))
 
 (defun fortran-build-logical (op left &optional right)
   (ecase op

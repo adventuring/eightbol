@@ -65,12 +65,12 @@
 
 (defun sci-parse-while (cond body)
   "while condition body"
-  (list :perform :procedure "WHILE" :until (list 'not cond) :body (ensure-list body)))
+  (list :perform :procedure "WHILE" :until (list :not cond) :body (ensure-list body)))
 
 (defun sci-parse-for (var start end body)
   "for var start end body"
   (list :perform :procedure "FOR" :varying var :from start :by 1
-        :until (list '< var end) :body (ensure-list body)))
+        :until (list :< var end) :body (ensure-list body)))
 
 (defun sci-parse-setq (var expr)
   "setq var expr"
@@ -167,39 +167,39 @@
 
 (defun sci-make-conditional-not (expr)
   "Create a NOT conditional node."
-  (list 'not expr))
+  (list :not expr))
 
 (defun sci-make-conditional-gt (left right)
   "Create a > comparison node."
-  (list '> left right))
+  (list :> left right))
 
 (defun sci-make-conditional-and (left right)
   "Create an AND node."
-  (list 'and left right))
+  (list :and left right))
 
 (defun sci-make-conditional-or (left right)
   "Create an OR node."
-  (list 'or left right))
+  (list :or left right))
 
 (defun sci-make-conditional-eq (left right)
   "Create an = comparison node."
-  (list '= left right))
+  (list := left right))
 
 (defun sci-make-conditional-ne (left right)
   "Create a <> (not equal) node."
-  (list '/= left right))
+  (list :≠ left right))
 
 (defun sci-make-conditional-lt (left right)
   "Create a < comparison node."
-  (list '< left right))
+  (list :< left right))
 
 (defun sci-make-conditional-le (left right)
   "Create a <= comparison node."
-  (list '<= left right))
+  (list :≤ left right))
 
 (defun sci-make-conditional-ge (left right)
   "Create a >= comparison node."
-  (list '>= left right))
+  (list :≥ left right))
 
 (defun sci-make-expression-add (left right)
   "Create an ADD expression node."
@@ -211,11 +211,11 @@
 
 (defun sci-make-expression-multiply (left right)
   "Create a MULTIPLY expression node."
-  (list :compute :target 'result :expression (list '* left right)))
+  (list :compute :target 'result :expression (list :× left right)))
 
 (defun sci-make-expression-divide (left right)
   "Create a DIVIDE expression node."
-  (list :compute :target 'result :expression (list '/ left right)))
+  (list :compute :target 'result :expression (list :÷ left right)))
 
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)

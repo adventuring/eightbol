@@ -303,39 +303,39 @@
 
 (defun make-conditional-or (left right)
   "Create a conditional OR node."
-  (list 'or left right))
+  (list :or left right))
 
 (defun make-conditional-and (left right)
   "Create a conditional AND node."
-  (list 'and left right))
+  (list :and left right))
 
 (defun make-conditional-not (expr)
   "Create a conditional NOT node."
-  (list 'not expr))
+  (list :not expr))
 
 (defun make-conditional-eq (left right)
   "Create an equality comparison node."
-  (list '= left right))
+  (list := left right))
 
 (defun make-conditional-ne (left right)
   "Create a not-equal comparison node."
-  (list '/= left right))
+  (list :≠ left right))
 
 (defun make-conditional-lt (left right)
   "Create a less-than comparison node."
-  (list '< left right))
+  (list :< left right))
 
 (defun make-conditional-gt (left right)
   "Create a greater-than comparison node."
-  (list '> left right))
+  (list :> left right))
 
 (defun make-conditional-le (left right)
   "Create a less-than-or-equal comparison node."
-  (list '<= left right))
+  (list :≤ left right))
 
 (defun make-conditional-ge (left right)
   "Create a greater-than-or-equal comparison node."
-  (list '>= left right))
+  (list :≥ left right))
 
 (defun make-expression-add (left right)
   "Create an addition expression node."
@@ -347,11 +347,11 @@
 
 (defun make-expression-multiply (left right)
   "Create a multiplication expression node."
-  (list :compute :target 'result :expression (list '* left right)))
+  (list :compute :target 'result :expression (list :× left right)))
 
 (defun make-expression-divide (left right)
   "Create a division expression node."
-  (list :compute :target 'result :expression (list '/ left right)))
+  (list :compute :target 'result :expression (list :÷ left right)))
 
 (defun make-qualified-identifier (prop obj)
   "Create a qualified identifier (object.property) AST node."

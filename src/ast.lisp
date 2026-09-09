@@ -42,6 +42,15 @@
  ;;   (:refmod :base name :start expr :length expr)  — reference modification name(start:length)
  ;;   (:subscript name index)  — subscripted identifier name(index)
  ;;   :self / :null        — SELF / NULL
+;;
+;; OPERATOR CANONICALIZATION (ALL OPERATORS AS KEYWORDS):
+;;   Inequalities: := :≠ :< :≤ :> :≥
+;;   Arithmetic:   :+ :- :× :÷
+;;   Bitwise:      :¬ :∧ :∨ :⊻ :⊼ :⊽
+;;   Shift:        :ash (or :asl/:asr for left/right)
+;;
+;; All operators are represented as KEYWORDS (not symbols) in canonical AST.
+;; Frontends MUST emit keyword operators; backends MUST accept keyword operators.
 
 (in-package :eightbol)
 
