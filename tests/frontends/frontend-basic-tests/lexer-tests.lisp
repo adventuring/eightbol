@@ -1,6 +1,6 @@
 ;;; -*- Mode: Lisp; Syntax: ANSI-Common-Lisp; Base: 10; Package: eightbol/test/frontend-basic -*-
 ;;;
-;;; EIGHTBOL EIGHTBOL Frontend BASIC Lexer Tests
+;;; EIGHTBOL Frontend BASIC Lexer Tests
 ;;;
 ;;; © 2026 EIGHTBOL Development. All rights reserved.
 ;;; Licensed under the MIT License
@@ -16,32 +16,42 @@
 
 (in-suite :basic-lexer)
 
+(test basic_lexer_keyword_let
+  "BASIC lexer recognizes LET keyword"
+  (is-true (eightbol:basic-lexer-keyword-p "LET")))
 
-(test basic_lexer_exists
-  "Verify BASIC lexer module is present"
-  (skip "Implementation pending"))
+(test basic_lexer_keyword_if
+  "BASIC lexer recognizes IF keyword"
+  (is-true (eightbol:basic-lexer-keyword-p "IF")))
 
-(test basic_lexer_keywords
-  "LEXER: BASIC keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(test basic_lexer_keyword_for
+  "BASIC lexer recognizes FOR keyword"
+  (is-true (eightbol:basic-lexer-keyword-p "FOR")))
+
+(test basic_lexer_keyword_print
+  "BASIC lexer recognizes PRINT keyword"
+  (is-true (eightbol:basic-lexer-keyword-p "PRINT")))
+
+(test basic_lexer_numeric_integer
+  "BASIC lexer tokenizes integer literals (10, 255, 32767)"
+  (skip "Numeric literal tokenization test"))
+
+(test basic_lexer_numeric_float
+  "BASIC lexer tokenizes floating-point literals (3.14, 1.0)"
+  (skip "Floating-point tokenization test"))
+
+(test basic_lexer_string_literal
+  "BASIC lexer tokenizes string literals with double quotes"
+  (skip "String literal tokenization test"))
+
+(test basic_lexer_identifier_variable
+  "BASIC lexer tokenizes variable names (X, COUNT, A$)"
+  (skip "Identifier tokenization test"))
+
+(test basic_lexer_line_number
+  "BASIC lexer recognizes and tokenizes line numbers"
+  (skip "Line number recognition test"))
 
 (test basic_lexer_operators
-  "LEXER: BASIC operators are correctly tokenized"
-  (skip "Implementation pending"))
-
-(test basic_lexer_numbers
-  "LEXER: BASIC numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
-
-(test basic_lexer_strings
-  "LEXER: BASIC string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
-
-(test basic_lexer_identifiers
-  "LEXER: BASIC identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
-
-(test basic_lexer_comments
-  "LEXER: BASIC comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
-
+  "BASIC lexer tokenizes operators (+, -, *, /, =, <, >, <=, >=, <>)"
+  (skip "Operator tokenization test"))
