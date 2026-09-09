@@ -72,35 +72,42 @@
                                 :depends-on ("eightbol-tests"))
                                (:file "frontend-comprehensive-tests"
                                 :depends-on ("eightbol-tests"))
+                               (:file "optimizer-comprehensive-tests"
+                                :depends-on ("eightbol-tests"))
+                               (:file "backend-comprehensive-tests"
+                                :depends-on ("eightbol-tests"))
                                (:file "backend-comprehensive-ast-tests"
                                 :depends-on ("eightbol-tests"))
                                 )))
   :perform (asdf:test-op (o c)
-                             (let ((suites '(:eightbol :backend-matrix :ast-optimize
-                                             :backend-output :parser-structure
-                                             :compile-regression :copybook-generation
-                                             :service-bank-lut :backend-cp1610
-                                             :backend-z80 :backend-operand-kinds
-                                             :backend-f8 :backend-sm83
-                                             :backend-6502-classification
-                                             :backend-65c02 :backend-65c816
-                                             :backend-huc6280 :backend-rp2a03
-                                             :backend-arm7 :backend-i286
-                                             :backend-m6800 :backend-m68k
-                                             :backend-stack
-                                             :expression-constant :numeric-precision
-                                             :numeric-precision-all-backends
-                                             :pic-1-bit :s-decimal
-                                             :eightbol-cp1610-6502-parity
-                                             :dartmouth-basic-parity
-                                             :frontend-lexers :frontend-parsers
-                                             :lexer-consistency :parser-error-handling
-                                             :ast-node-construction :lexer-performance
-                                             :cross-frontend-consistency :keyword-coverage
-                                             :parser-integration
-                                             :frontend-ast-generation
-                                             :backend-ast-comprehensive
-                                             )))
+                              (let ((suites '(:eightbol :backend-matrix :ast-optimize
+                                              :backend-output :parser-structure
+                                              :compile-regression :copybook-generation
+                                              :service-bank-lut :backend-cp1610
+                                              :backend-z80 :backend-operand-kinds
+                                              :backend-f8 :backend-sm83
+                                              :backend-6502-classification
+                                              :backend-65c02 :backend-65c816
+                                              :backend-huc6280 :backend-rp2a03
+                                              :backend-arm7 :backend-i286
+                                              :backend-m6800 :backend-m68k
+                                              :backend-stack
+                                              :expression-constant :numeric-precision
+                                              :numeric-precision-all-backends
+                                              :pic-1-bit :s-decimal
+                                              :eightbol-cp1610-6502-parity
+                                              :dartmouth-basic-parity
+                                              :frontend-lexers :frontend-parsers
+                                              :lexer-consistency :parser-error-handling
+                                              :ast-node-construction :lexer-performance
+                                              :cross-frontend-consistency :keyword-coverage
+                                              :parser-integration
+                                              :frontend-ast-generation
+                                              :frontend-comprehensive
+                                              :optimizer-comprehensive
+                                              :backend-comprehensive
+                                              :backend-ast-comprehensive
+                                              )))
                             (dolist (suite suites)
                               (format t "~&;; Running suite ~s...~%" suite)
                                (funcall (intern "RUN!" :fiveam) suite)))))
