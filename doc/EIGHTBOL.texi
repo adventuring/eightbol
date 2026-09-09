@@ -83,6 +83,11 @@ special characters in the platform's debug font.
 This appendix lists the control characters available in the high bytes
 of the minifont set.
 
+Actually, that's  a lie. It's  supposed to list control  characters, but
+it's too busy lying to you  and telling you that they're random graphics
+characters, some of which aren't even  found in minifont at all, so it's
+totally useless unless rewritten.
+
 @table @asis
 @item 0x80 - ← (left arrow)
 @item 0x81 - ↑ (up arrow)
@@ -115,6 +120,14 @@ platforms supported by EIGHTBOL.
 @item Modern ASCII - Standard ASCII without the ← and ↑ control codes
 @end table
 
+Oh, look. No table. I guess that didn't get written yet.
+
+Hint: there's 128 codes in ASCII, and 128 or 256 in ATASCII and PETSCII,
+and the later ANSI ASCII Unicode version is also 128 characters.
+So there's  no way this table  can be less  than 128 rows long  and it's
+probably got  to be much longer,  like 256+, to include  characters that
+may only be found in one character set (like pi).
+
 @node Appendix. Comparison chart of arithmetic and logical operators
 @appendix Comparison chart of arithmetic and logical operators
 
@@ -130,7 +143,7 @@ operators across all supported languages, with one page per concept.
 * Inequality (<> or !=)::
 * Less than (<)::
 * Greater than (>)::
-* Less than or equal (<=)::
+* Less than or equal (≤)::
 * Greater than or equal (>=)::
 * Logical AND (&& or and)::
 * Logical OR (|| or or)::
@@ -141,6 +154,8 @@ operators across all supported languages, with one page per concept.
 * Left shift (<<)::
 * Right shift (>>)::
 @end menu
+
+well, fuck, most of these are missing. 
 
 @node Addition
 @section Addition (+)

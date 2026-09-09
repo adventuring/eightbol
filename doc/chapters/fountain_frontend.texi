@@ -126,8 +126,6 @@ Decimal integers and floating-point numbers are supported:
 @itemize
 @item @code{42} — integer literal
 @item @code{3.14} — floating-point literal
-@item @code{1e-5} — scientific notation (1 × 10⁻⁵)
-@item @code{3.14E+2} — scientific notation with explicit exponent sign
 @end itemize
 
 @subsection Fractional Literals
@@ -138,27 +136,27 @@ Simple fractions are supported and parsed:
 @end itemize
 
 @subsection Binary Literals
-Binary integers are supported using the @code{0b} prefix:
+Binary integers are supported using the @code{#b} prefix:
 @itemize
-@item @code{0b1010} — equals 10 (decimal)
-@item @code{0b1111} — equals 15 (decimal)
+@item @code{#b1010} — equals 10 (decimal)
+@item @code{#b1111} — equals 15 (decimal)
 @end itemize
 
 @subsection Octal Literals
-Octal integers are supported using the @code{0o} prefix:
+Octal integers are supported using the @code{#o} prefix:
 @itemize
-@item @code{0o10} — equals 8 (decimal)
-@item @code{0o77} — equals 63 (decimal)
+@item @code{#o10} — equals 8 (decimal)
+@item @code{#o77} — equals 63 (decimal)
 @end itemize
 
 @subsection Hexadecimal Literals
 Hexadecimal integers are supported in two forms:
 
-@subsubheading Modern 0x Prefix Format
+@subsubheading modern #x Prefix Format
 @itemize
-@item @code{0xFF} — equals 255 (decimal)
-@item @code{0x100} — equals 256 (decimal)
-@item @code{0xDEADBEEF} — large hex value
+@item @code{#xFF} — equals 255 (decimal)
+@item @code{#x100} — equals 256 (decimal)
+@item @code{#xDEADBEEF} — large hex value
 @end itemize
 
 @subsubheading Legacy $XXXX Format
