@@ -16,12 +16,16 @@
       (:start-symbol program)
       (:terminals (number string ident :comma |=| |+| |-| |*| |/| |\|\|| |&| 
                           |<| |>| |<=| |>=| |==| |~=| |(| |)| |{| |}| |[| |]| |\:|
-                          |\;| keyword |break| |continue| |comment| |move| |to|))
+                          |\;| keyword |break| |continue| |comment| |move| |to|
+                          |if| |then| |else| |elseif| |end| |while| |do| |for|
+                          |local| |return| |dialogue| |dialog| |print| |input| |copy|
+                          |true| |false| |nil| |and| |or| |not| |function|))
                           (:precedence ((:left :|or|) (:left :|and|)
                                                       (:left :|==| :|~=| :|<| :|>| :|<=| :|>=|)
                               (:left :|+| :|-| )
                               (:left :|*| :|/| )
                               (:right :|not|)))
+
     (:muffle-conflicts t)
 
    ;; Top-level program: list of statements
@@ -39,29 +43,38 @@
                     (lambda (stmts stmt)
                       (append stmts (remove nil (list stmt))))))
 
-    ;; Statements
-    (statement
-     (nil)
-     (local-declaration)
-     (if-statement)
-     (while-statement)
-     (for-statement)
-     (return-statement)
-     (expression-statement)
-     (dialogue-statement)
-     (print-statement)
-     (input-statement)
-       (copy-statement)
-       (break-statement)
-       (continue-statement)
-       (move-statement))
+     ;; Statements
+     (statement
+      (nil)
+      (local-declaration)
+      (function-declaration)
+      (if-statement)
+      (while-statement)
+      (for-statement)
+      (return-statement)
+      (expression-statement)
+      (dialogue-statement)
+      (print-statement)
+      (input-statement)
+        (copy-statement)
+        (break-statement)
+        (continue-statement)
+        (move-statement))
 
-   ;; Local variable declaration
-   (local-declaration
-    (|local| ident |=| expression
-             (lambda (_local var _eq expr)
-               (declare (ignore _local _eq))
-               (list :set var expr))))
+    ;; Local variable declaration
+    (local-declaration
+     (|local| ident |=| expression
+              (lambda (_local var _eq expr)
+                (declare (ignore _local _eq))
+                (list :set var expr))))
+
+    ;; Function declaration
+    (function-declaration
+     (|function| ident |(| |)| statement-list |end|
+                 (lambda (_func name _lp _rp body _end)
+                   (declare (ignore _func _lp _rp _end))
+                   (list :procedure name :body body))))
+
 
    ;; If statement
    (if-statement
@@ -239,14 +252,14 @@
                     (lambda (left _op right)
                       (declare (ignore _op))
                       (list :subtract left right)))
-        (expression |*| expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list :* left right)))
-        (expression |/| expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list :/ left right)))
+         (expression |*| expression
+                     (lambda (left _op right)
+                       (declare (ignore _op))
+                       (list :× left right)))
+         (expression |/| expression
+                     (lambda (left _op right)
+                       (declare (ignore _op))
+                       (list :÷ left right)))
         (expression |== | expression
                     (lambda (left _op right)
                       (declare (ignore _op))
@@ -267,11 +280,23 @@
                     (lambda (left _op right)
                       (declare (ignore _op))
                       (list '<= left right)))
-        (expression |>= | expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list '>= left right)))
-       (ident |=| expression
+         (expression |>= | expression
+                     (lambda (left _op right)
+                       (declare (ignore _op))
+                       (list '>= left right)))
+         (expression |and| expression
+                     (lambda (left _and right)
+                       (declare (ignore _and))
+                       (list :and left right)))
+         (expression |or| expression
+                     (lambda (left _or right)
+                       (declare (ignore _or))
+                       (list :or left right)))
+         (|not| expression
+                (lambda (_not expr)
+                  (declare (ignore _not))
+                  (list :not expr)))
+        (ident |=| expression
               (lambda (var _eq expr)
                 (declare (ignore _eq))
                 (list :set var expr)))
@@ -372,6 +397,85 @@
   "Create a move AST node (copy value from one place to another)."
   (list :move :from from :to to))
 
+(defun parse/lua-procedure (name &optional body)
+  "Create a procedure (function) AST node."
+  (list :procedure name :body (or body '())))
+
+(defun lua-transform-special-calls (ast)
+  "Transform special library function calls to canonical AST nodes.
+   - string_sub(s, start, end) -> :refmod
+   - blt(src, dest, len) -> :string-blt
+   - log_fault(code) -> :log-fault
+   - debug_break(code) -> :debug-break
+   - nil?(var) -> :nil?
+   - bit_and(a,b), bit_or(a,b), bit_xor(a,b), bit_not(v) -> bitwise ops
+   - lshift(v,n), rshift(v,n) -> arithmetic shift"
+  (cond
+    ((null ast) nil)
+    ((not (listp ast)) ast)
+    ((eq (car ast) :program)
+     (list* :program (rest (mapcar #'lua-transform-special-calls ast))))
+    ((eq (car ast) :call)
+     ;; Check if this is a special function call
+     (let ((target (getf ast :target)))
+       (cond
+         ;; string_sub(s, start, end) -> (:refmod :base s :start start :length end)
+         ((string-equal target "string_sub")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 3)
+              (list :refmod :base (first args) :start (second args) :length (third args)))))
+         ;; blt(src, dest, len) -> (:string-blt :source src :dest dest :length len)
+         ((string-equal target "blt")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 3)
+              (list :string-blt :source (first args) :dest (second args) :length (third args)))))
+         ;; log_fault(code) -> (:log-fault :code code)
+         ((string-equal target "log_fault")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 1)
+              (list :log-fault :code (first args)))))
+         ;; debug_break(code) -> (:debug-break :code code)
+         ((string-equal target "debug_break")
+          (destructuring-bind (&key args) (cdr ast)
+            (let ((code (if args (first args) 0)))
+              (list :debug-break :code code))))
+         ;; nil?(var) -> test for null
+         ((string-equal target "nil?")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 1)
+              (list :nil? (first args)))))
+         ;; Bitwise operators
+         ((string-equal target "bit_and")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 2)
+              (list :bit-and (first args) (second args)))))
+         ((string-equal target "bit_or")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 2)
+              (list :bit-or (first args) (second args)))))
+         ((string-equal target "bit_xor")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 2)
+              (list :bit-xor (first args) (second args)))))
+         ((string-equal target "bit_not")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 1)
+              (list :bit-not (first args)))))
+         ;; Shift operators
+         ((string-equal target "lshift")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 2)
+              (list :ash :value (first args) :shift (second args)))))
+         ((string-equal target "rshift")
+          (destructuring-bind (&key args) (cdr ast)
+            (when (= (length args) 2)
+              ;; Right shift is negative left shift
+              (list :ash :value (first args) :shift (list :- 0 (second args))))))
+         ;; Otherwise, return transformed call
+         (t (list* :call (rest (mapcar #'lua-transform-special-calls ast)))))))
+    ;; Recursively transform all nested structures
+    (t (mapcar #'lua-transform-special-calls ast))))
+
 ;;; Main parser entry points
 
 (defun lua-lex (source)
@@ -384,14 +488,29 @@ Return a list of token plists."
 Returns a :program node with :statements containing all parsed statements."
   (let ((tokens (lua-lex source)))
     (when tokens
-      (yacc:parse-with-lexer
-        (lambda ()
-          (if tokens
-              (let ((tok (pop tokens)))
-                (list (intern (string (getf tok :type)))
-                      (getf tok :value)))
-              (list nil nil)))
-        *lua-parser*))))
+      (let ((parsed (yacc:parse-with-lexer
+                      (lambda ()
+                        (if tokens
+                            (let ((tok (pop tokens)))
+                              (let ((tok-type (getf tok :type))
+                                    (tok-value (getf tok :value)))
+                                ;; Convert token type to symbol for YACC
+                                (cond
+                                  ((eq tok-type :keyword)
+                                   ;; For keywords, use the keyword name as terminal
+                                   (list (intern tok-value :eightbol) tok-value))
+                                  ((eq tok-type :symbol)
+                                   ;; For symbols, keep the original behavior
+                                   (list (intern (string-upcase tok-value) :eightbol) tok-value))
+                                  ((eq tok-type :number)
+                                   (list 'number tok-value))
+                                  ((eq tok-type :string)
+                                   (list 'string tok-value))
+                                  (t
+                                   (list tok-type tok-value)))))
+                            (list nil nil)))
+                      *lua-parser*)))
+        (lua-transform-special-calls parsed)))))
 
 ;;; Export for use by other modules
 (export '(parse/lua-program
@@ -409,4 +528,5 @@ Returns a :program node with :statements containing all parsed statements."
           parse/lua-copy
           parse/lua-break
           parse/lua-continue
-          parse/lua-move))
+          parse/lua-move
+          parse/lua-procedure))

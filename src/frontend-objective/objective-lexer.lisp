@@ -1,357 +1,211 @@
-;; src/frontend-objective/objective-lexer.lisp — Tokenization for Objective-C source
-;; Based on Objective-C syntax with 8-bit/16-bit system constraints
-;; 
-;; Heritage notes:
-;; - Objective-C syntax retained (@interface/@implementation/@end keywords)
-;; - Property access converted to message sends to getters/setters
-;; - For loops converted to perform varying with manual iteration
-;; - If/then/else blocks remain intact but simplified for 8-bit targets
-;;; - @try/@catch/@finally converted to error logging (see :log-fault node)
-;;; - @throw converted to debug-break
+;; src/frontend-objective/objective-lexer.lisp
+;; Lexer for Objective-C subset targeting 8-bit/16-bit systems
 ;;
 ;; Features:
-;; - Identifier normalization to PascalCase (first letter uppercase, rest mixed)
-;; - Number literals: decimal, hex (0x), octal (0o), binary (0b), dword (0d"WORD")
-;; - Dialogue/print/input keywords: DISPLAY, ACCEPT, SPEAK
-;
+;; - C99 keywords and operators
+;; - Objective-C extensions (@interface, @implementation, @property, etc.)
+;; - Message send syntax [obj method:arg1 label:arg2]
+;; - Number literals: decimal, hex (0x), octal (0o), binary (0b)
+;; - String literals with escape sequences
+;; - PascalCase identifier normalization
+;;
+;; Limitations:
+;; - No @try/@catch/@finally (use error codes instead)
+;; - No C++ features
+;; - No nested class definitions
+;;
 ;;; Copyright © 2026 Interworldly Adventuring, LLC
+
 (in-package :eightbol)
 
-(defparameter *objective-keyword-alist*
-  '(("@INTERFACE" . :AT-INTERFACE)
-    ("@IMPLEMENTATION" . :AT-IMPLEMENTATION)
-    ("@END" . :AT-END)
-    ("@PROPERTY" . :AT-PROPERTY)
-    ("@SELECTOR" . :AT-SELECTOR)
-    ("@PROTOCOL" . :AT-PROTOCOL)
-    ("@PUBLIC" . :AT-PUBLIC)
-    ("@PRIVATE" . :AT-PRIVATE)
-    ("@PROTECTED" . :AT-PROTECTED)
-    ("@SYNTHESIZE" . :AT-SYNTHESIZE)
-    ("@AUTORELEASEPOOL" . :AT-AUTORELEASEPOOL)
-    ("@TRY" . :AT-TRY)
-    ("@CATCH" . :AT-CATCH)
-    ("@FINALLY" . :AT-FINALLY)
-    ("@THROW" . :AT-THROW)
-    ("@RETURN" . :AT-RETURN)
-    ("IF" . :IF)
-    ("ELSE" . :ELSE)
-    ("FOR" . :FOR)
-    ("WHILE" . :WHILE)
-    ("DO" . :DO)
-    ("RETURN" . :RETURN)
-    ("BREAK" . :BREAK)
-    ("CONTINUE" . :CONTINUE)
-    ("SWITCH" . :SWITCH)
-    ("CASE" . :CASE)
-    ("DEFAULT" . :DEFAULT)
-    ("SELF" . :SELF)
-    ("SUPER" . :SUPER)
-    ("NIL" . :NIL)
-    ("YES" . :YES)
-    ("NO" . :NO)
-    ("TRUE" . :TRUE)
-    ("FALSE" . :FALSE)
-    ("ID" . :ID-TYPE)
-    ("VOID" . :VOID)
-    ("CLASS" . :CLASS)
-    ("PROTOCOL" . :PROTOCOL)
-     ("DISPLAY" . :DISPLAY)
-     ("ACCEPT" . :ACCEPT)
-     ("SPEAK" . :SPEAK)
-     ("PRINT" . :PRINT)
-     ("INPUT" . :INPUT)
-     ("COPY" . :COPY))
-  "Association list of Objective-C keywords to token symbols.")
+;;; Keywords and operators
 
-(defparameter *objective-operators-alist*
-  '(("+" . :PLUS)
-    ("-" . :MINUS)
-    ("*" . :TIMES)
-    ("/" . :DIVIDE)
-    ("%" . :MODULO)
-    ("=" . :EQUAL)
-    ("==" . :EQUAL-EQUAL)
-    ("!=" . :NOT-EQUAL)
-    ("<>" . :NOT-EQUAL)
-    ("<" . :LT)
-    (">" . :GT)
-    ("<=" . :LE)
-    (">=" . :GE)
-    ("&&" . :AND-AND)
-    ("||" . :OR-OR)
-    ("!" . :NOT)
-    ("[" . :LBRACKET)
-    ("]" . :RBRACKET)
-    ("." . :DOT)
-    (":" . :COLON)
-    (";" . :SEMICOLON)
-    ("(" . :LPAREN)
-    (")" . :RPAREN)
-    ("{" . :LBRACE)
-    ("}" . :RBRACE)
-    ("," . :COMMA)
-    ("->" . :ARROW)
-    ("." . :DOT))
-  "Association list of Objective-C operators to token symbols.")
+(defparameter *objc-keywords-alist*
+  '(("@interface" . :AT-INTERFACE)
+    ("@implementation" . :AT-IMPLEMENTATION)
+    ("@end" . :AT-END)
+    ("@property" . :AT-PROPERTY)
+    ("@synthesize" . :AT-SYNTHESIZE)
+    ("@selector" . :AT-SELECTOR)
+    ("@protocol" . :AT-PROTOCOL)
+    ("@public" . :AT-PUBLIC)
+    ("@private" . :AT-PRIVATE)
+    ("@protected" . :AT-PROTECTED)
+    ("void" . :VOID)
+    ("int" . :INT)
+    ("float" . :FLOAT)
+    ("double" . :DOUBLE)
+    ("char" . :CHAR)
+    ("unsigned" . :UNSIGNED)
+    ("signed" . :SIGNED)
+    ("long" . :LONG)
+    ("short" . :SHORT)
+    ("struct" . :STRUCT)
+    ("enum" . :ENUM)
+    ("typedef" . :TYPEDEF)
+    ("const" . :CONST)
+    ("static" . :STATIC)
+    ("extern" . :EXTERN)
+    ("volatile" . :VOLATILE)
+    ("if" . :IF)
+    ("else" . :ELSE)
+    ("switch" . :SWITCH)
+    ("case" . :CASE)
+    ("default" . :DEFAULT)
+    ("while" . :WHILE)
+    ("do" . :DO)
+    ("for" . :FOR)
+    ("break" . :BREAK)
+    ("continue" . :CONTINUE)
+    ("return" . :RETURN)
+    ("goto" . :GOTO)
+    ("sizeof" . :SIZEOF)
+    ("self" . :SELF)
+    ("super" . :SUPER)
+    ("nil" . :NIL)
+    ("yes" . :YES)
+    ("no" . :NO)
+    ("true" . :TRUE)
+    ("false" . :FALSE))
+  "Association list of C/Objective-C keywords to token types.")
 
-(defun objective-token-type (lexeme)
-  "Return token type for LEXEME, a string."
-  (cond
-    ((and (stringp lexeme) (char= (char lexeme 0) #\@))
-     (or (cdr (assoc lexeme *objective-keyword-alist* :test #'string-equal))
-         :AT-IDENT))
-    ((and (stringp lexeme) (digit-char-p (char lexeme 0)))
-     :NUMBER)
-    ((and (stringp lexeme) (char= (char lexeme 0) #\"))
-     :STRING)
-    ((assoc lexeme *objective-keyword-alist* :test #'string-equal)
-     (cdr (assoc lexeme *objective-keyword-alist* :test #'string-equal)))
-    ((assoc lexeme *objective-operators-alist* :test #'string-equal)
-     (cdr (assoc lexeme *objective-operators-alist* :test #'string-equal)))
-    ((objective-valid-identifier-p lexeme)
-     :IDENT)
-    (t :UNKNOWN)))
+;;; Tokenization
 
-(defun objective-normalize-identifier (s)
-   "Normalize identifier S to PascalCase.
-    Converts first letter to uppercase, preserves camelCase for rest."
-   (when (and (stringp s) (plusp (length s)))
-     (let ((chars (coerce s 'list)))
-       (coerce (cons (char-upcase (car chars)) (cdr chars)) 'string))))
+(defun objc-normalize-identifier (name)
+  "Normalize identifier NAME to PascalCase (first uppercase, rest unchanged).
+   Preserves @ prefix for Objective-C keywords."
+  (when (and (stringp name) (plusp (length name)))
+    (cond
+      ((char= (char name 0) #\@)
+       name) ; @selector, @interface, etc. already marked
+      (t
+       (concatenate 'string
+                    (string-upcase (subseq name 0 1))
+                    (subseq name 1))))))
 
-(defun objective-valid-identifier-p (lexeme)
-   "Return true if LEXEME is a valid identifier (for :IDENT token).
-    Identifiers can contain letters, digits, and underscores, and cannot start with a digit."
-   (when (and (stringp lexeme) (plusp (length lexeme)))
-     (let* ((first (char lexeme 0))
-            (rest (subseq lexeme 1)))
-       (and (or (alpha-char-p first) (char= first #\_))
-            (every #'(lambda (c) (or (alphanumericp c) (char= c #\_)))
-                   rest)))))
+(defun objc-valid-identifier-p (lexeme)
+  "Predicate: is LEXEME a valid C/Objective-C identifier?
+   (letters, digits, underscore; first char not digit)"
+  (and (stringp lexeme)
+       (plusp (length lexeme))
+       (let ((first (char lexeme 0)))
+         (and (or (alpha-char-p first) (char= first #\_))
+              (every (lambda (c) (or (alphanumericp c) (char= c #\_)))
+                     (subseq lexeme 1))))))
 
-(defun objective-parse-number-literal (lexeme)
-  "Parse number literal LEXEME, supporting decimal, hex (0x), octal (0o),
-   binary (0b), and dword (0d\"WORD\") formats. Returns (value . radix) or nil."
-  (cond
-    ;; Dword format: 0d"WORD"
-    ((and (>= (length lexeme) 4)
-          (string= (subseq lexeme 0 2) "0d")
-          (char= (char lexeme 2) #\"))
-     (cons (string-upcase (subseq lexeme 3 (1- (length lexeme)))) :dword))
-    ;; Hex: 0x or 0X
-    ((and (>= (length lexeme) 3)
-          (string-equal (subseq lexeme 0 2) "0x"))
-     (cons (parse-integer (subseq lexeme 2) :radix 16 :junk-allowed t) :hex))
-    ;; Octal: 0o or 0O
-    ((and (>= (length lexeme) 3)
-          (string-equal (subseq lexeme 0 2) "0o"))
-     (cons (parse-integer (subseq lexeme 2) :radix 8 :junk-allowed t) :octal))
-    ;; Binary: 0b or 0B
-    ((and (>= (length lexeme) 3)
-          (string-equal (subseq lexeme 0 2) "0b"))
-     (cons (parse-integer (subseq lexeme 2) :radix 2 :junk-allowed t) :binary))
-    ;; Decimal (default)
-    ((every #'(lambda (c) (or (digit-char-p c) (char= c #\.)))
-            (coerce lexeme 'list))
-     (cons (parse-integer lexeme :junk-allowed t) :decimal))
-    (t nil)))
+(defun objc-parse-number (lexeme)
+  "Parse number literal LEXEME. Returns (value radix) or nil.
+   Supports: decimal, hex (0x), octal (0o), binary (0b)."
+  (when (and (stringp lexeme) (plusp (length lexeme)))
+    (cond
+      ;; Hex: 0x...
+      ((and (>= (length lexeme) 3) (string-equal (subseq lexeme 0 2) "0x"))
+       (let ((val (parse-integer (subseq lexeme 2) :radix 16 :junk-allowed t)))
+         (and val (list val :hex))))
+      ;; Octal: 0o...
+      ((and (>= (length lexeme) 3) (string-equal (subseq lexeme 0 2) "0o"))
+       (let ((val (parse-integer (subseq lexeme 2) :radix 8 :junk-allowed t)))
+         (and val (list val :octal))))
+      ;; Binary: 0b...
+      ((and (>= (length lexeme) 3) (string-equal (subseq lexeme 0 2) "0b"))
+       (let ((val (parse-integer (subseq lexeme 2) :radix 2 :junk-allowed t)))
+         (and val (list val :binary))))
+      ;; Decimal (including floats)
+      ((every (lambda (c) (or (digit-char-p c) (char= c #\.)))
+              (coerce lexeme 'list))
+       (let ((val (parse-integer lexeme :junk-allowed t)))
+         (and val (list val :decimal))))
+      (t nil))))
 
-(defun objective-lex-line (line)
-  "Split LINE into token list of (type value) pairs.
-Handles quoted strings, operators, identifiers, and Objective-C specific syntax."
-  (let ((tokens '())
-        (chars (coerce line 'list))
-        (i 0))
-    (labels ((peek () (nth i chars))
-             (next-char () (prog1 (nth i chars) (incf i)))
-             (eof? () (>= i (length chars)))
-             (skip-whitespace ()
-               (loop while (and (not (eof?))
-                                (find (peek) '(#\Space #\Tab #\Return #\Newline)))
-                     do (next-char)))
-             (flush-token (start end type)
-               (let ((text (coerce (subseq chars start end) 'string)))
-                 (unless (zerop (length text))
-                   (push (cons type text) tokens))))
-              (scan-number (start)
-                (cond
-                  ;; Dword format: 0d"..."
-                  ((and (not (eof?)) (char= (peek) #\0)
-                        (not (eof?)) (< (1+ i) (length chars))
-                         (char-equal (nth (1+ i) chars) #\d))
-                   (setf i (+ i 2))
-                   (when (and (not (eof?)) (char= (peek) #\"))
-                     (next-char)
-                     (loop while (and (not (eof?)) (char/= (peek) #\"))
-                           do (next-char))
-                     (when (not (eof?)) (next-char)))
-                   (flush-token start (1- i) :NUMBER))
-                  ;; Hex format: 0x... or 0X...
-                  ((and (not (eof?)) (char= (peek) #\0)
-                        (not (eof?)) (< (1+ i) (length chars))
-                         (char-equal (nth (1+ i) chars) #\x))
-                   (setf i (+ i 2))
-                   (loop while (and (not (eof?))
-                                    (or (digit-char-p (peek))
-                                        (find (char-downcase (peek)) '(#\a #\b #\c #\d #\e #\f))))
-                         do (next-char))
-                   (flush-token start (1- i) :NUMBER))
-                  ;; Octal format: 0o... or 0O...
-                  ((and (not (eof?)) (char= (peek) #\0)
-                        (not (eof?)) (< (1+ i) (length chars))
-                         (char-equal (nth (1+ i) chars) #\o))
-                   (setf i (+ i 2))
-                   (loop while (and (not (eof?))
-                                    (find (peek) '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7)))
-                         do (next-char))
-                   (flush-token start (1- i) :NUMBER))
-                  ;; Binary format: 0b... or 0B...
-                  ((and (not (eof?)) (char= (peek) #\0)
-                        (not (eof?)) (< (1+ i) (length chars))
-                         (char-equal (nth (1+ i) chars) #\b))
-                   (setf i (+ i 2))
-                   (loop while (and (not (eof?))
-                                    (find (peek) '(#\0 #\1)))
-                         do (next-char))
-                   (flush-token start (1- i) :NUMBER))
-                  ;; Decimal (default)
-                  (t
-                   (loop while (and (not (eof?))
-                                    (or (digit-char-p (peek))
-                                        (and (char= (peek) #\.)
-                                             (not (eof?))
-                                             (digit-char-p (nth (1+ i) chars)))))
-                         do (next-char))
-                   (flush-token start (1- i) :NUMBER))))
-             (scan-string (start)
-               (next-char) ; skip opening quote
-               (loop while (and (not (eof?)) (char/= (peek) #\"))
-                     do (when (and (char= (peek) #\\) (not (eof?)))
-                          (next-char)) ; skip escaped char
-                        (next-char))
-               (when (not (eof?)) (next-char)) ; skip closing quote
-               (flush-token (1+ start) (1- i) :STRING))
-              (scan-identifier (start)
-                (loop while (and (not (eof?))
-                                 (or (alphanumericp (peek))
-                                     (char= (peek) #\_)
-                                     (char= (peek) #\@)))
-                      do (next-char))
-                (let* ((text (coerce (subseq chars start (1- i)) 'string))
-                       (normalized (if (char= (char text 0) #\@)
-                                      text
-                                      (objective-normalize-identifier text))))
-                  (unless (zerop (length normalized))
-                    (push (cons :IDENT normalized) tokens)))))
-      (loop until (eof?)
-            do (skip-whitespace)
-               (cond
-                 ((eof?) (return))
-                 ((char= (peek) #\") (scan-string i))
-                 ((digit-char-p (peek)) (scan-number i))
-                 ((or (alphanumericp (peek)) (char= (peek) #\@) (char= (peek) #\_))
-                  (scan-identifier i))
-                 (t
-                  (let* ((op1 (string (next-char)))
-                         (op2 (when (not (eof?)) (string (peek))))
-                         (op3 (when (and op2 (not (eof?))) (string (nth (1+ i) chars)))))
-                    (cond
-                      ((and op2 op3 (string= (concatenate 'string op1 op2 op3) "||="))
-                       (next-char) (next-char)
-                       (flush-token (1- i) i :OR-OR-EQUAL))
-                      ((and op2 op3 (string= (concatenate 'string op1 op2 op3) "&&="))
-                       (next-char) (next-char)
-                       (flush-token (1- i) i :AND-AND-EQUAL))
-                      ((and op2 (string= (concatenate 'string op1 op2) "=="))
-                       (next-char)
-                       (flush-token (1- i) i :EQUAL-EQUAL))
-                      ((and op2 (string= (concatenate 'string op1 op2) "!="))
-                       (next-char)
-                       (flush-token (1- i) i :NOT-EQUAL))
-                      ((and op2 (string= (concatenate 'string op1 op2) "<="))
-                       (next-char)
-                       (flush-token (1- i) i :LE))
-                      ((and op2 (string= (concatenate 'string op1 op2) ">="))
-                       (next-char)
-                       (flush-token (1- i) i :GE))
-                      ((and op2 (string= (concatenate 'string op1 op2) "&&"))
-                       (next-char)
-                       (flush-token (1- i) i :AND-AND))
-                      ((and op2 (string= (concatenate 'string op1 op2) "||"))
-                       (next-char)
-                       (flush-token (1- i) i :OR-OR))
-                      ((and op2 (string= (concatenate 'string op1 op2) "->"))
-                       (next-char)
-                       (flush-token (1- i) i :ARROW))
-                      ((and op2 (string= (concatenate 'string op1 op2) "+="))
-                       (next-char)
-                       (flush-token (1- i) i :PLUS-EQUAL))
-                      ((and op2 (string= (concatenate 'string op1 op2) "-="))
-                       (next-char)
-                       (flush-token (1- i) i :MINUS-EQUAL))
-                      ((and op2 (string= (concatenate 'string op1 op2) "*="))
-                       (next-char)
-                       (flush-token (1- i) i :TIMES-EQUAL))
-                      ((and op2 (string= (concatenate 'string op1 op2) "/="))
-                       (next-char)
-                       (flush-token (1- i) i :DIVIDE-EQUAL))
-                      ((and op2 (string= (concatenate 'string op1 op2) "%="))
-                       (next-char)
-                       (flush-token (1- i) i :MODULO-EQUAL))
-                      (t
-                       (flush-token (1- i) i :OP))))))))
-    (nreverse tokens)))
-
-(defun objective-lex-source (source)
-  "Lex complete Objective-C SOURCE string into token stream."
-  (let ((all-tokens '()))
-    (dolist (line (split-sequence:split-sequence #\Newline source))
-      (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
-        (unless (or (zerop (length trimmed))
-                    (and (>= (length trimmed) 2)
-                         (char= (char trimmed 0) #\/)
-                         (char= (char trimmed 1) #\/)))
-          (setf all-tokens (nconc all-tokens (objective-lex-line trimmed))))))
-    all-tokens))
-
-(defun objective-lex (source)
-  "Lex Objective-C source string into token list for YACC.
-   Handles identifier normalization and number literal parsing."
-  (let ((tokens (objective-lex-source source)))
-    (mapcar (lambda (tok)
-              (destructuring-bind (type value) tok
-                (cond
-                  ;; Parse number literals with their format
-                  ((eq type :NUMBER)
-                   (let ((parsed (objective-parse-number-literal value)))
+(defun objective-lex (source-text)
+  "Tokenize complete Objective-C SOURCE-TEXT string.
+   Returns list of (TYPE VALUE &optional RADIX) tokens."
+  (unless (stringp source-text)
+    (return-from objective-lex '()))
+  
+  ;; Very simple lexer: split by whitespace, handle quoted strings
+  (let ((all-tokens '())
+        (current-token (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
+        (in-string nil))
+    
+    (loop for i from 0 below (length source-text)
+          for ch = (char source-text i)
+          do
+          (cond
+            ((and in-string (char= ch #\"))
+             ;; End of string literal
+             (vector-push-extend ch current-token)
+             (push (list :STRING (coerce (subseq current-token 1 (1- (length current-token))) 'string))
+                   all-tokens)
+             (setf current-token (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
+             (setf in-string nil))
+            (in-string
+             ;; Inside string - accumulate characters
+             (vector-push-extend ch current-token))
+            ((char= ch #\")
+             ;; Start of string literal
+             (setf in-string t)
+             (vector-push-extend ch current-token))
+            ((member ch '(#\Space #\Tab #\Newline #\Return) :test #'char=)
+             ;; Whitespace - flush current token if any
+             (when (plusp (length current-token))
+               (let ((lexeme (coerce current-token 'string)))
+                 (push (list :IDENT lexeme) all-tokens))
+               (setf current-token (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))))
+            ((member ch '(#\( #\) #\{ #\} #\[ #\] #\, #\; #\: #\. #\@ #\= #\+ #\- #\* #\/ #\< #\> #\! #\& #\| #\^ #\~ #\%) :test #'char=)
+             ;; Operator/delimiter - flush token and add operator
+             (when (plusp (length current-token))
+               (let ((lexeme (coerce current-token 'string)))
+                 (push (list :IDENT lexeme) all-tokens))
+               (setf current-token (make-array 0 :element-type 'character :adjustable t :fill-pointer 0)))
+             (push (list :OP (string ch)) all-tokens))
+            (t
+             ;; Regular character - accumulate
+             (vector-push-extend ch current-token))))
+    
+    ;; Flush any remaining token
+    (when (plusp (length current-token))
+      (let ((lexeme (coerce current-token 'string)))
+        (push (list :IDENT lexeme) all-tokens)))
+    
+    ;; Process and normalize tokens
+    (nreverse
+     (mapcar
+      (lambda (tok)
+        (destructuring-bind (type value) tok
+          (cond
+            ((eq type :STRING)
+             (list :STRING value))
+            ((eq type :OP)
+             (list :OP value))
+            ((eq type :IDENT)
+             ;; Check if it's a keyword
+             (let ((upper-lexeme (string-upcase value))
+                   (keyword-type (cdr (assoc value *objc-keywords-alist* :test #'string-equal))))
+               (if keyword-type
+                   (list keyword-type value)
+                   ;; Check if it's a number
+                   (let ((parsed (objc-parse-number value)))
                      (if parsed
-                         (list type (car parsed) (cdr parsed))
-                         (list type value))))
-                  ;; Return other tokens as-is
-                  (t (list type value)))))
-            tokens)))
+                         (list :NUMBER (first parsed) (second parsed))
+                         ;; Regular identifier
+                         (list :IDENT (objc-normalize-identifier value)))))))
+            (t (list type value)))))
+      all-tokens))))
+
+;;; Integration with YACC parser
+
+(defun make-objc-lexer (tokens)
+  "Create a lexer closure suitable for YACC parser from TOKENS list.
+   Each token is (TYPE VALUE) or (TYPE VALUE RADIX)."
+  (let ((token-index 0)
+        (token-vec (coerce tokens 'vector)))
+    (lambda ()
+      (when (< token-index (length token-vec))
+        (let ((tok (aref token-vec token-index)))
+          (incf token-index)
+          (destructuring-bind (type value &optional radix) tok
+            (declare (ignore radix)) ; radix passed through for debugging
+            (cons type value)))))))
 
 (provide 'objective-lexer)
-
-(defun objective-lex-token ()
-   "Read next token from *standard-input*."
-   (declare (special *objective-lex-token-buffer*))
-   (cond
-     ((and (boundp '*objective-lex-token-buffer*) *objective-lex-token-buffer*)
-      (prog1 (first *objective-lex-token-buffer*)
-        (setf *objective-lex-token-buffer* (rest *objective-lex-token-buffer*))))
-     (t
-      (let ((line (read-line *standard-input* nil nil)))
-        (when line
-          (let ((trimmed (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
-            (when (and (plusp (length trimmed)) (char/= #\; (char trimmed 0)))
-              (setf *objective-lex-token-buffer* (objective-lex-line trimmed))
-              (objective-lex-token))))))))
-
-(defun objective-token-list ()
-  "Return a thunk that reads tokens from *standard-input* using objective-lex-token."
-  (lambda ()
-    (let ((token (objective-lex-token)))
-      (when token
-        (cons token (funcall (objective-token-list)))))))

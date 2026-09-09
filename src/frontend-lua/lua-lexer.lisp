@@ -68,13 +68,24 @@
                    do (incf pos))
              (push (list :type :number :value (parse-integer (subseq line start pos) :radix radix)) result)))
           (read-operator ()
-            (let ((start pos))
-              (loop while (and (< pos len)
-                               (find (char line pos) '(#\+ #\- #\* #\/ #\% #\# #\< #\> #\= #\~)))
-                    do (incf pos))
-              (if (> pos start)
-                  (push (list :type :symbol :value (subseq line start pos)) result)
-                  (incf pos))))
+            (let ((start pos)
+                  (c (char line pos)))
+              ;; Handle two-character operators
+              (cond
+                ((and (< (1+ pos) len)
+                      (or (string= (subseq line pos (+ pos 2)) "<<")
+                          (string= (subseq line pos (+ pos 2)) ">>")
+                          (string= (subseq line pos (+ pos 2)) "||")
+                          (string= (subseq line pos (+ pos 2)) "&&")
+                          (string= (subseq line pos (+ pos 2)) "==")
+                          (string= (subseq line pos (+ pos 2)) "~=")))
+                 (incf pos 2)
+                 (push (list :type :symbol :value (subseq line start pos)) result))
+                ;; Single-character operators
+                ((find c '(#\+ #\- #\* #\/ #\% #\# #\< #\> #\= #\~ #\& #\| #\^ #\. #\?))
+                 (incf pos)
+                 (push (list :type :symbol :value (string c)) result))
+                (t (incf pos)))))
          (read-identifier ()
            (let ((start pos))
              (loop while (and (< pos len)
@@ -154,7 +165,9 @@
                    "end" "false" "for" "function" "if" "in"
                    "local" "nil" "not" "or" "repeat" "return"
                    "then" "true" "until" "while"
-                   "dialogue" "print" "input" "dialog")
+                   "dialogue" "print" "input" "dialog"
+                   "goto" "self" "debug_break" "log_fault"
+                   "blt" "string")
            :test #'string-equal))
 
 (defun identifier-to-snake-case (identifier)

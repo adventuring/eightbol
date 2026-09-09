@@ -928,6 +928,47 @@ The following Dartmouth BASIC commands and functions are \textbf{not supported} 
 \item @code{USR()} — User-defined machine language function
 \end{itemize}
 
+\section{Canonical AST Conformance}
+
+The BASIC frontend parser is conformant to the EIGHTBOL canonical Abstract Syntax Tree (AST) specification. All language constructs map directly to their AST equivalents:
+
+\begin{table}
+\centering
+\begin{tabular}{ll}
+BASIC Statement/Expression & Canonical AST Node \\
+\hline
+LET @code{var} = @code{expr} & @code{(:move :from expr :to var)} \\
+SET @code{var} TO @code{expr} & @code{(:move :from expr :to var)} \\
+PCOPY @code{src}, @code{dest}, @code{len} & @code{(:string-blt :from src :to dest :length len)} \\
+@code{A}(@code{index}) (subscript) & @code{(:subscript A index)} \\
+@code{A}$(@code{start}, @code{length}) & @code{(:refmod :base A$ :start start :length length)} \\
+@code{slot} OF @code{object} & @code{(:of slot object)} \\
+VARPTR(@code{var}) & @code{(:address-of var)} \\
+@code{expr1} AND @code{expr2} & @code{(:bit-and expr1 expr2)} \\
+@code{expr1} OR @code{expr2} & @code{(:bit-or expr1 expr2)} \\
+@code{expr1} XOR @code{expr2} & @code{(:bit-xor expr1 expr2)} \\
+NOT @code{expr} & @code{(:bit-not expr)} \\
+NULL & @code{:null} (literal) \\
+SELF & @code{:self} (literal) \\
+NULL(@code{expr}) & @code{(:null expr)} (test) \\
+RETURN & @code{(:goback)} \\
+END & @code{(:goback)} \\
+@code{expr1} * @code{expr2} & @code{(:× expr1 expr2)} \\
+@code{expr1} / @code{expr2} & @code{(:÷ expr1 expr2)} \\
+PRINT @code{expr-list} & @code{(:print :expressions expr-list)} \\
+INPUT @code{var-list} & @code{(:input :variables var-list)} \\
+\end{tabular}
+\end{table}
+
+\subsection{Feature Omissions}
+
+The following BASIC features are intentionally omitted:
+
+\begin{itemize}
+\item Exponentiation operator (@code{^}) — Use POW(@code{x}, @code{y}) library call instead
+\item Shift operators — Not currently implemented; may be added in future versions
+\end{itemize}
+
 \section{Translation Notes}
 
 When porting BASIC code to EightBol BASIC:

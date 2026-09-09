@@ -4,7 +4,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun fortran-token-list ()
     (mapcar (compose #'intern #'string)
-            '(|(| |)| |:| |,| + - * / ** = < <= > >= <>
+            '(|(| |)| |:| |,| + - * / × ÷ ** = < <= > >= <>
               program subroutine function end return stop call
               goto if then else do read write print open close
               real integer logical character complex type data
@@ -107,12 +107,12 @@
   (fortran-normalize-identifier name))
 
 (defun fortran-build-arithmetic (op left right)
-   (ecase op
-     (:plus (list :add :from left :to right :giving nil))
-     (:minus (list :subtract :subtrahend right :from left :giving nil))
-     (:times (list :multiply :by left :multiplier right :giving nil))
-     (:divide (list :divide :numerator left :denominator right :giving nil))
-     (:power (fortran-unsupported "power operator (**)"))))
+    (ecase op
+      (:plus (list :add :from left :to right :giving nil))
+      (:minus (list :subtract :subtrahend right :from left :giving nil))
+      (:times (list :× left right))
+      (:divide (list :÷ left right))
+      (:power (fortran-unsupported "power operator (**)"))))
 
 (defun fortran-build-relational (op left right)
   (ecase op
@@ -130,6 +130,39 @@
     (:not (list :not left))))
 
 (defun fortran-build-parenthesized (expr) expr)
+
+(defun fortran-type-to-pic (type-keyword)
+  "Map FORTRAN type specifier keyword to canonical PIC clause.
+  Returns a PIC clause string suitable for copybook generation.
+  
+  Type mappings:
+  - :INTEGER → 9(9) (32-bit integer)
+  - :REAL → 9(9)V9(2) (fixed-point with 2 fractional digits)
+  - :LOGICAL → 9 (boolean, 0 or 1)
+  - :CHARACTER → X(1) (default 1 character)
+  - :COMPLEX → [unsupported, error]"
+  (ecase type-keyword
+    (:REAL "9(9)V9(2)")
+    (:INTEGER "9(9)")
+    (:LOGICAL "9")
+    (:CHARACTER "X(1)")))
+
+(defun fortran-parse-variable-declaration (type-keyword variables)
+  "Parse FORTRAN variable type declaration.
+  
+  Returns NIL (declarations are collected but don't generate executable statements).
+  Side effect: Variables are registered in *fortran-type-table* for later reference.
+  
+  TYPE-KEYWORD: :REAL, :INTEGER, :LOGICAL, :CHARACTER
+  VARIABLES: list of variable names (as symbols/strings)"
+  (declare (ignore type-keyword variables))
+  ;; Declarations don't generate statements; they're metadata
+  nil)
+
+(defun fortran-parse-complex-declaration (type-keyword variables)
+  "COMPLEX type is not supported in canonical EIGHTBOL."
+  (declare (ignore type-keyword variables))
+  (fortran-unsupported "COMPLEX type"))
 
 (eval
  `(yacc:define-parser *fortran-parser*
@@ -228,10 +261,11 @@
           (declare (ignore _ eq-keyword))
           (fortran-unsupported "PARAMETER")))
 
-      (type-spec ident
-        (lambda (_ type-name v)
-          (declare (ignore _))
-          (fortran-unsupported "type declaration")))
+       (type-spec ident
+         (lambda (type-keyword v)
+           (if (eq type-keyword :COMPLEX)
+               (fortran-parse-complex-declaration type-keyword (list v))
+               (fortran-parse-variable-declaration type-keyword (list v)))))
 
       (common ident variable-list
         (lambda (_ b v)

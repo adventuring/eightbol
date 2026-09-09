@@ -10,6 +10,7 @@
 * Statements::
 * Expressions::
 * Functions::
+* Canonical AST Conformance::
 @end menu
 
 @node Lexical Elements
@@ -313,6 +314,33 @@ Examples:
 @subsection pascal-convert-lexer-tokens
 Transforms lexer output tokens into YACC-compatible format. Maps keyword identifiers to their corresponding token types and passes through numeric, string, and operator tokens. Input: list of lexer tokens (pairs of type and value). Output: list of YACC-compatible token tuples. Side‑effect: none.
 
+@node Library Functions
+@subsection Library Functions
+The Pascal frontend recognizes special library function calls and converts them to canonical EIGHTBOL AST nodes. These functions are invoked using the standard function call syntax @code{FunctionName(args)}.
+
+@itemize @bullet
+@item @code{LogFault(code)} — Logs a numeric fault code for debugging. Converted to @code{:log-fault} AST node.
+
+@item @code{DebugBreak(code)} — Triggers a debugger break with the given code. Converted to @code{:debug-break} AST node.
+
+@item @code{StringLength(s)} — Returns the length of a string. Converted to @code{:string-length} AST node.
+
+@item @code{StringCopy(src, dest, len)} — Copies @code{len} characters from @code{src} to @code{dest}. Converted to @code{:string-blt} AST node (canonical BLT = Block Transfer).
+
+@item @code{StringFind(haystack, needle)} — Searches for @code{needle} within @code{haystack}. Converted to @code{:string-find} AST node.
+@end itemize
+
+Examples:
+@example
+LogFault(1000)                      ; Log error code
+DebugBreak($FF)                     ; Trigger debugger
+Length := StringLength(Message)
+StringCopy(Source, Target, 20)
+Position := StringFind("Hello", "ll")
+@end example
+
+Unknown function calls are preserved as generic @code{:call-expr} nodes for potential runtime or backend-specific handling.
+
 @node Analogies to Reader Macros
 @section Number Literal Parsing
 The Pascal frontend supports multiple number literal formats to enhance code readability and compatibility:
@@ -339,3 +367,57 @@ Mask := Flag1 OR Flag2
 FileMode := 0o755
 @end example
 
+@node Canonical AST Conformance
+@section Canonical AST Conformance
+The Pascal frontend generates abstract syntax trees (ASTs) that conform to the canonical EIGHTBOL AST format, ensuring compatibility with all backends. This section documents the conformance of Pascal constructs to canonical forms.
+
+@subsection CASE/OF to :evaluate Mapping
+Pascal @code{CASE}...@code{OF} statements are mapped directly to the canonical @code{:evaluate} node structure, unifying with COBOL EVALUATE and AGI dispatch mechanisms:
+
+@example
+Pascal:    CASE expr OF v1: stmts1; v2: stmts2; ELSE: stmts3; ENDCASE
+Canonical: (:evaluate :subject expr :when-clauses ((:when (= v1) stmts1) (:when (= v2) stmts2) (:when-other stmts3)))
+@end example
+
+This transformation allows all backends (6502, Z80, m68k, ARM, etc.) to generate efficient dispatch code for Pascal CASE statements using their native jump table or conditional branch sequences.
+
+@subsection Library Functions to Canonical Nodes
+Pascal library function calls are transformed to canonical EIGHTBOL statement/expression nodes:
+
+@table @code
+@item LogFault(code)
+@code{(:log-fault :code code)}
+
+@item DebugBreak(code)
+@code{(:debug-break :code code)}
+
+@item StringLength(s)
+@code{(:string-length :source s)}
+
+@item StringCopy(src, dest, len)
+@code{(:string-blt :source src :dest dest :length len)}
+
+@item StringFind(haystack, needle)
+@code{(:string-find :haystack haystack :needle needle)}
+@end table
+
+@subsection WITH Statement Expansion
+Pascal @code{WITH}...@code{DO} statements are expanded to @code{:with} nodes that preserve object context for field qualification:
+
+@example
+Pascal:    WITH obj DO stmts END WITH
+Canonical: (:with :object obj :statements stmts)
+@end example
+
+Backends can apply the object context when generating code for subsequent field access operations, transforming implicit field references into explicit (:of field obj) nodes.
+
+@subsection Unsupported Features
+The following Pascal features are explicitly not supported in the canonical EIGHTBOL implementation:
+
+@itemize @bullet
+@item @code{SET OF} type constructor — users should implement via arrays or bitmaps
+@item String delimited by character — only STRING DELIMITED BY SIZE is supported
+@item @code{SET identifier TO TRUE/FALSE} — condition names not yet implemented
+@end itemize
+
+All other Pascal language constructs map to either canonical EIGHTBOL nodes or the base statement/expression grammar.

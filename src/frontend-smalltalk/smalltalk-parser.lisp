@@ -30,10 +30,11 @@ Renamed from normalize-identifier to avoid collision with COBOL lexer's normaliz
       (list stmts)))
 
 (defun smalltalk-make-move-node (target value)
-  "Create an assignment AST node (MOVE in COBOL terminology)."
+  "Create an assignment AST node (MOVE in COBOL terminology).
+Canonical form: (:move :from expr :to identifier)"
   (list :move
-        :variables (list (smalltalk-normalize-identifier target))
-        :expressions (list value)))
+        :from value
+        :to (smalltalk-normalize-identifier target)))
 
 (defun smalltalk-make-invoke-node (receiver selector)
   "Create a message send (method invocation) AST node."
@@ -42,15 +43,16 @@ Renamed from normalize-identifier to avoid collision with COBOL lexer's normaliz
         :method (smalltalk-normalize-identifier selector)))
 
 (defun smalltalk-make-literal-string (s)
-  "Create a string literal AST node."
-  (list :literal-string :value s))
+  "Return bare string value directly (canonical form).
+Strings are represented as plain strings in the AST, not wrapped in :literal-string nodes."
+  s)
 
 (defun smalltalk-make-literal-number (n &key format)
-  "Create a numeric literal AST node with optional format type.
-FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
-  (if format
-      (list :literal-number :value n :format format)
-      (list :literal-number :value n)))
+  "Return bare numeric value directly (canonical form).
+Numbers are represented as plain numbers in the AST, not wrapped in :literal-number nodes.
+FORMAT parameter is currently reserved for future use but not emitted."
+  (declare (ignore format))
+  n)
 
 (defun smalltalk-make-print-node (args)
   "Create a print/output statement AST node."
@@ -69,8 +71,12 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
   (list :perform :body body :until (list :not condition)))
 
 (defun smalltalk-make-block-node (&key params expressions)
-  "Create a code block AST node (residual - convert to perform with body)."
-  (list :perform :body expressions))
+  "Create a code block AST node - compiles inline to :procedure nodes.
+Blocks in Smalltalk are compiled directly to procedures with the block body as statements.
+No first-class closures are supported; blocks are inlined."
+  (list* :procedure
+         (when params (list :parameters params))
+         (list :body expressions)))
 
 (defun smalltalk-make-call-node (target &key args)
   "Create a function call AST node."
@@ -103,6 +109,16 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
   "Create a continue AST node."
   (list :continue))
 
+(defun smalltalk-make-cascade-nodes (receiver messages)
+  "Expand a cascade expression into multiple :invoke statements.
+Example: obj msg1; msg2; msg3
+Expands to: [(:invoke :object receiver :method msg1) 
+             (:invoke :object receiver :method msg2)
+             (:invoke :object receiver :method msg3)]"
+  (mapcar (lambda (selector)
+            (list :invoke :object receiver :method selector))
+          messages))
+
 (eval
  `(yacc:define-parser *smalltalk-parser*
     (:muffle-conflicts :some)
@@ -118,15 +134,16 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
        (stmt-list stmt
                   (lambda (prefix suffix) (append prefix (list suffix)))))
 
-     (stmt (assignment))
-     (stmt (print-stmt))
-     (stmt (input-stmt))
-     (stmt (dialogue-stmt))
-     (stmt (if-stmt))
-     (stmt (while-stmt))
-     (stmt (copy-stmt))
-     (stmt (message))
-     (stmt (expression))
+      (stmt (assignment))
+      (stmt (print-stmt))
+      (stmt (input-stmt))
+      (stmt (dialogue-stmt))
+      (stmt (if-stmt))
+      (stmt (while-stmt))
+      (stmt (copy-stmt))
+      (stmt (cascade))
+      (stmt (message))
+      (stmt (expression))
 
     ;; Assignment: variable := expression
     (assignment
@@ -186,15 +203,28 @@ FORMAT can be :DECIMAL, :HEX, :OCTAL, :BINARY, :DWORD, or NIL."
            (declare (ignore _colon))
            (smalltalk-make-copy-node filename))))
 
-      ;; Message: receiver.selector or receiver.selector(args)
-      (message
-       (expression :PERIOD expression
-         (lambda (receiver selector)
-           (list :invoke :receiver receiver :selector selector)))
-       (expression :PERIOD expression :LPAREN expression-list :RPAREN
-         (lambda (receiver selector args)
-           (declare (ignore args))
-           (list :invoke :receiver receiver :selector selector))))
+     ;; Cascade: receiver.selector1; selector2; selector3
+     ;; Expands to multiple :invoke statements
+     (cascade
+       (expression :PERIOD expression-cascade-list
+         (lambda (receiver selectors)
+           (smalltalk-make-cascade-nodes receiver selectors))))
+
+     (expression-cascade-list
+       (expression)
+       (expression-cascade-list :SEMICOLON expression
+         (lambda (prefix expr) (append prefix (list expr)))))
+
+       ;; Message: receiver.selector or receiver.selector(args)
+       ;; Canonical form: (:invoke :object expr :method "Selector")
+       (message
+        (expression :PERIOD expression
+          (lambda (receiver selector)
+            (list :invoke :object receiver :method selector)))
+        (expression :PERIOD expression :LPAREN expression-list :RPAREN
+          (lambda (receiver selector args)
+            (declare (ignore args))
+            (list :invoke :object receiver :method selector))))
 
     (expression
       (variable)
