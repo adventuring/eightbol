@@ -60,20 +60,41 @@
   "Build a :goto AST node for GOTO/GO TO statements."
   (list :goto :target target))
 
-(defun make-program-node (class-id &key data methods identification environment)
-  "Build a :program AST node."
-  (list :program
-        :class-id      class-id
-        :identification identification
-        :environment   environment
-        :data          (or data '())
-        :methods       (or methods '())))
+(defun make-program-node (class-id &key data methods identification environment declare)
+  "Build a :program AST node.
+   
+   DECLARE is optional list of declaration forms:
+   - (optimize (speed N) (space N) (safety N))
+   - (temp Var1 Var2 Var3)
+   
+   Example:
+   (make-program-node \"MyProgram\"
+     :data (...)
+     :methods (...)
+     :declare ((optimize (speed 3) (space 2) (safety 3))))"
+  (list* :program
+         :class-id      class-id
+         :identification identification
+         :environment   environment
+         :data          (or data '())
+         :methods       (or methods '())
+         (when declare `(:declare ,declare))))
 
-(defun make-method-node (method-id &key statements)
-  "Build a :method AST node."
-  (list :method
-        :method-id  method-id
-        :statements (or statements '())))
+(defun make-method-node (method-id &key statements declare)
+  "Build a :method AST node.
+   
+   DECLARE is optional list of declaration forms:
+   - (optimize (speed N) (space N) (safety N))
+   - (temp Var1 Var2 Var3)
+   
+   Example:
+   (make-method-node \"update\"
+     :statements (...)
+     :declare ((optimize (speed 3) (space 1) (safety 0))))"
+  (list* :method
+         :method-id  method-id
+         :statements (or statements '())
+         (when declare `(:declare ,declare))))
 
 (defun make-print-node (expressions)
   "Build a :print AST node for PRINT statements.

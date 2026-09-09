@@ -6,11 +6,189 @@
 ;;; NOTE: make-program-node / make-method-node / make-copy-node live in
 ;;; src/ast.lisp (canonical). Keep this file free of duplicates.
 
-(defun make-procedure-node (name &key statements)
-  "Build a :procedure AST node (global procedure)."
-  (list :procedure
-        :name       name
-        :statements (or statements '())))
+;;; ============================================================================
+;;; PRAGMATIC DECLARATIONS — Optimize hints and temporary variable allocation
+;;; ============================================================================
+
+(defun parse-declare-annotation (text)
+  "Parse (declare ...) annotation from comment text.
+   
+   Searches TEXT for (declare ... ) S-expression and extracts declaration forms.
+   
+   Returns list of declaration forms:
+   - (optimize (speed N) (space N) (safety N)) where N ∈ [0,3]
+   - (temp Var1 Var2 Var3)
+   
+   Returns NIL if no valid declaration found.
+   
+   Examples:
+   - (parse-declare-annotation \"(declare (optimize (speed 3) (space 1)))\")
+     → ((optimize (speed 3) (space 1)))
+   - (parse-declare-annotation \"(declare (temp TempX TempY) (optimize (speed 2)))\")
+     → ((temp TempX TempY) (optimize (speed 2)))
+   - (parse-declare-annotation \"no declarations here\")
+     → NIL"
+  (when (and (stringp text) (not (zerop (length text))))
+    (let ((start (search "(declare" text)))
+      (when start
+        ;; Find matching close paren for declare form
+        (let ((paren-depth 1)
+              (pos (+ start 8))
+              (found-close nil))
+          (loop while (and (< pos (length text)) (> paren-depth 0)) do
+            (cond
+              ((char= (char text pos) #\()
+               (incf paren-depth))
+              ((char= (char text pos) #\))
+               (decf paren-depth)
+               (when (zerop paren-depth)
+                 (setf found-close pos))))
+            (incf pos))
+          
+          (when found-close
+            ;; Extract and parse the declare form
+            (let ((declare-text (subseq text start (1+ found-close))))
+              (ignore-errors
+                (let ((form (read-from-string declare-text)))
+                  (when (and (listp form) (eq (first form) 'declare))
+                    (rest form)))))))))))
+
+(defun validate-declare-form (form)
+  "Validate a single declaration form.
+    
+    Valid forms:
+    - (optimize (speed N) (space N) (safety N)) where N ∈ [0,3]
+    - (temp Var1 Var2 ...)
+    
+    Returns T if valid, signals error otherwise."
+  (cond
+    ((and (listp form) (string-equal (first form) "optimize"))
+     ;; (optimize (speed N) (space N) (safety N))
+     (dolist (hint (rest form))
+       (unless (and (listp hint)
+                    (member (first hint) '(speed space safety) :test #'string-equal)
+                    (numberp (second hint))
+                    (>= (second hint) 0)
+                    (<= (second hint) 3))
+         (error 'compiler-error
+                :message (format nil "Invalid optimize hint: ~s (must be (speed|space|safety N) where N ∈ [0,3])" hint))))
+     t)
+    ((and (listp form) (string-equal (first form) "temp"))
+     ;; (temp Var1 Var2 ...)
+     (when (< (length form) 2)
+       (error 'compiler-error
+              :message "Invalid temp declaration: must have at least one variable"))
+     t)
+    (t
+     (error 'compiler-error
+            :message (format nil "Unknown declaration form: ~s (valid: optimize, temp)" form)))))
+
+;;; FRONTEND HELPER: Per-frontend state for capturing declarations
+;;; Frontends should use this mechanism to preserve comments for declaration extraction.
+
+(defvar *last-line-comment* nil
+  "Most recent line comment text (set by lexer, cleared after use by parser).
+   Used by frontends to capture declarations before procedures/methods/programs.
+   
+   Example usage in lexer:
+     (setf *last-line-comment* comment-text)
+   
+   Example usage in parser:
+     (let ((decls (when *last-line-comment* (parse-declare-annotation *last-line-comment*))))
+       (setf *last-line-comment* nil)
+       (make-procedure-node name :declare decls ...))")
+
+(defun extract-and-clear-declaration ()
+  "Extract pending declaration from *last-line-comment* and clear it.
+   
+   Returns list of declaration forms or NIL if none.
+   Automatically clears the comment variable after extraction.
+   
+   Frontends should call this just before creating procedure/method/program nodes.
+   
+   Example:
+     (let ((decls (extract-and-clear-declaration)))
+       (make-procedure-node \"MyProc\" :declare decls :statements stmts))"
+  (when *last-line-comment*
+    (let ((decls (parse-declare-annotation *last-line-comment*)))
+      (setf *last-line-comment* nil)
+      decls)))
+
+(defun make-procedure-with-declarations (name &key statements preceding-comment)
+  "Convenience wrapper: parse declarations from comment and create procedure node.
+   
+   PRECEDING-COMMENT: raw comment text before this procedure
+   
+   Automatically extracts declarations and validates them.
+   
+   Example:
+     (make-procedure-with-declarations \"Helper\"
+       :statements (list ...)
+       :preceding-comment \"(declare (optimize (speed 3)))\")
+   
+   Returns:
+     (:procedure :name \"Helper\" :statements (...) :declare ((optimize (speed 3))))"
+  (let ((decls (when preceding-comment (parse-declare-annotation preceding-comment))))
+    (make-procedure-node name :statements statements :declare decls)))
+
+(defun make-method-with-declarations (method-id &key statements preceding-comment)
+  "Convenience wrapper: parse declarations from comment and create method node.
+   
+   PRECEDING-COMMENT: raw comment text before this method
+   
+   Automatically extracts declarations and validates them.
+   
+   Example:
+     (make-method-with-declarations \"Update\"
+       :statements (list ...)
+       :preceding-comment \"(declare (optimize (speed 3) (space 1)))\")
+   
+   Returns:
+     (:method :method-id \"Update\" :statements (...) :declare ((optimize (speed 3) (space 1))))"
+  (let ((decls (when preceding-comment (parse-declare-annotation preceding-comment))))
+    (make-method-node method-id :statements statements :declare decls)))
+
+(defun make-program-with-declarations (class-id &key data methods preceding-comment identification environment)
+  "Convenience wrapper: parse declarations from comment and create program node.
+   
+   PRECEDING-COMMENT: raw comment text before this program
+   
+   Automatically extracts declarations and validates them.
+   
+   Example:
+     (make-program-with-declarations \"MyApp\"
+       :methods (...)
+       :data (...)
+       :preceding-comment \"(declare (optimize (speed 3) (space 2) (safety 3)))\")
+   
+   Returns:
+     (:program :class-id \"MyApp\" :methods (...) :data (...) :declare ((optimize ...)))"
+  (let ((decls (when preceding-comment (parse-declare-annotation preceding-comment))))
+    (make-program-node class-id 
+                       :data data 
+                       :methods methods 
+                       :identification identification
+                       :environment environment
+                       :declare decls)))
+
+(defun make-procedure-node (name &key statements declare)
+  "Build a :procedure AST node (global procedure).
+   
+   DECLARE is optional list of declaration forms:
+   - (optimize (speed N) (space N) (safety N))
+   - (temp Var1 Var2 Var3)
+   
+   Example:
+   (make-procedure-node \"Helper\"
+     :statements (...)
+     :declare ((optimize (speed 3) (space 1)) (temp TempX)))"
+  (when declare
+    (dolist (form declare)
+      (validate-declare-form form)))
+  (list* :procedure
+         :name       name
+         :statements (or statements '())
+         (when declare `(:declare ,declare))))
 
 (defun make-move-node (from to)
   "Build a :move AST node."

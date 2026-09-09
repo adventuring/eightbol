@@ -80,8 +80,10 @@
                                :depends-on ("eightbol-tests"))
                               (:file "calling-convention-and-complexity-tests"
                                :depends-on ("eightbol-tests"))
-                             (:file "backend-comprehensive-ast-tests"
-                              :depends-on ("eightbol-tests"))
+                              (:file "declarations-tests"
+                               :depends-on ("eightbol-tests"))
+                              (:file "backend-comprehensive-ast-tests"
+                               :depends-on ("eightbol-tests"))
                              
                              ;; Frontend tests (new structure)
                              (:module "frontends/frontend-cobol-tests" :depends-on ("test-package"))
@@ -160,9 +162,10 @@
                                               :frontend-comprehensive
                                               :optimizer-comprehensive
                                               :backend-comprehensive
-                                              :backend-ast-comprehensive
-                                              
-                                              ;; New frontend test suites
+                                               :backend-ast-comprehensive
+                                               :declarations-system
+                                               
+                                               ;; New frontend test suites
                                               :frontend-cobol
                                               :frontend-basic
                                               :frontend-agi

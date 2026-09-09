@@ -162,12 +162,25 @@
         :make-expression-shift-left
         :make-expression-shift-right
          :make-identifier-literal
-         ;; AST node constructors (core)
-         :make-call-node
-         :make-invoke-node
-         :make-declare-node
-         :make-move-node
-         ;; Expression complexity framework
+          ;; AST node constructors (core)
+          :make-call-node
+          :make-invoke-node
+          :make-declare-node
+          :make-move-node
+          :make-program-node
+          :make-method-node
+          :make-procedure-node
+          
+          ;; Pragmatic Declarations
+          :parse-declare-annotation
+          :validate-declare-form
+          :make-procedure-with-declarations
+          :make-method-with-declarations
+          :make-program-with-declarations
+          :extract-and-clear-declaration
+          :*last-line-comment*
+          
+          ;; Expression complexity framework
          :get-available-temps
          :get-cpu-additional-registers
          :allocate-temp-with-fallback
