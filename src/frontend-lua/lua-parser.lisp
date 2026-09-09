@@ -51,11 +51,10 @@
      (dialogue-statement)
      (print-statement)
      (input-statement)
-     (copy-statement)
-     (comment-statement)
-     (break-statement)
-     (continue-statement)
-     (move-statement))
+       (copy-statement)
+       (break-statement)
+       (continue-statement)
+       (move-statement))
 
    ;; Local variable declaration
    (local-declaration
@@ -98,12 +97,12 @@
              (declare (ignore _for _eq _comma1 _comma2 _do _end))
              (list :perform :body body :varying var :from from :to to :by by))))
 
-   ;; Return statement
+   ;; Return statement — emit canonical :exit-method
    (return-statement
     (|return|
      (lambda (_ret)
        (declare (ignore _ret))
-       (list :exit-method :value nil)))
+       (list :exit-method)))
     (|return| expression
               (lambda (_ret expr)
                 (declare (ignore _ret))
@@ -124,20 +123,20 @@
                 (declare (ignore _dial))
                 (list :dialogue :text msg))))
 
-   ;; Print statement
+   ;; Print statement — emit canonical :print node
    (print-statement
     (|print| expression
              (lambda (_print expr)
                (declare (ignore _print))
-               (list :call :target 'print :args (list expr))))
+               (make-print-node (list expr))))
     (|print| |\|\|| expression
-                          (lambda (_print _pipe expr)
-                            (declare (ignore _print _pipe))
-                            (list :call :target 'print :args (list expr))))
-      (|print| expression print-args
-               (lambda (_print expr rest)
-                 (declare (ignore _print))
-                 (list :call :target 'print :args (cons expr rest)))))
+             (lambda (_print _pipe expr)
+               (declare (ignore _print _pipe))
+               (make-print-node (list expr))))
+    (|print| expression print-args
+             (lambda (_print expr rest)
+               (declare (ignore _print))
+               (make-print-node (cons expr rest)))))
 
       ;; Print arguments
       
@@ -151,17 +150,16 @@
                     (declare (ignore _comma))
                      (append prev (list expr)))))
 
-      ;; Input statement
-      
+      ;; Input statement — emit canonical :input node with address-of wrapped vars
       (input-statement
        (|input| ident
                 (lambda (_inp var)
                   (declare (ignore _inp))
-                  (list :call :target 'input :args (list (list :address-of var)))))
+                  (make-input-node (list (list :address-of var)))))
        (|input| ident input-args
                 (lambda (_inp var rest)
                   (declare (ignore _inp))
-                  (list :call :target 'input :args (cons (list :address-of var) rest)))))
+                  (make-input-node (cons (list :address-of var) rest)))))
 
       ;; Input arguments
       
@@ -175,27 +173,19 @@
                      (declare (ignore _comma))
                      (append prev (list (list :address-of var))))))
 
-       ;; Copy statement
-       
-       (copy-statement
-        (|copy| |(| string |)| |;|
-                (lambda (_copy _lp filename _rp _semi)
-                  (declare (ignore _copy _lp _rp _semi))
-                  (list :copy :name filename)))
-        (|copy| |(| string |)|
-                (lambda (_copy _lp filename _rp)
-                  (declare (ignore _copy _lp _rp))
-                  (list :copy :name filename))))
+        ;; Copy statement
+        
+        (copy-statement
+         (|copy| |(| string |)| |;|
+                 (lambda (_copy _lp filename _rp _semi)
+                   (declare (ignore _copy _lp _rp _semi))
+                   (list :copy :name filename)))
+         (|copy| |(| string |)|
+                 (lambda (_copy _lp filename _rp)
+                   (declare (ignore _copy _lp _rp))
+                   (list :copy :name filename))))
 
-       ;; Comment statement
-       
-       (comment-statement
-        (|comment| string
-                   (lambda (_comment text)
-                     (declare (ignore _comment))
-                     (list :comment :text text))))
-
-       ;; Break statement (for loops/perform)
+        ;; Break statement (for loops/perform)
        
        (break-statement
         (|break|
@@ -237,50 +227,50 @@
         (lambda (_nil)
           (declare (ignore _nil))
           nil))
-       (|(| expression |)|
-            (lambda (_lp expr _rp)
-              (declare (ignore _lp _rp))
-              expr))
-       (expression |+| expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :add :from right :to left)))
-       (expression |-| expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :subtract :from right :from-target left)))
-       (expression |*| expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :compute :target 'result :expression (list :* left right))))
-       (expression |/| expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :compute :target 'result :expression (list :/ left right))))
-       (expression |== | expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :eq left right)))
-       (expression |~=| expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :neq left right)))
-       (expression |<| expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :lt left right)))
-       (expression |>| expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :gt left right)))
-       (expression |<= | expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :le left right)))
-       (expression |>= | expression
-                   (lambda (left _op right)
-                     (declare (ignore _op))
-                     (list :ge left right)))
+        (|(| expression |)|
+             (lambda (_lp expr _rp)
+               (declare (ignore _lp _rp))
+               expr))
+        (expression |+| expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list :add left right)))
+        (expression |-| expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list :subtract left right)))
+        (expression |*| expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list :* left right)))
+        (expression |/| expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list :/ left right)))
+        (expression |== | expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list '= left right)))
+        (expression |~=| expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list '/= left right)))
+        (expression |<| expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list '< left right)))
+        (expression |>| expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list '> left right)))
+        (expression |<=| expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list '<= left right)))
+        (expression |>= | expression
+                    (lambda (left _op right)
+                      (declare (ignore _op))
+                      (list '>= left right)))
        (ident |=| expression
               (lambda (var _eq expr)
                 (declare (ignore _eq))
@@ -360,19 +350,15 @@
 
 (defun parse/lua-print (&rest args)
   "Create a print call AST node."
-  (list :call :target 'print :args args))
+  (make-print-node args))
 
 (defun parse/lua-input (&rest vars)
-  "Create an input call AST node with address-of wrapped vars."
-  (list :call :target 'input :args (mapcar (lambda (v) (list :address-of v)) vars)))
+  "Create an input AST node with address-of wrapped vars."
+  (make-input-node (mapcar (lambda (v) (list :address-of v)) vars)))
 
 (defun parse/lua-copy (filename)
   "Create a copy AST node."
   (list :copy :name filename))
-
-(defun parse/lua-comment (text)
-  "Create a comment AST node."
-  (list :comment :text text))
 
 (defun parse/lua-break ()
   "Create a break AST node."
@@ -421,7 +407,6 @@ Returns a :program node with :statements containing all parsed statements."
           parse/lua-print
           parse/lua-input
           parse/lua-copy
-          parse/lua-comment
           parse/lua-break
           parse/lua-continue
           parse/lua-move))

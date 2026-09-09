@@ -1,567 +1,1057 @@
+@c -*- texinfo -*-
+@c -*- coding: utf-8 -*-
+@node Smalltalk
+@chapter Smalltalk (Object-Oriented Programming Language)
+
 @menu
 * Naming system::
-* Basic structure::
-* Calling routines::
-* Assignment::
-* Arithmetic::
-* Complex arithmetic::
-* Boolean expressions::
-* Control structures::
-* Loops::
-* Breaking loops::
-* Dialogue scripts::
-* Tile manipulation::
-* Decal manipulation::
-* Object manipulation::
+* Classes and objects::
+* Variables and declarations::
+* Blocks (BlockClosure)::
+* Arrays and collections::
+* Strings and symbols::
+* Numbers and arithmetic::
+* Message sends::
+* Conditional execution::
+* Loop constructs::
+* Input and output::
+* Assignment statements::
 * Unsupported features::
 @end menu
 
 @node Naming system
-@section Naming system
+@section Naming System
 
-In SmallTalk, variable names use @code{case-sensitive} naming (conventionally @code{camelCase} for variables and @code{UpperCamelCase} for classes).
-All keywords are case-sensitive and written in lowercase.
-
-@table @asis
-@item Keywords: self, super, true, false, nil, thisContext, ifTrue:, ifFalse:, ifTrue:ifFalse:, whileTrue:, whileFalse:, timesRepeat:, to:do:, to:by:do:
-@item Operators: +, -, *, /, //, \\, =, ~=, >, <, >=, <=, and, or, not
-@item String delimiters: Single quotes (@code{'...'}) for strings, double quotes (@code{"..."}) for comments
-@item Comments: Double quotes (@code{"..."}) to end of line
-@end table
-
-@node Basic structure
-@section Basic structure for a stand-alone routine or program
-
-A SmallTalk program consists of class definitions and method definitions, and is executed by sending messages to objects.
+Smalltalk uses @code{case-sensitive} naming with identifiers normalized
+to @code{camelCase}. The lexer converts PascalCase and snake_case
+identifiers to camelCase format.
 
 @example
-! Initialize game !
-| score livesLeft currentRoom |
-score := 0.
-livesLeft := 3.
-currentRoom := 1.
-
-GameState new
-    initializeGame;
-    [
-        gameOver not
-    ] whileTrue: [
-        self processInput.
-        self updateGame.
-        self renderDisplay.
-    ].
-
-! Define GameState class !
-Object subclass: #GameState
-    instanceVariableNames: 'score livesLeft currentRoom gameOver'
-    classVariableNames: ''
-    poolDictionaries: ''
-    category: 'Phantasia-Game' !
-
-! Methods !
-GameState>>initializeGame
-    score := 0.
-    livesLeft := 3.
-    currentRoom := 1.
-    gameOver := false.
-
-GameState>>processInput
-    "Simulate input handling"
-    (self keyPressed: #rightArrow) ifTrue: [
-        currentRoom := currentRoom + 10.
-    ].
-
-GameState>>updateGame
-    "Game logic updates".
-
-GameState>>renderDisplay
-    "Rendering code".
+myVariable   @result{} myVariable
+playerHealth @result{} playerHealth
+SPRITE_COUNT  @result{} spriteCount
 @end example
 
-@node Basic structure object
-@section Basic structure for an object method
+@table @asis
+@item Keywords / Messages
+@code{ifTrue:}, @code{ifFalse:}, @code{ifTrue:ifFalse:},
+@code{whileTrue:}, @code{whileFalse:}, @code{to:do:},
+@code{timesRepeat:}, @code{do:}, @code{new}, @code{self}, @code{super},
+@code{true}, @code{false}, @code{nil}, @code{and:}, @code{or:},
+@code{dialogue:}, @code{print}, @code{display}, @code{input}, @code{read},
+@code{say:}, @code{ask:}, @code{copy:}
 
-SmallTalk is purely object-oriented; all computation is done by sending messages to objects.
+@item Special Variables
+@code{self} — reference to the current object
+@code{super} — reference for method lookup in superclass
+@code{thisContext} — current execution context (advanced)
+@code{nil} — undefined object (false/nothing)
+@code{true} / @code{false} — Boolean objects
+
+@item Operators
+@code{+}, @code{-}, @code{*}, @code{/}, @code{//} (integer division),
+@code{\\} (modulo), @code{=}, @code{~=}, @code{==}, @code{>}, @code{<},
+@code{>=}, @code{<=}, @code{,} (sequence)
+
+@item String Delimiters
+Single quotes (@code{'...'}) for strings
+Double quotes (@code{"..."}) for comments
+
+@item Symbol Delimiters
+Hash prefix (@code{#name}) for symbols
+
+@item Comments
+Double quotes to end of line (@code{" comment "})
+@end table
+
+@node Classes and objects
+@section Classes and Objects
+
+@subsubheading Purpose and Function
+
+Smalltalk is a purely object-oriented language where everything is an
+object. Classes define the structure and behavior of objects; instances
+are created from classes.
+
+@subsubheading Class Definition
 
 @example
-! Define Player class !
-Object subclass: #Player
-    instanceVariableNames: 'x y sprite'
-    classVariableNames: ''
+Object subclass: #@var{ClassName}
+    instanceVariableNames: '@var{inst1} @var{inst2} ...'
+    classVariableNames: '@var{class1} @var{class2} ...'
     poolDictionaries: ''
-    category: 'Phantasia-Game' !
+    category: '@var{category}'
+@end example
 
-Player>>initialize
-    super initialize.
-    x := 0.
-    y := 0.
-    sprite := 0.
+@subsubheading Examples
 
-Player>>moveDX:dx dy:dy
-    x := x + dx.
-    y := y + dy.
-! End !
+@example
+Object subclass: #Player
+    instanceVariableNames: 'x y health sprite'
+    classVariableNames: 'MaxPlayers'
+    poolDictionaries: ''
+    category: 'Game-Entities'
+@end example
 
-! Create instance !
-| player |
+@subsubheading Creating Instances
+
+@example
+@var{instance} := @var{Class} new.
+@var{instance} := @var{Class} new.
+@var{instance} initialize.
+@end example
+
+@subsubheading Examples
+
+@example
 player := Player new.
 player initialize.
-player moveDX: 5 dy: 10.
+enemy := Enemy new.
 @end example
 
-@node Calling routines
-@section Calling a routine (nullary)
-
-To send a message that takes no arguments:
+@subsubheading Instance Methods
 
 @example
-initializeGraphics.
-clearScreen.
-playStartupMusic.
-someObject someMessage.
+@var{ClassName>>@var{methodName}
+    @var{statements}
 @end example
 
-@node Calling routines value
-@section Calling a routine with a value (in accumulator)
-
-To send a message that returns a single value:
+@subsubheading Examples
 
 @example
-| score bonusFactor volume |
-score := someObject calculateBonus: level withTimeLeft: timeLeft.
-bonusFactor := someObject getInputFactor.
-volume := someObject getMasterVolume.
-someObject someMessage.
-@end example
-
-@node Calling routines giving
-@section Calling a routine giving a value (in accumulator)
-
-Not applicable in SmallTalk's standard calling convention.
-
-@node Calling routines values
-@section Calling a routine with values in and out (in accumulator)
-
-To send a message with parameters:
-
-@example
-someObject drawSprite: spriteId atX: xPos andY: yPos.
-someObject playSound: soundId withVolume: volume andLoopFlag: loopFlag.
-someObject checkCollision: obj1 with: obj2 puttingResultIn: resultVar.
-someObject someMessageWithParam1: param1 andParam2: param2.
-@end example
-
-@node Calling library
-@section Calling a library routine (all 4 styles)
-
-SmallTalk accesses library routines through standard message sends:
-
-@example
-someObject loadLevel: levelNumber.          @r{Direct call}
-someObject farProc: libraryAddress.         @r{Far call}
-| result |
-result := someObject libraryFunction: input. @r{Library function}
-someObject someObject: param1 with: param2.   @r{Object method call}
-@end example
-
-These correspond to:
-@table @asis
-@item Direct: OBJECT messageName
-@item Far: OBJECT farProc: address
-@item Library: OBJECT libraryFunction: input
-@item Object: OBJECT someMessage:param1 with:param2
-@end table
-
-@node Calling far bank
-@section Calling a far bank Service (all 4 styles)
-
-Far procedures in SmallTalk are called using external interfaces or through
-the foreign function interface (if available):
-
-@example
-! Assume we have a C function farLoadLibrary at address 0x8000 !
-| farLoadLibrary |
-farLoadLibrary := ExternalFunction
-    returnType: #void
-    parameterTypes: #( #unsignedInt )
-    module: 'farproc'
-    function: #farLoadLibrary.
-
-farLoadLibrary value: 16r8000.   @r{Call routine in bank 1}
-@end example
-
-These correspond to:
-@table @asis
-@item Direct: Not used for far calls
-@item Far: External function call
-@item Library: Not applicable
-@item Object: Not applicable
-@end table
-
-@node Invoking object
-@section Invoking a method on an object (all 4 styles)
-
-Object method invocation in SmallTalk is done by sending messages:
-
-@example
-player moveDX: 5 dy: 10.
-score-display update: score.
-game-state isGameOver.
-@end example
-
-These correspond to:
-@table @asis
-@item Direct: Setting object properties via setter messages
-@item Far: Not applicable for methods (objects typically in same memory)
-@item Library: Method may call library routines internally
-@item Object: METHOD invocation on object instance
-@end table
-
-@node Assignment
-@section Assigning to a variable
-
-Variables are assigned using the assignment operator (:=):
-
-@example
-| score livesLeft counter message |
-score := 0.                           @r{Explicit assignment}
-livesLeft := 3.                       @r{Implicit assignment}
-counter := counter + 1.               @r{Increment}
-livesLeft := livesLeft - 1.           @r{Decrement}
-score := score + 10.                  @r{Arithmetic assignment}
-message := 'Hello, World!'.           @r{String assignment}
-@end example
-
-@node Assignment object
-@section Assigning to an object slot
-
-Object slots (instance variables) are assigned via setter messages or direct access (if allowed):
-
-@example
-player x: 160.                          @r{Set object's x coordinate}
-player y: 100.                          @r{Set object's y coordinate}
-player sprite: 5.                       @r{Set sprite number}
-player visible: true.                   @r{Set visibility flag}
-@end example
-
-@node Assignment array
-@section Assigning to an array member with a subscript
-
-SmallTalk uses Array and other collections. Elements are assigned using at:put: or similar:
-
-@example
-| scoreList initialsList board |
-scoreList := Array new: 10.
-initialsList := Array new: 10.
-board := Array new: 8.
-1 to: 8 do: [ :i | board at: i put: (Array new: 8) ].
-
-scoreList at: 1 put: 100.
-initialsList at: 1 put: 'ALI'.
-(board at: 3) at: 4 put: 1.
-@end example
-
-@node Arithmetic
-@section Basic arithmetic: addition and subtraction
-
-Basic arithmetic uses the + and - operators:
-
-@example
-score := score + 10.                  @r{Addition}
-livesLeft := livesLeft - 1.           @r{Subtraction}
-| total |
-total := width + height.              @r{Add two variables}
-| finalPrice |
-finalPrice := price - discount.       @r{Subtraction}
-| delta |
-delta := newValue - oldValue.         @r{Subtraction}
-@end example
-
-@node Arithmetic bit
-@section Basic arithmetic: bit-shifting for mutiplication or division
-
-Bit-shifting for multiplication/division by powers of two is not directly supported in standard SmallTalk.
-Use arithmetic shift or external libraries:
-
-@example
-| result |
-result := value bitShift: 2.          @r{Left shift 2 bits (multiply by 4)}
-result := value bitShift: -1.         @r{Right shift 1 bit (divide by 2)}
-result := value * 4.                  @r{Multiply by 4}
-result := value / 2.                  @r{Divide by 2}
-result := value * 8.                  @r{Multiply by 8}
-result := value / 16.                 @r{Divide by 16}
-@end example
-
-@node Complex arithmetic
-@section Complex arithmetic: multiple expressions
-
-Complex arithmetic expressions follow standard precedence rules:
-
-@example
-| total average distance |
-total := (baseSalary * 12) + bonus - deductions.
-average := (sum1 + sum2 + sum3) / 3.0.
-distance := ((x2 - x1) squared + (y2 - y1) squared) sqrt.
-@end example
-
-@node Boolean
-@section Boolean expressions: equality and inequalities
-
-Boolean expressions use logical operators and comparison operators:
-
-@example
-(score > 1000) ifTrue: [ ... ].              @r{Greater than}
-(score < 50) ifTrue: [ ... ].                @r{Less than}
-(score = 100) ifTrue: [ ... ].               @r{Equality}
-(score ~= 0) ifTrue: [ ... ].                @r{Inequality}
-((x >= 0) and: [ x < MAX_X ]) ifTrue: [ ... ] @r{Combined conditions}
-((button = BUTTON_A) or: [ button = BUTTON_B ]) ifTrue: [ ... ] @r{Alternative conditions}
-@end example
-
-@node If then else
-@section Using if/then/else structures and examine/cond structures
-
-Conditional execution uses ifTrue:/ifFalse: and ifTrue:ifFalse: messages:
-
-@example
-(temperature > THOT)
-    ifTrue: [ status := 'HOT' ]
-    ifFalse: [
-        (temperature > TCOLD)
-            ifTrue: [ status := 'WARM' ]
-            ifFalse: [ status := 'COLD' ]
-    ].
-
-(answer = 'Y') or: [ answer = 'y' ] ifTrue: [ response := 'YES' ] ifFalse: [
-    (answer = 'N') or: [ answer = 'n' ]
-        ifTrue: [ response := 'NO' ]
-        ifFalse: [ response := 'INVALID' ]
-].
-@end example
-
-SmallTalk does not have an EXAMINE/COND structure; the ifTrue:/ifFalse: messages serve
-a similar purpose for conditional execution, and nested conditionals can handle multi-way branching.
-
-@node Performing
-@section Performing loops
-
-Loops are implemented using whileTrue:, whileFalse:, timesRepeat:, and to:do: messages:
-
-@example
-! whileTrue: loop equivalent (pre-test) !
-| i |
-i := 1.
-[ i <= 10 ] whileTrue: [
-    'Count: ', i asString printNl.
-    i := i + 1.
-].
-
-! timesRepeat: loop equivalent (known iterations) !
-10 timesRepeat: [ | i |
-    'Count: ', i asString printNl.
-    i := i + 1. ].
-
-! to:do: loop equivalent (known iterations) !
-1 to: 10 do: [ :i |
-    'Count: ', i asString printNl.
-].
-
-! Loop with break and continue (using a flag) !
-| i breakFlag |
-i := 1.
-breakFlag := false.
-[ i <= 100 ] whileTrue: [
-    ( (scoreList at: i) = TARGET_VALUE )
-        ifTrue: [
-            'Found at index: ', i asString printNl.
-            breakFlag := true.
-        ].
-    breakFlag ifFalse: [
-        ( (scoreList at: i) < 0 )
-            ifTrue: [ ]   @r{Skip to next iteration}
-            ifFalse: [
-                'Processing positive value: ', (scoreList at: i) asString printNl.
-            ].
-    ].
-    i := i + 1.
-] whileFalse: [ breakFlag ].
-@end example
-
-@node Breaking loops
-@section Breaking out of loops safely
-
-Early loop exit is achieved using a flag or by returning from a block:
-
-@example
-Exit whileTrue: loop early
-| i |
-i := 1.
-[ i <= 100 ] whileTrue: [
-    ( (scoreList at: i) = TARGET_VALUE )
-        ifTrue: [
-            'Found at index: ', i asString printNl.
-            ^ self   @r{Exit loop immediately (by returning from enclosing method)}
-        ].
-    i := i + 1.
-].
-
-! Skip current iteration !
-| i |
-i := 1.
-[ i <= 100 ] whileTrue: [
-    ( (scoreList at: i) < 0 )
-        ifTrue: [ ]   @r{Skip to next iteration}
-        ifFalse: [
-            'Processing non-negative value: ', (scoreList at: i) asString printNl.
-        ].
-    i := i + 1.
-].
-
-! Nested loop control !
-| i j |
-i := 1.
-[ i <= 10 ] whileTrue: [
-    j := 1.
-    [ j <= 10 ] whileTrue: [
-        ( (matrix at: i) at: j ) = 0
-            ifTrue: [ ^ self ]   @r{Exit inner loop only (by returning from enclosing method)}
-        ].
-    j := j + 1.
-].
-    i := i + 1.
-].
-@end example
-
-@node Dialogue
-@section Calling a dialogue script (Forth scripts)
-
-SmallTalk does not directly call Forth dialogue scripts. Instead, it uses
-its own methods. However, through the semantic-sugar
-layer, SmallTalk commands can be mapped to calls of the shared Fountain/Forth
-runtime library:
-
-@example
-! Original SmallTalk code !
-| x |
-x := 150.
-( (x > 100) and: [ x < 200 ] )
-    ifTrue: [ self showMessage: MSG_WELCOME ] .
-
-! Desugared via semantic-sugar layer !
-( (x > 100) and: [ x < 200] )
-    ifTrue: [ (:call-acc :target "ShowWelcomeMessage" :using nil) ] .
-@end example
-
-@node Tiles
-@section Manipulating tiles
-
-Tile manipulation is performed through direct video memory access
-or through library routines for tiled backgrounds:
-
-@example
-! Direct memory access (mode-dependent) !
-| videoMemory offset tileNum attribute |
-videoMemory := 16rB8000 asSmallInt.
-offset := ((row * 80) + col) * 2.
-tileNum := 42.
-attribute := 7.
-(videoMemory byteAt: offset) put: tileNum.
-(videoMemory byteAt: offset + 1) put: attribute.
-
-! Library routine approach !
-someObject loadTileSet: tileSetId.
-someObject placeTile: layer atX: x atY: y tileIndex: tileIndex.
-someObject scrollBackground: dx by: dy.
-@end example
-
-@node Decals
-@section Manipulating decals
-
-Decals (sprites or movable objects) are manipulated using:
-
-@example
-! Hardware sprite approach (if available) !
-someObject initSprites.
-someObject setSpritePosition: spriteId atX: x atY: y.
-someObject setSpriteImage: spriteId to: imageId.
-someObject showSprite: spriteId withVisibility: -1.   @r{-1 = visible}
-
-! Software sprite approach !
-| sprite |
-sprite := Dictionary new.
-sprite at: #x put: 100.
-sprite at: #y put: 50.
-sprite at: #frame put: 0.
-
-sprite at: #x put: 100.
-sprite at: #y put: 50.
-sprite at: #frame put: ((sprite at: #frame) + 1) \\ 4.
-@end example
-
-@node Objects
-@section Manipulating objects
-
-Object manipulation depends on the implementation approach:
-
-@example
-! Using classes !
-Object subclass: #GameObject
-    instanceVariableNames: 'x y width height active'
-    classVariableNames: ''
-    poolDictionaries: ''
-    category: 'Phantasia-Game' !
-
-GameObject>>initialize
-    super initialize.
+Player>>initialize
     x := 0.
     y := 0.
-    width := 0.
-    height := 0.
-    active := true.
+    health := 100.
+    sprite := 0.
 
-GameObject>>moveDX:dx dy:dy
+Player>>moveDX: dx dy: dy
     x := x + dx.
     y := y + dy.
 
-! Create instances !
-| gameObjects |
-gameObjects := Array new: 20.
-1 to: 20 do: [ :i |
-    | obj |
-    obj := GameObject new.
-    obj initialize.
-    obj x: 100; y: 100; width: 16; height: 16.
-    gameObjects at: i put: obj
+Player>>isAlive
+    ^ health > 0
+@end example
+
+@subsubheading Class Methods
+
+@example
+@var{ClassName class>>@var{methodName}
+    @var{statements}
+@end example
+
+@subsubheading Examples
+
+@example
+Player class>>newWithX: xValue y: yValue
+    | p |
+    p := self new.
+    p x: xValue; y: yValue.
+    ^ p
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Class names: UpperCamelCase, globally unique
+@item Instance variable names: lowercase, space-separated
+@item Class variable names: PascalCase, shared across instances
+@end itemize
+
+@node Variables and declarations
+@section Variables and Declarations
+
+@subsubheading Purpose and Function
+
+Local variables hold temporary values within a method. They must be
+declared in a pipe-delimited list before use.
+
+@subsubheading Syntax
+
+@example
+| @var{var1} @var{var2} @var{var3} |
+@var{statements}
+@end example
+
+@subsubheading Examples
+
+@example
+| score lives |
+score := 0.
+lives := 3.
+
+| x y z temp |
+x := 10.
+y := 20.
+temp := x.
+x := y.
+y := temp.
+
+| name age |
+name := 'Player'.
+age := 25.
+@end example
+
+@subsubheading Temporary Variables
+
+Variables declared at method level are temporary and scoped to that
+method execution.
+
+@subsubheading Instance Variables
+
+Accessed directly within instance methods:
+
+@example
+Player>>setPositionX: xValue y: yValue
+    x := xValue.
+    y := yValue.
+@end example
+
+@subsubheading Global Variables (Class Variables)
+
+Shared across all instances of a class and its subclasses.
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Variable names: lowercase letters, digits, underscores
+@item Declaration: must precede any statement in a sequence
+@item Scope: block or method where declared
+@end itemize
+
+@node Blocks (BlockClosure)
+@section Blocks (BlockClosure)
+
+@findex [
+@findex ]
+
+@subsubheading Purpose and Function
+
+Blocks are anonymous functions (closures) that can be stored in
+variables, passed as arguments, and executed later. They capture their
+lexical environment.
+
+@subsubheading Syntax
+
+@example
+[ @var{statements} ]
+[ :@var{param1} :@var{param2} | @var{statements} ]
+@end example
+
+@subsubheading Examples
+
+@example
+-- Simple block
+[ Transcript show: 'Hello' ]
+
+-- Block with value
+[ x + y ]
+
+-- Block with parameter
+[ :value | value * value ]
+
+-- Block with multiple parameters
+[ :a :b | a + b ]
+
+-- Stored in variable
+doubler := [ :n | n * 2 ].
+doubler value: 5  @result{} 10
+@end example
+
+@subsubheading Block Evaluation
+
+@example
+@var{block} value
+@var{block} value: @var{arg1}
+@var{block} value: @var{arg1} value: @var{arg2}
+@var{block} valueWithArguments: @var{array}
+@end example
+
+@subsubheading Examples
+
+@example
+square := [ :n | n * n ].
+square value: 4                @result{} 16
+
+adder := [ :a :b | a + b ].
+adder value: 3 value: 5       @result{} 8
+
+-- Delayed execution
+delayed := [ Transcript show: 'Later' ].
+" ... later ... "
+delayed value.
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Parameters: zero or more, each prefixed with colon
+@item Body: any sequence of expressions
+@item Return: ^ returns from enclosing method, not block
+@end itemize
+
+@node Arrays and collections
+@section Arrays and Collections
+
+@subsubheading Purpose and Function
+
+Arrays and collections store ordered sequences of objects with various
+access patterns and iteration methods.
+
+@subsubheading Array Syntax
+
+@example
+Array new: @var{size}
+@{ @var{item1} . @var{item2} . ... @}
+@end example
+
+@subsubheading Examples
+
+@example
+-- Create array
+arr := Array new: 10.
+
+-- Array literal
+nums := @{ 1 . 2 . 3 . 4 . 5 @}.
+names := @{ 'Alice' . 'Bob' . 'Carol' @}.
+
+-- Nested array
+matrix := @{
+    @{ 1 . 0 . 0 @} .
+    @{ 0 . 1 . 0 @} .
+    @{ 0 . 0 . 1 @}
+@}.
+@end example
+
+@subsubheading Accessing Elements
+
+@example
+@var{array} at: @var{index}
+@var{array} at: @var{index} put: @var{value}
+@end example
+
+Note: Arrays are 1-indexed in standard Smalltalk.
+
+@subsubheading Examples
+
+@example
+arr := @{ 10 . 20 . 30 @}.
+arr at: 1              @result{} 10
+arr at: 2 put: 25.
+arr at: 2              @result{} 25
+@end example
+
+@subsubheading OrderedCollection
+
+@example
+collection := OrderedCollection new.
+collection add: item.
+collection addAll: otherCollection.
+@end example
+
+@subsubheading Examples
+
+@example
+items := OrderedCollection new.
+items add: 'first'.
+items add: 'second'.
+items addLast: 'last'.
+items do: [ :each | Transcript show: each; cr ].
+@end example
+
+@subsubheading Collection Iteration
+
+@example
+@var{collection} do: @var{block}
+@var{collection} collect: @var{block}
+@var{collection} select: @var{block}
+@var{collection} reject: @var{block}
+@var{collection} detect: @var{block}
+@var{collection} inject: @var{initial} into: @var{block}
+@end example
+
+@subsubheading Examples
+
+@example
+-- Iterate
+@{ 1 . 2 . 3 . 4 . 5 @} do: [ :n |
+    Transcript show: n asString; cr ].
+
+-- Transform
+@{ 1 . 2 . 3 @} collect: [ :n | n * n ]  @result{} @{ 1 . 4 . 9 @}
+
+-- Filter
+@{ 1 . 2 . 3 . 4 . 5 . 6 @} select: [ :n | n odd ]  @result{} @{ 1 . 3 . 5 @}
+
+-- Find
+@{ 3 . 7 . 2 . 8 . 4 @} detect: [ :n | n > 5 ]  @result{} 7
+@end example
+
+@node Strings and symbols
+@section Strings and Symbols
+
+@subsubheading Purpose and Function
+
+Strings represent sequences of characters; symbols are interned
+identifiers that are guaranteed unique and can be used as keys.
+
+@subsubheading String Syntax
+
+@example
+'@var{text}'
+'@var{text with ''escaped'' quotes}'
+@end example
+
+@subsubheading Examples
+
+@example
+greeting := 'Hello, World!'.
+empty := ''.
+withQuote := 'It''s a fine day'.
+multiLine := 'First line' , 'Second line'.
+@end example
+
+@subsubheading String Concatenation
+
+@example
+@var{string1} , @var{string2}
+@end example
+
+@subsubheading Examples
+
+@example
+'Hello, ' , 'World!'           @result{} 'Hello, World!'
+'Value: ' , 42 asString        @result{} 'Value: 42'
+first , ' ' , last             @result{} 'First Last'
+@end example
+
+@subsubheading Symbol Syntax
+
+@example
+#@var{name}
+#'@var{name with spaces}'
+@end example
+
+@subsubheading Examples
+
+@example
+action := #start.
+key := #playerName.
+spaces := #'name with spaces'.
+@end example
+
+@subsubheading String Operations
+
+@example
+@var{string} size
+@var{string} at: @var{index}
+@var{string} copyFrom: @var{start} to: @var{end}
+@var{string} asSymbol
+@var{symbol} asString
+@end example
+
+@subsubheading Examples
+
+@example
+'hello' size                      @result{} 5
+'hello' at: 1                     @result{} $h
+'hello' copyFrom: 1 to: 3         @result{} 'hel'
+'hello' asSymbol                  @result{} #hello
+@end example
+
+@node Numbers and arithmetic
+@section Numbers and Arithmetic
+
+@subsubheading Purpose and Function
+
+Smalltalk provides multiple numeric classes including Integer, Float,
+and Fraction for different numeric representations.
+
+@subsubheading Number Formats
+
+@example
+@var{integer}          -- decimal: 42
+16r@var{hex}           -- hex: 16rFF = 255
+8r@var{octal}          -- octal: 8r77 = 63
+2r@var{binary}         -- binary: 2r1010 = 10
+@var{float}            -- floating point: 3.14
+@end example
+
+@subsubheading Examples
+
+@example
+42
+16rFF                  @result{} 255
+8r77                   @result{} 63
+2r1010                 @result{} 10
+3.14159
+-273
+@end example
+
+@subsubheading Arithmetic Operators
+
+@example
+@var{a} + @var{b}      -- addition
+@var{a} - @var{b}      -- subtraction
+@var{a} * @var{b}      -- multiplication
+@var{a} / @var{b}      -- division (returns Fraction)
+@var{a} // @var{b}     -- integer division
+@var{a} \\ @var{b}     -- modulo
+@var{a} negated        -- unary negation
+@end example
+
+@subsubheading Examples
+
+@example
+10 + 5                 @result{} 15
+10 - 3                 @result{} 7
+4 * 3                  @result{} 12
+10 / 4                 @result{} (5/2)
+10 // 4                @result{} 2
+10 \\ 4                @result{} 2
+(-5) abs               @result{} 5
+@end example
+
+@subsubheading Comparison Operators
+
+@example
+@var{a} = @var{b}      -- equality
+@var{a} ~= @var{b}     -- inequality
+@var{a} < @var{b}      -- less than
+@var{a} > @var{b}      -- greater than
+@var{a} <= @var{b}     -- less than or equal
+@var{a} >= @var{b}     -- greater than or equal
+@end example
+
+@subsubheading Number Methods
+
+@example
+@var{n} abs           -- absolute value
+@var{n} negated       -- negation
+@var{n} reciprocal    -- 1/n
+@var{n} squared       -- n * n
+@var{n} sqrt          -- square root
+@var{n} floor         -- floor
+@var{n} ceiling       -- ceiling
+@var{n} round         -- round to nearest
+@var{n} asFloat       -- convert to Float
+@var{n} asInteger     -- convert to Integer
+@end example
+
+@subsubheading Examples
+
+@example
+(-5) abs              @result{} 5
+16 sqrt               @result{} 4.0
+2.5 floor             @result{} 2
+2.5 ceiling           @result{} 3
+2.71828 asInteger     @result{} 2
+@end example
+
+@node Message sends
+@section Message Sends
+
+@subsubheading Purpose and Function
+
+Smalltalk uses message passing for all operations. Messages are sent
+to objects, which respond by executing the corresponding method.
+
+@subsubheading Unary Messages
+
+No arguments required.
+
+@example
+@var{receiver} @var{message}
+@end example
+
+@subsubheading Examples
+
+@example
+10 negated
+3.14 rounded
+array size
+object class
+player initialize
+@end example
+
+@subsubheading Binary Messages
+
+One argument with operator syntax.
+
+@example
+@var{receiver} @var{operator} @var{argument}
+@end example
+
+@subsubheading Examples
+
+@example
+10 + 5
+100 - 30
+3 * 4
+'Hello' , ' World'
+score > 100
+@end example
+
+@subsubheading Keyword Messages
+
+Multiple arguments with colon-terminated keywords.
+
+@example
+@var{receiver} @var{keyword1}: @var{arg1} @var{keyword2}: @var{arg2}
+@end example
+
+@subsubheading Examples
+
+@example
+array at: 1
+array at: 1 put: 100
+player moveDX: 5 dy: 10
+dictionary at: #key put: value
+string copyFrom: 1 to: 10
+@end example
+
+@subsubheading Cascaded Messages
+
+@example
+@var{receiver}
+    @var{message1};
+    @var{message2};
+    @var{message3}
+@end example
+
+Multiple messages to the same receiver.
+
+@subsubheading Examples
+
+@example
+Transcript
+    show: 'Line 1';
+    cr;
+    show: 'Line 2';
+    cr
+
+array
+    at: 1 put: 100;
+    at: 2 put: 200;
+    at: 3 put: 300
+@end example
+
+@subsubheading Method Lookup
+
+Messages are resolved at runtime through the object's class hierarchy,
+starting with the receiver's class and proceeding to superclasses.
+
+@subsubheading Self and Super
+
+@example
+self @var{message}         -- lookup in same class
+super @var{message}        -- lookup in superclass
+@end example
+
+@subsubheading Examples
+
+@example
+Rectangle>>draw
+    self drawOutline.
+    self fillInterior.
+
+Object subclass: #SpecialPlayer
+    instanceVariableNames: ''
+
+SpecialPlayer>>initialize
+    super initialize.
+    self setupSpecial.
+@end example
+
+@node Conditional execution
+@section Conditional Execution
+
+@findex ifTrue:
+@findex ifFalse:
+@findex ifTrue:ifFalse:
+
+@subsubheading Purpose and Function
+
+Conditionals are implemented as messages to Boolean objects. The condition
+is evaluated first, then the appropriate block is executed.
+
+@subsubheading Syntax
+
+@example
+@var{condition} ifTrue: @var{trueBlock}
+@var{condition} ifFalse: @var{falseBlock}
+@var{condition} ifTrue: @var{trueBlock} ifFalse: @var{falseBlock}
+@end example
+
+@subsubheading Examples
+
+@example
+-- Simple ifTrue
+score > 100 ifTrue: [
+    Transcript show: 'High score!'; cr
 ].
 
-! Update object position !
-gameObjects do: [ :obj |
-    obj moveDX: dx dy: dy
+-- Simple ifFalse
+health <= 0 ifFalse: [
+    self updateHealthDisplay
 ].
 
-! Check active status and draw !
-gameObjects do: [ :obj |
-    obj active ifTrue: [ self drawObject: obj ]
+-- If-else
+health <= 0
+    ifTrue: [ gameOver := true ]
+    ifFalse: [ health := health - damage ].
+@end example
+
+@subsubheading Nested Conditionals
+
+@example
+temperature > 30 ifTrue: [
+    status := #hot
+] ifFalse: [
+    temperature > 15 ifTrue: [
+        status := #warm
+    ] ifFalse: [
+        status := #cold
+    ]
 ].
 @end example
 
-@node Unsupported
-@section Unsupported language features
-
-The following SmallTalk features are not supported in this EIGHTBOL release:
+@subsubheading Boolean Messages
 
 @table @asis
-@item File I/O operations (FileStream read/write)
-@item Graphics commands (Graphics context: display, drawLine, etc.)
-@item Hardware-specific features (joystick, mouse, keyboard beyond basic)
-@item Extended memory handling (unless emulated)
-@item Multithreading or concurrent execution (unless using Semaphore or Monitor)
-@item Exception handling (Signal, Responder, etc.)
-@item Pointer arithmetic and manual memory management
-@item Preprocessor directives (#define, #ifdef)
-@item Object-oriented multiple inheritance (unless using traits or mixins)
-@item Just-In-Time compilation (unless using external VM)
+@item @code{ifTrue: block} — Execute block if true
+@item @code{ifFalse: block} — Execute block if false
+@item @code{ifTrue: trueBlock ifFalse: falseBlock} — Conditional execution
+@item @code{ifFalse: falseBlock ifTrue: trueBlock} — Reverse conditional
 @end table
 
-@node ZIL
+@subsubheading Valid Inputs
+
+@itemize @bullet
+@item Condition: any expression returning Boolean
+@item Blocks: must be blocks with no parameters
+@end itemize
+
+@subsubheading Outputs
+
+Returns the result of the executed block, or nil if no block matches.
+
+@node Loop constructs
+@section Loop Constructs
+
+@findex whileTrue:
+@findex whileFalse:
+@findex to:do:
+@findex timesRepeat:
+
+@subsubheading Purpose and Function
+
+Loops repeat block execution based on conditions or counts.
+
+@subsubheading While Loops
+
+@example
+@var{condition} whileTrue: @var{block}
+@var{condition} whileFalse: @var{block}
+@end example
+
+The condition is evaluated first, then the block if appropriate.
+
+@subsubheading Examples
+
+@example
+-- Pre-test loop
+[i < 10] whileTrue: [
+    Transcript show: i asString; cr.
+    i := i + 1
+].
+
+-- Continue while condition is false
+[health <= 0] whileFalse: [
+    self updateGame
+].
+@end example
+
+@subsubheading Numeric Range Loop
+
+@example
+@var{start} to: @var{end} do: @var{block}
+@var{start} to: @var{end} by: @var{step} do: @var{block}
+@end example
+
+@subsubheading Examples
+
+@example
+-- Count 1 to 10
+1 to: 10 do: [ :i |
+    Transcript show: i asString; cr
+].
+
+-- Count with step
+0 to: 100 by: 5 do: [ :n |
+    process(n)
+].
+
+-- Count down
+10 to: 1 by: -1 do: [ :n |
+    Transcript show: 'T-minus ' , n asString; cr
+].
+@end example
+
+@subsubheading Times Repeat
+
+@example
+@var{n} timesRepeat: @var{block}
+@end example
+
+Executes the block @var{n} times.
+
+@subsubheading Examples
+
+@example
+5 timesRepeat: [
+    Transcript show: 'Hello'; cr
+].
+
+-- With counter
+10 timesRepeat: [ :i |
+    process(i)
+].
+@end example
+
+@subsubheading Collection Iteration
+
+@example
+@var{collection} do: @var{block}
+@end example
+
+@subsubheading Examples
+
+@example
+@{ 1 . 2 . 3 . 4 . 5 @} do: [ :each |
+    Transcript show: each asString; cr
+].
+
+items do: [ :item |
+    item process
+].
+
+names select: [ :name | name size > 5 ].
+@end example
+
+@subsubheading Breaking from Loops
+
+Use @code{^} (return) to exit, but this returns from the enclosing method:
+
+@example
+[ i < 100 ] whileTrue: [
+    i := i + 1.
+    (items at: i) = target ifTrue: [
+        ^ i  "exit method with index"
+    ]
+].
+^nil  "not found"
+@end example
+
+For immediate loop exit without method return, use a flag:
+
+@example
+| done |
+done := false.
+[ i < 100 and: [ done not ] ] whileTrue: [
+    i := i + 1.
+    (items at: i) = target ifTrue: [
+        found := i.
+        done := true
+    ]
+].
+@end example
+
+@node Input and output
+@section Input and Output
+
+@findex print
+@findex display
+@findex dialogue:
+@findex say:
+@findex input
+@findex read
+
+@subsubheading Purpose and Function
+
+I/O statements handle displaying output and reading input from the user
+or environment.
+
+@subsubheading Print Statement
+
+@example
+print @var{expression}
+print @var{expr1}, @var{expr2}, ...
+display @var{expression}
+display @var{expr1}, @var{expr2}, ...
+@end example
+
+@subsubheading Examples
+
+@example
+print "Hello, World!".
+print score.
+print "Score: ", score, " Lives: ", lives.
+display "Loading..."
+@end example
+
+@subsubheading Dialogue Statement
+
+@example
+dialogue '@var{speaker}': '@var{text}'
+say '@var{text}'
+@end example
+
+Displays a dialogue message or message box.
+
+@subsubheading Examples
+
+@example
+dialogue 'Narrator': 'Welcome to the adventure!'.
+say 'Press any key to continue'.
+dialogue 'System': 'Game saved successfully'.
+@end example
+
+@subsubheading Input Statement
+
+@example
+input @var{variable}
+read @var{variable}
+ask @var{variable}: '@var{prompt}'
+@end example
+
+Reads input into the specified variable.
+
+@subsubheading Examples
+
+@example
+input playerName.
+ask name: 'Enter your name: '.
+ask age: 'How old are you? '.
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Print expressions: any value (converted to string)
+@item Input variables: any valid variable name
+@item String concatenation: use @code{,} operator
+@end itemize
+
+@node Assignment statements
+@section Assignment Statements
+
+@findex :=
+
+@subsubheading Purpose and Function
+
+Assignment stores a value into a variable.
+
+@subsubheading Syntax
+
+@example
+@var{variable} := @var{value}
+@end example
+
+@subsubheading Examples
+
+@example
+score := 0.
+lives := 3.
+playerName := 'Hero'.
+counter := counter + 1.
+result := self calculateTotal.
+@end example
+
+@subsubheading Cascaded Assignment
+
+@example
+@var{var1} := @var{var2} := @var{var3} := @var{value}
+@end example
+
+@subsubheading Examples
+
+@example
+x := y := z := 0.
+a := b := c := someExpression.
+@end example
+
+@subsubheading Instance Variable Assignment
+
+Within methods, instance variables are assigned directly:
+
+@example
+@var{instanceVariable} := @var{value}
+@end example
+
+@subsubheading Examples
+
+@example
+Player>>initialize
+    x := 0.
+    y := 0.
+    health := 100.
+
+Player>>setPositionX: xValue y: yValue
+    x := xValue.
+    y := yValue.
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Variable names: lowercase, alphanumeric
+@item Value: any Smalltalk expression
+@item Instance variables: declared in class definition
+@end itemize
+
+@node Unsupported features
+@section Unsupported Features
+
+The following Smalltalk features are not supported in this EIGHTBOL release:
+
+@table @asis
+@item File I/O
+FileStream operations, directory manipulation, path management
+
+@item Graphics
+Drawing primitives, window management, image handling
+
+@item Advanced collections
+Set, Bag, Dictionary, Stack, Queue with full API
+Weak collections, linked lists
+
+@item Exception handling
+@code{Error}, @code{Exception}, @code{Signal}, @code{Halt}
+
+@item Reflection
+@code{perform:}, @code{respondsTo:}, @code{instVarAt:}, method introspection
+
+@item Process/Threading
+@code{Processor}, @code{Delay}, semaphores, priority scheduling
+
+@item Persistence
+Object serialization, change sets, image save/load
+
+@item IDE/Development tools
+Browser, debugger, inspector, workspace
+
+@item Network
+Socket operations, HTTP, FTP
+
+@item Foreign function interface
+ExternalFunction, loading DLLs/shared libraries
+
+@item Metaclasses
+Class methods beyond basic factory methods
+
+@item Multiple inheritance
+Traits, mixins, method combinations
+@end table
+
+@node Smalltalk

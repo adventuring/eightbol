@@ -1,6 +1,7 @@
 (in-package :eightbol)
 
-(defun compile-6502-goto (statement)
+(defun compile-6502-goto (statement &optional (out *output-stream*) (class-id *class-id*) (method-id *method-id*))
+  (declare (ignore out class-id method-id))
   (let ((target (safe-getf (rest statement) :target))
         (targets (safe-getf (rest statement) :targets))
         (dep (safe-getf (rest statement) :depending-on)))

@@ -1,6 +1,37 @@
 \chapter{BASIC Frontend Language}
 This chapter describes the Dartmouth BASIC subset supported by the EightBol compiler's BASIC frontend. It covers every statement, function, operator, and control structure recognized by the lexer and parser, along with their inputs, outputs, processing, and side-effects.
 
+This BASIC frontend is designed to compile BASIC source code to COBOL/EIGHTBOL intermediate representation, which is then further compiled to target assembly languages (6502, 65c02, Z80, etc.). The frontend provides a bridge between legacy BASIC programs and the modern EightBol compilation pipeline.
+
+\section{Overview}
+
+The BASIC frontend accepts a Dartmouth-style BASIC source and produces an Abstract Syntax Tree (AST) that maps to EightBol's COBOL-like IR. The frontend handles:
+
+\begin{itemize}
+\item Line-numbered source with optional quoted labels
+\item Variable assignment and expressions
+\item Control flow structures (IF/THEN/ELSE, FOR/NEXT, WHILE, UNTIL, DO)
+\item Subroutines via GOSUB/RETURN
+\item Object-oriented method invocation via GOSUB ... ON object
+\item Library calls via GOSUB ... IN LIBRARY
+\item Service dispatch via GOSUB ... SERVICE
+\item Class and method definitions
+\item PRINT, INPUT, and DIALOGUE statements
+\item Assembly entry points and file inclusion
+\end{itemize}
+
+\section{Line Number and Label Format}
+
+Each BASIC line may optionally begin with a line number followed by an optional quoted label and a colon:
+
+@example
+100 "Start" LET X = 5
+200 LOOP: FOR I = 1 TO 10
+300 NEXT I
+@end example
+
+Line numbers generate @code{BASIC_Lnnnnnn} labels in the generated assembly. Quoted labels after the line number provide symbolic names for lines, also translated to assembly labels.
+
 \section{Lexical Elements}
 The BASIC frontend tokenizes source code into the following categories:
 
@@ -39,10 +70,14 @@ LIBRARY & :LIBRARY \\
 AND & :AND \\
 OR & :OR \\
 NOT & :NOT \\
+PRINT & :PRINT \\
+INPUT & :INPUT \\
+DIALOGUE & :DIALOGUE \\
+SERVICE & :SERVICE \\
 \end{tabular}
 \end{table}
 
-\subsection{Operators}
+\section{Operators}
 Operators are symbols that perform arithmetic, logical, or relational operations.
 
 \begin{table}
@@ -121,6 +156,12 @@ Each statement performs a specific action. Statements may be separated by colons
 \subsection{REM}
 The @code{REM} statement (remark) inserts a comment that is ignored by the compiler. It has no effect on program execution.
 
+\subsubsection{Syntax}
+@example
+REM This is a comment
+100 REM Comment after line number
+@end example
+
 \subsubsection{Inputs}
 Any text following the @code{REM} keyword on the same line.
 
@@ -128,7 +169,15 @@ Any text following the @code{REM} keyword on the same line.
 None.
 
 \subsubsection{Processing}
-The lexer recognizes @code{REM} as a keyword and treats all text from @code{REM} to the end of the line as a comment. The apostrophe (@code{'}) is no longer recognized for comments; only the @code{REM} keyword and lines beginning with semicolon (@code{;}) are supported for comment handling.
+The lexer recognizes @code{REM} as a keyword and treats all text from @code{REM} to the end of the line as a comment. The parser skips these lines entirely during AST construction.
+
+\subsubsection{Variants}
+\begin{itemize}
+\item Lines beginning with @code{REM} (case-insensitive)
+\item Lines where the first three characters are @code{REM} followed by a space
+\end{itemize}
+
+Note: The apostrophe (@code{'}) and semicolon (@code{;}) are \textbf{not} recognized for inline comments; only the @code{REM} keyword is supported.
 
 \subsection{LET}
 The @code{LET} statement assigns the value of an expression to a variable.
@@ -152,10 +201,87 @@ The parser produces a move node that copies the value of @code{expression} into 
 The variable's previous value is overwritten.
 
 \subsection{INPUT}
-Note: The @code{INPUT} statement is not implemented in this BASIC frontend.
+The @code{INPUT} statement reads values from the user into variables.
+
+\subsubsection{Syntax}
+@example
+INPUT var1
+INPUT var1, var2, var3
+@end example
+
+\subsubsection{Inputs}
+\begin{itemize}
+\item @code{var1, var2, ...}: Comma-separated list of variable identifiers
+\end{itemize}
+
+\subsubsection{Outputs}
+The specified variables are updated with user input values.
+
+\subsubsection{Processing}
+The parser creates an @code{:input} AST node containing the list of variable identifiers. At runtime, the backend generates code to read values from standard input into each variable.
+
+\subsubsection{Variants}
+\begin{itemize}
+\item Single variable: @code{INPUT X}
+\item Multiple variables: @code{INPUT A, B, C}
+\end{itemize}
 
 \subsection{PRINT}
-Note: The @code{PRINT} statement is not implemented in this BASIC frontend.
+The @code{PRINT} statement outputs values and strings to the console.
+
+\subsubsection{Syntax}
+@example
+PRINT "Hello, World!"
+PRINT X
+PRINT "The value is: ", X
+PRINT
+@end example
+
+\subsubsection{Inputs}
+\begin{itemize}
+\item Zero or more expressions separated by commas
+\item Expressions may be string literals, numeric literals, or variable references
+\end{itemize}
+
+\subsubsection{Outputs}
+Values are written to standard output.
+
+\subsubsection{Processing}
+The parser creates a @code{:print} AST node with the list of expressions. Empty @code{PRINT} statements produce a newline.
+
+\subsubsection{Variants}
+\begin{itemize}
+\item Print string literal: @code{PRINT "text"}
+\item Print expression: @code{PRINT X + Y}
+\item Print multiple items: @code{PRINT "Value: ", X}
+\item Print blank line: @code{PRINT}
+\end{itemize}
+
+\subsection{DIALOGUE}
+The @code{DIALOGUE} statement displays character dialogue in game contexts.
+
+\subsubsection{Syntax}
+@example
+DIALOGUE $CHARACTER "Text to display"
+@end example
+
+\subsubsection{Inputs}
+\begin{itemize}
+\item @code{CHARACTER}: Identifier naming the speaking character
+\item @code{text}: String literal containing the dialogue text
+\end{itemize}
+
+\subsubsection{Outputs}
+Dialogue is displayed with character attribution.
+
+\subsubsection{Processing}
+The parser creates a @code{:dialogue} AST node with speaker and text properties. The backend formats output to include character name and dialogue text.
+
+\subsubsection{Example}
+@example
+DIALOGUE $HERO "I found the treasure!"
+DIALOGUE $GUARD "Halt! Who goes there?"
+@end example
 
 \subsection{IF...THEN...ELSE}
 The @code{IF} statement conditionally executes one or two blocks of statements.
@@ -190,21 +316,42 @@ NEXT [variable]
 @end example
 
 \subsubsection{Inputs}
-- @code{variable}: Identifier that serves as the loop counter.
-- @code{start}: Initial value of the counter (expression).
-- @code{end}: Terminal value; loop continues while counter has not passed this value (expression).
-- @code{step}: Optional increment (default 1) added to @code{variable} each iteration (expression).
-- @code{statement}: Body of the loop.
+\begin{itemize}
+\item @code{variable}: Identifier that serves as the loop counter.
+\item @code{start}: Initial value of the counter (expression).
+\item @code{end}: Terminal value; loop continues while counter has not passed this value (expression).
+\item @code{step}: Optional increment (default 1) added to @code{variable} each iteration (expression).
+\item @code{statement}: Body of the loop.
+\end{itemize}
 
 \subsubsection{Outputs}
 The @code{variable} is updated each iteration.
 
 \subsubsection{Processing}
-The parser generates a @code{perform-node} representing a loop with:
-- Varying variable: @code{variable}
-- Initial value: @code{start}
-- Increment: @code{step} (or 1 if omitted)
-- Termination condition: counter > @code{end} (for positive step) or counter < @code{end} (for negative step). The current implementation uses a greater-than comparison regardless of step sign; see source for details.
+The parser generates a @code{:perform} AST node representing a loop with:
+\begin{itemize}
+\item Varying variable: @code{variable}
+\item Initial value: @code{start}
+\item Increment: @code{step} (or 1 if omitted)
+\item Termination condition: counter > @code{end} (for positive step) or counter < @code{end} (for negative step).
+\end{itemize}
+
+The FOR node uses a greater-than comparison for termination; see source for details on step sign handling.
+
+\subsubsection{Variants}
+@example
+FOR I = 1 TO 10
+   PRINT I
+NEXT
+
+FOR X = 0 TO 100 STEP 5
+   LET Y = X * 2
+NEXT X
+
+FOR COUNT = 10 TO 1 STEP -1
+   PRINT COUNT
+NEXT
+@end example
 
 \subsubsection{Side-Effects}
 The loop variable is modified after each iteration. The loop body executes zero or more times.
@@ -214,95 +361,26 @@ The @code{NEXT} statement marks the end of a @code{FOR} loop. The loop variable 
 
 \subsubsection{Syntax}
 @example
-NEXT [variable]
+NEXT
+NEXT I
 @end example
 
 \subsubsection{Inputs}
-Optional @code{variable}: If present, must match the corresponding @code{FOR} variable (though the current implementation ignores it).
+Optional @code{variable}: If present, should match the corresponding @code{FOR} variable (though the current implementation ignores it).
 
 \subsubsection{Outputs}
 None.
 
 \subsubsection{Processing}
-The parser produces a @code{goback-node} that jumps back to the loop header. The actual loop continuation logic resides in the @code{FOR} node.
+The parser produces a @code{:goback} AST node that jumps back to the loop header. The actual loop continuation logic resides in the @code{FOR} node.
 
-\subsubsection{Side-Effects
-The loop variable is incremented by the step value before the condition is tested.
+\subsubsection{Variants}
+\begin{itemize}
+\item @code{NEXT} — Continue to nearest enclosing loop
+\item @code{NEXT I} — Continue to loop with variable I (variable ignored in current implementation)
+\end{itemize}
 
-\subsection{WHILE}
-The @code{WHILE} statement repeats a statement while a condition remains true.
-
-\subsubsection{Syntax}
-@example
-WHILE condition
-   statement
-@end example
-
-\subsubsection{Inputs}
-- @code{condition}: Expression evaluated before each iteration.
-- @code{statement}: Statement to execute if @code{condition} is true.
-
-\subsubsection{Outputs}
-None.
-
-\subsubsection{Processing}
-The parser creates an @code{if-node} where the @code{THEN} branch contains the statement and the @code{ELSE} branch is empty. The generated code effectively branches around the statement when the condition is false.
-
-\subsubsection{Side-Effects
-Determined by the enclosed statement.
-
-\subsection{UNTIL}
-The @code{UNTIL} statement repeats a statement until a condition becomes true (i.e., while the condition is false).
-
-\subsubsection{Syntax}
-@example
-UNTIL condition
-   statement
-@end example
-
-\subsubsection{Inputs}
-- @code{condition}: Expression evaluated before each iteration.
-- @code{statement}: Statement to execute while @code{condition} is false.
-
-\subsubsection{Outputs}
-None.
-
-\subsubsection{Processing
-The parser creates an @code{if-node} with the condition negated; the @code{THEN} branch holds the statement.
-
-\subsubsection{Side-Effects
-Determined by the enclosed statement.
-
-\subsection{DO...NEXT WHILE / DO...NEXT UNTIL}
-The @code{DO} statement executes a block of statements and then tests a condition to decide whether to repeat.
-
-\subsubsection{Syntax}
-@example
-DO
-   statement-list
-NEXT WHILE condition
-@end example
-or
-@example
-DO
-   statement-list
-NEXT UNTIL condition
-@end example
-
-\subsubsection{Inputs}
-- @code{statement-list}: Zero or more statements.
-- @code{condition}: Expression tested after the block.
-
-\subsubsection{Outputs}
-None.
-
-\subsubsection{Processing}
-The parser generates a @code{perform-node} labeled uniquely. For @code{WHILE}, the loop continues while @code{condition} is true; for @code{UNTIL}, it continues while @code{condition} is false (i.e., until @code{condition} becomes true). The condition is evaluated after the block.
-
-\subsubsection{Side-Effects
-Determined by the statements in the block.
-
-\subsection{GOTO}
+\section{GOTO}
 The @code{GOTO} statement transfers control unconditionally to a line number or label.
 
 \subsubsection{Syntax}
@@ -312,18 +390,24 @@ GOTO target
 where @code{target} is either a line number (identifier) or a quoted label (string).
 
 \subsubsection{Inputs}
-- @code{target}: Line number or label to jump to.
+\begin{itemize}
+\item @code{target}: Line number or label to jump to.
+\end{itemize}
 
-\subsubsection{Outputs
+\subsubsection{Outputs}
 None.
 
 \subsubsection{Processing}
-The parser produces a @code{goto-node} with the target. The backend resolves line numbers to @code{BASIC_Lnnnnnn} labels; quoted labels become symbolic labels.
+The parser produces a @code{:goto} AST node with the target. The backend resolves line numbers to @code{BASIC_Lnnnnnn} labels; quoted labels become symbolic labels.
 
-\subsubsection{Side-Effects
-Execution continues at the target line.
+\subsubsection{Variants}
+@example
+GOTO 100
+GOTO "LoopStart"
+IF X > 0 THEN GOTO 200
+@end example
 
-\subsection{GOSUB}
+\section{GOSUB}
 The @code{GOSUB} statement calls a subroutine, saving the return address for later @code{RETURN}.
 
 \subsubsection{Syntax}
@@ -331,29 +415,41 @@ The @code{GOSUB} statement calls a subroutine, saving the return address for lat
 GOSUB target
 @end example
 where @code{target} can be:
-- A line number (identifier)
-- A quoted label (string)
-- A string literal with @code{IN LIBRARY} (resident library call)
-- A string literal with @code{ON expression} (method invocation on an object)
-- A string literal with @code{SERVICE} (service-dispatch call)
+\begin{itemize}
+\item A line number (identifier)
+\item A quoted label (string)
+\item A string literal with @code{IN LIBRARY} (resident library call)
+\item A string literal with @code{ON expression} (method invocation on an object)
+\item A string literal with @code{SERVICE} (service-dispatch call)
+\end{itemize}
 
 \subsubsection{Inputs}
-- @code{target}: Subroutine destination as described above.
+\begin{itemize}
+\item @code{target}: Subroutine destination as described above.
+\end{itemize}
 
-\subsubsection{Outputs
+\subsubsection{Outputs}
 None; a return address is pushed onto the call stack implicitly by the generated code.
 
 \subsubsection{Processing}
 Depending on the variant, the parser produces:
-- \textit{Local label or identifier}: a @code{perform-node} with the target.
-- \textit{Library}: a @code{call-node} with library flag set.
-- \textit{Method}: an @code{invoke-node} with object and method name.
-- \textit{Service}: a @code{call-node} with service flag set.
+\begin{itemize}
+\item \textit{Local label or identifier}: a @code{:perform} AST node with the target.
+\item \textit{Library}: a @code{:call} AST node with library flag set.
+\item \textit{Method}: an @code{:invoke} AST node with object and method name.
+\item \textit{Service}: a @code{:call} AST node with service flag set.
+\end{itemize}
 
-\subsubsection{Side-Effects
-The return address is stored; normal subroutine call/return mechanics apply.
+\subsubsection{Variants}
+@example
+GOSUB 1000
+GOSUB "Initialize"
+GOSUB "DrawScreen" IN LIBRARY
+GOSUB "Update" ON PlayerObject
+GOSUB "PlaySound" SERVICE
+@end example
 
-\subsection{RETURN}
+\section{RETURN}
 The @code{RETURN} statement returns from the most recently called subroutine.
 
 \subsubsection{Syntax}
@@ -364,16 +460,13 @@ RETURN
 \subsubsection{Inputs}
 None.
 
-\subsubsection{Outputs
+\subsubsection{Outputs}
 None.
 
 \subsubsection{Processing}
-The parser creates a @code{goback-node} that jumps to the address saved by the matching @code{GOSUB}.
+The parser creates a @code{:goback} AST node that jumps to the address saved by the matching @code{GOSUB}.
 
-\subsubsection{Side-Effects
-The call stack is popped; execution resumes after the @code{GOSUB}.
-
-\subsection{LOG FAULT}
+\section{LOG FAULT}
 The @code{LOG FAULT} statement logs a fault code for debugging.
 
 \subsubsection{Syntax}
@@ -382,18 +475,17 @@ LOG FAULT "code"
 @end example
 
 \subsubsection{Inputs}
-- @code{code}: A string literal containing the fault code (typically four digits).
+\begin{itemize}
+\item @code{code}: A string literal containing the fault code (typically four digits).
+\end{itemize}
 
-\subsubsection{Outputs
+\subsubsection{Outputs}
 None.
 
 \subsubsection{Processing}
-The parser builds a @code{log-fault-node} with the code.
+The parser builds a @code{:log-fault} AST node with the code.
 
-\subsubsection{Side-Effects
-Depending on the backend, a fault may be recorded or trigger a breakpoint.
-
-\subsection{STOP}
+\section{STOP}
 The @code{STOP} statement halts program execution with an optional code.
 
 \subsubsection{Syntax}
@@ -402,18 +494,17 @@ STOP "code"
 @end example
 
 \subsubsection{Inputs}
-- @code{code}: String literal containing a stop code.
+\begin{itemize}
+\item @code{code}: String literal containing a stop code.
+\end{itemize}
 
-\subsubsection{Outputs
+\subsubsection{Outputs}
 None.
 
 \subsubsection{Processing}
-The parser creates a @code{stop-run-node} with the code.
+The parser creates a @code{:stop-run} AST node with the code.
 
-\subsubsection{Side-Effects
-The program terminates; control returns to the operating system or debugger.
-
-\subsection{METHOD}
+\section{METHOD}
 The @code{METHOD} statement defines a method within a class.
 
 \subsubsection{Syntax}
@@ -422,19 +513,12 @@ METHOD "name" ON "class-name"
 @end example
 
 \subsubsection{Inputs}
-- @code{name}: Method name (string).
-- @code{class-name}: Name of the class to which the method belongs (string).
+\begin{itemize}
+\item @code{name}: Method name (string).
+\item @code{class-name}: Name of the class to which the method belongs (string).
+\end{itemize}
 
-\subsubsection{Outputs
-None.
-
-\subsubsection{Processing}
-The parser creates a @code{method-node} and sets the current class for subsequent definitions.
-
-\subsubsection{Side-Effects
-Establishes the current class context; later definitions belong to this class unless overridden.
-
-\subsection{PROCEDURE
+\section{PROCEDURE}
 The @code{PROCEDURE} statement defines a standalone procedure.
 
 \subsubsection{Syntax}
@@ -443,18 +527,11 @@ PROCEDURE "name"
 @end example
 
 \subsubsection{Inputs}
-- @code{name}: Procedure name (string).
+\begin{itemize}
+\item @code{name}: Procedure name (string).
+\end{itemize}
 
-\subsubsection{Outputs
-None.
-
-\subsubsection{Processing}
-The parser creates a @code{procedure-node}.
-
-\subsubsection{Side-Effects
-Makes the procedure available for calling via @code{GOSUB} or @code{CALL}.
-
-\subsection{CLASS
+\section{CLASS}
 The @code{CLASS} statement defines a class.
 
 \subsubsection{Syntax}
@@ -463,18 +540,11 @@ CLASS "name"
 @end example
 
 \subsubsection{Inputs}
-- @code{name}: Class name (string).
+\begin{itemize}
+\item @code{name}: Class name (string).
+\end{itemize}
 
-\subsubsection{Outputs
-None.
-
-\subsubsection{Processing}
-The parser creates a @code{program-node} for the class and sets @code{*current-class*} to the class name.
-
-\subsubsection{Side-Effects
-Subsequent @code{METHOD} and @code{PROCEDURE} definitions belong to this class until another @code{CLASS} or end of file.
-
-\subsection{END
+\section{END}
 The @code{END} statement marks the end of the program.
 
 \subsubsection{Syntax}
@@ -482,244 +552,166 @@ The @code{END} statement marks the end of the program.
 END
 @end example
 
-\subsubsection{Inputs
-None.
+\section{INVOKE}
+The @code{INVOKE} statement calls a method on an object using the OOPS dispatch mechanism.
 
-\subsubsection{Outputs
-None.
-
-\subsubsection{Processing}
-The parser creates a @code{goback-node} that returns from the main program.
-
-\subsubsection{Side-Effects
-Execution stops; equivalent to @code{STOP} without a code in many backends.
-
-### INVOKE
-
-The `INVOKE` statement calls a method on an object using the OOPS dispatch mechanism.
-
-#### Syntax
-```
+\subsubsection{Syntax}
+@example
 INVOKE object "method-name"
-```
+@end example
 
-#### Inputs
-- `object`: An identifier referencing an object instance.
-- `"method-name"`: A string literal naming the method to invoke.
+\subsubsection{Inputs}
+\begin{itemize}
+\item @code{object}: An identifier referencing an object instance.
+\item @code{"method-name"}: A string literal naming the method to invoke.
+\end{itemize}
 
-#### Outputs
-None.
+\section{CALL}
+The @code{CALL} statement invokes a procedure or subroutine by name.
 
-#### Processing
-The parser creates an `invoke-node` with the object and method name.
-
-#### Side-Effects
-Depending on the backend, this emits a call to the virtual method table or a direct call to the method implementation.
-
-### CALL
-
-The `CALL` statement invokes a procedure or subroutine by name.
-
-#### Syntax
-```
+\subsubsection{Syntax}
+@example
 CALL target
-```
+@end example
 
-#### Inputs
-- `target`: Identifier naming the procedure to call.
+\subsubsection{Inputs}
+\begin{itemize}
+\item @code{target}: Identifier naming the procedure to call.
+\end{itemize}
 
-#### Outputs
-None.
+\section{MOVE}
+The @code{MOVE} statement copies the value of an expression into a variable.
 
-#### Processing
-The parser creates a `call-node` with the target.
-
-#### Side-Effects
-Execution transfers to the procedure; a return address is pushed onto the stack.
-
-### MOVE
-
-The `MOVE` statement copies the value of an expression into a variable.
-
-#### Syntax
-```
+\subsubsection{Syntax}
+@example
 MOVE expression TO variable
-```
+@end example
 
-#### Inputs
-- `expression`: Value to copy.
-- `variable`: Identifier naming the destination variable.
+\subsubsection{Inputs}
+\begin{itemize}
+\item @code{expression}: Value to copy.
+\item @code{variable}: Identifier naming the destination variable.
+\end{itemize}
 
-#### Outputs
-The variable `variable` receives the value of `expression`.
+\section{SET}
+The @code{SET} statement assigns the value of an expression to a variable (similar to @code{LET} but with different syntax).
 
-#### Processing
-The parser creates a `move-node` with the source expression and destination identifier.
-
-#### Side-Effects
-The destination variable's previous value is overwritten.
-
-### SET
-
-The `SET` statement assigns the value of an expression to a variable (similar to `LET` but with different syntax).
-
-#### Syntax
-```
+\subsubsection{Syntax}
+@example
 SET variable TO expression
-```
+@end example
 
-#### Inputs
-- `variable`: Identifier naming the target variable.
-- `expression`: Value to assign.
+\section{ASSEMBLY ENTRY}
+The @code{ASSEMBLY ENTRY} statement inserts an assembly language label into the generated output.
 
-#### Outputs
-The variable `variable` is set to the value of `expression`.
-
-#### Processing
-The parser creates a `set-node` (functionally identical to a `move-node`).
-
-#### Side-Effects
-The variable's previous value is overwritten.
-
-### ASSEMBLY ENTRY
-
-The `ASSEMBLY ENTRY` statement inserts an assembly language label into the generated output.
-
-#### Syntax
-```
+\subsubsection{Syntax}
+@example
 ASSEMBLY ENTRY "label"
-```
+@end example
 
-#### Inputs
-- `"label"`: String literal naming the assembly label.
+\section{COPY}
+The @code{COPY} statement includes the contents of another source file.
 
-#### Outputs
-None.
-
-#### Processing
-The parser creates an `assembly-entry-node` with the label.
-
-#### Side-Effects
-The label is emitted in the assembly output, allowing manual code insertion or linking.
-
-### COPY
-
-The `COPY` statement includes the contents of another source file.
-
-#### Syntax
-```
+\subsubsection{Syntax}
+@example
 COPY "filename"
-```
+@end example
 
-#### Inputs
-- `"filename"`: String literal naming the file to copy.
-
-#### Outputs
-None.
-
-#### Processing
-The parser creates a `copy-node` with the filename.
-
-#### Side-Effects
-At compile time, the contents of the named file are lexed and parsed as if they appeared at this point.
-
-### Expression Statement
-
+\section{Expression Statement}
 A standalone expression (without an enclosing statement) is permitted; its value is computed but discarded unless it has side-effects.
 
-#### Syntax
-```
+\subsubsection{Syntax}
+@example
 expression
-```
+@end example
 
-#### Inputs
-- `expression`: Any valid arithmetic, logical, or relational expression.
-
-#### Outputs
-None (value discarded).
-
-#### Processing
-The parser treats the expression as a statement that evaluates the expression.
-
-#### Side-Effects
-Any side-effects inherent in the expression (e.g., function calls with side-effects) occur.
-
-## Expressions
+\section{Expressions}
 
 Expressions compute values using operators, operands, and parentheses.
 
-### Arithmetic Operators
+\section{Arithmetic Operators}
 
-| Operator | Description |
-|----------|-------------|
-| `+`      | Addition |
-| `-`      | Subtraction |
-| `*`      | Multiplication |
-| `/`      | Division |
+\begin{tabular}{ll}
+Operator & Description \\
+\hline
++ & Addition \\
+- & Subtraction \\
+* & Multiplication \\
+/ & Division \\
+\end{tabular}
 
-### Relational Operators
+\section{Relational Operators}
 
-| Operator | Description |
-|----------|-------------|
-| `=`      | Equality |
-| `<>`     | Not equal |
-| `<`      | Less than |
-| `<=`     | Less than or equal |
-| `>`      | Greater than |
-| `>=`     | Greater than or equal |
+\begin{tabular}{ll}
+Operator & Description \\
+\hline
+= & Equality \\
+<> & Not equal \\
+< & Less than \\
+<= & Less than or equal \\
+> & Greater than \\
+>= & Greater than or equal \\
+\end{tabular}
 
-### Logical Operators
+\section{Logical Operators}
 
-| Operator | Description |
-|----------|-------------|
-| `AND`    | Logical conjunction |
-| `OR`     | Logical disjunction |
-| `NOT`    | Logical negation |
+\begin{tabular}{ll}
+Operator & Description \\
+\hline
+AND & Logical conjunction \\
+OR & Logical disjunction \\
+NOT & Logical negation \\
+\end{tabular}
 
-### Operator Precedence (highest to lowest)
-1. Parentheses
-2. `NOT`
-3. Multiplicative (`*`, `/`)
-4. Additive (`+`, `-`)
-5. Relational (`=`, `<>`, `<`, `<=`, `>`, `>=`)
-6. `AND`
-7. `OR`
+\section{Operator Precedence (highest to lowest)}
 
-### Primary Expressions
+\begin{enumerate}
+\item Parentheses
+\item NOT
+\item Multiplicative (*, /)
+\item Additive (+, -)
+\item Relational (=, <>, <, <=, >, >=)
+\item AND
+\item OR
+\end{enumerate}
+
+\section{Primary Expressions}
 
 Primary expressions are the building blocks of more complex expressions.
 
-#### Numeric Literals
-Example: `42`
+\subsection{Numeric Literals}
+Example: @code{42}
 
-#### String Literals
-Example: `"Hello"`
+\subsection{String Literals}
+Example: @code{"Hello"}
 
-#### Identifiers
-Example: `Count`, `Total$`, `_flag`
+\subsection{Identifiers}
+Example: @code{Count}, @code{Total\$}, @code{\_flag}
 
-#### `SELF`
+\subsection{SELF}
 Refers to the current object instance within a method.
 
-#### `NULL`
+\subsection{NULL}
 Represents the null object reference.
 
-#### Parenthesized Expressions
-`( expression )` groups subexpressions to override precedence.
+\subsection{Parenthesized Expressions}
+@code{( expression )} groups subexpressions to override precedence.
 
-### Reader Macro Analogies
+\section{Number Literal Formats}
 
-This BASIC frontend supports multiple number literal formats similar to reader macros in Lisp:
+This BASIC frontend supports multiple number literal formats:
 
-- **Hexadecimal Numbers**: Prefix with @code{&H} or @code{&h}. Example: @code{&HFF} → 255, @code{&h10} → 16.
-- **Octal Numbers**: Prefix with @code{&O} or @code{&o}. Example: @code{&O77} → 63, @code{&o10} → 8.
-- **Binary Numbers**: Prefix with @code{&B} or @code{&b}. Example: @code{&B1010} → 10, @code{&b11} → 3.
-- **Dword (32-bit) Numbers**: Prefix with @code{&D} or @code{&d}. Example: @code{&D4294967295} → 4294967295. Values must be in range 0 to 2^32-1.
-- **Decimal Numbers**: Default format without prefix. Example: @code{42}, @code{1000}.
+\begin{itemize}
+\item \textbf{Hexadecimal Numbers}: Prefix with @code{\&H} or @code{\&h}. Example: @code{\&HFF} → 255, @code{\&h10} → 16.
+\item \textbf{Octal Numbers}: Prefix with @code{\&O} or @code{\&o}. Example: @code{\&O77} → 63, @code{\&o10} → 8.
+\item \textbf{Binary Numbers}: Prefix with @code{\&B} or @code{\&b}. Example: @code{\&B1010} → 10, @code{\&b11} → 3.
+\item \textbf{Dword (32-bit) Numbers}: Prefix with @code{\&D} or @code{\&d}. Example: @code{\&D4294967295} → 4294967295. Values must be in range 0 to 2^32-1.
+\item \textbf{Decimal Numbers}: Default format without prefix. Example: @code{42}, @code{1000}.
+\end{itemize}
 
 All numeric formats are converted to their decimal equivalent in the token stream for processing.
 
-## Functions
+\section{Functions}
 
 The BASIC frontend does not provide intrinsic functions beyond those exposed via libraries or OOPS methods. Functions are invoked using `GOSUB` with appropriate targets (library, method, or service). Examples include:
 
@@ -729,27 +721,32 @@ The BASIC frontend does not provide intrinsic functions beyond those exposed via
 
 Consult the specific library or class documentation for available functions.
 
-## Control Structures Summary
+\section{Control Structures Summary}
 
-| Structure   | Purpose |
-|-------------|---------|
-| `REM`       | Comment |
-| `LET`/`SET`/`MOVE` | Assignment |
-| `IF...THEN...ELSE` | Conditional branching |
-| `FOR...TO...STEP...NEXT` | Counted loop |
-| `WHILE`     | Conditional loop (pre-test) |
-| `UNTIL`     | Conditional loop (pre-test with negation) |
-| `DO...NEXT WHILE/UNTIL` | Conditional loop (post-test) |
-| `GOTO`      | Unconditional jump |
-| `GOSUB`/`RETURN` | Subroutine call and return |
-| `LOG FAULT` | Debugging fault logging |
-| `STOP`      | Program termination |
-| `METHOD`/`PROCEDURE`/`CLASS` | OOPS definition |
-| `END`       | Program end |
-| `INVOKE`    | OOPS method invocation |
-| `CALL`      | Procedure call |
-| `ASSEMBLY ENTRY` | Inline assembly label |
-| `COPY`      | File inclusion |
+\begin{tabular}{ll}
+Structure & Purpose \\
+\hline
+REM & Comment \\
+LET/SET/MOVE & Assignment \\
+IF...THEN...ELSE & Conditional branching \\
+FOR...TO...STEP...NEXT & Counted loop \\
+WHILE & Conditional loop (pre-test) \\
+UNTIL & Conditional loop (pre-test with negation) \\
+DO...NEXT WHILE/UNTIL & Conditional loop (post-test) \\
+GOTO & Unconditional jump \\
+GOSUB/RETURN & Subroutine call and return \\
+LOG FAULT & Debugging fault logging \\
+STOP & Program termination \\
+METHOD/PROCEDURE/CLASS & OOPS definition \\
+END & Program end \\
+INVOKE & OOPS method invocation \\
+CALL & Procedure call \\
+ASSEMBLY ENTRY & Inline assembly label \\
+COPY & File inclusion \\
+PRINT & Output to console \\
+INPUT & Read from console \\
+DIALOGUE & Character dialogue display \\
+\end{tabular}
 
 This chapter provides a complete reference for the BASIC frontend language as implemented in EightBol. For further details, consult the lexer and parser source files.
 
@@ -789,3 +786,158 @@ All identifiers appearing in the abstract syntax tree (AST) have been normalized
 \end{itemize}
 
 This normalization ensures consistent identifier treatment throughout compilation and aids in cross-language and cross-platform consistency.
+
+\section{Unsupported BASIC Commands}
+
+The following Dartmouth BASIC commands and functions are \textbf{not supported} by the EightBol BASIC frontend. Programs using these features will produce compile-time errors. This list is provided to help identify code that requires manual translation or restructuring.
+
+\subsection{Input/Output Commands}
+
+\begin{itemize}
+\item @code{INPUT\#} — File input
+\item @code{PRINT\#} — File output
+\item @code{PRINT USING} — Formatted print
+\item @code{OPEN} — Open file for I/O
+\item @code{CLOSE} — Close file
+\item @code{GET} — Get record from file
+\item @code{PUT} — Put record to file
+\item @code{FIELD} — Define random-access file field
+\end{itemize}
+
+\subsection{String Functions}
+
+\begin{itemize}
+\item @code{LEFT\$} — Left substring
+\item @code{RIGHT\$} — Right substring
+\item @code{MID\$} — Middle substring (both statement and function forms)
+\item @code{LEN()} — String length
+\item @code{ASC()} — Character to ASCII code
+\item @code{CHR\$} — ASCII code to character
+\item @code{VAL()} — String to number
+\item @code{STR\$} — Number to string
+\item @code{INSTR()} — String search
+\item @code{STRING\$} — Repeat character
+\item @code{SPC()} — Print spaces
+\item @code{TAB()} — Print to column
+\end{itemize}
+
+\subsection{Mathematical Functions}
+
+\begin{itemize}
+\item @code{SIN()} — Sine
+\item @code{COS()} — Cosine
+\item @code{TAN()} — Tangent
+\item @code{ATN()} — Arctangent
+\item @code{SQR()} — Square root
+\item @code{LOG()} — Natural logarithm (note: LOG is used for fault logging in this frontend)
+\item @code{EXP()} — Exponential
+\item @code{ABS()} — Absolute value
+\item @code{SGN()} — Sign function
+\end{itemize}
+
+\subsection{Numeric Functions}
+
+\begin{itemize}
+\item @code{RND()} — Random number
+\item @code{RANDOMIZE} — Seed random number generator
+\item @code{INT()} — Integer part (use assignment for truncation)
+\item @code{FIX()} — Integer part (truncate toward zero)
+\item @code{CINT()} — Convert to integer
+\item @code{CSNG()} — Convert to single precision
+\item @code{CDbl()} — Convert to double precision
+\end{itemize}
+
+\subsection{Memory and Hardware Functions}
+
+\begin{itemize}
+\item @code{PEEK()} — Read memory
+\item @code{POKE} — Write memory
+\item @code{WAIT} — Hardware wait
+\item @code{DEEK()} — Read 16-bit memory (some BASIC variants)
+\item @code{DOKE} — Write 16-bit memory (some BASIC variants)
+\end{itemize}
+
+\subsection{Graphics and Sound Commands}
+
+\begin{itemize}
+\item @code{CLS} — Clear screen
+\item @code{COLOR} — Set color
+\item @code{PLOT} — Plot point
+\item @code{DRAW} — Draw graphics
+\item @code{CIRCLE} — Draw circle
+\item @code{SOUND} — Play sound
+\item @code{MUSIC} — Play music
+\item @code{PLAY} — Play music sequence
+\item @code{VOLUME} — Set volume
+\end{itemize}
+
+\subsection{Control Flow Commands}
+
+\begin{itemize}
+\item @code{ON ... GOTO} — Computed GOTO (use IF/GOTO instead)
+\item @code{ON ... GOSUB} — Computed GOSUB (use IF/GOSUB instead)
+\item @code{SELECT CASE} — Multi-way branch (use IF/ELSE IF instead)
+\item @code{CONT} — Continue program
+\item @code{END IF} — Explicit IF block end
+\item @code{NEXT} with multiple variables — not supported
+\end{itemize}
+
+\subsection{Program Structure Commands}
+
+\begin{itemize}
+\item @code{DIM} — Dimension array (use COPY books for data structures)
+\item @code{ERASE} — Erase array
+\item @code{READ} — Read from DATA statement
+\item @code{DATA} — Data storage
+\item @code{RESTORE} — Restore DATA pointer
+\item @code{DEF FN} — User-defined functions
+\item @code{EXIT FOR} — Exit FOR loop early (use GOTO instead)
+\item @code{EXIT DO} — Exit DO loop early (use GOTO instead)
+\end{itemize}
+
+\subsection{File I/O Commands}
+
+\begin{itemize}
+\item @code{FILES} — List files (directory)
+\item @code{LOAD} — Load program
+\item @code{SAVE} — Save program
+\item @code{RUN} — Run program
+\item @code{CHAIN} — Chain to another program
+\item @code{MERGE} — Merge programs
+\item @code{NEW} — New program (shell command, not program statement)
+\item @code{LIST} — List program (shell command, not program statement)
+\end{itemize}
+
+\subsection{System Commands}
+
+\begin{itemize}
+\item @code{CLEAR} — Clear variables
+\item @code{CLR} — Clear variables (abbreviation)
+\item @code{CONT} — Continue execution
+\item @code{SYSTEM} — Return to operating system
+\item @code{SWAP} — Swap variable values
+\item @code{POKE} — Memory write
+\end{itemize}
+
+\subsection{Operator Overloading and Advanced Features}
+
+\begin{itemize}
+\item @code{TYPE} — User-defined data types
+\item @code{POKE} — Memory modification
+\item @code{CALL} — Assembly routine call (use GOSUB with library instead)
+\item @code{USR()} — User-defined machine language function
+\end{itemize}
+
+\section{Translation Notes}
+
+When porting BASIC code to EightBol BASIC:
+
+\begin{enumerate}
+\item \textbf{File I/O}: Replace file operations with COPY book mechanisms or service calls
+\item \textbf{String manipulation}: Use COBOL-style STRING and UNSTRING via EightBol's COBOL features
+\item \textbf{Math functions}: Implement via library calls (GOSUB ... IN LIBRARY)
+\item \textbf{Random numbers}: Use service-dispatch random number generators
+\item \textbf{Arrays}: Use COBOL data structures defined in COPY books
+\item \textbf{Graphics/Sound}: Access via service calls to platform-specific implementations
+\item \textbf{ON GOTO/GOSUB}: Rewrite as IF/THEN chains or computed GOTO using IF/GOTO
+\end{enumerate}

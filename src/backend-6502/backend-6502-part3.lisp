@@ -504,8 +504,8 @@ Array fetches use X or Y; when true, avoid using X for temp storage."
 ;;; Source/dest may have reference modification: name(start:length)
 
 (defun string-operand-address (operand class-id)
-  "Return 64tass address expression for STRING operand (identifier or :refmod).
-For :refmod, returns Base+offset for 1-based start."
+  "Return 64tass address expression for STRING operand (identifier, :refmod, or string literal).
+For :refmod, returns Base+offset for 1-based start. For string literals, returns the inline address."
   (declare (ignore class-id))
   (cond
     ((and (listp operand) (eq (first operand) :refmod))
@@ -515,14 +515,20 @@ For :refmod, returns Base+offset for 1-based start."
        (if (and (integerp start) (= start 1))
 	 base-string
 	 (format nil "~a + ~d" base-string (1- start)))))
+    ((stringp operand)
+     ;; String literals are emitted inline; use a placeholder label
+     (format nil "StringLiteral_~a" (substitute #\_ #\Space (substitute #\_ #\- (princ-to-string operand)))))
     (t
      (emit-6502-value operand))))
 
 (defun string-operand-length-expression (operand statement)
-  "Return length expression for STRING: from :length clause or from :refmod."
+  "Return length expression for STRING: from :length clause, from :refmod, or from string literal."
   (or (safe-getf (rest statement) :length)
       (when (and (listp operand) (eq (first operand) :refmod))
-        (safe-getf (rest operand) :length))))
+        (safe-getf (rest operand) :length))
+      ;; String literals have their length embedded
+      (when (stringp operand)
+        (length operand))))
 
 (defun resolve-length-constant (length-expression)
   "Resolve length expression to integer. Supports number, symbol (constant),
@@ -568,13 +574,25 @@ constant expression, or nil."
    (declare (ignore _))
    (to-identifier name))
 
-(defun compile-6502-paragraph (statement)
-  (let ((name (if (eq (first statement) :paragraph)
-                  (second statement)
-                  (or (safe-getf (rest statement) :paragraph) (second statement)))))
+(defun compile-6502-paragraph (statement &optional (cpu :6502) (class-id *class-id*) (method-id *method-id*))
+  (declare (ignore method-id))
+  (let* ((name (cond
+                 ((eq (first statement) :paragraph)
+                  (second statement))
+                 (t
+                  (or (safe-getf (rest statement) :label)
+                      (safe-getf (rest statement) :paragraph)
+                      (second statement)))))
+         (statements (safe-getf (rest statement) :statements)))
     (when name
       (format *output-stream* "~%~a:" (para-label (format nil "~a" name)))
       (setf *6502-accumulator-expression* :trash/paragraph-top
-        *6502-x-index-expression* :trash/paragraph-top))))
+            *6502-x-index-expression* :trash/paragraph-top))
+    (when statements
+      (dolist (s (ensure-list statements))
+        (when (and (listp s) (first s))
+          (compile-statement cpu (first s) (rest s)))))))
+
+
 
 

@@ -237,27 +237,27 @@ Otherwise return STATEMENT unchanged."
   (unless (listp statement)
     (return-from rewrite-divide-multiply-statement statement))
   (case (first statement)
-    (:divide
-     (let ((numerator (safe-getf (rest statement) :numerator))
-           (denominator (safe-getf (rest statement) :denominator))
-           (giving (safe-getf (rest statement) :giving)))
-       (unless (power-of-two-p denominator)
-         (return-from rewrite-divide-multiply-statement statement))
-       (let ((sc (power-of-two-shift-count (literal-integer-value numerator))))
-         (unless sc
-           (return-from rewrite-divide-multiply-statement statement))
-         (cond
-           ((and numerator giving)
-            (%append-statement-source-location
-             (list :compute :target giving
-                            :expression (list :shift-right numerator sc))
-             statement))
-           ((and numerator (null giving))
-            (%append-statement-source-location
-             (list :compute :target numerator
-                            :expression (list :shift-right numerator sc))
-             statement))
-           (t statement)))))
+     (:divide
+      (let ((numerator (safe-getf (rest statement) :numerator))
+            (denominator (safe-getf (rest statement) :denominator))
+            (giving (safe-getf (rest statement) :giving)))
+        (unless (power-of-two-p denominator)
+          (return-from rewrite-divide-multiply-statement statement))
+        (let ((sc (power-of-two-shift-count (literal-integer-value denominator))))
+          (unless sc
+            (return-from rewrite-divide-multiply-statement statement))
+          (cond
+            ((and numerator giving)
+             (%append-statement-source-location
+              (list :compute :target giving
+                             :expression (list :shift-right numerator sc))
+              statement))
+            ((and numerator (null giving))
+             (%append-statement-source-location
+              (list :compute :target numerator
+                             :expression (list :shift-right numerator sc))
+              statement))
+            (t statement)))))
     (:multiply
      (let ((multiplier (safe-getf (rest statement) :multiplier))
            (by (safe-getf (rest statement) :by))

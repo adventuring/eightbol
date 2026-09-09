@@ -179,48 +179,10 @@
          (getf ast-node-data :name)))
 
 (def-cp1610-statement :divide
-  (let* ((divisor (getf ast-node-data :divisor))
-         (into (getf ast-node-data :into))
-         (by (getf ast-node-data :by))
-         (source (or by into))
-         (dest (or (getf ast-node-data :giving) into)))
-    (if (and (expression-constant-p divisor)
-             (power-of-two-p (expression-constant-value divisor)))
-        (let ((shift (log2 (expression-constant-value divisor))))
-          (when (or (operand-bcd-p source) (operand-bcd-p dest))
-            (error 'source-error
-                   :message "DIVIDE: cannot use with USAGE DECIMAL operands"
-                   :detail (list :divisor divisor :source source :dest dest)))
-          (unless (zerop shift)
-            (compile-cp1610-load (or source dest) 1)
-            (format *output-stream* "~&~10tSARC    R0, ~d" shift)
-            (when (stringp dest)
-              (format *output-stream* "~&~10tMVO     R0, ~a" (cp1610-symbol dest)))))
-        (error 'source-error
-               :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
-               :detail (format nil "DIVIDE by ~s" divisor)))))
+   (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :cp1610 :detail ast-node-data))
 
-(def-cp1610-statement :multiply
-  (let* ((multiplier (getf ast-node-data :multiplier))
-         (by (getf ast-node-data :by))
-         (giving (getf ast-node-data :giving))
-         (source (or giving by))
-         (dest (or giving by)))
-    (if (and (expression-constant-p multiplier)
-             (power-of-two-p (expression-constant-value multiplier)))
-        (let ((shift (log2 (expression-constant-value multiplier))))
-          (when (or (operand-bcd-p source) (operand-bcd-p dest))
-            (error 'source-error
-                   :message "MULTIPLY: cannot use with USAGE DECIMAL operands"
-                   :detail (list :multiplier multiplier :source source :dest dest)))
-          (unless (zerop shift)
-            (compile-cp1610-load (or source dest) 1)
-            (format *output-stream* "~&~10tSLL     R0, ~d" shift)
-            (when (stringp dest)
-              (format *output-stream* "~&~10tMVO     R0, ~a" (cp1610-symbol dest)))))
-        (error 'source-error
-               :message "MULTIPLY: multiplier must be constant power-of-two (1, 2, 4, 8, ...)"
-               :detail (format nil "MULTIPLY by ~s" multiplier)))))
+ (def-cp1610-statement :multiply
+   (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :cp1610 :detail ast-node-data))
 
 (def-cp1610-statement :invoke-super
   (unless (gethash *class-id* *parent-classes*)
@@ -284,6 +246,36 @@ Reads input and stores into target identifier."
     (when (stringp target)
       (format *output-stream* "~&~10tMVO     R0, ~a~%" (cp1610-symbol target)))))
 
+(def-cp1610-statement :break
+  "Emit loop break — unconditional jump to end of enclosing loop.
+Uses JR R5 for now; proper scope handling requires stack analysis."
+  (format *output-stream* "~&~10t;; BREAK"))
+
+(def-cp1610-statement :continue
+  "Emit loop continue — unconditional jump to next iteration.
+Uses JR R5 for now; proper scope handling requires stack analysis."
+  (format *output-stream* "~&~10t;; CONTINUE"))
+
+(def-cp1610-statement :call-acc
+  "Emit accumulator-based call. Loads value into R0 then calls target."
+  (let ((target (getf ast-node-data :target))
+        (using (getf ast-node-data :using))
+        (bank (getf ast-node-data :bank))
+        (library (getf ast-node-data :library)))
+    (when using
+      (compile-cp1610-load using))
+    (cond
+      (bank
+       (format *output-stream* "~&~10tJSR     R5, ~a:~a" (cp1610-symbol bank) (cp1610-symbol target)))
+      (library
+       (format *output-stream* "~&~10tJSR     R5, Call~a~a" "Lib" (cp1610-symbol target)))
+      (t
+       (format *output-stream* "~&~10tJSR     R5, ~a" (cp1610-symbol target))))))
+
+(def-cp1610-statement :service-bank
+  "Service bank metadata — no-op for cp1610."
+  (declare (ignore ast-node-data)))
+
 ;;; Expression / value emission
 
 (defun cp1610-expr-is-constant-p (expr)
@@ -330,10 +322,10 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
      (let ((n (if (numberp (third expr)) (third expr) 1)))
        (compile-cp1610-load (second expr) width reg)
        (dotimes (_ n) (format *output-stream* "~&~10tSLL     ~a, 1" reg))))
-    ((and (listp expr) (eq (first expr) :shift-right))
-     (let ((n (if (numberp (third expr)) (third expr) 1)))
-       (compile-cp1610-load (second expr) width)
-       (dotimes (_ n) (format *output-stream* "~&~10tSARC    ~a, 1" reg))))
+     ((and (listp expr) (eq (first expr) :shift-right))
+      (let ((n (if (numberp (third expr)) (third expr) 1)))
+        (compile-cp1610-load (second expr) width reg)
+        (dotimes (_ n) (format *output-stream* "~&~10tSARC    ~a, 1" reg))))
     ((and (listp expr) (eq (first expr) :bit-and))
      (compile-cp1610-load (second expr) width)
      (let ((rhs (third expr)))
@@ -368,13 +360,15 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
            (progn
              (compile-cp1610-load inner 2 reg)
              (format *output-stream* "~&~10tSARC    ~a, 8" reg)))))
-    ((and (listp expr) (eq (first expr) :add))
-     (compile-cp1610-load (getf (rest expr) :from) width reg)
-     (format *output-stream* "~&~10tMOVR    ~a, R1" reg)
-     (compile-cp1610-load (getf (rest expr) :to) width :r0)
-     (format *output-stream* "~&~10tADDR    R1, ~a" reg))
-    (t
-     (format *output-stream* "~&~10t;; Unsupported load ~s" expr))))
+     ((and (listp expr) (eq (first expr) :add))
+      (compile-cp1610-load (getf (rest expr) :from) width reg)
+      (format *output-stream* "~&~10tMOVR    ~a, R1" reg)
+      (compile-cp1610-load (getf (rest expr) :to) width :r0)
+      (format *output-stream* "~&~10tADDR    R1, ~a" reg))
+     ((eq expr :null)
+      (format *output-stream* "~&~10tMVII    #0, ~a" reg))
+     (t
+      (format *output-stream* "~&~10t;; Unsupported load ~s" expr))))
 
 ;;; MOVE
 
@@ -1009,9 +1003,9 @@ W is the byte width (1 or 2). For w=2, corrects both bytes with carry."
             (format *output-stream* "~&~10tMVII    #~a, R0" (cp1610-symbol src)))
            (t (format *output-stream* "~&~10t;; Unsupported SET ADDRESS OF source ~s" src)))
          (cp1610-store-r0-to-set-target dest target-w)))
-      (to-self
-       (format *output-stream* "~&~10tMOVR    Self, R0")
-       (cp1610-store-r0-to-set-target to-self target-w))
+       (to-self
+        (format *output-stream* "~&~10tMVII    #Self, R0")
+        (cp1610-store-r0-to-set-target to-self target-w))
       (t
        (compile-cp1610-load value)
        (cp1610-store-r0-to-set-target target target-w)))))

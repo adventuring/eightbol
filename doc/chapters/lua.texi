@@ -1,546 +1,1180 @@
+@c -*- texinfo -*-
+@c -*- coding: utf-8 -*-
+@node Lua
+@chapter Lua (Embedded Scripting Language)
+
 @menu
 * Naming system::
-* Basic structure::
-* Calling routines::
-* Assignment::
-* Arithmetic::
-* Complex arithmetic::
+* Variables and declarations::
+* Tables (arrays and dictionaries)::
+* Functions::
+* Conditional execution::
+* Loop constructs::
+* Input and output::
+* Assignment statements::
+* Routine calls::
+* Control flow statements::
+* Arithmetic operations::
 * Boolean expressions::
-* Control structures::
-* Loops::
-* Breaking loops::
-* Dialogue scripts::
-* Tile manipulation::
-* Decal manipulation::
-* Object manipulation::
 * Unsupported features::
 @end menu
 
 @node Naming system
-@section Naming system
+@section Naming System
 
-In Lua, variable names use @code{case-sensitive} naming (conventionally @code{snake_case} or @code{camelCase}).
-All keywords are case-sensitive and written in lowercase.
-
-@table @asis
-@item Keywords: and, break, do, else, elseif, end, false, for, function, if, in, local, nil, not, or, repeat, return, then, true, until, while
-@item Operators: +, -, *, /, ^, %, ==, ~=, <, >, <=, >=, and, or, not, # (length)
-@item String delimiters: Double quotes (@code{"..."}), single quotes (@code{'...'}), or long brackets (@code{[==[ ... ]==]})
-@item Comments: Single line starts with @code{--}, block comment @code{--[[ ... --]]}
-@end table
-
-@node Basic structure
-@section Basic structure for a stand-alone routine or program
-
-A Lua program consists of statements and function definitions that are executed sequentially unless altered by control flow.
+Lua uses @code{case-sensitive} naming with identifiers normalized to
+@code{snake_case}. The lexer converts PascalCase and camelCase identifiers
+to snake_case format.
 
 @example
--- Initialize game
-local score = 0
-local livesLeft = 3
-local currentRoom = 1
+myVariable   @result{} my_variable
+playerHealth @result{} player_health
+SPRITE_COUNT @result{} sprite_count
+@end example
 
-local function initializeGame()
-    score = 0
-    livesLeft = 3
-    currentRoom = 1
+@table @asis
+@item Keywords
+@code{and}, @code{break}, @code{do}, @code{else}, @code{elseif},
+@code{end}, @code{false}, @code{for}, @code{function}, @code{if},
+@code{in}, @code{local}, @code{nil}, @code{not}, @code{or},
+@code{repeat}, @code{return}, @code{then}, @code{true}, @code{until},
+@code{while}, @code{dialogue}, @code{dialog}, @code{print}, @code{input},
+@code{copy}, @code{move}, @code{to}, @code{continue}
+
+@item Operators
+@code{+}, @code{-}, @code{*}, @code{/}, @code{%}, @code{^},
+@code{==}, @code{~=}, @code{<}, @code{>}, @code{<=}, @code{>=},
+@code{and}, @code{or}, @code{not}, @code{#} (length)
+
+@item Number Formats
+Decimal (@code{123}), hexadecimal (@code{0xFF}), octal (@code{0o77}),
+binary (@code{0b1010})
+
+@item String Delimiters
+Double quotes (@code{"..."}), single quotes (@code{'...'}), long brackets
+(@code{[=[ ... ]=]})
+
+@item Comments
+Double hyphen to end of line (@code{-- comment}), block comment
+(@code{--[[ block ]]})
+@end table
+
+@node Variables and declarations
+@section Variables and Declarations
+
+@findex local
+@findex nil
+
+@subsubheading Purpose and Function
+
+Variables in Lua are dynamically typed storage locations. The @code{local}
+keyword declares variables with local scope (limited to the current block),
+while global variables persist across the entire program.
+
+@subsubheading Syntax
+
+@example
+local @var{name} = @var{expression}
+local @var{name1}, @var{name2}, @var{name3}
+@end example
+
+@subsubheading Examples
+
+@example
+-- Basic assignment
+local score = 0
+local name = "Player"
+
+-- Multiple declarations
+local x, y, z
+
+-- Initialize from expression
+local distance = math.sqrt((x2-x1)^2 + (y2-y1)^2)
+
+-- Uninitialized locals are nil
+local pending
+print(pending)  -- nil
+@end example
+
+@subsubheading Global Variables
+
+Variables declared without @code{local} are global:
+
+@example
+score = 0           -- global
+MAX_SPEED = 100     -- global constant (convention)
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Variable names: letters, digits, underscores; cannot start with digit
+@item Scope: local to block, function, or entire program
+@item Type: dynamically determined from assigned value
+@end itemize
+
+@subsubheading nil Value
+
+@code{nil} represents the absence of a value:
+
+@example
+local uninitialized = nil
+if value == nil then
+    print("Not set")
+end
+@end example
+
+@node Tables (arrays and dictionaries)
+@section Tables (Arrays and Dictionaries)
+
+@findex table
+
+@subsubheading Purpose and Function
+
+Tables are Lua's sole data structure, combining the functionality of
+arrays, dictionaries (hash maps), objects, and modules. They are
+implemented as associative arrays with automatic key management.
+
+@subsubheading Array Syntax
+
+@example
+@var{array} = @{ @var{value1}, @var{value2}, @var{...} @}
+@var{array}[@var{index}]
+@end example
+
+@subsubheading Examples
+
+@example
+-- Simple array
+local numbers = @{1, 2, 3, 4, 5@}
+print(numbers[1])      -- 1
+print(numbers[3])      -- 3
+
+-- Mixed types
+local mixed = @{"hello", 42, true, 3.14@}
+
+-- Nested arrays
+local matrix = @{
+    @{1, 0, 0@},
+    @{0, 1, 0@},
+    @{0, 0, 1@}
+@}
+print(matrix[2][2])    -- 1
+@end example
+
+@subsubheading Dictionary Syntax
+
+@example
+@var{dict} = @{ key1 = @var{value1}, key2 = @var{value2} @}
+@var{dict}.@var{key}
+@var{dict}[@var{key}]
+@end example
+
+@subsubheading Examples
+
+@example
+-- Dictionary/object
+local player = @{
+    name = "Hero",
+    health = 100,
+    x = 10,
+    y = 20
+@}
+print(player.name)        -- Hero
+print(player["health"])   -- 100
+
+-- Dynamic keys
+local key = "score"
+data[key] = 1000
+@end example
+
+@subsubheading Array Length
+
+@example
+#@var{array}        -- length operator
+#@var{string}       -- also works for strings
+@end example
+
+@subsubheading Examples
+
+@example
+local items = @{10, 20, 30@}
+print(#items)           -- 3
+for i = 1, #items do
+    print(items[i])
+end
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Array indices: 1 to N for arrays, any value for dictionaries
+@item Keys: any non-nil value (strings, numbers, tables, functions)
+@item Values: any Lua value including other tables
+@end itemize
+
+@node Functions
+@section Functions
+
+@findex function
+@findex return
+@findex local
+
+@subsubheading Purpose and Function
+
+Functions are reusable blocks of code that perform specific tasks.
+They can take parameters, return values, and be stored in variables.
+
+@subsubheading Syntax
+
+@example
+function @var{name}(@var{params})
+    @var{statements}
 end
 
-local function processInput()
-    -- Simulate input handling
-    if love.keyboard.isDown("right") then
-        currentRoom = currentRoom + 10
+local function @var{name}(@var{params})
+    @var{statements}
+end
+
+@var{var} = function(@var{params})
+    @var{statements}
+end
+@end example
+
+@subsubheading Examples
+
+@example
+-- Simple function
+function greet()
+    print("Hello!")
+end
+
+-- Function with parameters
+function add(a, b)
+    return a + b
+end
+
+-- Function with multiple returns
+function divide(a, b)
+    return math.floor(a / b), a % b
+end
+
+-- Local function
+local function calculate(x, y)
+    return x * y + 10
+end
+
+-- Function stored in variable
+local double = function(n)
+    return n * 2
+end
+@end example
+
+@subsubheading Parameters and Arguments
+
+@example
+function process(a, b, c)
+    print(a, b, c)
+end
+
+process(1, 2, 3)         -- 1, 2, 3
+process(1, 2)            -- 1, 2, nil
+process(1, 2, 3, 4, 5)   -- 1, 2, 3 (extra args ignored)
+@end example
+
+@subsubheading Return Values
+
+@example
+return              -- no value
+return @var{expr}   -- single value
+return @var{expr1}, @var{expr2}, @var{...}  -- multiple values
+@end example
+
+@subsubheading Examples
+
+@example
+function getStats()
+    return score, health, mana
+end
+
+s, h, m = getStats()
+
+-- Multiple returns with selection
+function firstLast(list)
+    return list[1], list[#list]
+end
+
+first, last = firstLast(@{1,2,3,4,5@})  -- first=1, last=5
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Function names: valid identifiers or table keys
+@item Parameters: zero or more, comma-separated
+@item Return values: zero or more
+@item Closure: functions capture local variables from enclosing scope
+@end itemize
+
+@node Conditional execution
+@section Conditional Execution
+
+@findex if
+@findex then
+@findex else
+@findex elseif
+@findex end
+
+@subsubheading Purpose and Function
+
+Conditional statements execute different code paths based on boolean
+expressions. Lua supports simple if/then, if/then/else, and chained
+elseif chains.
+
+@subsubheading Syntax
+
+@example
+if @var{condition} then
+    @var{statements}
+end
+
+if @var{condition} then
+    @var{statements}
+else
+    @var{statements}
+end
+
+if @var{cond1} then
+    @var{stmts1}
+elseif @var{cond2} then
+    @var{stmts2}
+elseif @var{cond3} then
+    @var{stmts3}
+else
+    @var{stmts4}
+end
+@end example
+
+@subsubheading Examples
+
+@example
+-- Simple if
+if score > 1000 then
+    print("High score!")
+end
+
+-- If-else
+if health <= 0 then
+    gameOver = true
+else
+    health = health - damage
+end
+
+-- Elseif chain
+if temperature > 30 then
+    status = "hot"
+elseif temperature > 15 then
+    status = "warm"
+elseif temperature > 0 then
+    status = "cool"
+else
+    status = "cold"
+end
+
+-- Nested conditions
+if player then
+    if player.health > 0 then
+        updatePlayer()
     end
 end
+@end example
 
-local function updateGame()
-    -- Game logic updates
-end
+@subsubheading Valid Inputs
 
-local function renderDisplay()
-    -- Rendering code
-end
+@itemize @bullet
+@item Any expression that evaluates to true or false
+@item Nil and false are falsy; all other values are truthy
+@item Use @code{and}, @code{or}, @code{not} for complex conditions
+@end itemize
 
-initializeGame()
-while not gameOver do
-    processInput()
-    updateGame()
-    renderDisplay()
+@subsubheading Outputs
+
+The first branch with a true condition executes; if none, the else branch
+(if present) executes.
+
+@node Loop constructs
+@section Loop Constructs
+
+@findex while
+@findex do
+@findex end
+@findex for
+@findex repeat
+@findex until
+@findex break
+@findex continue
+
+@subsubheading Purpose and Function
+
+Loops repeat a block of statements either a fixed number of times,
+while a condition holds, until a condition becomes true, or by iterating
+over a sequence.
+
+@subsubheading While Loop (PRE-TEST)
+
+@example
+while @var{condition} do
+    @var{statements}
 end
 @end example
 
-@node Basic structure object
-@section Basic structure for an object method
-
-Lua supports object-oriented programming through tables and metatables.
+@subsubheading Examples
 
 @example
--- Define a Player class
-Player = {}
-Player.__index = Player
-
-function Player.new(x, y, sprite)
-    local self = setmetatable({}, Player)
-    self.x = x
-    self.y = y
-    self.sprite = sprite
-    return self
-end
-
-function Player:move(dx, dy)
-    self.x = self.x + dx
-    self.y = self.y + dy
-end
-
--- Create instance
-local player = Player.new(100, 100, 5)
-end
-@end example
-
-@node Calling routines
-@section Calling a routine (nullary)
-
-To call a function that takes no arguments:
-
-@example
-initializeGraphics()
-clearScreen()
-playStartupMusic()
-end
-@end example
-
-@node Calling routines value
-@section Calling a routine with a value (in accumulator)
-
-To call a function that returns a single value:
-
-@example
-score = calculateBonus(level, timeLeft)
-bonusFactor = getInputFactor()
-volume = getMasterVolume()
-end
-@end example
-
-@node Calling routines giving
-@section Calling a routine giving a value (in accumulator)
-
-Not applicable in Lua's standard calling convention.
-
-@node Calling routines values
-@section Calling a routine with values in and out (in accumulator)
-
-To call a function with parameters:
-
-@example
-drawSprite(spriteId, xPos, yPos)
-playSound(soundId, volume, loopFlag)
-checkCollision(obj1, obj2, resultVar)
-end
-@end example
-
-@node Calling library
-@section Calling a library routine (all 4 styles)
-
-Lua accesses library routines through standard function calls or object methods:
-
-@example
-loadLevel(levelNumber)          @r{Direct call}
-farProc(libraryAddress)         @r{Far call}
-result = libraryFunction(input) @r{Library function}
-object:method(param1, param2)   @r{Object method call}
-end
-@end example
-
-These correspond to:
-@table @asis
-@item Direct: FunctionName(...)
-@item Far: AbsoluteAddress(...) (via FFI or external module)
-@item Library: LibraryEntry(...) or FunctionName(...)
-@item Object: OBJECT:MethodName(...)
-@end table
-
-@node Calling far bank
-@section Calling a far bank Service (all 4 styles)
-
-Far procedures in Lua are called using the foreign function interface (FFI) or external modules:
-
-@example
--- Assume we have a C function farLoadLibrary at address 0x8000
-local ffi = require("ffi")
-ffi.cdef("void farLoadLibrary(uint32_t addr);")
-local farLoadLibrary = ffi.C.farLoadLibrary
-
-farLoadLibrary(0x8000)   @r{Call routine in bank 1}
-end
-@end example
-
-These correspond to:
-@table @asis
-@item Direct: Not used for far calls
-@item Far: FFI call to absolute address
-@item Library: Not applicable
-@item Object: Not applicable
-@end table
-
-@node Invoking object
-@section Invoking a method on an object (all 4 styles)
-
-Object method invocation in Lua uses the colon syntax:
-
-@example
-player:move(5, 10)
-scoreDisplay:update(score)
-gameState:isGameOver()
-end
-@end example
-
-These correspond to:
-@table @asis
-@item Direct: Setting object properties via table assignment
-@item Far: Not applicable for methods (objects typically in same memory)
-@item Library: Method may call library routines internally
-@item Object: METHOD invocation on object instance
-@end table
-
-@node Assignment
-@section Assigning to a variable
-
-Variables are assigned using the assignment operator (=):
-
-@example
-score = 0                           @r{Explicit assignment}
-livesLeft = 3                       @r{Implicit assignment}
-counter = counter + 1               @r{Increment}
-livesLeft = livesLeft - 1           @r{Decrement}
-score = score + 10                  @r{Arithmetic assignment}
-message = "Hello, World!"           @r{String assignment}
-end
-@end example
-
-@node Assignment object
-@section Assigning to an object slot
-
-Object slots (table fields) are assigned using dot or colon notation:
-
-@example
-player.x = 160                      @r{Set object's x coordinate}
-player.y = 100                      @r{Set object's y coordinate}
-player.sprite = 5                   @r{Set sprite number}
-player:setVisible(true)             @r{Set visibility flag}
-end
-@end example
-
-@node Assignment array
-@section Assigning to an array member with a subscript
-
-Lua uses tables for arrays. Elements are assigned using index:
-
-@example
-local scoreList = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-local initialsList = {"", "", "", "", "", "", "", "", "", ""}
-local board = {
-    {0,0,0,0,0,0,0,0},
-    {0,0,0,0,0,0,0,0},
-    {0,0,0,0,0,0,0,0},
-    {0,0,0,0,0,0,0,0},
-    {0,0,0,0,0,0,0,0},
-    {0,0,0,0,0,0,0,0},
-    {0,0,0,0,0,0,0,0},
-    {0,0,0,0,0,0,0,0}
-}
-
-scoreList[1] = 100
-initialsList[1] = "ALI"
-board[3][4] = 1
-end
-@end example
-
-@node Arithmetic
-@section Basic arithmetic: addition and subtraction
-
-Basic arithmetic uses the + and - operators:
-
-@example
-score = score + 10                    @r{Addition}
-livesLeft = livesLeft - 1             @r{Subtraction}
-total = width + height                @r{Add two variables}
-finalPrice = price - discount         @r{Subtraction}
-delta = newValue - oldValue           @r{Subtraction}
-end
-@end example
-
-@node Arithmetic bit
-@section Basic arithmetic: bit-shifting for mutiplication or division
-
-Bit-shifting for multiplication/division by powers of two is not directly supported in standard Lua.
-Use bit32 library (Lua 5.2+) or external bit library:
-
-@example
--- Lua 5.2+ bit32 library
-local bit32 = require("bit32")
-result = bit32.lshift(value, 2)   @r{Left shift 2 bits (multiply by 4)}
-result = bit32.rshift(value, 1)   @r{Right shift 1 bit (divide by 2)}
-
--- Or using external bit library
-local bit = require("bit")
-result = bit.lshift(value, 2)
-result = bit.rshift(value, 1)
-
--- Or using multiplication/division
-result = value * 4
-result = value / 2
-result = value * 8
-result = value / 16
-end
-@end example
-
-@node Complex arithmetic
-@section Complex arithmetic: multiple expressions
-
-Complex arithmetic expressions follow standard precedence rules:
-
-@example
-total = (baseSalary * 12) + bonus - deductions
-average = (sum1 + sum2 + sum3) / 3.0
-distance = math.sqrt((x2 - x1)^2 + (y2 - y1)^2)
-end
-@end example
-
-@node Boolean
-@section Boolean expressions: equality and inequalities
-
-Boolean expressions use logical operators and comparison operators:
-
-@example
-if score > 1000 then ...             @r{Greater than}
-if score < 50 then ...               @r{Less than}
-if score == 100 then ...             @r{Equality}
-if score ~= 0 then ...               @r{Inequality}
-if x >= 0 and x < MAX_X then ...     @r{Combined conditions}
-if button == BUTTON_A or button == BUTTON_B then ... @r{Alternative conditions}
-end
-@end example
-
-@node If then else
-@section Using if/then/else structures and examine/cond structures
-
-Conditional execution uses if/then/else/end blocks:
-
-@example
-if temperature > THOT then
-    status = "HOT"
-elseif temperature > TCOLD then
-    status = "WARM"
-else
-    status = "COLD"
-end
-
--- Lua does not have a switch statement, but we can use if-elseif-else
--- or a table dispatch for multi-way branching
-if answer == "Y" or answer == "y" then
-    response = "YES"
-elseif answer == "N" or answer == "n" then
-    response = "NO"
-else
-    response = "INVALID"
-end
-end
-@end example
-
-@node Performing
-@section Performing loops
-
-Loops are implemented using while, repeat, and numeric for loops:
-
-@example
-! Numeric for loop equivalent (known iterations)
-for i = 1, 10 do
-    print("Count: ", i)
-end
-
-! While loop equivalent (pre-test)
-i = 1
+local i = 1
 while i <= 10 do
-    print("Count: ", i)
+    print("Count:", i)
     i = i + 1
 end
 
-! Repeat loop equivalent (post-test)
+while running do
+    processEvents()
+    updateGame()
+    if quit then break end
+end
+@end example
+
+@subsubheading Repeat Loop (POST-TEST)
+
+@example
 repeat
-    io.write("Continue? (Y/N): ")
-    response = io.read()
-until response:upper() == "Y"
+    @var{statements}
+until @var{condition}
+@end example
 
-! Generic for loop with iterators
-for i, v in ipairs(array) do
-    print(i, v)
-end
+The body executes at least once before the condition is checked.
+
+@subsubheading Examples
+
+@example
+repeat
+    print("Enter password:")
+    input = read()
+until input == "secret"
+
+repeat
+    i = i + 1
+    process(i)
+until i >= max
+@end example
+
+@subsubheading Numeric For Loop
+
+@example
+for @var{var} = @var{start}, @var{end}, @var{step} do
+    @var{statements}
 end
 @end example
 
-@node Breaking loops
-@section Breaking out of loops safely
+The step defaults to 1 if omitted.
 
-Early loop exit is achieved using break statement:
+@subsubheading Examples
 
 @example
-! Exit numeric for loop early
-for i = 1, 100 do
-    if array[i] == TARGET_VALUE then
-        print("Found at index: ", i)
-        break                    @r{Exit loop immediately}
-    end
-end
-
-! Skip current iteration in while loop
-while condition do
-    if skipCondition then
-        -- Do nothing, effectively skipping
-    else
-        -- Process
-    end
-end
-
-! Nested loop control
+-- Count 1 to 10
 for i = 1, 10 do
-    for j = 1, 10 do
-        if matrix[i][j] == 0 then
-            break                @r{Exit inner loop only}
+    print(i)
+end
+
+-- Count with step
+for i = 0, 100, 5 do
+    print(i)
+end
+
+-- Count down
+for i = 10, 1, -1 do
+    print("T-minus", i)
+end
+
+-- Nested loops
+for i = 1, 3 do
+    for j = 1, 3 do
+        print(i, j)
+    end
+end
+@end example
+
+@subsubheading Break Statement
+
+@example
+break
+@end example
+
+Exits the innermost loop immediately.
+
+@subsubheading Examples
+
+@example
+for i = 1, 100 do
+    if items[i] == target then
+        print("Found at", i)
+        break
+    end
+end
+@end example
+
+@subsubheading Continue Statement
+
+@example
+continue
+@end example
+
+Skips to the next iteration of the loop.
+
+@subsubheading Examples
+
+@example
+for i = 1, 10 do
+    if i % 2 == 0 then
+        continue  -- skip even numbers
+    end
+    print(i)  -- only odd numbers printed
+end
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Counter variable: any valid identifier
+@item Start/end/step: numeric expressions
+@item Step: can be positive or negative
+@end itemize
+
+@node Input and output
+@section Input and Output
+
+@findex print
+@findex input
+@findex dialogue
+@findex dialog
+
+@subsubheading Purpose and Function
+
+I/O statements handle user interaction, displaying output, and reading
+input values.
+
+@subsubheading Print Statement
+
+@example
+print @var{expression}
+print @var{expr1}, @var{expr2}, ...
+print @var{expr1} .. @var{expr2}    -- concatenation
+@end example
+
+@subsubheading Examples
+
+@example
+print("Hello, World!")
+print(score)
+print("Score:", score, "Lives:", lives)
+print("Result: " .. result)
+print(x .. " + " .. y .. " = " .. (x + y))
+@end example
+
+@subsubheading Input Statement
+
+@example
+input @var{variable}
+input @var{var1}, @var{var2}, ...
+@end example
+
+Reads input into one or more variables.
+
+@subsubheading Examples
+
+@example
+input userName
+input x, y, z
+@end example
+
+@subsubheading Dialogue Statement
+
+@example
+dialogue "@var{text}"
+dialog "@var{text}"
+@end example
+
+Displays a dialogue message or message box.
+
+@subsubheading Examples
+
+@example
+dialogue("Welcome to the game!")
+dialog("Press any key to continue")
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Print expressions: any value (converted to string)
+@item Input variables: must be valid identifiers
+@item String concatenation: use @code{..} operator
+@end itemize
+
+@node Assignment statements
+@section Assignment Statements
+
+@findex local
+@findex =
+@findex move
+@findex to
+
+@subsubheading Purpose and Function
+
+Assignment statements store values into variables, table fields,
+or other storage locations.
+
+@subsubheading Simple Assignment
+
+@example
+@var{variable} = @var{expression}
+local @var{variable} = @var{expression}
+@end example
+
+@subsubheading Examples
+
+@example
+score = 0
+lives = 3
+player_name = "Hero"
+counter = counter + 1
+local result = calculate(x, y)
+@end example
+
+@subsubheading Move Statement
+
+@example
+move @var{expression} to @var{variable}
+@end example
+
+Copies the value of expression to variable.
+
+@subsubheading Examples
+
+@example
+move 100 to score
+move temp to final
+move x * 2 to result
+@end example
+
+@subsubheading Table Assignment
+
+@example
+@var{table}[@var{key}] = @var{value}
+@var{table}.@var{key} = @var{value}
+@end example
+
+@subsubheading Examples
+
+@example
+items[1] = 100
+items["name"] = "Item"
+player.health = 100
+config["difficulty"] = "hard"
+@end example
+
+@subsubheading Multiple Assignment
+
+@example
+@var{a}, @var{b}, @var{c} = @var{expr1}, @var{expr2}, @var{expr3}
+@end example
+
+@subsubheading Examples
+
+@example
+x, y = y, x                    -- swap
+min, max = math.min(a,b), math.max(a,b)
+a, b, c = 1, 2                  -- c is nil
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Variable names: valid identifiers
+@item Table keys: any non-nil value
+@item Values: any Lua value
+@end itemize
+
+@node Routine calls
+@section Routine Calls
+
+@findex function
+@findex return
+@findex :
+
+@subsubheading Purpose and Function
+
+Routine calls invoke functions, optionally passing arguments and receiving
+return values. Lua supports methods via the colon syntax.
+
+@subsubheading Nullary Call
+
+@example
+@var{function}()
+@end example
+
+@subsubheading Examples
+
+@example
+initializeGame()
+clearScreen()
+playStartupMusic()
+@end example
+
+@subsubheading Call with Arguments
+
+@example
+@var{function}(@var{arg1}, @var{arg2}, @var{arg3})
+@end example
+
+@subsubheading Examples
+
+@example
+drawSprite(sprite_id, x, y)
+loadLevel(level_number)
+calculate_score(player_id, time_bonus)
+@end example
+
+@subsubheading Method Invocation
+
+@example
+@var{object}:@var{method}(@var{args})
+@end example
+
+The colon automatically passes @code{self} as the first argument.
+
+@subsubheading Examples
+
+@example
+player:move(5, 10)
+enemy:takeDamage(50)
+ui:updateDisplay()
+@end example
+
+@subsubheading Table Functions
+
+Functions stored in tables can be called like methods:
+
+@example
+table.insert(items, value)
+table.remove(items, index)
+string.format("%d + %d = %d", a, b, c)
+@end example
+
+@subsubheading Return Values
+
+@example
+return
+return @var{expression}
+return @var{expr1}, @var{expr2}, @var{...}
+@end example
+
+@subsubheading Examples
+
+@example
+return
+return score
+return level * 100, bonus
+return true, "success"
+@end example
+
+@node Control flow statements
+@section Control Flow Statements
+
+@findex return
+@findex break
+@findex continue
+
+@subsubheading Purpose and Function
+
+Control flow statements transfer execution or exit from blocks.
+
+@subsubheading Return Statement
+
+@example
+return
+return @var{expression}
+return @var{expr1}, @var{expr2}, @var{...}
+@end example
+
+Exits the current function, optionally returning values.
+
+@subsubheading Examples
+
+@example
+function findItem(list, target)
+    for i, v in ipairs(list) do
+        if v == target then
+            return i  -- return index
         end
-        -- Process non-zero elements
     end
-end
-end
-@end example
-
-@node Dialogue
-@section Calling a dialogue script (Forth scripts)
-
-Lua does not directly call Forth dialogue scripts. Instead, it uses
-its own functions. However, through the semantic-sugar
-layer, Lua commands can be mapped to calls of the shared Fountain/Forth
-runtime library:
-
-@example
-! Original Lua code
-if (x > 100) and (x < 200) then
-    showMessage(MSG_WELCOME)
-end
-
-! Desugared via semantic-sugar layer
-if ((x > 100) and (x < 200)) then
-    (:call-acc :target "ShowWelcomeMessage" :using nil)
-end
+    return nil  -- not found
 end
 @end example
 
-@node Tiles
-@section Manipulating tiles
-
-Tile manipulation is performed through direct video memory access
-or through library routines for tiled backgrounds:
+@subsubheading Break Statement
 
 @example
-! Direct memory access (mode-dependent)
--- Assuming direct memory access via pointer
-local videoMemory = ffi.cast("uint8_t*", 0xB8000)
-local offset = (row * 80 + col) * 2
-videoMemory[offset] = tileNum
-videoMemory[offset + 1] = attribute
-
-! Library routine approach
-loadTileSet(tileSetId)
-placeTile(layer, x, y, tileIndex)
-scrollBackground(dx, dy)
-end
+break
 @end example
 
-@node Decals
-@section Manipulating decals
+Exits the innermost enclosing loop.
 
-Decals (sprites or movable objects) are manipulated using:
-
-@example
-! Hardware sprite approach (if available)
-initSprites()
-setSpritePosition(spriteId, x, y)
-setSpriteImage(spriteId, imageId)
-showSprite(spriteId, -1)   @r{-1 = visible}
-
-! Software sprite approach
-local sprite = {
-    x = 100,
-    y = 50,
-    frame = 0
-}
-
-sprite.x = 100
-sprite.y = 50
-sprite.frame = (sprite.frame + 1) % 4
-end
-@end example
-
-@node Objects
-@section Manipulating objects
-
-Object manipulation depends on the implementation approach:
+@subsubheading Examples
 
 @example
-! Using tables with metatables (classes)
-local GameObject = {}
-GameObject.__index = GameObject
-
-function GameObject.new(x, y, width, height)
-    local self = setmetatable({}, GameObject)
-    self.x = x
-    self.y = y
-    self.width = width
-    self.height = height
-    self.active = true
-    return self
-end
-
-function GameObject:move(dx, dy)
-    self.x = self.x + dx
-    self.y = self.y + dy
-end
-
-! Create instances
-local gameObjects = {}
-for i = 1, 20 do
-    table.insert(gameObjects, GameObject.new(100, 100, 16, 16))
-end
-
-! Update object position
-for _, obj in ipairs(gameObjects) do
-    obj.x = obj.x + dx
-    obj.y = obj.y + dy
-end
-
-! Check active status and draw
-for _, obj in ipairs(gameObjects) do
-    if obj.active then
-        drawObject(obj)
+while true do
+    event = getNextEvent()
+    if event == nil then
+        break
     end
-end
+    process(event)
 end
 @end example
 
-@node Unsupported
-@section Unsupported language features
+@subsubheading Continue Statement
+
+@example
+continue
+@end example
+
+Skips to the next iteration of the enclosing loop.
+
+@subsubheading Examples
+
+@example
+for i = 1, 100 do
+    if i % 7 == 0 then
+        continue  -- skip multiples of 7
+    end
+    process(i)
+end
+@end example
+
+@node Arithmetic operations
+@section Arithmetic Operations
+
+@findex +
+@findex -
+@findex *
+@findex /
+@findex %
+@findex ^
+
+@subsubheading Purpose and Function
+
+Arithmetic operations perform numeric calculations on operands.
+
+@subsubheading Addition
+
+@example
+result = @var{a} + @var{b}
+@end example
+
+@subsubheading Examples
+
+@example
+total = price + tax
+score = score + 10
+x = left_margin + offset
+@end example
+
+@subsubheading Subtraction
+
+@example
+result = @var{a} - @var{b}
+@end example
+
+@subsubheading Examples
+
+@example
+balance = total - deductions
+health = health - damage
+x = x - speed
+@end example
+
+@subsubheading Multiplication
+
+@example
+result = @var{a} * @var{b}
+@end example
+
+@subsubheading Examples
+
+@example
+area = width * height
+total = price * quantity
+interest = principal * rate * years
+@end example
+
+@subsubheading Division
+
+@example
+result = @var{a} / @var{b}
+@end example
+
+@subsubheading Examples
+
+@example
+average = sum / count
+speed = distance / time
+ratio = width / height
+@end example
+
+@subsubheading Modulo
+
+@example
+result = @var{a} % @var{b}
+@end example
+
+Returns the remainder of integer division.
+
+@subsubheading Examples
+
+@example
+remainder = 17 % 5     -- 2
+index = (i - 1) % 10 + 1
+@end example
+
+@subsubheading Exponentiation
+
+@example
+result = @var{a} ^ @var{b}
+@end example
+
+Raises @var{a} to the power of @var{b}.
+
+@subsubheading Examples
+
+@example
+squared = x ^ 2
+volume = length ^ 3
+distance = ((x2 - x1) ^ 2 + (y2 - y1) ^ 2) ^ 0.5
+@end example
+
+@subsubheading Unary Minus
+
+@example
+result = -@var{a}
+@end example
+
+@subsubheading Examples
+
+@example
+negated = -value
+distance = -offset
+@end example
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item All operands: numeric values
+@item Division by zero: results in error or infinity
+@item Modulo: second operand must not be zero
+@end itemize
+
+@subsubheading Bitwise Operations
+
+Lua 5.2+ includes the bit32 library:
+
+@example
+local bit32 = require("bit32")
+result = bit32.lshift(value, 2)   -- left shift
+result = bit32.rshift(value, 1)   -- right shift
+result = bit32.band(x, y)         -- bitwise AND
+result = bit32.bor(x, y)          -- bitwise OR
+result = bit32.bxor(x, y)         -- bitwise XOR
+@end example
+
+@node Boolean expressions
+@section Boolean Expressions
+
+@findex ==
+@findex ~=
+@findex <
+@findex >
+@findex <=
+@findex >=
+@findex and
+@findex or
+@findex not
+@findex true
+@findex false
+@findex nil
+
+@subsubheading Purpose and Function
+
+Boolean expressions evaluate conditions and combine multiple tests.
+
+@subsubheading Equality
+
+@example
+@var{a} == @var{b}
+@end example
+
+True if @var{a} equals @var{b}.
+
+@subsubheading Inequality
+
+@example
+@var{a} ~= @var{b}
+@end example
+
+True if @var{a} does not equal @var{b}.
+
+@subsubheading Less Than
+
+@example
+@var{a} < @var{b}
+@end example
+
+@subsubheading Greater Than
+
+@example
+@var{a} > @var{b}
+@end example
+
+@subsubheading Less Than or Equal
+
+@example
+@var{a} <= @var{b}
+@end example
+
+@subsubheading Greater Than or Equal
+
+@example
+@var{a} >= @var{b}
+@end example
+
+@subsubheading Logical AND
+
+@example
+@var{a} and @var{b}
+@end example
+
+Returns first operand if falsy, otherwise returns second operand.
+
+@subsubheading Examples
+
+@example
+if score > 100 and lives > 0 then
+    continueGame()
+end
+
+-- Short-circuit
+if func1() and func2() then
+    print("Both succeeded")
+end
+@end example
+
+@subsubheading Logical OR
+
+@example
+@var{a} or @var{b}
+@end example
+
+Returns first operand if truthy, otherwise returns second operand.
+
+@subsubheading Examples
+
+@example
+-- Default value
+speed = speed or 100
+
+-- Conditional assignment
+if choice == "yes" or choice == "y" then
+    proceed()
+end
+@end example
+
+@subsubheading Logical NOT
+
+@example
+not @var{expression}
+@end example
+
+Returns true if expression is falsy, false if truthy.
+
+@subsubheading Examples
+
+@example
+if not gameOver then
+    updateGame()
+end
+
+if not (x < min or x > max) then
+    inRange = true
+end
+@end example
+
+@subsubheading Truth Values
+
+@itemize @bullet
+@item Falsy: @code{nil}, @code{false}
+@item Truthy: everything else (0, "", tables, functions, etc.)
+@end itemize
+
+@subsubheading Valid Ranges
+
+@itemize @bullet
+@item Comparison operands: compatible types
+@item Mixing types in comparison: may produce unexpected results
+@end itemize
+
+@subsubheading Operator Precedence
+
+Highest to lowest:
+@code{^}, @code{not}, @code{*}, @code{/}, @code{%},
+@code{+}, @code{-}, @code{..}, @code{<}, @code{>}, @code{<=}, @code{>=},
+@code{==}, @code{~=}, @code{and}, @code{or}
+
+@node Unsupported features
+@section Unsupported Features
 
 The following Lua features are not supported in this EIGHTBOL release:
 
 @table @asis
-@item File I/O operations (io.open, file:read, file:write, file:close)
-@item Standard libraries beyond basic math and string (unless emulated)
-@item Coroutines (unless using external scheduler)
-@item Debugging facilities (debug library)
-@item Garbage collection manual control (unless via external interface)
-@item Variadic functions and arg table (unless using external interface)
-@item Bitwise operations (unless using bit32 or external library)
-@item UTF-8 string handling (unless using external library)
-@item Dynamic module loading (require) beyond pre-loaded libraries
+@item Standard libraries
+File I/O (io.*), OS functions (os.*), debug library, math library
+(beyond basic operations)
+
+@item Coroutines
+@code{coroutine.*}, @code{yield}, @code{resume}
+
+@item Modules and require
+@code{require}, @code{module}, @code{package.*}
+
+@item Metatables and metamethods
+Advanced OOP patterns using metatables
+
+@item Iterators and generic for
+Custom iterators using @code{__pairs}, @code{__ipairs}
+
+@item Vararg expressions
+@code{...}, @code{select()}, @code{arg} table
+
+@item Garbage collection control
+@code{collectgarbage()}
+
+@item Environments
+@code{_G}, @code{setfenv()}, @code{getfenv()}
+
+@item Weak tables
+@code{weak} mode in metatables
+
+@item Variadic functions
+Functions with variable arguments (though limited support via
+fixed parameters)
 @end table
 
-@node Muddle
+@node Lua

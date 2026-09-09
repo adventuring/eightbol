@@ -274,29 +274,29 @@ Keywords are mapped to their symbol forms matching terminal declarations."
    (IDENTIFIER EQUALS expression
                (lambda (target _ expr)
                  (declare (ignore _))
-                 (make-move-node expr target)))
+                 (list :move :from expr :to target)))
    (MOVE expression IDENTIFIER
          (lambda (_ expr target)
            (declare (ignore _))
-           (make-move-node expr target))))
+           (list :move :from expr :to target))))
   
   (calls
    (CALL IDENTIFIER
          (lambda (ignored1 target)
            (declare (ignore ignored1))
-           (make-call-node target)))
+           (list :call :target target)))
    (CALL IDENTIFIER ON IDENTIFIER
          (lambda (ignored1 method-name ignored2 object-name)
            (declare (ignore ignored1 ignored2))
-           (make-invoke-node object-name method-name)))
-    (CALL IDENTIFIER IN NUMBER
-          (lambda (_call routine-name _in bank-name)
-            (declare (ignore _call _in))
-            (make-call-node routine-name :bank bank-name)))
-    (CALL IDENTIFIER IN LIBRARY
-          (lambda (_call routine-name _in _library)
-            (declare (ignore _call _in _library))
-            (list :call :target routine-name :bank nil :library t))))
+           (list :invoke :class object-name :method method-name)))
+   (CALL IDENTIFIER IN NUMBER
+         (lambda (_call routine-name _in bank-name)
+           (declare (ignore _call _in))
+           (list :call :target routine-name :bank bank-name)))
+   (CALL IDENTIFIER IN LIBRARY
+         (lambda (_call routine-name _in _library)
+           (declare (ignore _call _in _library))
+           (list :call :target routine-name :library t))))
   
    (conditional
     (IF expression THEN statement-list ELSE statement-list
@@ -324,11 +324,11 @@ Keywords are mapped to their symbol forms matching terminal declarations."
     (NUMBER COLON statement-list SEMICOLON
      (lambda (value _colon stmts _semi)
        (declare (ignore _colon _semi))
-       (list :when (list :equals value) stmts)))
+       (list :when (list '= value) stmts)))
     (NUMBER COLON statement-list
      (lambda (value _colon stmts)
        (declare (ignore _colon))
-       (list :when (list :equals value) stmts)))
+       (list :when (list '= value) stmts)))
     (ELSE COLON statement-list SEMICOLON
      (lambda (_else _colon stmts _semi)
        (declare (ignore _else _colon _semi))
@@ -372,11 +372,11 @@ Keywords are mapped to their symbol forms matching terminal declarations."
    (LOG FAULT expression
         (lambda (ignore1 ignore2 code)
           (declare (ignore ignore1 ignore2))
-          (make-log-fault-node code)))
+          (list :log-fault :code code)))
    (STOP expression
          (lambda (_ code)
            (declare (ignore _))
-           (make-debug-break-node code))))
+           (list :stop-run :code code))))
   
     (copy-statement
      (COPY STRING SEMICOLON
@@ -502,23 +502,21 @@ Keywords are mapped to their symbol forms matching terminal declarations."
     (:unary-minus (make-expression-subtract 0 operand))))
 
 (defun make-debug-break-node (code)
-  "Create a :debug-break AST node."
-  (list :debug-break :code code))
+  "Create a :stop-run AST node (canonical)."
+  (list :stop-run :code code))
 
 (defun pascal-make-print-node (expr)
-  "Create a :print AST node for output statements (PRINT or WRITE).
-Calls the canonical make-print-node from grammar-build.lisp."
-  (make-print-node expr))
+  "Create a :print AST node for output statements (PRINT or WRITE)."
+  (list :print :expressions (list expr)))
 
 (defun pascal-make-input-node (var &optional prompt)
-  "Create an :input AST node for input statements (INPUT or READ).
-Calls the canonical make-input-node from grammar-build.lisp."
-  (make-input-node var :prompt prompt))
+  "Create an :input AST node for input statements (INPUT or READ)."
+  (list* :input :variables (list var)
+         (when prompt `(:prompt ,prompt))))
 
-(defun pascal-make-dialogue-node (name)
-  "Create a :dialogue AST node for dialogue/narrative text.
-Calls the canonical make-dialogue-node from ast.lisp."
-  (make-dialogue-node :speaker name :text ""))
+(defun pascal-make-dialogue-node (text)
+  "Create a :dialogue AST node for dialogue/narrative text."
+  (list :dialogue :speaker "narrator" :text text))
 
 (defun make-assembly-entry-node (label)
   "Create an :assembly-entry AST node for label definitions."

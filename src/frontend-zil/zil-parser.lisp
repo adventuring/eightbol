@@ -127,39 +127,41 @@
 
 (defun make-print-node (args)
   "Create a PRINT AST node from list of arguments."
-  (cons :print args))
+  (list :print :expressions args))
 
 (defun make-input-node (var)
   "Create an INPUT AST node for reading into variable."
-  (list :input var))
+  (list :input :variables (list var)))
 
 (defun make-get-node (obj prop)
-  "Create a GET (property access) AST node."
-  (list :get obj prop))
+  "Create a GET (property access) AST node. Converts to :compute expression."
+  (list :compute :target prop :expression (list :of prop obj)))
 
 (defun make-put-node (obj prop val)
-  "Create a PUT (property set) AST node."
-  (list :put obj prop val))
+  "Create a PUT (property set) AST node. Converts to :move."
+  (list :move :expressions (list val) :variables (list prop)))
 
 (defun make-object-node (name props)
-  "Create an OBJECT definition AST node."
-  (cons :object (cons name props)))
+  "Create an OBJECT definition AST node. Converts to :paragraph."
+  (list :paragraph :name name :body props))
 
 (defun make-label-node (name)
-  "Create a LABEL definition AST node."
-  (list :label name))
+  "Create a LABEL definition AST node. Converts to :assembly-entry."
+  (list :assembly-entry :label name))
 
 (defun make-exit-node (code)
-  "Create an EXIT AST node."
-  (list :exit code))
+  "Create an EXIT AST node. Converts to :exit-program or :exit."
+  (if (zerop code)
+      (list :exit-program)
+      (list :exit)))
 
 (defun make-wait-node (time)
-  "Create a WAIT/DELAY AST node."
-  (list :wait time))
+  "Create a WAIT/DELAY AST node. Converts to :perform with body."
+  (list :perform :name "WAIT" :body (list (list :call :target 'delay :bank nil))))
 
 (defun make-assert-node (cond msg)
-  "Create an ASSERT AST node."
-  (list :assert cond msg))
+  "Create an ASSERT AST node. Converts to :compute with debug-break."
+  (list :compute :target 'assert-result :expression (list :assert cond msg)))
 
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)

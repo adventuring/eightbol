@@ -2,103 +2,992 @@
 @node Stack Backend
 @section Stack Backend
 
-The stack backend refers to the virtual machine used to execute Fountain scripts in the Phantasia game engine.
-This virtual machine is a 16-bit stack machine, similar to Forth, and is implemented in @file{Source/Code/7800/Routines/Forth.s}.
+The stack backend (also called the Forth backend) is a virtual machine used to execute
+Fountain scripts in the Phantasia game engine. This virtual machine is a 16-bit stack
+machine similar to Forth, and is implemented in @file{Source/Code/7800/Routines/Forth.s}.
 
-The machine operates on a parameter stack that holds 16-bit values. The stack grows downward in memory, and the stack pointer points to the next free slot (i.e., the address where the next item will be stored).
+The machine operates on a parameter stack holding 16-bit values. The stack grows
+downward in memory, and the stack pointer indicates the next free slot.
 
-Below is a table of the opcodes (bytecodes) recognized by the stack backend, their mnemonic names, and their effect on the parameter stack.
+@menu
+* Opcode Reference::
+* Stack Layout::
+* Interpreter Implementation::
+* ABI and Compilation::
+@end menu
+
+@node Opcode Reference
+@subsection Opcode Reference
+
+The following table lists all valid opcodes (bytecodes) recognized by the stack backend,
+their hexadecimal values, and their effect on the parameter stack. All multi-byte
+operands are little-endian (low byte first).
 
 @table @asis
-@item ForthEOL (Done)
-Not a traditional opcode; signals the end of the script. No stack effect.
+@item ForthEOL ($00) - End of Script
+Stack effect: @dots{} @rightarrow{} @dots{}
+Description: Signals the end of the script. Not a traditional opcode; the interpreter
+checks this and returns from the script. No stack effect.
 
-@item ForthPushWord (PushWord)
-Pushes a 16-bit value from the instruction stream onto the stack.
-Stack effect: @dots{} @rightarrow @dots{}, @var{value}
-Description: Reads two bytes from the instruction stream (little-endian) and pushes them as a 16-bit value.
+@item ForthPushWord ($01) - Push 16-bit Immediate
+Stack effect: @dots{} @rightarrow{} @dots{}, @var{value}
+Description: Reads two bytes from the instruction stream (little-endian) and pushes
+them as a 16-bit value. The instruction pointer advances by 2 bytes.
 
-@item ForthPushByte (PushByte)
-Pushes an 8-bit value from the instruction stream, zero-extended to 16-bit, onto the stack.
-Stack effect: @dots{} @rightarrow @dots{}, @var{value} (where @var{value} is in the range 0-255)
-Description: Reads one byte from the instruction stream and pushes it as a 16-bit value with the high byte zero.
+@item ForthSetByte ($02) - Store Byte
+Stack effect: @var{value}, @var{address} @rightarrow{} @dots{}
+Description: Pops an address and a value (16-bit, but only the low byte is stored).
+Stores the low byte of @var{value} at the 16-bit address @var{address}.
+Corresponds to the 6502 @code{STA} instruction.
 
-@item ForthSetByte (SetByte)
-Stores the byte at the top of the stack to the memory address given by the next item on the stack.
-Stack effect: @var{value}, @var{address} @rightarrow @dots{}
-Description: Pops an address and a value (16-bit, but only the low byte is used). Stores the low byte of @var{value} at the 16-bit address @var{address}.
+@item ForthSetWord ($03) - Store 16-bit Word
+Stack effect: @var{value}, @var{address} @rightarrow{} @dots{}
+Description: Pops an address and a value. Stores the 16-bit @var{value} at the 16-bit
+address @var{address} in little-endian order. Corresponds to 6502 @code{STA} twice.
 
-@item ForthGetByte (GetByte)
-Fetches a byte from the memory address on top of the stack, zero-extends it to 16-bit, and pushes it.
-Stack effect: @var{address} @rightarrow @dots{}, @var{value} (where @var{value} is in the range 0-255)
-Description: Replaces the address on the stack with the zero-extended byte read from that address.
+@item ForthGetByte ($04) - Fetch Byte
+Stack effect: @var{address} @rightarrow{} @dots{}, @var{value}
+Description: Replaces the address on the stack with the byte read from that address,
+zero-extended to 16-bit (value 0-255). Corresponds to 6502 @code{LDA} with zero-extend.
 
-@item ForthSetWord (SetWord)
-Stores the 16-bit value at the top of the stack to the memory address given by the next item on the stack.
-Stack effect: @var{value}, @var{address} @rightarrow @dots{}
-Description: Pops an address and a value. Stores the 16-bit @var{value} at the 16-bit address @var{address}.
+@item ForthGetWord ($05) - Fetch 16-bit Word
+Stack effect: @var{address} @rightarrow{} @dots{}, @var{value}
+Description: Replaces the address on the stack with the 16-bit value read from that
+address (little-endian). Corresponds to two @code{LDA} instructions.
 
-@item ForthGetWord (GetWord)
-Fetches a 16-bit value from the memory address on top of the stack and pushes it.
-Stack effect: @var{address} @rightarrow @dots{}, @var{value}
-Description: Replaces the address on the stack with the 16-bit value read from that address.
+@item ForthExecute ($06) - Call Subroutine
+Stack effect: @var{address} @rightarrow{} @dots{}
+Description: Pops the address and jumps to it. The stack is popped by two bytes (one
+16-bit item) before the jump. Used for subroutine calls. The target address should
+typically be in the $8000-$BFFF range (RAM or low ROM) on the 7800.
 
-@item ForthDup (Dup)
-Duplicates the top item on the stack.
-Stack effect: @var{x} @rightarrow @dots{}, @var{x}, @var{x}
-Description: Pushes a copy of the top item.
+@item ForthDup ($07) - Duplicate Top of Stack
+Stack effect: @var{x} @rightarrow{} @dots{}, @var{x}, @var{x}
+Description: Pushes a copy of the top item. Requires at least one item on stack.
 
-@item ForthDrop (Drop)
-Discards the top item on the stack.
-Stack effect: @var{x} @rightarrow @dots{}
-Description: Removes the top item from the stack.
+@item ForthDrop ($08) - Discard Top of Stack
+Stack effect: @var{x} @rightarrow{} @dots{}
+Description: Removes the top item from the stack. Requires at least one item on stack.
 
-@item ForthExecute (Execute)
-Calls the subroutine whose address is on top of the stack.
-Stack effect: @var{address} @rightarrow @dots{}
-Description: Pops the address and jumps to it. The stack is popped by two bytes (one 16-bit item) before the jump.
+@item ForthUnless ($09) - Conditional Branch on False
+Stack effect: @var{condition} @rightarrow{} @dots{}
+Description: Pops a 16-bit condition. If the condition is zero, the instruction pointer
+is advanced by two bytes (skipping a 16-bit offset operand). Otherwise, execution
+continates normally. Used for IF...ELSE constructs.
 
-@item ForthUnless (Unless)
-Conditional branch: if the top of stack is false (zero), skip the next two bytes in the instruction stream.
-Stack effect: @var{condition} @rightarrow @dots{}
-Description: Pops a 16-bit condition. If the condition is zero, the instruction pointer is advanced by two bytes (to skip a 16-bit offset). Otherwise, execution continues normally.
+@item ForthWhen ($0a) - Conditional Branch on True
+Stack effect: @var{condition} @rightarrow{} @dots{}
+Description: Pops a 16-bit condition. If the condition is non-zero, execution continues
+normally. If the condition is zero, the instruction pointer advances by two bytes
+(skipping a 16-bit offset operand). Used for IF...THEN constructs.
 
-@item ForthWhen (When)
-Conditional branch: if the top of stack is true (non-zero), continue; otherwise, skip the next two bytes in the instruction stream.
-Stack effect: @var{condition} @rightarrow @dots{}
-Description: Pops a 16-bit condition. If the condition is non-zero, execution continues normally. If the condition is zero, the instruction pointer is advanced by two bytes.
+@item ForthGo ($0b) - Unconditional Jump
+Stack effect: @dots{} @rightarrow{} @dots{}
+Description: Reads two bytes from the instruction stream (little-endian) and sets the
+instruction pointer to that address. Does not affect the stack.
 
-@item ForthGo (Go)
-Unconditional jump: sets the instruction pointer to the address given by the next two bytes in the instruction stream.
-Stack effect: @dots{} @rightarrow @dots{}
-Description: Reads two bytes from the instruction stream (little-endian) and sets the instruction pointer to that address. Does not affect the stack.
+@item ForthSwap ($0c) - Swap Top Two Items
+Stack effect: @var{x}, @var{y} @rightarrow{} @dots{}, @var{y}, @var{x}
+Description: Exchanges the top two items on the stack. Requires at least two items.
+Corresponds to rotating the top two stack entries.
 
-@item ForthSwap (Swap)
-Swaps the top two items on the stack.
-Stack effect: @var{x}, @var{y} @rightarrow @dots{}, @var{y}, @var{x}
-Description: Exchanges the top two items on the stack.
+@item ForthPushByte ($0d) - Push 8-bit Immediate
+Stack effect: @dots{} @rightarrow{} @dots{}, @var{value}
+Description: Reads one byte from the instruction stream and pushes it as a 16-bit
+value with the high byte zero (zero-extended). Useful for small constants (0-255)
+to save bytecode space.
 @end table
 
-@subsection Stack Layout and Conventions
+@node Stack Layout
+@subsection Stack Layout and Memory Model
 
-The parameter stack is implemented as a circular buffer in RAM, with the stack pointer (@code{ForthStack}) indicating the next free slot.
-The stack stores 16-bit values in little-endian order (low byte at the lower address).
+The parameter stack is implemented as a region in RAM, with the stack pointer
+(@code{ForthStack}) indicating the next free slot. The stack grows downward in memory.
 
-When the stack pointer is @var{SP}, the top of the stack is located at @code{StackMemory + @var{SP} + 2} and @code{StackMemory + @var{SP} + 3} for the low and high bytes, respectively.
-The second item is at @code{StackMemory + @var{SP} + 4} and @code{StackMemory + @var{SP} + 5}.
+@subsubheading Memory Layout
 
-The stack pointer is decremented by two for each push operation and incremented by two for each pop operation.
+@example
+Stack Memory Base: $XXXX (configurable, typically in RAM)
+Stack Pointer (SP):  $XX  (0-255, index into stack memory)
 
-Stack underflow and overflow are checked by the interpreter; underflow results in a fault log, and overflow triggers a debug break.
+Stack grows downward:
+  [SP+0, SP+1] = top of stack (16-bit, low byte first)
+  [SP+2, SP+3] = second item
+  [SP+4, SP+5] = third item
+  ...
+@end example
 
-@subsection Usage in Fountain Scripts
+On the Atari 7800, the stack is implemented as a page ($100 bytes) in zero page
+for fast access. The stack pointer starts at $81 (leaving one slot as a safety
+margin).
 
-Fountain scripts are compiled to sequences of these opcodes by the Fountain compiler (@file{SkylineTool/src/fountain.lisp}).
-The resulting bytecode is executed by the Forth interpreter during gameplay to drive cutscenes, dialogue, and other scripted events.
+@subsubheading Stack Pointer Conventions
 
-See the @file{Source/Code/7800/Routines/Forth.s} file for the full implementation of the interpreter and opcodes.
+@itemize @bullet
+@item Stack pointer points to the next free (empty) slot
+@item Pushing decrements SP by 2
+@item Popping increments SP by 2
+@item Stack underflow is detected when SP reaches $80 (one slot above the guard)
+@item Stack overflow is detected when SP reaches $02 (no room for another item)
+@end itemize
+
+@subsubheading Zero-Page Variables (7800 Implementation)
+
+@example
+ForthStack     = $80   ; Stack pointer (zero page)
+ForthCursor    = $82   ; Instruction pointer (2 bytes)
+StackTop       = $00   ; Assumes X points to ForthStack
+StackNext      = $02   ; One word below top
+StackSecond    = $04   ; Two words below top
+ForthStackOneArg = $82 ; Minimum SP for one argument
+ForthStackTwoArgs = $84 ; Minimum SP for two arguments
+@end example
+
+@node Interpreter Implementation
+@subsection Interpreter Implementation
+
+This section provides complete interpreter implementations for several platforms.
+The interpreter follows a fetch-decode-execute cycle.
+
+@subsubheading Common Design Patterns
+
+All interpreters share these characteristics:
+@itemize @bullet
+@item Instruction pointer points to the next byte to execute
+@item Dispatch table maps opcode to handler routine
+@item Handlers operate on the stack using push/pop operations
+@item Branch offsets are relative to the instruction pointer after reading the offset
+@end itemize
+
+@subsubheading 6502 Assembly (7800 Atari)
+
+This is the reference implementation from @file{Source/Code/7800/Routines/Forth.s}:
+
+@example
+;; ForthInterpreter - Main fetch-decode-execute loop
+;; Uses zero-page for fast stack access
+;; Assumes: ForthStack at $80, ForthCursor at $82
+
+ForthInterpreter:
+        lda ForthCursor+1        ; Check if cursor high byte is 0
+        bne Stay
+
+Return:
+        jmp ScriptFinis          ; Exit interpreter
+
+Stay:
+        ldx ForthStack
+        cpx #$82                  ; Check for underflow
+        blt StackUnderflow
+
+InStack:
+        jsr ForthExecuteOneOpcode ; Execute one instruction
+        jmp ForthInterpreter     ; Loop
+
+;; Execute single opcode
+ForthExecuteOneOpcode:
+        ldy #0
+        lda (ForthCursor),y       ; Fetch opcode
+        sta LastForthOp
+        inc ForthCursor           ; Advance cursor
+        bne +
+        inc ForthCursor+1
++
+        tay                       ; Opcode to Y register
+
+        ;; Dispatch table (simplified)
+        cpy #ForthEOL
+        beq Done
+        cpy #ForthPushWord
+        beq ForthPushOp
+        cpy #ForthPushByte
+        beq ForthPushByteOp
+        cpy #ForthSetByte
+        beq ForthSetByteOp
+        ... (more cases)
+
+;; PushWord: Push 16-bit immediate
+;; Format: $01 low high
+ForthPushOp:
+        ldx ForthStack
+        ldy #0
+        lda (ForthCursor),y       ; Low byte
+        sta StackNext,x           ; Store at SP
+        iny
+        lda (ForthCursor),y       ; High byte
+        sta StackNext+1,x
+        dec ForthStack            ; Decrement SP
+        dec ForthStack
+        .Add16 ForthCursor,#2      ; Advance cursor
+        rts
+
+;; PushByte: Push 8-bit immediate (zero-extended)
+;; Format: $0D value
+ForthPushByteOp:
+        ldy #0
+        ldx ForthStack
+        lda (ForthCursor),y       ; Value
+        sta StackNext,x           ; Low byte
+        iny
+        lda #0
+        sta StackNext+1,x         ; Zero-extend
+        dec ForthStack
+        dec ForthStack
+        .Inc16 ForthCursor
+        rts
+
+;; SetWord: Store 16-bit word at address
+;; Stack: address, value (value on top)
+ForthSetWordOp:
+        ldx ForthStack
+        lda StackTop,x            ; Low byte of value
+        sta (StackSecond,x)       ; Store at address (low)
+        lda StackTop+1,x          ; High byte
+        sta (StackSecond,x)+1     ; Store at address+1 (high)
+        inc ForthStack
+        inc ForthStack            ; Pop address
+        rts
+
+;; GetWord: Fetch 16-bit word from address
+;; Stack: address (on top)
+ForthGetWordOp:
+        ldx ForthStack
+        lda (StackTop,x)          ; Fetch low byte
+        sta StackTop,x            ; Store as new top
+        lda (StackTop,x)+1        ; Fetch high byte
+        sta StackTop+1,x          ; Store high
+        rts
+
+;; Execute: Call subroutine at address
+;; Stack: address (on top)
+ForthExecuteOp:
+        ldx ForthStack
+        lda StackTop,x
+        sta ThreadedVector
+        lda StackTop+1,x
+        sta ThreadedVector+1
+        inc ForthStack
+        inc ForthStack            ; Pop address
+        jmp (ThreadedVector)      ; Jump to subroutine
+
+;; Unless: Branch if zero
+;; Stack: condition
+ForthUnlessOp:
+        ldx ForthStack
+        lda StackTop,x            ; Check low byte
+        bne Fail                   ; Non-zero, don't branch
+        lda StackTop+1,x           ; Check high byte
+        beq UnlessToGo            ; Both zero, branch
+
+Fail:
+        inc ForthStack
+        inc ForthStack
+        .Add16 ForthCursor,#2      ; Skip offset
+        rts
+
+UnlessToGo:
+        inc ForthStack
+        inc ForthStack
+        jmp ForthGoOp             ; Do the jump
+
+;; Go: Unconditional jump
+;; Format: $0B low high
+ForthGoOp:
+        ldy #0
+        lda (ForthCursor),y       ; Low byte
+        ldx ForthCursor
+        iny
+        lda (ForthCursor),y       ; High byte
+        sta ForthCursor+1
+        stx ForthCursor           ; Set instruction pointer
+        rts
+
+;; When: Branch if non-zero
+;; Stack: condition
+ForthWhenOp:
+        ldx ForthStack
+        lda StackTop,x
+        bne WhenToGo              ; Non-zero, take branch
+        lda StackTop+1,x
+        bne WhenToGo
+
+        inc ForthStack
+        inc ForthStack
+        .Add16 ForthCursor,#2      ; Skip offset
+        rts
+
+WhenToGo:
+        inc ForthStack
+        inc ForthStack
+        rts                        ; Continue to next instruction
+@end example
+
+@subsubheading C Implementation
+
+@example
+#include <stdint.h>
+#include <stdbool.h>
+
+/* Opcodes */
+#define FORTH_EOL       0x00
+#define FORTH_PUSH_WORD 0x01
+#define FORTH_SET_BYTE  0x02
+#define FORTH_SET_WORD  0x03
+#define FORTH_GET_BYTE  0x04
+#define FORTH_GET_WORD  0x05
+#define FORTH_EXECUTE   0x06
+#define FORTH_DUP       0x07
+#define FORTH_DROP      0x08
+#define FORTH_UNLESS    0x09
+#define FORTH_WHEN      0x0A
+#define FORTH_GO        0x0B
+#define FORTH_SWAP      0x0C
+#define FORTH_PUSH_BYTE 0x0D
+
+/* Stack configuration */
+#define STACK_SIZE 64          /* Number of 16-bit items */
+#define STACK_BASE 0x0000      /* Adjust for your platform */
+#define SP_MIN    2            /* Minimum SP (overflow guard) */
+#define SP_MAX    0x80         /* Maximum SP (underflow guard) */
+
+/* VM state */
+static uint16_t stack[STACK_SIZE];
+static uint8_t  sp = STACK_SIZE;  /* Start full, pointing to next free */
+static uint8_t  ip = 0;           /* Instruction pointer (byte index) */
+static uint8_t  memory[256];       /* Forth bytecode buffer */
+
+/* Stack operations */
+static inline void push(uint16_t value) {
+    if (sp <= SP_MIN) {
+        /* Stack overflow - handle error */
+        return;
+    }
+    sp -= 2;
+    stack[sp / 2] = value;
+}
+
+static inline uint16_t pop(void) {
+    if (sp >= STACK_SIZE) {
+        /* Stack underflow - handle error */
+        return 0;
+    }
+    uint16_t value = stack[sp / 2];
+    sp += 2;
+    return value;
+}
+
+/* Memory access */
+static inline uint8_t read_byte(uint16_t addr) {
+    return memory[addr];  /* Adjust for actual memory read */
+}
+
+static inline uint16_t read_word(uint16_t addr) {
+    return read_byte(addr) | (read_byte(addr + 1) << 8);
+}
+
+static inline void write_byte(uint16_t addr, uint8_t value) {
+    memory[addr] = value;  /* Adjust for actual memory write */
+}
+
+static inline void write_word(uint16_t addr, uint16_t value) {
+    write_byte(addr, value & 0xFF);
+    write_byte(addr + 1, value >> 8);
+}
+
+/* Fetch-decode-execute */
+void forth_run(void) {
+    while (1) {
+        uint8_t opcode = read_byte(ip++);
+
+        switch (opcode) {
+        case FORTH_EOL:
+            return;  /* Exit interpreter */
+
+        case FORTH_PUSH_WORD: {
+            uint16_t value = read_word(ip);
+            ip += 2;
+            push(value);
+            break;
+        }
+
+        case FORTH_PUSH_BYTE: {
+            uint8_t value = read_byte(ip++);
+            push((uint16_t)value);
+            break;
+        }
+
+        case FORTH_DUP: {
+            uint16_t top = pop();
+            push(top);
+            push(top);
+            break;
+        }
+
+        case FORTH_DROP: {
+            pop();
+            break;
+        }
+
+        case FORTH_SWAP: {
+            uint16_t a = pop();
+            uint16_t b = pop();
+            push(a);
+            push(b);
+            break;
+        }
+
+        case FORTH_GET_BYTE: {
+            uint16_t addr = pop();
+            push((uint16_t)read_byte(addr));
+            break;
+        }
+
+        case FORTH_GET_WORD: {
+            uint16_t addr = pop();
+            push(read_word(addr));
+            break;
+        }
+
+        case FORTH_SET_BYTE: {
+            uint16_t value = pop();
+            uint16_t addr = pop();
+            write_byte(addr, (uint8_t)value);
+            break;
+        }
+
+        case FORTH_SET_WORD: {
+            uint16_t value = pop();
+            uint16_t addr = pop();
+            write_word(addr, value);
+            break;
+        }
+
+        case FORTH_EXECUTE: {
+            uint16_t addr = pop();
+            ip = (uint8_t)addr;  /* Save ip, set new ip */
+            break;  /* Note: real impl needs call stack */
+        }
+
+        case FORTH_GO: {
+            uint16_t addr = read_word(ip);
+            ip = (uint8_t)addr;
+            break;
+        }
+
+        case FORTH_WHEN: {
+            uint16_t offset = read_word(ip);
+            uint16_t cond = pop();
+            if (cond == 0) {
+                ip += offset;  /* Skip to else clause */
+            }
+            break;
+        }
+
+        case FORTH_UNLESS: {
+            uint16_t offset = read_word(ip);
+            uint16_t cond = pop();
+            if (cond != 0) {
+                ip += offset;  /* Skip to then clause */
+            }
+            break;
+        }
+
+        default:
+            /* Unknown opcode - fault handler */
+            return;
+        }
+    }
+}
+@end example
+
+@subsubheading Java Implementation
+
+@example
+public class ForthVM {
+    /* Opcodes */
+    public static final int FORTH_EOL       = 0x00;
+    public static final int FORTH_PUSH_WORD = 0x01;
+    public static final int FORTH_SET_BYTE  = 0x02;
+    public static final int FORTH_SET_WORD  = 0x03;
+    public static final int FORTH_GET_BYTE  = 0x04;
+    public static final int FORTH_GET_WORD  = 0x05;
+    public static final int FORTH_EXECUTE   = 0x06;
+    public static final int FORTH_DUP       = 0x07;
+    public static final int FORTH_DROP      = 0x08;
+    public static final int FORTH_UNLESS    = 0x09;
+    public static final int FORTH_WHEN      = 0x0A;
+    public static final int FORTH_GO        = 0x0B;
+    public static final int FORTH_SWAP      = 0x0C;
+    public static final int FORTH_PUSH_BYTE = 0x0D;
+
+    private int[] stack = new int[64];
+    private int sp = 64;  // Start at top, grow down
+    private byte[] memory;
+    private int ip = 0;
+
+    public ForthVM(byte[] bytecode) {
+        this.memory = bytecode;
+    }
+
+    private void push(int value) {
+        stack[--sp] = value;
+    }
+
+    private int pop() {
+        return stack[sp++];
+    }
+
+    private int readByte() {
+        return memory[ip++] & 0xFF;
+    }
+
+    private int readWord() {
+        int low = readByte();
+        int high = readByte();
+        return low | (high << 8);
+    }
+
+    public void run() {
+        while (true) {
+            int opcode = readByte();
+
+            switch (opcode) {
+            case FORTH_EOL:
+                return;
+
+            case FORTH_PUSH_WORD:
+                push(readWord());
+                break;
+
+            case FORTH_PUSH_BYTE:
+                push(readByte());
+                break;
+
+            case FORTH_DUP: {
+                int top = pop();
+                push(top);
+                push(top);
+                break;
+            }
+
+            case FORTH_DROP:
+                pop();
+                break;
+
+            case FORTH_SWAP: {
+                int a = pop();
+                int b = pop();
+                push(a);
+                push(b);
+                break;
+            }
+
+            case FORTH_GET_BYTE:
+                push(memory[pop()] & 0xFF);
+                break;
+
+            case FORTH_GET_WORD: {
+                int addr = pop();
+                int low = memory[addr] & 0xFF;
+                int high = memory[addr + 1] & 0xFF;
+                push(low | (high << 8));
+                break;
+            }
+
+            case FORTH_SET_BYTE: {
+                int value = pop();
+                int addr = pop();
+                memory[addr] = (byte) value;
+                break;
+            }
+
+            case FORTH_SET_WORD: {
+                int value = pop();
+                int addr = pop();
+                memory[addr] = (byte) (value & 0xFF);
+                memory[addr + 1] = (byte) (value >> 8);
+                break;
+            }
+
+            case FORTH_EXECUTE: {
+                int addr = pop();
+                ip = addr;
+                break;
+            }
+
+            case FORTH_GO:
+                ip = readWord();
+                break;
+
+            case FORTH_WHEN: {
+                int offset = readWord();
+                if (pop() == 0) {
+                    ip += offset;
+                }
+                break;
+            }
+
+            case FORTH_UNLESS: {
+                int offset = readWord();
+                if (pop() != 0) {
+                    ip += offset;
+                }
+                break;
+            }
+
+            default:
+                throw new IllegalStateException(
+                    "Unknown opcode: " + Integer.toHexString(opcode));
+            }
+        }
+    }
+}
+@end example
+
+@subsubheading C++ Implementation (Object-Oriented)
+
+@example
+#include <cstdint>
+#include <vector>
+#include <stdexcept>
+
+class ForthVM {
+public:
+    static constexpr uint8_t FORTH_EOL       = 0x00;
+    static constexpr uint8_t FORTH_PUSH_WORD = 0x01;
+    static constexpr uint8_t FORTH_SET_BYTE  = 0x02;
+    static constexpr uint8_t FORTH_SET_WORD  = 0x03;
+    static constexpr uint8_t FORTH_GET_BYTE  = 0x04;
+    static constexpr uint8_t FORTH_GET_WORD  = 0x05;
+    static constexpr uint8_t FORTH_EXECUTE   = 0x06;
+    static constexpr uint8_t FORTH_DUP       = 0x07;
+    static constexpr uint8_t FORTH_DROP      = 0x08;
+    static constexpr uint8_t FORTH_UNLESS    = 0x09;
+    static constexpr uint8_t FORTH_WHEN      = 0x0A;
+    static constexpr uint8_t FORTH_GO        = 0x0B;
+    static constexpr uint8_t FORTH_SWAP      = 0x0C;
+    static constexpr uint8_t FORTH_PUSH_BYTE = 0x0D;
+
+    ForthVM(const std::vector<uint8_t>& bytecode)
+        : memory_(bytecode), ip_(0), sp_(stack_.size()) {}
+
+    void run() {
+        while (true) {
+            uint8_t opcode = readByte();
+
+            switch (opcode) {
+            case FORTH_EOL:
+                return;
+
+            case FORTH_PUSH_WORD:
+                push(readWord());
+                break;
+
+            case FORTH_PUSH_BYTE:
+                push(static_cast<int16_t>(readByte()));
+                break;
+
+            case FORTH_DUP: {
+                auto top = pop();
+                push(top);
+                push(top);
+                break;
+            }
+
+            case FORTH_DROP:
+                pop();
+                break;
+
+            case FORTH_SWAP: {
+                auto a = pop();
+                auto b = pop();
+                push(a);
+                push(b);
+                break;
+            }
+
+            case FORTH_GET_BYTE:
+                push(memory_[pop()] & 0xFF);
+                break;
+
+            case FORTH_GET_WORD: {
+                auto addr = pop();
+                push(readWordAt(addr));
+                break;
+            }
+
+            case FORTH_SET_BYTE: {
+                auto value = pop();
+                auto addr = pop();
+                memory_[addr] = static_cast<uint8_t>(value);
+                break;
+            }
+
+            case FORTH_SET_WORD: {
+                auto value = pop();
+                auto addr = pop();
+                memory_[addr] = static_cast<uint8_t>(value & 0xFF);
+                memory_[addr + 1] = static_cast<uint8_t>(value >> 8);
+                break;
+            }
+
+            case FORTH_EXECUTE:
+                ip_ = pop();
+                break;
+
+            case FORTH_GO:
+                ip_ = readWord();
+                break;
+
+            case FORTH_WHEN: {
+                auto offset = readWord();
+                if (pop() == 0) {
+                    ip_ += offset;
+                }
+                break;
+            }
+
+            case FORTH_UNLESS: {
+                auto offset = readWord();
+                if (pop() != 0) {
+                    ip_ += offset;
+                }
+                break;
+            }
+
+            default:
+                throw std::runtime_error(
+                    "Unknown opcode: 0x" + std::to_string(opcode));
+            }
+        }
+    }
+
+private:
+    std::vector<int16_t> stack_{64};
+    std::vector<uint8_t> memory_;
+    size_t ip_ = 0;
+    size_t sp_ = 0;
+
+    void push(int16_t value) {
+        stack_[--sp_] = value;
+    }
+
+    int16_t pop() {
+        return stack_[sp_++];
+    }
+
+    uint8_t readByte() {
+        return memory_[ip_++];
+    }
+
+    uint16_t readWord() {
+        uint16_t low = readByte();
+        uint16_t high = readByte();
+        return low | (high << 8);
+    }
+
+    uint16_t readWordAt(size_t addr) {
+        return memory_[addr] | (memory_[addr + 1] << 8);
+    }
+};
+@end example
+
+@subsubheading Handling Underflow and Overflow
+
+Stack underflow and overflow must be handled carefully:
+
+@example
+/* Underflow detection */
+void checkUnderflow(uint8_t needed) {
+    if (sp >= STACK_SIZE - needed) {
+        logFault("Stack underflow");
+        sp = STACK_SIZE;  /* Reset to known state */
+    }
+}
+
+/* Overflow detection */
+void checkOverflow(void) {
+    if (sp <= 2) {  /* Need room for at least one more */
+        debugBreak("Stack overflow");
+        /* Or: grow the stack, or terminate script */
+    }
+}
+@end example
+
+@node ABI and Compilation
+@subsection ABI and Compilation Details
+
+This section describes how Eightbol compiles COBOL or other source code to Forth
+bytecode, and how the bytecode integrates with the host system.
+
+@subsubheading Compilation Pipeline
+
+@example
+Source Code (COBOL, etc.)
+        |
+        v
+Frontend Parser --> AST (Abstract Syntax Tree)
+        |
+        v
+Eightbol Compiler (backend-forth)
+        |
+        v
+Forth Bytecode (.byte sequences)
+        |
+        v
+Forth Interpreter (Forth.s)
+@end example
+
+@subsubheading Bytecode Generation
+
+The backend emits raw bytes in a format suitable for the target platform. On the
+Atari 7800, this is assembled using the 6502 cross-assembler:
+
+@example
+; MethodDialogueShow:
+; Generated by Eightbol for Stack Machine
+; DO NOT EDIT -- regenerate from DialogueShow.cob
+
+MethodDialogueShow:
+        .byte #x01, #x00, #x5A    ; PUSHWORD $5A00 (DialogueIndex)
+        .byte #x06                ; EXECUTE (call ShowDialogue)
+        .byte #x00                ; EOL (end of method)
+@end example
+
+@subsubheading Method Calling Convention
+
+Methods are called using the @code{ForthExecute} opcode:
+
+@enumerate
+@item Caller pushes the address of the target method onto the stack
+@item Caller executes @code{ForthExecute}
+@item The interpreter jumps to the method's bytecode
+@item The method executes until it hits @code{ForthEOL}
+@item Control returns to the instruction after @code{ForthExecute}
+@end enumerate
+
+Example call sequence:
+
+@example
+; INVOKE Dialogue.Show
+        .byte #x01, <MethodDialogueShow  ; Push method address (low)
+               #x01, >MethodDialogueShow ; Push method address (high)
+        .byte #x06                       ; EXECUTE
+; Return here after method completes
+@end example
+
+@subsubheading Variable Access
+
+Variables are typically accessed via memory-mapped locations or global addresses:
+
+@example
+; SET Score TO 100
+; Generates:
+        .byte #x01, <Score           ; Push address of Score
+        .byte #x04                    ; GETWORD (fetch current value)
+        .byte #x01, #x00, #x64        ; PUSHWORD 100
+        .byte #x0C                    ; SWAP (value, old-score)
+        .byte #x01, <Score            ; Push address again
+        .byte #x02                    ; SETBYTE (store low byte)
+@end example
+
+@subsubheading Conditional Flow
+
+Conditionals use @code{ForthWhen} and @code{ForthUnless} with 16-bit relative offsets:
+
+@example
+; IF Health == 0 THEN GameOver ELSE Continue ENDIF
+; Generates:
+        .byte #x01, <Health           ; Push Health address
+        .byte #x05                    ; GETWORD
+        .byte #x01, #x00, #x00        ; PUSHWORD 0 (comparison value)
+        ; ... comparison logic ...
+        .byte #x0A                    ; WHEN (branch if true)
+        .byte #x00, #x06              ; Offset: skip 6 bytes
+        ; (GameOver code here)
+        .byte #x0B, #x00, #x04        ; GO (skip else clause)
+        ; (Continue code here)
+        .byte #x00                    ; EOL
+@end example
+
+@subsubheading Return Values
+
+Return values are passed on the stack:
+
+@example
+; COMPUTE Result = CalculateValue()
+; Generates:
+        .byte #x01, <CalculateValue   ; Push function address
+        .byte #x06                    ; EXECUTE (result on stack)
+        .byte #x01, <Result           ; Push result address
+        .byte #x03                    ; SETWORD (store result)
+@end example
+
+@subsubheading Integration with Game Engine
+
+The Forth interpreter integrates with the Phantasia game engine:
+
+@itemize @bullet
+@item @strong{Script Loading}: Scripts are loaded into memory at a known address
+@item @strong{Cursor Setup}: @code{ForthCursor} is set to point to the script
+@item @strong{Execution}: @code{ForthInterpreter} runs the script
+@item @strong{Completion}: When @code{ForthEOL} is encountered, control returns
+@item @strong{Fault Handling}: Underflow and other errors call @code{.LogFault}
+@end itemize
+
+@example
+; C entry point for script execution
+void RunFountainScript(const uint8_t* script) {
+    ForthCursor = script;
+    ForthInterpreter();
+    /* Control returns here when script completes */
+}
+@end example
+
+@subsubheading Memory Considerations
+
+When integrating the Forth VM into your system:
+
+@itemize @bullet
+@item Reserve RAM for the parameter stack (64-256 bytes recommended)
+@item Ensure bytecode memory is readable
+@item Provide callable entry points for native functions
+@item Implement fault handlers for underflow/overflow
+@item Consider watchdog timer for long-running scripts
+@end itemize
+
+@subsubheading Example: Complete Script
+
+A complete dialogue script compiled to Forth bytecode:
+
+@example
+; MethodShowDialogue - Generated by Eightbol
+; Shows dialogue and returns
+;
+; COBOL source:
+;   PERFORM ShowDialogue.
+;   IF DialogueComplete THEN
+;       PERFORM HandleComplete.
+;   ENDIF.
+;
+MethodShowDialogue:
+        .byte #x01, <ShowDialogue     ; Push routine address
+        .byte #x06                    ; EXECUTE
+        .byte #x01, <DialogueComplete ; Push variable address
+        .byte #x05                    ; GETWORD
+        .byte #x09                    ; UNLESS (branch if false)
+        .byte #x00, #x06              ; Offset: +6 bytes
+        .byte #x01, <HandleComplete   ; Push routine address
+        .byte #x06                    ; EXECUTE
+        .byte #x00                    ; EOL (end of method)
+@end example
+
 @subsection Identifier Normalization
 
-The front-end converts identifiers to the canonical PascalCase form (or language-specific form) before AST production.@subsection Identifier Normalization
+The front-end converts identifiers to the canonical PascalCase form (or language-specific
+form) before AST production.
 
-The front-end converts identifiers to the canonical PascalCase form (or language-specific form) before AST production.
+@subsection See Also
+
+@file{Source/Code/7800/Routines/Forth.s} - Reference interpreter implementation
+@file{src/backend-forth/backend-forth-*.lisp} - Eightbol bytecode compiler

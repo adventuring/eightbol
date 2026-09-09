@@ -517,7 +517,7 @@ Extract statements from PROCEDURE DIVISION and build a :program AST node."
 (defun parse/call-service (_call _service target)
   "CALL SERVICE target. — service-dispatch call; bank must be specified at link time."
   (declare (ignore _call _service))
-  (list :call :service target :bank nil))
+  (list :call :target target :bank :service))
 
 (defun parse/if-then (_if condition _then statements _end_if)
   (declare (ignore _if _then _end_if))
@@ -582,7 +582,9 @@ OUTPUT: perform AST plist."
 
 (defun parse/set-to (_set identifier _to expression)
   (declare (ignore _set _to))
-  (list :set :target identifier :value expression))
+  (if (and (stringp expression) (string-equal expression "SELF"))
+      (list :set :to-self identifier)
+      (list :set :target identifier :value expression)))
 
 (defun parse/stop-run (_stop _run)
   (declare (ignore _stop _run))
@@ -615,15 +617,15 @@ OUTPUT: perform AST plist."
 ;;; INTO id, INTO expression GIVING id, BY expression GIVING id. Remainder forms unsupported.
 (defun parse/divide-into-id (_div expression _into id)
   (declare (ignore _div _into))
-  (list :divide :numerator expression :denominator id))
+  (list :divide :numerator id :denominator expression))
 
 (defun parse/divide-into-giving (_div divisor _into dividend _giving id)
   (declare (ignore _div _into _giving))
-  (list :divide :numerator divisor :denominator dividend :giving id))
+  (list :divide :numerator dividend :denominator divisor :giving id))
 
 (defun parse/divide-by-giving (_div divisor _by dividend _giving id)
   (declare (ignore _div _by _giving))
-  (list :divide :numerator divisor :denominator dividend :giving id))
+  (list :divide :numerator dividend :denominator divisor :giving id))
 
 (defun parse/divide-into-remainder-unsupported (&rest _) (declare (ignore _))
   (unsupported-statement "DIVIDE ... REMAINDER ... is not supported"))
@@ -691,36 +693,36 @@ OUTPUT: perform AST plist."
 (defun parse/display-character-says (_display character-name _says message)
   "DISPLAY character-name SAYS message — dialogue output statement.
 FORMAT: 'CharacterName' SAYS 'Message text'.
-Emits (:display :character character-name :says message) AST node."
+Emits (:dialogue :speaker character-name :text message) AST node."
   (declare (ignore _display _says))
-  (list :display :character character-name :says message :type :dialogue))
+  (make-dialogue-node :speaker character-name :text message))
 
 (defun parse/display-message (_display message)
   "DISPLAY message — simple output statement (no character).
-Emits (:display :message message) AST node."
+Emits (:print :expressions (list message)) AST node."
   (declare (ignore _display))
-  (list :display :message message))
+  (make-print-node (list message)))
 
 (defun parse/display-identifier (_display identifier)
   "DISPLAY identifier — output variable value.
-Emits (:display :value identifier) AST node."
+Emits (:print :expressions (list identifier)) AST node."
   (declare (ignore _display))
-  (list :display :value identifier))
+  (make-print-node (list identifier)))
 
 ;;; Read/Input — supported as input statements
 (defun parse/read-input (_read _from identifier)
   "READ FROM identifier — input statement.
 FORMAT: READ FROM input-identifier.
-Emits (:read :from identifier) AST node."
+Emits (:input :variables (list identifier)) AST node."
   (declare (ignore _read _from))
-  (list :read :from identifier))
+  (make-input-node (list identifier)))
 
 (defun parse/read-into (_read _into identifier)
   "READ INTO identifier — alternative input syntax.
 FORMAT: READ INTO identifier.
-Emits (:read :into identifier) AST node."
+Emits (:input :variables (list identifier)) AST node."
   (declare (ignore _read _into))
-  (list :read :into identifier))
+  (make-input-node (list identifier)))
 
 ;;; Write — not supported
 (defun parse/write-statement-unsupported (_write _identifier &optional _from)
@@ -1563,13 +1565,13 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (inspect identifier converting expression to expression #'parse/inspect-converting)
           (inspect identifier replacing characters by expression #'parse/inspect-replacing))
 
-         (invoke-statement
-          (invoke object-expression method-name returning identifier
-                  #'parse/invoke-returning)
-          (invoke super (lambda (&rest _) (declare (ignore _))
-                          (list :invoke-super)))
-          (invoke object-expression method-name #'parse/invoke)
-          (invoke object-expression as symbol method-name #'parse/invoke-as))
+(invoke-statement
+           (invoke object-expression method-name returning identifier
+                   #'parse/invoke-returning)
+           (invoke super (lambda (&rest _) (declare (ignore _))
+                           (list :invoke-super :method "SUPER")))
+           (invoke object-expression method-name #'parse/invoke)
+           (invoke object-expression as symbol method-name #'parse/invoke-as))
          
          (log-fault-statement
           (log fault expression #'parse/log-fault))
@@ -1605,14 +1607,14 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           ())
 
          (set-statement
-          (set identifier to expression #'parse/set-to)
-          (set identifier up by expression #'parse/set-up-by)
-          (set identifier down by expression #'parse/set-down-by)
-          (set condition-name to true #'parse/set-condition-unsupported)
+          (set identifier to self #'parse/set-self)
           (set identifier to address of identifier #'parse/set-address-of)
           (set identifier to null #'parse/set-null)
           (set identifier to nulls #'parse/set-nulls-unsupported)
-          (set identifier to self #'parse/set-self))
+          (set condition-name to true #'parse/set-condition-unsupported)
+          (set identifier to expression #'parse/set-to)
+          (set identifier up by expression #'parse/set-up-by)
+          (set identifier down by expression #'parse/set-down-by))
 
          ;; string-operand: identifier, literal, or identifier with reference modification (start:length)
          (string-operand

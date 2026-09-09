@@ -9,17 +9,31 @@
 ;;; ===== Test Helpers =====
 
 (defun lua-test-source (statements)
-  "Wrap STATEMENTS in minimal EIGHTBOL class structure for parsing."
-  (format nil "~{000010 ~a~%~}"
-          (append
-           (list "IDENTIFICATION DIVISION.")
-           (list "CLASS-ID. TestLua.")
-           (list "ENVIRONMENT DIVISION.")
-           (list "OBJECT.")
-           (list "  PROCEDURE DIVISION.")
-           (append statements (list "  "))
-           (list "END OBJECT.")
-           (list "END CLASS TestLua."))))
+  "Wrap STATEMENTS in minimal EIGHTBOL class structure for parsing.
+Statements in DATA DIVISION if they start with a level number (01-77),
+otherwise place them in PROCEDURE DIVISION."
+  (let ((data-stmts (remove-if-not 
+                      (lambda (s) (and (> (length s) 0) 
+                                      (digit-char-p (char s 0))))
+                      statements))
+        (proc-stmts (remove-if
+                      (lambda (s) (and (> (length s) 0) 
+                                      (digit-char-p (char s 0))))
+                      statements)))
+    (format nil "~{000010 ~a~%~}"
+            (append
+             (list "IDENTIFICATION DIVISION.")
+             (list "CLASS-ID. TestLua.")
+             (when data-stmts
+               (list "DATA DIVISION.")
+               (list "WORKING-STORAGE SECTION.")
+               data-stmts)
+             (list "ENVIRONMENT DIVISION.")
+             (list "OBJECT.")
+             (list "  PROCEDURE DIVISION.")
+             (append proc-stmts (list "  "))
+             (list "END OBJECT.")
+             (list "END CLASS TestLua.")))))
 
 ;;; ===== Lexer Tests =====
 

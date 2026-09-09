@@ -445,17 +445,22 @@ A holds the other operand."
        (format out "~%~10T~a ~a + ~a" mnemonic pointer offset)))
 
     ((and (listp expression) (member (first expression)
-			       '(:bit-and :bit-or :bit-xor
-			         :add :subtract :multiply :divide
-			         :shift-left :shift-right)))
-     (format out "~%~10Tpha")
-     (emit-6502-load-expression out expression class-id)
-     (format out "~%~10Tsta WorkALU")
-     (format out "~%~10Tpla")
-     (format out "~%~10T~a WorkALU" mnemonic))
+		       '(:bit-and :bit-or :bit-xor
+		         :add :subtract
+		         :shift-left :shift-right)))
+      (format out "~%~10Tpha")
+      (emit-6502-load-expression out expression class-id)
+      (format out "~%~10Tsta WorkALU")
+      (format out "~%~10Tpla")
+      (format out "~%~10T~a WorkALU" mnemonic))
+
+    ((and (listp expression) (member (first expression) '(:multiply :divide)))
+     (error 'backend-error
+       :message "MULTIPLY/DIVIDE not supported"
+       :cpu :6502 :detail expression))
 
     (t
-     (format out "~%~10T~a ~a" mnemonic (emit-6502-value expression))))
+      (format out "~%~10T~a ~a" mnemonic (emit-6502-value expression))))
   (setf *6502-accumulator-expression* :trash/alu))
 
 (defun emit-6502-cmp-memory-rhs (out expression class-id)

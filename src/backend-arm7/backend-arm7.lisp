@@ -331,6 +331,8 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
       ((and (listp expr) (eq (first expr) :bit-not))
        (compile-arm7-load out (second expr) class-id slot-table const-table pic-width-table)
        (format out  "~&~8tmvns    r0, r0"))
+      ((eq expr :null)
+       (format out  "~&~8tmovs    r0, #0"))
       (t (format out  "~&~8t@ Unsupported load ~s" expr)))))
 
 (defun compile-arm7-move (out stmt class-id slot-table const-table pic-width-table)

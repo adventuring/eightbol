@@ -61,20 +61,20 @@
 
 (defun sci-parse-if (cond then-form &optional else-form)
   "if condition then-form [else else-form]"
-  (make-if-node cond (list then-form) (if else-form (list else-form) '())))
+  (list :if :condition cond :then (list then-form) :else (if else-form (list else-form) '())))
 
 (defun sci-parse-while (cond body)
   "while condition body"
-  (make-perform-node "WHILE" :until (make-conditional-not cond) :body (ensure-list body)))
+  (list :perform :procedure "WHILE" :until (list 'not cond) :body (ensure-list body)))
 
 (defun sci-parse-for (var start end body)
   "for var start end body"
-  (make-perform-node "FOR" :varying var :from start :by 1
-                     :until (make-conditional-gt (make-identifier var) end) :body (ensure-list body)))
+  (list :perform :procedure "FOR" :varying var :from start :by 1
+        :until (list '< var end) :body (ensure-list body)))
 
 (defun sci-parse-setq (var expr)
   "setq var expr"
-  (make-move-node expr (make-identifier var)))
+  (list :move :from expr :to var))
 
 (defun sci-parse-define (name params body)
   "(define name params body)"
@@ -82,33 +82,31 @@
 
 (defun sci-parse-call (func args)
   "(call func args)"
-  (make-call-node func))
+  (list :call :target func))
 
 (defun sci-parse-send (obj method args)
   "(send obj method args)"
-  (make-invoke-node (make-identifier obj) method :returning (when args (car args))))
+  (list :invoke :class obj :method method))
 
 (defun sci-parse-return (&optional val)
   "return [val]"
-  (make-goback-node))
+  (list :go-back))
 
 (defun sci-parse-print (args)
   "print args or (print arg1 arg2 ...)"
-  (make-print-node args))
+  (list :print :expressions (if (listp args) args (list args))))
 
 (defun sci-parse-dialogue (character text)
   "dialogue character text"
-  (make-dialogue-node :speaker character :text text))
+  (list :dialogue :speaker character :text text))
 
 (defun sci-parse-say (character &rest args)
   "say character text [response1 response2 ...]"
-  ;; Create dialogue node (say is alias for dialogue)
-  (make-dialogue-node :speaker character :text (car args)))
+  (list :dialogue :speaker character :text (car args)))
 
 (defun sci-parse-input (prompt &optional variable)
   "input prompt [variable]"
-  ;; Create input node for user interaction
-  (make-input-node (if variable (list variable) '())))
+  (list :input :variables (if variable (list variable) '()) :prompt prompt))
 
 ;;; Helper functions for standard EIGHTBOL node production
 
@@ -122,19 +120,16 @@
 
 (defun sci-make-if-node (cond then-stmts &optional else-stmts)
   "Create an if-conditional AST node."
-  (let ((node (list :if :condition cond :then then-stmts)))
-    (when else-stmts (setf node (append node (list :else else-stmts))))
-    node))
+  (list :if :condition cond :then then-stmts :else (or else-stmts '())))
 
 (defun sci-make-perform-node (name &key until varying from by body)
   "Create a perform/loop AST node."
-  (let ((node (list :perform :name name)))
-    (when varying (setf node (append node (list :varying varying))))
-    (when from (setf node (append node (list :from from))))
-    (when by (setf node (append node (list :by by))))
-    (when until (setf node (append node (list :until until))))
-    (when body (setf node (append node (list :body body))))
-    node))
+  (list* :perform :procedure name
+         (append (when varying `(:varying ,varying))
+                 (when from `(:from ,from))
+                 (when by `(:by ,by))
+                 (when until `(:until ,until))
+                 (when body `(:body ,body)))))
 
 (defun sci-make-move-node (expr target)
   "Create a move/assignment AST node."
@@ -142,32 +137,29 @@
 
 (defun sci-make-identifier (name)
   "Create an identifier AST node."
-  (list :identifier :name name))
+  (string name))
 
 (defun sci-make-call-node (func)
   "Create a function call AST node."
   (list :call :target func))
 
-(defun sci-make-invoke-node (object method &key returning args)
+(defun sci-make-invoke-node (class method &key args)
   "Create an invocation (method call) AST node."
   (declare (ignore args))
-  (let ((node (list :invoke :object object :method method)))
-    (when returning (setf node (append node (list :returning returning))))
-    node))
+  (list :invoke :class class :method method))
 
 (defun sci-make-goback-node ()
   "Create a return/goback AST node."
-  (list :goback))
+  (list :go-back))
 
 (defun sci-make-print-node (args)
   "Create a print AST node."
-  (list :print :args args))
+  (list :print :expressions (ensure-list args)))
 
 (defun sci-make-dialogue-node (&key speaker text responses)
   "Create a dialogue AST node."
-  (let ((node (list :dialogue :speaker speaker :text text)))
-    (when responses (setf node (append node (list :responses responses))))
-    node))
+  (list* :dialogue :speaker speaker :text text
+         (when responses `(:responses ,responses))))
 
 (defun sci-make-input-node (&optional vars)
   "Create an input AST node."
@@ -175,55 +167,55 @@
 
 (defun sci-make-conditional-not (expr)
   "Create a NOT conditional node."
-  (list :not expr))
+  (list 'not expr))
 
 (defun sci-make-conditional-gt (left right)
   "Create a > comparison node."
-  (list :gt left right))
+  (list '> left right))
 
 (defun sci-make-conditional-and (left right)
   "Create an AND node."
-  (list :and left right))
+  (list 'and left right))
 
 (defun sci-make-conditional-or (left right)
   "Create an OR node."
-  (list :or left right))
+  (list 'or left right))
 
 (defun sci-make-conditional-eq (left right)
   "Create an = comparison node."
-  (list :eq left right))
+  (list '= left right))
 
 (defun sci-make-conditional-ne (left right)
   "Create a <> (not equal) node."
-  (list :neq left right))
+  (list '/= left right))
 
 (defun sci-make-conditional-lt (left right)
   "Create a < comparison node."
-  (list :lt left right))
+  (list '< left right))
 
 (defun sci-make-conditional-le (left right)
   "Create a <= comparison node."
-  (list :le left right))
+  (list '<= left right))
 
 (defun sci-make-conditional-ge (left right)
   "Create a >= comparison node."
-  (list :ge left right))
+  (list '>= left right))
 
-(defun make-expression-add (left right)
+(defun sci-make-expression-add (left right)
   "Create an ADD expression node."
   (list :add :from left :to right))
 
-(defun make-expression-subtract (left right)
+(defun sci-make-expression-subtract (left right)
   "Create a SUBTRACT expression node."
-  (list :subtract :from left :from-target right))
+  (list :subtract :subtrahend right :from left))
 
-(defun make-expression-multiply (left right)
+(defun sci-make-expression-multiply (left right)
   "Create a MULTIPLY expression node."
-  (list :compute :target 'result :expression (list :* left right)))
+  (list :compute :target 'result :expression (list '* left right)))
 
-(defun make-expression-divide (left right)
+(defun sci-make-expression-divide (left right)
   "Create a DIVIDE expression node."
-  (list :compute :target 'result :expression (list :/ left right)))
+  (list :compute :target 'result :expression (list '/ left right)))
 
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)
@@ -258,7 +250,7 @@
 
       (atom
        (ident
-        (lambda (id) (make-identifier id)))
+        (lambda (id) (string id)))
        (number
         (lambda (n) (sci-parse-number n)))
        (hex
@@ -300,7 +292,7 @@
 
       (expression
        (ident
-        (lambda (id) (make-identifier id)))
+        (lambda (id) (string id)))
        (number
         (lambda (n) (sci-parse-number n)))
        (hex
@@ -314,31 +306,31 @@
        (string
         (lambda (s) s))
        (expression plus expression
-        (lambda (l r) (make-expression-add l r)))
+        (lambda (l r) (sci-make-expression-add l r)))
        (expression minus expression
-        (lambda (l r) (make-expression-subtract l r)))
+        (lambda (l r) (sci-make-expression-subtract l r)))
        (expression times expression
-        (lambda (l r) (make-expression-multiply l r)))
+        (lambda (l r) (sci-make-expression-multiply l r)))
        (expression divide expression
-        (lambda (l r) (make-expression-divide l r)))
+        (lambda (l r) (sci-make-expression-divide l r)))
        (expression equal expression
-        (lambda (l r) (make-conditional-eq l r)))
+        (lambda (l r) (sci-make-conditional-eq l r)))
        (expression ne expression
-        (lambda (l r) (make-conditional-ne l r)))
+        (lambda (l r) (sci-make-conditional-ne l r)))
        (expression lt expression
-        (lambda (l r) (make-conditional-lt l r)))
+        (lambda (l r) (sci-make-conditional-lt l r)))
        (expression gt expression
-        (lambda (l r) (make-conditional-gt l r)))
+        (lambda (l r) (sci-make-conditional-gt l r)))
        (expression le expression
-        (lambda (l r) (make-conditional-le l r)))
+        (lambda (l r) (sci-make-conditional-le l r)))
        (expression ge expression
-        (lambda (l r) (make-conditional-ge l r)))
+        (lambda (l r) (sci-make-conditional-ge l r)))
        (expression and expression
-        (lambda (l r) (make-conditional-and l r)))
+        (lambda (l r) (sci-make-conditional-and l r)))
        (expression or expression
-        (lambda (l r) (make-conditional-or l r)))
+        (lambda (l r) (sci-make-conditional-or l r)))
        (not expression
-        (lambda (f) (make-conditional-not f))))
+        (lambda (f) (sci-make-conditional-not f))))
 
       (form-list
        (form

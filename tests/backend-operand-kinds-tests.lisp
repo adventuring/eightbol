@@ -57,16 +57,14 @@
         ((:huc6280) (eightbol::compile-6502-method method class-id :huc6280))
         ((:z80) (eightbol::compile-z80-method s method class-id slot-table type-table const-table
                                               pic-size-table pic-width-table))
-        ((:cp1610) (eightbol::compile-cp1610-method method class-id))
+        ((:cp1610) (eightbol::compile-cp1610-method method))
         ((:sm83) (eightbol::compile-sm83-method method))
-        ((:m68k) (eightbol::compile-m68k-method s method class-id slot-table type-table const-table
-                                                pic-size-table pic-width-table))
+        ((:m68k) (eightbol::compile-m68k-method method))
         ((:i286) (eightbol::compile-i286-method s method class-id slot-table type-table const-table
                                                  pic-size-table pic-width-table))
         ((:arm7) (eightbol::compile-arm7-method s method class-id slot-table type-table const-table
                                                  pic-size-table pic-width-table))
-        ((:f8) (eightbol::compile-f8-method s method class-id slot-table type-table const-table
-                                             pic-size-table pic-width-table))))))
+        ((:f8) (eightbol::compile-f8-method method))))))
 
 (defun compile-one-stmt (cpu stmt &key (slot-table (ht)) (const-table (ht))
                                     (type-table (ht)) (pic-width-table (ht)))
@@ -166,7 +164,7 @@
       (let ((asm (compile-one-stmt
                   cpu
                   '(:compute :target "X"
-                    :expression (:add-expr "A" (:add-expr "B" "C")))
+                    :expression (:add :from "A" :to (:add :from "B" :to "C")))
                   :pic-width-table pw)))
         (is (plusp (length asm)) "CPU ~s" cpu)))))
 
@@ -180,7 +178,7 @@
       (let ((asm (compile-one-stmt
                   cpu
                   '(:compute :target "X"
-                    :expression (:add-expr "A" (:multiply-expr "B" 2)))
+                    :expression (:add :from "A" :to (:multiply :by 2 :multiplier "B")))
                   :pic-width-table pw)))
         (is (plusp (length asm)) "CPU ~s" cpu)))))
 

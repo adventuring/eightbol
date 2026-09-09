@@ -57,19 +57,17 @@ MODIFIERS: initial state (looks, faces, equips)."
         :modifiers modifiers))
 
 (defun make-variable-assignment-node (var-name value)
-  "Build a :variable-assignment AST node.
+  "Build a :set AST node.
 VAR-NAME: PascalCase variable identifier
 VALUE: expression (number, string, or complex expression)."
-  (list :variable-assignment
-        :variable var-name
-        :value value))
+  (list :set :target var-name :value value))
 
 (defun make-conditional-node (condition then-block &key else-block)
-  "Build a :conditional AST node.
+  "Build an :if AST node.
 CONDITION: expression that evaluates to boolean
 THEN-BLOCK: list of statements to execute when true
 ELSE-BLOCK: optional list of statements when false."
-  (list :conditional
+  (list :if
         :condition condition
         :then then-block
         :else else-block))
@@ -386,7 +384,7 @@ Returns expression AST node or value."
 
 (defun parse-variable-assignment (state)
   "Parse 'Set $variable to expression'.
-Returns variable-assignment node or nil."
+Returns :set node or nil."
   (when (and (current-token state) (eq (token-type (current-token state)) :set))
     (consume-token state) ; SET
     (let ((var-name (when (and (current-token state)
@@ -396,7 +394,7 @@ Returns variable-assignment node or nil."
         (consume-token state) ; TO
         (let ((value (parse-expression state)))
           (skip-newlines state)
-          (make-variable-assignment-node var-name value))))))
+          (make-set-node var-name value))))))
 
 ;;;; Input Statement
 
@@ -694,10 +692,14 @@ Returns (values program-ast error-list)."
     (parse-fountain-tokens tokens)))
 
 (defun parse-fountain-file (filepath)
-  "Lex and parse Fountain file from FILEPATH into AST.
+   "Lex and parse Fountain file from FILEPATH into AST.
 Returns (values program-ast error-list)."
-  (let ((tokens (lex-fountain-file filepath)))
-    (parse-fountain-tokens tokens)))
+   (let ((tokens (lex-fountain-file filepath)))
+     (parse-fountain-tokens tokens)))
+
+(defun make-set-node (target value)
+  "Build a :set AST node."
+  (list :set :target target :value value))
 
 (export '(parse-fountain-source
           parse-fountain-file
@@ -707,11 +709,11 @@ Returns (values program-ast error-list)."
           make-action-node
           make-transition-node
           make-character-entry-node
-          make-variable-assignment-node
           make-conditional-node
           make-print-node
           make-input-node
           make-program-node
+          make-set-node
           ;; Tier 1 AST node constructors
           make-character-action-node
           make-camera-node

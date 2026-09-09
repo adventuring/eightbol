@@ -2,17 +2,38 @@
 @cindex AGI frontend language
 
 This chapter describes the AGI frontend language as implemented in the EightBol compiler.
+The AGI (Adventure Game Interpreter) frontend provides a high-level language for creating
+classic adventure games, supporting game logic, room management, and player interaction.
 The language is defined by its lexer (@file{agi-lexer.lisp}) and parser (@file{agi-parser.lisp}).
 Only the constructs defined in these files are part of the language; any other AGI-like
 constructs are not supported by this frontend.
 
+@menu
+* Lexical Elements::
+* Numeric Literals::
+* Statements::
+* Control Flow::
+* Arithmetic Operations::
+* Comparison Operations::
+* Logical Operations::
+* Game Commands::
+* Input and Output::
+* Expressions::
+* Operator Precedence::
+* Identifier Normalization::
+* Unsupported Commands::
+* Example Programs::
+@end menu
+
+@node Lexical Elements
 @section Lexical Elements
 
 The AGI frontend lexer tokenizes input into the following categories:
 
 @table @asis
 @item Keywords
-Reserved words that have special meaning in the language.
+Reserved words that have special meaning in the language. All keywords are
+case-insensitive and conventionally written in UPPERCASE.
 @item Operators
 Symbols representing arithmetic, logical, and comparison operations.
 @item Delimiters
@@ -20,92 +41,89 @@ Punctuation used for grouping and separation.
 @item Literals
 Numeric and string constants.
 @item Identifiers
-User-defined names for variables and routines.
+User-defined names for variables, routines, and labels.
 @end table
 
 @subsection Keywords
 
-The following keywords are recognized (case-insensitive):
+The following keywords are recognized by the AGI frontend lexer (case-insensitive):
+
 @table @asis
-@item IF
-Starts a conditional statement.
-@item ELSE
+@item @code{IF}
+Starts a conditional statement. See @ref{Control Flow}.
+@item @code{ELSE}
 Specifies the false branch of an IF statement.
-@item THEN
+@item @code{THEN}
 Separates the condition from the true branch in an IF statement.
-@item GOSUB
-Calls a subroutine.
-@item GOTO
-Jumps to a labeled statement.
-@item NEWROOM
-(Reserved for future use; not implemented in the parser.)
-@item LOADLOGICS
-(Reserved for future use; not implemented in the parser.)
-@item RETURN
-Returns from a subroutine.
-@item QUIT
-(Reserved for future use; not implemented in the parser.)
-@item ASSIGN
-(Reserved for future use; not implemented in the parser. Assignment is done via the @code{=} operator.)
-@item INCREMENT
-Increments a variable by 1.
-@item DECREMENT
-Decrements a variable by 1.
-@item SET
-Sets a variable to 1.
-@item RESET
-Sets a variable to 0.
-@item SAID
-(Reserved for future use; not implemented in the parser.)
-@item TEST
-(Reserved for future use; not implemented in the parser.)
-@item POSN
-(Reserved for future use; not implemented in the parser.)
-@item CONTROLLER
-(Reserved for future use; not implemented in the parser.)
-@item HAVEKEY
-(Reserved for future use; not implemented in the parser.)
-@item AND
-Logical conjunction operator.
-@item OR
-Logical disjunction operator.
+@item @code{END-IF}
+Optional marker for the end of an IF block (for readability; not required by parser).
+@item @code{GOSUB}
+Calls a subroutine. See @ref{Subroutine Call}.
+@item @code{GOTO}
+Jumps to a labeled statement. See @ref{Unconditional Jump}.
+@item @code{RETURN}
+Returns from a subroutine. See @ref{Subroutine Return}.
+@item @code{INCREMENT}
+Increments a variable by 1. See @ref{Increment}.
+@item @code{DECREMENT}
+Decrements a variable by 1. See @ref{Decrement}.
+@item @code{SET}
+Sets a variable to 1 (boolean true). See @ref{Set to One}.
+@item @code{RESET}
+Sets a variable to 0 (boolean false). See @ref{Reset to Zero}.
+@item @code{ASSIGN}
+Assignment operator (reserved; use @code{=} instead). See @ref{Assignment}.
+@item @code{PRINT}
+Display text on screen. See @ref{Print Statement}.
+@item @code{INPUT}
+Get user input. See @ref{Input Statement}.
+@item @code{DIALOGUE}
+Display dialogue with speaker name. See @ref{Dialogue Statement}.
+@item @code{AND}
+Logical conjunction operator for combining conditions.
+@item @code{OR}
+Logical disjunction operator for combining conditions.
+@item @code{NOT}
+Logical negation operator for inverting conditions.
 @end table
 
 @subsection Operators
 
 The following operators are supported:
+
 @table @asis
 @item @code{+}
-Addition.
+Addition. Combines two numeric values.
 @item @code{-}
-Subtraction.
+Subtraction. Subtracts right operand from left.
 @item @code{*}
-Multiplication.
+Multiplication. Multiplies two numeric values.
 @item @code{/}
-Division.
+Division. Divides left operand by right.
 @item @code{=}
-Assignment and equality comparison.
+Assignment (sets variable to value) and equality comparison (tests equality).
 @item @code{<}
-Less than comparison.
+Less than comparison. Returns 1 if true, 0 if false.
 @item @code{>}
-Greater than comparison.
+Greater than comparison. Returns 1 if true, 0 if false.
 @item @code{<=}
 Less than or equal comparison.
 @item @code{>=}
 Greater than or equal comparison.
 @item @code{<>}
-Not equal comparison.
+Not equal comparison. Returns 1 if operands differ.
 @item @code{<<}
-Left bit shift.
+Left bit shift. Shifts bits left by specified amount.
 @item @code{>>}
-Right bit shift.
+Right bit shift. Shifts bits right by specified amount.
 @item @code{.}
-(Reserved for future use; not implemented in the parser.)
+Reserved for future use; not implemented in the parser.
 @end table
 
 @subsection Delimiters
 
 The following delimiters are used:
+
 @table @asis
 @item @code{(}
 Left parenthesis for grouping expressions.
@@ -117,82 +135,345 @@ Comma for separating items (reserved for future use).
 Colon for separating items (reserved for future use).
 @end table
 
-@subsection Literals
-
-@table @asis
-@item Numeric literals
-Integer constants in one of the following formats:
-@table @asis
-@item Decimal
-Bare digits (@code{42}, @code{0}, @code{123}) or @code{d'@var{digits}'} format.
-Examples: @code{100}, @code{d'255'}
-@item Hexadecimal
-@code{x'@var{hex-digits}'} format with optional commas for readability.
-Examples: @code{x'FF'}, @code{x'1A,2B'}
-@item Octal
-@code{o'@var{octal-digits}'} format.
-Examples: @code{o'777'}, @code{o'42'}
-@item Binary
-@code{b'@var{binary-digits}'} format.
-Examples: @code{b'1010'}, @code{b'11111111'}
-@item Word/Dword (String)
-@code{w'@var{data}'} or @code{w"@var{data}"} format.
-Used for assembler word data.
-Examples: @code{w'ABCD'}, @code{w"test"}
-@end table
-All numeric formats are internally converted to their decimal integer value
-for AST representation.
-
-@item String literals
-Text enclosed in double quotes (@code{"..."}). 
-Examples: @code{"Hello, world!"}, @code{"player_name"}
-@end table
-
 @subsection Identifiers
 
 Identifiers consist of letters, digits, underscores (@code{_}), and hyphens (@code{-}).
-They must begin with a letter or underscore.
-Identifiers are case-insensitive and normalized to @code{Header.Case} format in the AST.
+They must begin with a letter or underscore. Identifiers are case-insensitive and
+normalized to @code{Header.Case} format in the AST.
 
-@subsubsection Identifier Normalization
+See @ref{Identifier Normalization} for details on the normalization process.
 
-All identifiers are automatically normalized to the @code{Header.Case} format with dots 
-as segment separators:
+@node Numeric Literals
+@section Numeric Literals
 
-@table @asis
-@item Input format
-Identifiers with hyphens or underscores as separators (e.g., @code{player-name}, @code{player_name}).
-@item Output format (AST)
-Header.Case with dots (e.g., @code{Player.Name}).
-@end table
+The AGI frontend supports multiple numeric literal formats for convenience:
 
 @table @asis
-@item Example 1
-@code{player_score} → @code{Player.Score}
-@item Example 2
-@code{get-item-count} → @code{Get.Item.Count}
-@item Example 3
-@code{my_var_name} → @code{My.Var.Name}
-@item Example 4
-@code{X} → @code{X} (unchanged if no separators)
+@item Decimal
+Bare digits (@code{42}, @code{0}, @code{123}) or @code{d'@var{digits}'} format.
+@*
+Examples: @code{100}, @code{d'255'}, @code{d'0'}
+
+@item Hexadecimal
+@code{x'@var{hex-digits}'} format with optional commas for readability.
+@*
+Examples: @code{x'FF'} (255), @code{x'1A'} (26), @code{x'1A,2B'} (6682)
+
+@item Octal
+@code{o'@var{octal-digits}'} format.
+@*
+Examples: @code{o'777'} (511), @code{o'42'} (34)
+
+@item Binary
+@code{b'@var{binary-digits}'} format.
+@*
+Examples: @code{b'1010'} (10), @code{b'11111111'} (255)
+
+@item Word/Dword (String)
+@code{w'@var{data}'} or @code{w"@var{data}"} format. Returns the string data
+as-is for backend processing.
+@*
+Examples: @code{w'ABCD'}, @code{w"test"}
 @end table
 
-This normalization ensures consistent, language-appropriate naming conventions in the generated AST.
+All numeric formats (except word/dword strings) are internally converted to their
+decimal integer value for AST representation. This allows uniform handling
+regardless of input format.
 
+@node Statements
 @section Statements
 
-An AGI program is a sequence of statements, each executed in order unless modified by
-control flow statements.
+An AGI program is a sequence of statements, each executed in order unless modified
+by control flow statements. Statements may be separated by newlines or placed on
+the same line (parser processes sequentially).
 
+@menu
+* Assignment Statement::
+* Increment and Decrement::
+* Set and Reset::
+* Print Statement::
+* Input Statement::
+* Dialogue Statement::
+@end menu
+
+@node Assignment Statement
+@subsection Assignment Statement
+
+@defsyn
+@var{variable} = @var{expression}
+@end defsyn
+
+Evaluates @var{expression} and stores the result in @var{variable}.
+The @code{=} operator performs both assignment and equality testing depending on context.
+
+@subsubsection Syntax Variations
+
+@table @asis
+@item Basic assignment
+@code{@var{variable} = @var{expression}}
+@*
+Assigns the result of expression to variable.
+
+@item Assignment with parentheses
+@code{(@var{variable} = @var{expression})}
+@*
+Assignment within a condition.
+@end table
+
+@subsubsection Examples
+
+@example
+player_score = 0
+x = (y + 10)
+score = (score + points)
+flag = (status = 1)
+@end example
+
+@subsubsection Valid Ranges
+
+Variables store integer values. The valid range depends on the backend target:
+@itemize @bullet
+@item 8-bit targets: 0-255 (unsigned) or -128 to 127 (signed)
+@item 16-bit targets: 0-65535 (unsigned) or -32768 to 32767 (signed)
+@item Larger ranges available for multi-byte storage
+@end itemize
+
+@node Increment and Decrement
+@subsection Increment and Decrement
+
+@subsubsection Increment
+
+@defsyn
+INCREMENT @var{variable}
+@end defsyn
+
+@defsyn
+INCREMENT (@var{variable})
+@end defsyn
+
+Adds 1 to @var{variable}. Equivalent to @code{@var{variable} = @var{variable} + 1}.
+
+@subsubsection Examples
+
+@example
+INCREMENT lives
+INCREMENT (counter)
+@end example
+
+@subsubsection Decrement
+
+@defsyn
+DECREMENT @var{variable}
+@end defsyn
+
+@defsyn
+DECREMENT (@var{variable})
+@end defsyn
+
+Subtracts 1 from @var{variable}. Equivalent to @code{@var{variable} = @var{variable} - 1}.
+
+@subsubsection Examples
+
+@example
+DECREMENT lives
+DECREMENT (health)
+@end example
+
+@subsubsection Notes
+
+Both INCREMENT and DECREMENT operate atomically and are useful for counters,
+loop variables, and game state tracking.
+
+@node Set and Reset
+@subsection Set and Reset
+
+@subsubsection Set to One
+
+@defsyn
+SET @var{variable}
+@end defsyn
+
+@defsyn
+SET (@var{variable}, @var{expression})
+@end defsyn
+
+Sets @var{variable} to 1 (boolean true) in the simple form.
+In the parenthesized form, sets the variable to the result of expression.
+
+@subsubsection Examples
+
+@example
+SET game_started
+SET (difficulty, 5)
+@end example
+
+@subsubsection Reset to Zero
+
+@defsyn
+RESET @var{variable}
+@end defsyn
+
+Sets @var{variable} to 0 (boolean false). Used to clear flags and boolean states.
+
+@subsubsection Examples
+
+@example
+RESET flag
+RESET game_over
+@end example
+
+@subsubsection Notes
+
+SET and RESET are optimized for boolean flag operations. The simple form of SET
+is faster than @code{variable = 1} as it may generate more efficient code.
+
+@node Print Statement
+@subsection Print Statement
+
+@defsyn
+PRINT "@var{message}"
+@end defsyn
+
+@defsyn
+PRINT "@var{message}" @var{x} @var{y}
+@end defsyn
+
+Displays text on the screen at the current cursor position (simple form) or
+at coordinates (x, y) when specified.
+
+@subsubsection Parameters
+
+@table @asis
+@item @var{message}
+String literal containing the text to display. Must be enclosed in double quotes.
+@item @var{x}
+Horizontal position (optional). Integer or numeric expression.
+@item @var{y}
+Vertical position (optional). Integer or numeric expression.
+@end table
+
+@subsubsection Examples
+
+@example
+PRINT "Hello, world!"
+PRINT "Score: " score
+PRINT "Game Over" 10 20
+@end example
+
+@subsubsection Output
+
+The print statement generates a :print AST node. The actual rendering depends
+on the backend target (console, graphics buffer, etc.).
+
+@node Input Statement
+@subsection Input Statement
+
+@defsyn
+INPUT @var{variable}
+@end defsyn
+
+@defsyn
+INPUT @var{variable} @var{max-length}
+@end defsyn
+
+Reads user input and stores the result in @var{variable}.
+
+@subsubsection Parameters
+
+@table @asis
+@item @var{variable}
+Identifier to store the input value.
+@item @var{max-length}
+Maximum length of input (optional). Limits how many characters are read.
+@end table
+
+@subsubsection Examples
+
+@example
+INPUT player_name
+INPUT answer 50
+@end example
+
+@subsubsection Input Types
+
+The backend determines the input type based on context:
+@itemize @bullet
+@item Numeric contexts expect integer input
+@item String contexts allow text input
+@end itemize
+
+@node Dialogue Statement
+@subsection Dialogue Statement
+
+@defsyn
+DIALOGUE "@var{speaker}" "@var{text}"
+@end defsyn
+
+Displays dialogue text attributed to a speaker, commonly used for NPC conversations
+and narrative text display.
+
+@subsubsection Parameters
+
+@table @asis
+@item @var{speaker}
+String literal naming the speaking character.
+@item @var{text}
+String literal containing the dialogue text.
+@end table
+
+@subsubsection Examples
+
+@example
+DIALOGUE "Guard" "Halt! Who goes there?"
+DIALOGUE "Narrator" "You enter a dark cave."
+@end example
+
+@subsubsection Output
+
+Generates a :dialogue AST node that the backend renders appropriately for the
+target platform (text adventure, graphical, etc.).
+
+@node Control Flow
+@section Control Flow
+
+@menu
+* Conditional Statement::
+* Subroutine Call::
+* Unconditional Jump::
+* Subroutine Return::
+@end menu
+
+@node Conditional Statement
 @subsection Conditional Statement: IF-THEN-ELSE
 
 @defsyn
-IF @var{condition} THEN @var{true-statement} [ELSE @var{false-statement}]
+IF @var{condition} THEN @var{statement} [ELSE @var{statement}]
 @end defsyn
 
-Executes @var{true-statement} if @var{condition} evaluates to true (non-zero);
-otherwise, executes @var{false-statement} if present.
-The @var{condition} is an expression (see @ref{Expressions}).
+Executes @var{statement} if @var{condition} evaluates to true (non-zero);
+otherwise, executes the @var{statement} in the ELSE clause if present.
+The END-IF keyword is optional and ignored by the parser (used for readability).
+
+@subsubsection Syntax Variations
+
+@table @asis
+@item Simple conditional
+@code{IF @var{condition} THEN @var{statement}}
+@*
+Executes statement if condition is true.
+
+@item Conditional with else
+@code{IF @var{condition} THEN @var{statement} ELSE @var{statement}}
+@*
+Executes first statement if true, second if false.
+
+@item With END-IF marker
+@code{IF @var{condition} THEN @var{statements} END-IF}
+@*
+END-IF is ignored but improves readability.
+@end table
+
+@subsubsection Examples
 
 @example
 IF (score > 100) THEN
@@ -200,38 +481,85 @@ IF (score > 100) THEN
 ELSE
     SET difficulty 0
 END-IF
+
+IF (lives > 0) THEN
+    INCREMENT attempts
+END-IF
 @end example
 
-Note: The @code{END-IF} keyword is not part of the language syntax; it is used in examples
-for clarity but is not required by the parser. The parser accepts a single statement after
-THEN and ELSE; to create a block, use multiple statements in sequence (though the current
-parser only allows one statement per branch—see @ref{Limitations}).
+@subsubsection Valid Conditions
 
+Conditions are expressions that evaluate to true (non-zero) or false (zero).
+See @ref{Expressions} for expression syntax.
+
+@node Subroutine Call
 @subsection Subroutine Call: GOSUB
 
 @defsyn
 GOSUB @var{routine-name}
 @end defsyn
 
+@defsyn
+GOSUB (@var{routine-name})
+@end defsyn
+
 Calls the subroutine named @var{routine-name}. Execution continues after the GOSUB
 statement when a RETURN is encountered in the subroutine.
 
+@subsubsection Syntax Variations
+
+@table @asis
+@item Without parentheses
+@code{GOSUB @var{routine-name}}
+@*
+Direct call with routine name.
+
+@item With parentheses
+@code{GOSUB (@var{routine-name})}
+@*
+Parenthesized form for clarity or precedence.
+@end table
+
+@subsubsection Examples
+
 @example
 GOSUB InitializeGame
+GOSUB (UpdateScore)
+GOSUB ProcessInput
 @end example
 
+@subsubsection Notes
+
+GOSUB calls are analogous to function calls in other languages. The subroutine
+must contain a RETURN statement to return control to the caller.
+
+@node Unconditional Jump
 @subsection Unconditional Jump: GOTO
 
 @defsyn
 GOTO @var{label}
 @end defsyn
 
-Transfers control to the statement labeled @var{label}. Labels are identifiers.
+Transfers control to the statement following the label @var{label}.
+Labels are identifiers defined elsewhere in the program.
+
+@subsubsection Examples
 
 @example
-GOTO StartLoop
+GOTO MainLoop
+GOTO GAME_OVER
+GOTO Retry
 @end example
 
+@subsubsection Notes
+
+@itemize @bullet
+@item GOTO provides unstructured control flow
+@item Use sparingly; prefer GOSUB/RETURN for maintainability
+@item Labels must be defined in the same scope
+@end itemize
+
+@node Subroutine Return
 @subsection Subroutine Return: RETURN
 
 @defsyn
@@ -239,116 +567,351 @@ RETURN
 @end defsyn
 
 Returns from the current subroutine to the statement following the most recent GOSUB.
+In a top-level program, RETURN terminates execution.
+
+@subsubsection Examples
 
 @example
 RETURN
+
+MyRoutine:
+    SET processed 1
+    RETURN
 @end example
 
-@subsection Assignment: @var{variable} = @var{expression}
+@subsubsection Notes
+
+Each GOSUB should have a matching RETURN. Unmatched RETURNs at program level
+terminate the program.
+
+@node Arithmetic Operations
+@section Arithmetic Operations
+
+The AGI frontend supports standard arithmetic operations. See @ref{Operator Precedence}
+for information on how operations are evaluated.
+
+@menu
+* Addition and Subtraction::
+* Multiplication and Division::
+* Bit Shifting::
+@end menu
+
+@node Addition and Subtraction
+@subsection Addition and Subtraction
 
 @defsyn
-@var{variable} = @var{expression}
+@var{expression} + @var{expression}
 @end defsyn
-
-Evaluates @var{expression} and stores the result in @var{variable}.
-
-@example
-player_score = 0
-x = (y + 10)
-@end example
-
-@subsection Increment: INCREMENT @var{variable}
 
 @defsyn
-INCREMENT @var{variable}
+@var{expression} - @var{expression}
 @end defsyn
 
-Adds 1 to @var{variable}.
+Addition (+) produces the sum of two operands.
+Subtraction (-) produces the difference (left minus right).
+
+@subsubsection Examples
 
 @example
-INCREMENT lives
+score + 10
+(x + y)
+(score - penalty)
+(total - 100)
 @end example
 
-@subsection Decrement: DECREMENT @var{variable}
+@subsubsection Valid Ranges
+
+Results are computed using integer arithmetic. Overflow behavior depends on the
+backend target (wrap-around, saturation, or error).
+
+@node Multiplication and Division
+@subsection Multiplication and Division
 
 @defsyn
-DECREMENT @var{variable}
+@var{expression} * @var{expression}
 @end defsyn
-
-Subtracts 1 from @var{variable}.
-
-@example
-DECREMENT lives
-@end example
-
-@subsection Set to One: SET @var{variable}
 
 @defsyn
-SET @var{variable}
+@var{expression} / @var{expression}
 @end defsyn
 
-Sets @var{variable} to 1.
+Multiplication (*) produces the product of two operands.
+Division (/) produces the quotient (left divided by right). Integer division
+truncates toward zero.
+
+@subsubsection Examples
 
 @example
-SET flag
+score * 2
+(width * height)
+(total / 2)
+(points / players)
 @end example
 
-@subsection Reset to Zero: RESET @var{variable}
+@subsubsection Notes
+
+@itemize @bullet
+@item Division by zero produces undefined behavior
+@item For multiplication by powers of 2, consider bit shifting for efficiency
+@end itemize
+
+@node Bit Shifting
+@subsection Bit Shifting
 
 @defsyn
-RESET @var{variable}
+@var{expression} << @var{expression}
 @end defsyn
 
-Sets @var{variable} to 0.
+@defsyn
+@var{expression} >> @var{expression}
+@end defsyn
+
+Left shift (<<) moves bits left, filling with zeros. Equivalent to multiplication
+by powers of 2.
+Right shift (>>) moves bits right, discarding shifted bits. Equivalent to division
+by powers of 2.
+
+@subsubsection Examples
 
 @example
-RESET flag
+value << 2          @r{; Multiply by 4}
+flags << 3          @r{; Multiply by 8}
+packed >> 1         @r{; Divide by 2}
+shift >> 4          @r{; Divide by 16}
 @end example
 
+@subsubsection Equivalencies
+
+@table @asis
+@item @code{x << n} is equivalent to @code{x * 2^n}
+@item @code{x >> n} is equivalent to @code{x / 2^n} (integer division)
+@end table
+
+@node Comparison Operations
+@section Comparison Operations
+
+Comparison operations evaluate to 1 (true) or 0 (false). They are commonly used
+in IF conditions and while loops.
+
+@menu
+* Equality and Inequality::
+* Relational Comparisons::
+@end menu
+
+@node Equality and Inequality
+@subsection Equality and Inequality
+
+@defsyn
+@var{expression} = @var{expression}
+@end defsyn
+
+@defsyn
+@var{expression} <> @var{expression}
+@end defsyn
+
+Equality (=) returns 1 if operands are equal, 0 otherwise.
+Inequality (<>) returns 1 if operands differ, 0 otherwise.
+
+@subsubsection Examples
+
+@example
+(score = 100)
+(x = 0)
+(flag <> 1)
+(name <> "unknown")
+@end example
+
+@node Relational Comparisons
+@subsection Relational Comparisons
+
+@defsyn
+@var{expression} < @var{expression}
+@end defsyn
+
+@defsyn
+@var{expression} > @var{expression}
+@end defsyn
+
+@defsyn
+@var{expression} <= @var{expression}
+@end defsyn
+
+@defsyn
+@var{expression} >= @var{expression}
+@end defsyn
+
+Less than (<), greater than (>), less than or equal (<=), and greater than or
+equal (>=) compare two numeric operands.
+
+@subsubsection Examples
+
+@example
+(score < 10)
+(level > 5)
+(health <= 0)
+(age >= 18)
+@end example
+
+@node Logical Operations
+@section Logical Operations
+
+Logical operations combine boolean values and are typically used in conditions.
+
+@menu
+* Logical AND::
+* Logical OR::
+* Logical NOT::
+@end menu
+
+@node Logical AND
+@subsection Logical AND
+
+@defsyn
+@var{condition} AND @var{condition}
+@end defsyn
+
+Returns true if both operands are true (non-zero). Evaluation is left-to-right
+with short-circuit behavior (second operand not evaluated if first is false).
+
+@subsubsection Examples
+
+@example
+(score > 0) AND (lives > 0)
+(x >= 0) AND (x < 100)
+(active = 1) AND (visible = 1)
+@end example
+
+@node Logical OR
+@subsection Logical OR
+
+@defsyn
+@var{condition} OR @var{condition}
+@end defsyn
+
+Returns true if either operand is true (non-zero). Evaluation is left-to-right
+with short-circuit behavior (second operand not evaluated if first is true).
+
+@subsubsection Examples
+
+@example
+(score > 100) OR (bonus > 50)
+(level = 1) OR (level = 2)
+(end = 1) OR (quit = 1)
+@end example
+
+@node Logical NOT
+@subsection Logical NOT
+
+@defsyn
+NOT @var{condition}
+@end defsyn
+
+Returns true if the operand is false (zero), and vice versa.
+
+@subsubsection Examples
+
+@example
+NOT done
+NOT (score = 0)
+NOT ((x < 0) OR (x > 100))
+@end example
+
+@node Game Commands
+@section Game Commands
+
+The following commands are reserved for future implementation for game-specific
+functionality:
+
+@table @asis
+@item @code{NEWROOM}
+Load and transition to a new room or map. Reserved for future use.
+
+@item @code{LOADLOGICS}
+Load logic/script resources. Reserved for future use.
+
+@item @code{QUIT}
+End game and return to title screen. Reserved for future use.
+
+@item @code{SAID}
+Parse and respond to player text input. Reserved for future use.
+
+@item @code{TEST}
+Test multiple conditions. Reserved for future use.
+
+@item @code{POSN}
+Check if position is within bounding box. Reserved for future use.
+
+@item @code{CONTROLLER}
+Test controller/input state. Reserved for future use.
+
+@item @code{HAVEKEY}
+Check if keyboard input is available. Reserved for future use.
+@end table
+
+These keywords are recognized by the lexer but have no effect in the current
+parser implementation.
+
+@node Input and Output
+@section Input and Output
+
+The AGI frontend provides basic I/O commands for user interaction:
+
+@table @asis
+@item PRINT
+Display text on screen (see @ref{Print Statement})
+@item INPUT
+Read user input (see @ref{Input Statement})
+@item DIALOGUE
+Display attributed dialogue (see @ref{Dialogue Statement})
+@end table
+
+@node Expressions
 @section Expressions
 
-Expressions compute values and can consist of literals, identifiers, operators, and
-parentheses for grouping.
+Expressions compute values and can consist of literals, identifiers, operators,
+and parentheses for grouping.
 
-@subsection Arithmetic Expressions
+@subsubsection Primary Expressions
 
-Arithmetic expressions use the operators @code{+}, @code{-}, @code{*}, @code{/},
-@code{<<}, and @code{>>} to combine numeric values.
+Primary expressions are the building blocks:
+
+@table @asis
+@item Numeric literals: @code{42}, @code{0}, @code{x'FF'}, @code{o'77'}, @code{b'1010'}
+@item String literals: @code{"Hello, world!"}
+@item Identifiers: @code{score}, @code{player_x}, @code{Player.Score}
+@end table
+
+@subsubsection Compound Expressions
+
+Expressions can be combined using operators:
 
 @example
 score + 10
 (x * y) / 2
 value << 2
-@end example
-
-@subsection Comparison Expressions
-
-Comparison expressions evaluate to 1 (true) or 0 (false) and use the operators
-@code{=}, @code{<}, @code{>}, @code{<=}, @code{>=}, @code{<>}.
-
-@example
 (score = 100)
-(x < y)
-(flag <> 0)
+(score > 0) AND (lives > 0)
 @end example
 
-@subsection Logical Expressions
+@subsubsection Grouping
 
-Logical expressions combine boolean values using @code{AND} and @code{OR}.
-The @code{NOT} operator negates a boolean expression.
+Parentheses control evaluation order:
 
 @example
-(score > 0) AND (lives > 0)
-(NOT flag)
-(score < 10) OR (time > 100)
+((a + b) * c)
+(x = (y + 10))
+((score > 0) AND (lives > 0))
 @end example
 
-@subsection Operator Precedence
+@node Operator Precedence
+@section Operator Precedence
 
 Operators have the following precedence (highest first):
+
 @enumerate
 @item Parentheses @code{( @var{expression} @code{)}}
-@item Multiplication, division, and shifts: @code{*}, @code{/}, @code{<<}, @code{>>}
+@item Multiplication and division: @code{*}, @code{/}
+@item Bit shifts: @code{<<}, @code{>>}
 @item Addition and subtraction: @code{+}, @code{-}
 @item Comparisons: @code{=}, @code{<}, @code{>}, @code{<=}, @code{>=}, @code{<>}
 @item Logical NOT: @code{NOT}
@@ -356,60 +919,107 @@ Operators have the following precedence (highest first):
 @item Logical OR: @code{OR}
 @end enumerate
 
-@subsection Primary Expressions
+When operators have equal precedence, they evaluate left-to-right except for
+NOT which is right-associative.
 
-Primary expressions are:
-@table @asis
-@item Numeric literals: @code{42}, @code{0}, @code{x'FF'}, @code{o'77'}, @code{b'1010'}
-@item String literals: @code{"Hello, world!"}
-@item Identifiers: @code{score}, @code{player_x}, @code{Player.Score}
-@end table
-
-@subsection Numeric Literal Examples
-
-Examples of numeric literals using different formats:
-@table @asis
-@item Decimal
-@code{100}, @code{d'255'} (both equivalent; evaluates to 100 or 255)
-@item Hexadecimal
-@code{x'FF'} (255 in decimal), @code{x'1A'} (26 in decimal), @code{x'100'} (256 in decimal)
-@item Octal
-@code{o'77'} (63 in decimal), @code{o'10'} (8 in decimal), @code{o'777'} (511 in decimal)
-@item Binary
-@code{b'1010'} (10 in decimal), @code{b'11111111'} (255 in decimal), @code{b'1'} (1 in decimal)
-@item Word/Dword (String)
-@code{w'ABCD'} (string for assembler), @code{w"test"} (string for assembler)
-@end table
-
-All numeric formats are converted to their decimal integer equivalents when parsed
-and stored in the AST. This allows the rest of the compiler to work uniformly with
-integers regardless of the input representation.
-
-@section Limitations
-
-The current AGI frontend implementation has the following limitations:
-
-@itemize @bullet
-@item Only one statement is allowed in the THEN and ELSE branches of an IF statement.
-  To execute multiple statements, use subroutines (GOSUB/RETURN).
-@item The keywords NEWROOM, LOADLOGICS, QUIT, ASSIGN, SAID, TEST, POSN, CONTROLLER,
-  HAVEKEY, and the operator @code{.} are reserved for future use and have no effect.
-@item String literals are supported but cannot be used in expressions (they are only
-  allowed as literals; no string operations are defined).
-@end itemize
-
-@section Example Program
+@subsubsection Examples
 
 @example
-REM This program demonstrates basic AGI frontend constructs
+a + b * c           @r{; Equivalent to: a + (b * c)}
+(a + b) * c         @r{; Addition before multiplication}
+NOT a AND b         @r{; Equivalent to: (NOT a) AND b}
+a AND b OR c        @r{; Equivalent to: (a AND b) OR c}
+a OR b AND c        @r{; AND has higher precedence: a OR (b AND c)}
+@end example
+
+@node Identifier Normalization
+@section Identifier Normalization
+
+All identifiers are automatically normalized to the @code{Header.Case} format with
+dots as segment separators when converted to AST nodes.
+
+@subsubsection Normalization Rules
+
+@table @asis
+@item Input: @code{player-name}
+@*
+Output: @code{Player.Name}
+
+@item Input: @code{player_score}
+@*
+Output: @code{Player.Score}
+
+@item Input: @code{getItemCount}
+@*
+Output: @code{Get.Item.Count}
+
+@item Input: @code{my_var_name}
+@*
+Output: @code{My.Var.Name}
+
+@item Input: @code{X}
+@*
+Output: @code{X} (unchanged if no separators)
+@end table
+
+Hyphens and underscores are both converted to dots in the output. CamelCase
+identifiers are split at case transitions.
+
+@node Unsupported Commands
+@section Unsupported Commands
+
+The following AGI-like constructs are recognized by the lexer but not implemented
+in the parser. They are reserved for future development:
+
+@table @asis
+@item @code{NEWROOM @var{room-id}}
+Load and display a new room. Planned for room management.
+
+@item @code{LOADLOGICS @var{script-id}}
+Load and execute a logic/script file. Planned for modular game logic.
+
+@item @code{QUIT}
+End the game and return to the title screen. Planned for game termination.
+
+@item @code{ASSIGN @var{variable} @var{value}}
+Explicit assignment keyword. Use @code{variable = value} instead.
+
+@item @code{SAID @var{word-list}}
+Parse player input against vocabulary. Planned for text parser integration.
+
+@item @code{TEST @var{var1} @var{var2} @dots{}}
+Test multiple variables for specific patterns. Planned for testing utilities.
+
+@item @code{POSN @var{left} @var{top} @var{right} @var{bottom} [variable]}
+Check if position is within bounding box. Planned for collision detection.
+
+@item @code{CONTROLLER @var{controller-id}}
+Test if input controller is active. Planned for input handling.
+
+@item @code{HAVEKEY}
+Check if keyboard input is waiting. Planned for input buffering.
+@end table
+
+These commands are syntactically valid but produce no code generation in the
+current implementation.
+
+@node Example Programs
+@section Example Programs
+
+@subsubsection Game State Machine
+
+@example
+;; Game state initialization
 SET score 0
 SET lives 3
+SET game_over 0
 
+;; Main game loop
 MAIN_LOOP:
-IF (lives = 0) THEN
-    GOTO GAME_OVER
+IF (game_over = 1) THEN
+    GOTO END_GAME
 ELSE
-    INCREMENT score
+    GOSUB UpdateGame
 END-IF
 
 IF (score > 1000) THEN
@@ -419,7 +1029,54 @@ END-IF
 
 GOTO MAIN_LOOP
 
-GAME_OVER:
+;; Game over handler
+END_GAME:
+PRINT "Game Over!"
+PRINT "Final Score: " score
+RETURN
+@end example
+
+@subsubsection Inventory Management
+
+@example
+;; Initialize inventory
+SET has_key 0
+SET has_sword 0
+SET gold 100
+
+;; Pick up item
+PICKUP:
+IF (item = 1) THEN
+    SET has_key 1
+    PRINT "You found a key!"
+ELSE
+    IF (item = 2) THEN
+        SET has_sword 1
+        PRINT "You found a sword!"
+    ELSE
+        PRINT "Unknown item."
+    END-IF
+END-IF
+
+RETURN
+@end example
+
+@subsubsection Dialogue System
+
+@example
+;; NPC dialogue routine
+TALK_GUARD:
+DIALOGUE "Guard" "Halt! Who goes there?"
+
+INPUT response
+
+IF (has_key = 1) THEN
+    DIALOGUE "Guard" "Oh, you have the key. Pass."
+    GOSUB OpenDoor
+ELSE
+    DIALOGUE "Guard" "You need permission to enter."
+END-IF
+
 RETURN
 @end example
 

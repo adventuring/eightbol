@@ -493,7 +493,7 @@ Otherwise return CONDITION unchanged."
         ((member op '(>= ≥) :test #'string-equal) "≥")
         ((member op '(<= ≤) :test #'string-equal) "≤")
         ((member op '(/= ≠) :test #'string-equal) "≠")
-        ((member op '(= equal) :test #'string-equal) "=")
+        ((member op '(= equal eql) :test #'string-equal) "=")
         (t op)))
 
 (defun oops-class-of (symbol)
@@ -503,7 +503,7 @@ Resolves @code{Self} to @code{*CLASS-ID*}. Otherwise prefers the parsed COBOL
 @code{*working-storage*} entry (@code{:USAGE} @code{:OBJECT} or @code{:OBJECT-REF}
 and @code{:CLASS}), then @code{*TYPE-TABLE*} (merged copybooks, including
 @file{Phantasia-Globals.cpy} from RAM @code{; @Class} annotations), then built-in
-Phantasia globals when no table row exists.
+@code{Phantasia globals when no table row exists.
 
 @table @asis
 @item SYMBOL
@@ -519,7 +519,7 @@ Class name string (e.g. @code{\"Course\"}), or @code{*CLASS-ID*} for Self."
        *class-id*)
       (t
        (let ((var (gethash name *working-storage*)))
-         (or (when (and var (member (getf var :usage) '(:object :object-ref)))
+         (or (when (and var (member (getf var :usage) '(:object :object-ref :x)))
                (getf var :class))
              (when *type-table*
                (or (gethash name *type-table*)
@@ -1119,13 +1119,13 @@ Integer byte count at least 1."
                 (max (rec (getf (rest e) :from)) (rec (getf (rest e) :to))))
                ((eql :subtract (first e))
                 (max (rec (getf (rest e) :from)) (rec (getf (rest e) :subtrahend))))
-               ((eql :mulitply (first e))
+               ((eql :multiply (first e))
                 (max (rec (getf (rest e) :multiplier)) (rec (getf (rest e) :by))))
                ((eql :divide (first e))
                 (max (rec (getf (rest e) :numerator)) (rec (getf (rest e) :denominator))))
-               ((member (first e)
-                        '(:add-expr :subtract-expr :multiply-expr :divide-expr))
-                (max (rec (second e)) (rec (third e))))
+((member (first e)
+                         '(:add :subtract :multiply :divide))
+                 (max (rec (getf (rest e) :from)) (rec (getf (rest e) :to))))
                ((member (first e)
                         '(:shift-left :shift-right :bit-and :bit-or :bit-xor))
                 (max (rec (second e)) (rec (third e))))

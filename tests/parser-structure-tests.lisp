@@ -64,7 +64,7 @@
          (cond (getf (rest if-stmt) :condition)))
     (is (not (null cond)))
     (is (eq :not-null (first cond)))
-    (is (string= "HP" (second cond)))))
+    (is (string-equal "HP" (second cond)))))
 
 (test parser-structure/condition-relation-equal
   "IF x IS EQUAL TO y produces (= lhs rhs) in condition."
@@ -124,8 +124,8 @@
                       :key #'eightbol::ast-method-name :test #'string=))
          (inv (find :invoke (eightbol::ast-method-statements think) :key #'first)))
     (is (not (null inv)))
-    (is (string= "Kill" (getf (rest inv) :method)))
-    (is (string= "HP" (getf (rest inv) :returning)))))
+    (is (string-equal "Kill" (getf (rest inv) :method)))
+    (is (string-equal "HP" (getf (rest inv) :returning)))))
 
 (test parser-structure/perform-times-structure
   "PERFORM proc TIMES n produces (:perform :procedure :times)."

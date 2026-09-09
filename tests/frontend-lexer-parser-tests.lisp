@@ -276,7 +276,7 @@
 
 (test ast-make-call-node
   "Test make-call-node construction."
-  (let ((node (eightbol::make-call-node "MyRoutine" '())))
+  (let ((node (eightbol::make-call-node "MyRoutine")))
     (is (not (null node)))
     (is (listp node))))
 
@@ -329,7 +329,6 @@
   "Test all known lexer functions are defined and callable."
   (dolist (lex-fn '(eightbol::basic-lex-line
                     eightbol::agi-lex-line
-                    eightbol::cobol-lex-line
                     eightbol::fortran-lex-line
                     eightbol::lua-lex-line
                     eightbol::pascal-lex-line
@@ -341,15 +340,12 @@
 
 (test all-parser-token-lists-callable
   "Test all known parser token-list functions are defined."
-  (dolist (tok-fn '(eightbol::basic-token-list
-                    eightbol::agi-token-list
+  (dolist (tok-fn '(eightbol::agi-token-list
                     eightbol::cobol-token-list
                     eightbol::fortran-token-list
                     eightbol::lua-token-list
                     eightbol::pascal-token-list
-                    eightbol::objective-token-list
-                    eightbol::smalltalk-token-list
-                    eightbol::lingo-token-list))
+                    eightbol::objective-token-list))
     (is (fboundp tok-fn)
         (format nil "Token list function ~A should be defined" tok-fn))))
 

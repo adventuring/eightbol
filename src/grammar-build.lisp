@@ -78,7 +78,7 @@ alongside."
 
 (defun make-identifier (name)
   "Build an identifier reference."
-  (string name))
+  (list :identifier (string name)))
 
 (defun make-qualified-identifier (slot object &optional class)
   "Build a qualified identifier (:of slot obj [class])."

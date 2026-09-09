@@ -762,7 +762,8 @@ CPU is a supported backend keyword: 6502 family (:6502 :rp2a03 :65c02 :65c816 :h
                                                    pic-size-table pic-width-table))
           ((:arm7) (eightbol::compile-arm7-method s effective-method class-id slot-table type-table const-table
                                                    pic-size-table pic-width-table))
-          ((:f8) (eightbol::compile-f8-method effective-method)))))))
+          ((:f8) (eightbol::compile-f8-method effective-method))
+          ((:stack) (eightbol::compile-stack-method effective-method)))))))
 
 (defun asm-from-ast (ast)
   "Compile a hand-crafted AST directly to 6502 assembly string.
