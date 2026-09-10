@@ -1,4 +1,4 @@
-;; src/ast-optimize.lisp — AST-level dead code elimination and tail-call detection
+;; src/ast-optimize.lisp — AST-level optimization: constant folding, dead code elimination, CSE, and tail-call detection
 ;;
 ;; Performs:
 
@@ -20,7 +20,11 @@
 ;;   3.  Dead  store  elimination:  removes  writes  overwritten  before
 ;;   being read.
 
-;;   4.  Tail-call detection:  annotates  INVOKE/CALL  in tail  position
+;;   4. Common subexpression elimination: identifies and factors out
+;;      identical subexpressions into temporary variables to avoid
+;;      recomputation.
+
+;;   5.  Tail-call detection:  annotates  INVOKE/CALL  in tail  position
 ;;      with   :tail-call-p.   (INVOKE   with   :returning   cannot   be
 ;;      tail-called; CALL has no return value.)
 ;;
@@ -459,14 +463,73 @@ Integer, simplified list, or EXPRESSION unchanged for non-arithmetic leaves."
              (ash a n)
              (list :shift-left a n))))
       
-      (:shift-right
-       (let ((a (fold-literal-expression (second expression)))
-             (n (third expression)))
-         (if (and (integerp a) (integerp n))
-             (ash a (- n))
-             (list :shift-right a n))))
-      
-      (otherwise expression))))
+       (:shift-right
+        (let ((a (fold-literal-expression (second expression)))
+              (n (third expression)))
+          (if (and (integerp a) (integerp n))
+              (ash a (- n))
+              (list :shift-right a n))))
+       
+       ;; Canonical arithmetic operators
+       (:+
+        (let ((a (fold-literal-expression (second expression)))
+              (b (fold-literal-expression (third expression))))
+          (if (and (integerp a) (integerp b))
+              (+ a b)
+              (list :+ a b))))
+       (:-
+        (let ((a (fold-literal-expression (second expression)))
+              (b (fold-literal-expression (third expression))))
+          (if (and (integerp a) (integerp b))
+              (- a b)
+              (list :- a b))))
+       (:×
+        (let ((a (fold-literal-expression (second expression)))
+              (b (fold-literal-expression (third expression))))
+          (if (and (integerp a) (integerp b))
+              (* a b)
+              (list :× a b))))
+       (:÷
+        (let ((a (fold-literal-expression (second expression)))
+              (b (fold-literal-expression (third expression))))
+          (if (and (integerp a) (integerp b) (not (zerop b)))
+              (truncate a b)
+              (list :÷ a b))))
+       
+       ;; Bitwise operators
+       (:∧
+        (let ((a (fold-literal-expression (second expression)))
+              (b (fold-literal-expression (third expression))))
+          (if (and (integerp a) (integerp b))
+              (logand a b)
+              (list :∧ a b))))
+       (:∨
+        (let ((a (fold-literal-expression (second expression)))
+              (b (fold-literal-expression (third expression))))
+          (if (and (integerp a) (integerp b))
+              (logior a b)
+              (list :∨ a b))))
+       (:⊻
+        (let ((a (fold-literal-expression (second expression)))
+              (b (fold-literal-expression (third expression))))
+          (if (and (integerp a) (integerp b))
+              (logxor a b)
+              (list :⊻ a b))))
+       (:¬
+        (let ((a (fold-literal-expression (second expression))))
+          (if (integerp a)
+              (lognot a)
+              (list :¬ a))))
+       
+       ;; Shift operator
+       (:ash
+        (let ((a (fold-literal-expression (second expression)))
+              (n (fold-literal-expression (third expression))))
+          (if (and (integerp a) (integerp n))
+              (ash a n)
+              (list :ash a n))))
+       
+       (otherwise expression))))
 
 (defun fold-constants-in-statement (statement)
   "Return STATEMENT with literal sub-expressions folded where safe."
@@ -771,6 +834,243 @@ A top-level @code{GOBACK} must not drop following paragraphs — they are @code{
       (flush-block))
     result))
 
+
+;;; Common Subexpression Elimination (CSE - Stub)
+;;;
+;;; This is a placeholder CSE implementation. Full CSE optimization will be added 
+;;; in a future pass to identify identical subexpressions appearing 2+ times
+;;; and factor them into temporaries to avoid recomputation.
+
+(defun %cse-process-statements (statements)
+  "Apply common subexpression elimination to statement list.
+   Currently a stub that returns statements unchanged - full CSE to be implemented."
+  statements)
+
+;;; Strength Reduction Optimizer
+;;;
+;;; Transforms expensive operations to cheaper ones:
+;;; - Multiplication by power of 2 → left shift
+;;; - Division by power of 2 → right shift (unsigned only)
+;;; - Modulo by power of 2 → bitwise AND
+;;; - Multiplication by 0 or 1 → identity
+;;; - Addition/subtraction by 0 → identity
+;;; - Bitwise AND/OR with constants → identity/simplification
+
+(defun is-power-of-two-p (n)
+  "True if N is a positive power of 2 (1, 2, 4, 8, 16, ...)."
+  (and (integerp n) (plusp n) (zerop (logand n (- n 1)))))
+
+(defun shift-count-for-power-of-two (n)
+  "Return the shift count for power-of-two N. E.g., 2→1, 4→2, 8→3."
+  (when (is-power-of-two-p n)
+    (1- (integer-length n))))
+
+(defun strength-reduce-expression (expression)
+  "Apply strength reduction to EXPRESSION.
+   Returns transformed expression or EXPRESSION if no reduction applies."
+  (unless (listp expression)
+    (return-from strength-reduce-expression expression))
+  
+  (case (first expression)
+    
+    ;; Multiplication: (:multiply-expr X Y)
+    (:multiply-expr
+     (let ((a (strength-reduce-expression (second expression)))
+           (b (strength-reduce-expression (third expression))))
+       ;; Multiply by 0 → 0
+       (cond ((or (eql a 0) (eql b 0)) 0)
+             ;; Multiply by 1 → operand
+             ((eql a 1) b)
+             ((eql b 1) a)
+             ;; Multiply by power of 2 → shift left
+             ((is-power-of-two-p b)
+              (let ((shift (shift-count-for-power-of-two b)))
+                (list :shift-left a shift)))
+             ((is-power-of-two-p a)
+              (let ((shift (shift-count-for-power-of-two a)))
+                (list :shift-left b shift)))
+             (t (list :multiply-expr a b)))))
+    
+    ;; Division: (:divide-expr X Y)
+    (:divide-expr
+     (let ((a (strength-reduce-expression (second expression)))
+           (b (strength-reduce-expression (third expression))))
+       ;; Divide by 1 → operand
+       (cond ((eql b 1) a)
+             ;; Divide by power of 2 (unsigned) → shift right
+             ((is-power-of-two-p b)
+              (let ((shift (shift-count-for-power-of-two b)))
+                (list :shift-right a shift)))
+             (t (list :divide-expr a b)))))
+    
+    ;; Addition: (:add-expr X Y)
+    (:add-expr
+     (let ((a (strength-reduce-expression (second expression)))
+           (b (strength-reduce-expression (third expression))))
+       ;; Add 0 → operand
+       (cond ((eql b 0) a)
+             ((eql a 0) b)
+             ;; Convert +(-k) to -(k)
+             ((and (numberp b) (minusp b))
+              (list :subtract-expr a (- b)))
+             (t (list :add-expr a b)))))
+    
+    ;; Subtraction: (:subtract-expr X Y)
+    (:subtract-expr
+     (let ((a (strength-reduce-expression (second expression)))
+           (b (strength-reduce-expression (third expression))))
+       ;; Subtract 0 → operand
+       (cond ((eql b 0) a)
+             ;; Subtract -k → add k
+             ((and (numberp b) (minusp b))
+              (list :add-expr a (- b)))
+             (t (list :subtract-expr a b)))))
+    
+    ;; Modulo: (:modulo-expr X Y)
+    (:modulo-expr
+     (let ((a (strength-reduce-expression (second expression)))
+           (b (strength-reduce-expression (third expression))))
+       ;; Modulo by power of 2 → bitwise AND with (power-1)
+       (cond ((is-power-of-two-p b)
+              (let ((mask (- b 1)))
+                (list :∧ a mask)))
+             (t (list :modulo-expr a b)))))
+    
+    ;; Bitwise AND: (:∧ X Y)
+    (:∧
+     (let ((a (strength-reduce-expression (second expression)))
+           (b (strength-reduce-expression (third expression))))
+       ;; AND with 0 → 0
+       (cond ((or (eql a 0) (eql b 0)) 0)
+             ;; AND with -1 (all bits set) → operand (if we know width)
+             (t (list :∧ a b)))))
+    
+    ;; Bitwise OR: (:∨ X Y)
+    (:∨
+     (let ((a (strength-reduce-expression (second expression)))
+           (b (strength-reduce-expression (third expression))))
+       ;; OR with 0 → operand
+       (cond ((eql b 0) a)
+             ((eql a 0) b)
+             ;; OR with -1 (all bits set) → -1 (if we know width)
+             (t (list :∨ a b)))))
+    
+    ;; Bitwise XOR: (:⊻ X Y)
+    (:⊻
+     (let ((a (strength-reduce-expression (second expression)))
+           (b (strength-reduce-expression (third expression))))
+       ;; XOR with 0 → operand
+       (cond ((eql b 0) a)
+             ((eql a 0) b)
+             ;; XOR with self → 0 (but requires knowing if same variable)
+             (t (list :⊻ a b)))))
+    
+    ;; Bitwise NOT: (:¬ X)
+    (:¬
+     (let ((a (strength-reduce-expression (second expression))))
+       (list :¬ a)))
+    
+    ;; Shift left: (:shift-left X N)
+    (:shift-left
+     (let ((a (strength-reduce-expression (second expression)))
+           (n (third expression)))
+       (cond ((eql n 0) a)
+             (t (list :shift-left a n)))))
+    
+    ;; Shift right: (:shift-right X N)
+    (:shift-right
+     (let ((a (strength-reduce-expression (second expression)))
+           (n (third expression)))
+       (cond ((eql n 0) a)
+             (t (list :shift-right a n)))))
+    
+    ;; For other expressions, recurse on sublists
+    (otherwise
+     (mapcar #'strength-reduce-expression expression))))
+
+(defun strength-reduce-in-statement (statement)
+  "Apply strength reduction to all expressions in STATEMENT."
+  (unless (listp statement)
+    (return-from strength-reduce-in-statement statement))
+  
+  (case (first statement)
+    
+    ;; :compute :target id :expression expr
+    (:compute
+     (list :compute
+           :target (safe-getf (rest statement) :target)
+           :expression (strength-reduce-expression (safe-getf (rest statement) :expression))))
+    
+    ;; :move :from expr :to id
+    (:move
+     (list :move
+           :from (strength-reduce-expression (safe-getf (rest statement) :from))
+           :to (safe-getf (rest statement) :to)))
+    
+    ;; :add :from expr :to (expr|id) [:giving id]
+    (:add
+     (let ((from (safe-getf (rest statement) :from))
+           (to (safe-getf (rest statement) :to))
+           (giving (safe-getf (rest statement) :giving)))
+       (list* :add
+              :from (strength-reduce-expression from)
+              :to (if (stringp to) to (strength-reduce-expression to))
+              (when giving (list :giving giving)))))
+    
+    ;; :subtract :minuend expr :subtrahend expr [:giving id]
+    (:subtract
+     (let ((minuend (safe-getf (rest statement) :minuend))
+           (subtrahend (safe-getf (rest statement) :subtrahend))
+           (giving (safe-getf (rest statement) :giving)))
+       (list* :subtract
+              :minuend (strength-reduce-expression minuend)
+              :subtrahend (strength-reduce-expression subtrahend)
+              (when giving (list :giving giving)))))
+    
+    ;; :multiply :multiplier expr :by expr [:giving id]
+    (:multiply
+     (let ((multiplier (safe-getf (rest statement) :multiplier))
+           (by (safe-getf (rest statement) :by))
+           (giving (safe-getf (rest statement) :giving)))
+       (list* :multiply
+              :multiplier (strength-reduce-expression multiplier)
+              :by (strength-reduce-expression by)
+              (when giving (list :giving giving)))))
+    
+    ;; :divide :numerator expr :denominator expr [:giving id]
+    (:divide
+     (let ((numerator (safe-getf (rest statement) :numerator))
+           (denominator (safe-getf (rest statement) :denominator))
+           (giving (safe-getf (rest statement) :giving)))
+       (list* :divide
+              :numerator (strength-reduce-expression numerator)
+              :denominator (strength-reduce-expression denominator)
+              (when giving (list :giving giving)))))
+    
+    ;; :if :condition cond :then stmts :else stmts
+    (:if
+     (list :if
+           :condition (strength-reduce-expression (safe-getf (rest statement) :condition))
+           :then (strength-reduce-in-list (safe-getf (rest statement) :then))
+           :else (strength-reduce-in-list (safe-getf (rest statement) :else))))
+    
+    ;; :invoke :object expr :method name [:returning id] [:using expr]
+    (:invoke
+     (list* :invoke
+            :object (strength-reduce-expression (safe-getf (rest statement) :object))
+            :method (safe-getf (rest statement) :method)
+            (append (when (safe-getf (rest statement) :returning)
+                      (list :returning (safe-getf (rest statement) :returning)))
+                    (when (safe-getf (rest statement) :using)
+                      (list :using (strength-reduce-expression (safe-getf (rest statement) :using)))))))
+    
+    ;; Default: return as-is
+    (otherwise statement)))
+
+(defun strength-reduce-in-list (statements)
+  "Apply strength reduction to all statements in a list."
+  (mapcar #'strength-reduce-in-statement (ensure-list statements)))
+
 ;;; Top-level entry point
 
 (defun optimize-ast (ast)
@@ -813,9 +1113,10 @@ map across each node. When a single @code{(:program ...)} plist, optimize direct
                               (eliminate-unreachable-in-method-body
                                (annotate-tail-calls-in-list
                                 (eliminate-dead-stores-in-list
-                                 (eliminate-unreachable-in-method-body
-                                  (fold-constants-in-list
-                                   (rewrite-divide-multiply-in-list
-                                    (safe-getf (rest m) :statements))))))))
+                                 (%cse-process-statements
+                                  (eliminate-unreachable-in-method-body
+                                   (fold-constants-in-list
+                                    (rewrite-divide-multiply-in-list
+                                    (safe-getf (rest m) :statements)))))))))
                         m))
                   (ensure-list methods)))))

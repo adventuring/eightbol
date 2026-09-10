@@ -23,6 +23,18 @@
     :validate-eightbol-program
     :collect-object-reference-classes-from-ast
     
+    ;; Dead code elimination optimizer
+    :eliminate-dead-code-in-list
+    :apply-dead-code-elimination
+    :optimize-dead-code
+    :eliminate-unreachable-after-terminal
+    :simplify-if-with-constant-condition
+    :simplify-if-empty-branches
+    :simplify-if-identical-branches
+    :empty-block-p
+    :always-true-condition-p
+    :always-false-condition-p
+    
     ;; BASIC-specific API (exposed for external BASIC drivers) -- Derived from Dartmouth BASIC/QBASIC syntax, maps line numbers to labels, GOSUB/RETURN→PERFORM/GOBACK; no graphics/sound commands
     :basic-lex
     :parse-basic

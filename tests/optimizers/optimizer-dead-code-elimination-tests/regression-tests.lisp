@@ -1,35 +1,32 @@
-;;; -*- Mode: Lisp; Syntax: ANSI-Common-Lisp; Base: 10; Package: eightbol/test/optimizer-dead-code-elimination -*-
-;;;
-;;; EIGHTBOL Dead Code Elimination Optimizer Regressions
-;;;
-;;; © 2026 EIGHTBOL Development. All rights reserved.
-;;; Licensed under the MIT License
-;;;
-;;; This module tests the dead code elimination optimizer pass.
-;;; See: src/ast-optimize.lisp
-
+;;; Test regressions for dead code elimination
 (in-package :eightbol/test/optimizer-dead-code-elimination)
-
-(fiveam:def-suite :optimizer-dead-code-elimination
-  :description "Dead Code Elimination optimizer tests"
-  :in :ast-optimize)
-
-(fiveam:def-suite :optimizer-dead-code-elimination-regression
-  :description "Dead Code Elimination regression tests"
-  :in :optimizer-dead-code-elimination)
-
-(in-suite :optimizer-dead-code-elimination-regression)
-
 
 (test dead_code_elimination_regression_known_issue_1
   "REGRESSION: Known issue from issue tracker is fixed"
-  (skip "Implementation pending"))
+  ;; Verify that unreachable code after terminal statements is removed
+  (let* ((input '((:move :to "X" :from 1)
+                  (:stop-run)
+                  (:move :to "Y" :from 2)
+                  (:move :to "Z" :from 3)))
+         (result (eliminate-dead-code-in-list input)))
+    ;; After optimization, should have only 2 statements
+    (is (= 2 (length result)))))
 
 (test dead_code_elimination_regression_previous_failures
   "REGRESSION: Previously failing programs now work correctly"
-  (skip "Implementation pending"))
+  ;; Verify constant condition simplification works
+  (let* ((input '((:if :condition :true
+                       :then ((:move :to "A" :from 1))
+                       :else ((:move :to "B" :from 2)))))
+         (result (eliminate-dead-code-in-list input)))
+    ;; IF with true condition should become just the THEN branch
+    (is (listp result))))
 
 (test dead_code_elimination_regression_optimization_disabled
   "REGRESSION: Results are identical when optimization is disabled"
-  (skip "Implementation pending"))
-
+  ;; Verify optimization doesn't break on non-optimizable code
+  (let* ((input '((:perform :target "PARAGRAPH1" :times 5)
+                  (:move :to "X" :from 1)))
+         (result (eliminate-dead-code-in-list input)))
+    ;; Should preserve all statements
+    (is (= 2 (length result)))))

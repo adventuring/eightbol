@@ -6,10 +6,10 @@
 (in-suite :dartmouth-basic-parity)
 
 (test basic/transpile-entrypoints-exist
-  (skip "BASIC must use proper AST output, not transpile to COBOL")
-  #+skip (is (fboundp 'eightbol::basic-transpile-to-assembly))
-  #+skip (is (fboundp 'eightbol::basic-shell-run)
-      "basic-shell RUN must compile emitted methods, not execute CPU code in REPL"))
+  "Verify BASIC AST compilation entry points are available."
+  (is (fboundp 'eightbol::basic-ast-from-source))
+  (is (fboundp 'eightbol::compile-basic-from-path)
+      "BASIC compilation must use AST output, not COBOL transpile"))
 
 (test basic/cp1610-and-6502-both-compile
   (skip "BASIC must produce AST, not transpile")

@@ -3713,15 +3713,21 @@ AST is a :method plist (not full :program)."
     (is (null file))
     (is (equal '("-I" "x" "-m" "6502") rest))))
 
-(test basic/transpile-emits-class-and-method
-  "transpile-basic-to-cobol-string emits CLASS-ID and METHOD-ID for a tiny program."
-  (let* ((src "100 METHOD \"Think\"
-110 REM hello
-120 END
-")
-         (cob (eightbol::transpile-basic-to-cobol-string "TestBas" src)))
-    (is (search "CLASS-ID. TestBas." cob))
-    (is (search "METHOD-ID. \"Think\"" cob))))
+(test basic/emits-canonical-ast
+  "basic-ast-from-source emits canonical :program AST node directly."
+  (let* ((src "10 LET A = 5
+20 GOSUB 100
+30 RETURN
+100 LET B = 10
+110 RETURN")
+         (ast (eightbol::basic-ast-from-source src :class-id "TestBas")))
+    (is (eq :program (eightbol::ast-node-type ast)))
+    (is (string-equal "TestBas" (eightbol::ast-class-id ast)))
+    (is (not (null (eightbol::ast-methods ast))))
+    (let ((main-method (first (eightbol::ast-methods ast))))
+      (is (string-equal "Main" (eightbol::ast-method-name main-method)))
+      (is (not (null (eightbol::ast-method-statements main-method)))))))
+
 
 (test lexer/valid-copybook-name-p
   "valid-copybook-name-p rejects path traversal and accepts valid names."

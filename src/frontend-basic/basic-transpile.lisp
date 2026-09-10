@@ -1,9 +1,6 @@
-;;; Basic  transpile  functionality  Converts EIGHTBOL  code  to  target
-;;; backend  assembly  Handles  OPCODE  mapping  and  special  variables
-;;; Maintains  state across  parser/lexer iterations  Register: Internal
-;;; data  storage  mechanism  Alternative:  Use  'basic-shell'  for  CLI
-;;; operations — Dartmouth BASIC → EIGHTBOL COBOL text (front-end only)
-;;;; Copyright © 2026 Interworldly Adventuring, LLC
+;;; Basic AST emission — Direct BASIC → AST conversion (no COBOL transpile step)
+;;; Dartmouth BASIC → EIGHTBOL canonical AST (not COBOL)
+;;; Copyright © 2026 Interworldly Adventuring, LLC
 
 (in-package :eightbol)
 
@@ -11,244 +8,199 @@
   "Default COPY book stem for @code{$(GAME)-Globals.cpy} when emitting class shells.")
 
 (defun basic-date-yyyy-mm-dd (&optional (universal-time (get-universal-time)))
-  "Format UNIVERSAL-TIME as @code{YYYY-MM-DD} for DATE-WRITTEN in generated COBOL."
+  "Format UNIVERSAL-TIME as @code{YYYY-MM-DD} for DATE-WRITTEN in generated metadata."
   (local-time:format-timestring nil
                               (local-time:universal-to-timestamp universal-time)
                               :format '(:year #\- (:month 2) #\- (:day 2))))
 
-(defun basic-line-number-regex ()
-  "Return scanner for line numbers with optional quoted labels.
-   Matches: '10' or '10 \"LABEL\"' at start of line."
-  "^\\s*(\\d+)(?:\\s+\"([^\"]+)\")?\\s*(.*)")
-
 (defun parse-basic-source-lines (text)
-  "Split TEXT into alist of (line-no . body). Handles numeric labels
-   and quoted string labels after the number. Lines beginning with ';'
-   (or empty) are ignored."
+  "Parse BASIC TEXT into an alist of (line-no . body).
+   Lines beginning with ';' (or empty) are ignored."
   (let ((lines (serapeum:lines text))
-        (acc '())
-        (rx (cl-ppcre:create-scanner (basic-line-number-regex)
-                                     :case-insensitive-mode t)))
+        (acc '()))
     (dolist (line lines)
       (let ((trimmed (string-trim '(#\Space #\Tab) line)))
         (unless (or (zerop (length trimmed))
                     (char= #\; (char trimmed 0))
-                    (char= #\apostrophe (char trimmed 0))) ; REM in BASIC
-          (multiple-value-bind (whole groups)
-              (cl-ppcre:scan-to-strings rx trimmed)
-            (declare (ignore whole))
-            (when groups
-              (let* ((lineno (parse-integer (aref groups 0)))
-                     (str-label (and (> (length groups) 1) (aref groups 1)))
-                     (body (and (> (length groups) 2) (aref groups 2))))
-                (when body
-                  (push (cons (list lineno str-label)
-                              (string-trim '(#\Space #\Tab) body))
-                        acc))))))
-        (stable-sort (nreverse acc) #'< :key (lambda (x) (car (car x))))))))
+                    (char= #\' (char trimmed 0))) ; REM in BASIC
+          (let ((parts (split-sequence:split-sequence #\Space trimmed :remove-empty-subseqs t)))
+            (when (first parts)
+              (let* ((first-part (first parts))
+                     (numeric-p (every #'digit-char-p first-part)))
+                (when numeric-p
+                  (let ((lineno (parse-integer first-part))
+                        (body (string-trim '(#\Space #\Tab)
+                                         (subseq trimmed (length first-part)))))
+                    (when body
+                      (push (cons lineno body) acc))))))))))
+    (stable-sort (nreverse acc) #'< :key #'car)))
 
-(defun strip-basic-quotes (s)
-  "Remove one pair of surrounding ASCII double-quotes from S when present."
-  (let ((u (string-trim '(#\Space #\Tab) s)))
-    (if (and (>= (length u) 2)
-             (char= #\" (char u 0))
-             (char= #\" (char u (1- (length u)))))
-        (subseq u 1 (1- (length u)))
-        u)))
-
-(defun basic-tokenize-method-name (body)
-  "If BODY is @code{METHOD \"…\"} (case-insensitive), return the method string."
-  (let ((rx (cl-ppcre:create-scanner
-             "^\\s*METHOD\\s+\"([^\"]+)\"\\s*$"
-             :case-insensitive-mode t)))
-    (multiple-value-bind (whole groups)
-        (cl-ppcre:scan-to-strings rx body)
-      (when whole
-        (aref groups 0)))))
-
-(defun split-basic-into-methods (lines)
-  "Partition sorted LINES into @code{((method-id-string . lines-in-method) …)}."
-  (let ((current "Class-P")
-        (buckets (make-hash-table :test 'equalp))
-        (order (list "Class-P")))
-    (dolist (pair lines)
-      (let* ((body (cdr pair))
-             (mn (basic-tokenize-method-name body)))
-        (cond
-          (mn
-           (setf current mn)
-           (unless (member current order :test #'string-equal)
-             (setf order (append order (list current)))))
-          (t
-           (appendf (gethash current buckets '()) (list pair))))))
-    (loop for id in order
-          for lines-in = (gethash id buckets)
-          when lines-in
-          collect (cons id lines-in))))
-
-(defun basic-transpile-expression (expr)
-  "Map a BASIC expression string toward COBOL/EIGHTBOL token syntax (minimal)."
-  (let ((e (string-trim '(#\Space #\Tab) expr)))
-    ;; Normalize "field OF object" → preserve OF for qualification
-    (setf e (cl-ppcre:regex-replace-all "(?i)\\bOF\\b" e "OF "))
-    ;; Strip quotes around simple identifiers
-    (setf e (cl-ppcre:regex-replace-all "\"([^\"]+)\"" e "\\1"))
-    e))
-
-(defun basic-transpile-statement-one-line (line)
-  "Transpile one BASIC LINE (string) to COBOL statement string.
-Handles assignment, control flow, and method calls."
-  (let ((l (string-trim '(#\Space #\Tab #\Return #\Linefeed) line)))
+(defun basic-parse-expression-from-string (expr-str)
+  "Parse a BASIC expression string into an AST expression node.
+   Handles: identifiers, literals, operators, function calls."
+  (let ((trimmed (string-trim '(#\Space #\Tab) expr-str)))
     (cond
-      ;; LET assignment: LET A = B → MOVE B TO A
-      ((cl-ppcre:scan "^\\s*LET\\s+([A-Za-z0-9_]+)\\s*=\\s*(.+)\\s*$" l :case-insensitive-mode t)
-       (multiple-value-bind (whole parts)
-           (cl-ppcre:scan-to-strings "^\\s*LET\\s+([A-Za-z0-9_]+)\\s*=\\s*(.+)\\s*$" l :case-insensitive-mode t)
+      ;; Numeric literal
+      ((every #'(lambda (c) (or (digit-char-p c) (char= c #\.)))
+              trimmed)
+       (read-from-string trimmed))
+      
+      ;; String literal
+      ((and (> (length trimmed) 1)
+            (char= #\" (char trimmed 0))
+            (char= #\" (char trimmed (1- (length trimmed)))))
+       (subseq trimmed 1 (1- (length trimmed))))
+      
+      ;; Variable/identifier
+      ((every #'(lambda (c) (or (alphanumericp c) (char= c #\_) (char= c #$)))
+              trimmed)
+       (make-identifier trimmed))
+      
+      ;; Default: return as-is (will be validated later)
+      (t trimmed))))
+
+(defun basic-transpile-statement (stmt-text)
+  "Convert a single BASIC statement text to an AST node.
+   Returns NIL for unrecognized statements."
+  (let ((stmt (string-trim '(#\Space #\Tab #\Return #\Linefeed) stmt-text)))
+    (cond
+      ;; LET assignment: LET A = B → :move node
+      ((cl-ppcre:scan "^(?i)LET\\s+([A-Za-z_][A-Za-z0-9_$]*)\\s*=\\s*(.+)$" stmt)
+       (multiple-value-bind (whole groups)
+           (cl-ppcre:scan-to-strings "^(?i)LET\\s+([A-Za-z_][A-Za-z0-9_$]*)\\s*=\\s*(.+)$" stmt)
          (declare (ignore whole))
-         (format nil "MOVE ~A TO ~A" (aref parts 1) (aref parts 0))))
+         (let ((target (aref groups 0))
+               (expr (aref groups 1)))
+           (make-move-node (basic-parse-expression-from-string expr)
+                          (make-identifier target)))))
       
-       ;; GOTO: GOTO target → GO TO target (but GO TO is unsupported, so this should be an error)
-       ((cl-ppcre:scan "^\\s*GOTO\\s+(.+)\\s*$" l :case-insensitive-mode t)
-        (multiple-value-bind (whole parts)
-            (cl-ppcre:scan-to-strings "^\\s*GOTO\\s+(.+)\\s*$" l :case-insensitive-mode t)
-          (declare (ignore whole))
-          (let* ((target (string-trim '(#\Space #\Tab) (aref parts 0)))
-                 (numeric-p (every #'digit-char-p target)))
-            (if numeric-p
-                (format nil "GO TO ~A" target)
-                (format nil "GO TO ~A" (basic-label->cobol target))))))
-       
-       ;; GOSUB: GOSUB target → PERFORM target
-       ((cl-ppcre:scan "^\\s*GOSUB\\s+(.+)\\s*$" l :case-insensitive-mode t)
-        (multiple-value-bind (whole parts)
-            (cl-ppcre:scan-to-strings "^\\s*GOSUB\\s+(.+)\\s*$" l :case-insensitive-mode t)
-          (declare (ignore whole))
-          (let* ((target (string-trim '(#\Space #\Tab) (aref parts 0)))
-                 (numeric-p (every #'digit-char-p target)))
-            (if numeric-p
-                (format nil "PERFORM ~A" target)
-                (format nil "PERFORM ~A" (basic-label->cobol target))))))
-      
-      ;; RETURN → GOBACK
-      ((cl-ppcre:scan "^\\s*RETURN\\s*$" l :case-insensitive-mode t)
-       "GOBACK")
-      
-      ;; IF...THEN...ELSE structure (simplified)
-      ((cl-ppcre:scan "^\\s*IF\\s+(.+)\\s+THEN\\s+(.+)\\s+(?:ELSE\\s+(.+))?\\s*$" l :case-insensitive-mode t)
-       (multiple-value-bind (whole parts)
-           (cl-ppcre:scan-to-strings "^\\s*IF\\s+(.+)\\s+THEN\\s+(.+)\\s+(?:ELSE\\s+(.+))?\\s*$" l :case-insensitive-mode t)
+      ;; Assignment without LET: A = B → :move node
+      ((cl-ppcre:scan "^([A-Za-z_][A-Za-z0-9_$]*)\\s*=\\s*(.+)$" stmt)
+       (multiple-value-bind (whole groups)
+           (cl-ppcre:scan-to-strings "^([A-Za-z_][A-Za-z0-9_$]*)\\s*=\\s*(.+)$" stmt)
          (declare (ignore whole))
-         (let ((condition (aref parts 0))
-               (then-branch (aref parts 1))
-               (else-branch (aref parts 2)))
-           (if else-branch
-               (format nil "IF ~A THEN ~A ELSE ~A" condition then-branch else-branch)
-               (format nil "IF ~A THEN ~A" condition then-branch)))))
+         (let ((target (aref groups 0))
+               (expr (aref groups 1)))
+           (make-move-node (basic-parse-expression-from-string expr)
+                          (make-identifier target)))))
       
-      ;; FOR loop: FOR I = 1 TO 10 → PERFORM VARYING I FROM 1 UNTIL I > 10
-       ((cl-ppcre:scan "^\\s*FOR\\s+([A-Za-z0-9_]+)\\s*=\\s*(\\d+)\\s+TO\\s*(\\d+)\\s*(?:STEP\\s+(\\d+))?\\s*$" l :case-insensitive-mode t)
-        (multiple-value-bind (whole parts)
-            (cl-ppcre:scan-to-strings "^\\s*FOR\\s+([A-Za-z0-9_]+)\\s*=\\s*(\\d+)\\s+TO\\s*(\\d+)\\s*(?:STEP\\s+(\\d+))?\\s*$" l :case-insensitive-mode t)
-          (declare (ignore whole))
-          (let ((var (aref parts 0))
-                (start (aref parts 1))
-                (end (aref parts 2))
-                (step (aref parts 3)))
-            (if step
-                (format nil "PERFORM VARYING ~A FROM ~A BY ~A UNTIL ~A > ~A" var start step var end)
-                (format nil "PERFORM VARYING ~A FROM ~A UNTIL ~A > ~A" var start var end)))))
+      ;; GOSUB: GOSUB target → :perform node
+      ((cl-ppcre:scan "^(?i)GOSUB\\s+(.+)$" stmt)
+       (multiple-value-bind (whole groups)
+           (cl-ppcre:scan-to-strings "^(?i)GOSUB\\s+(.+)$" stmt)
+         (declare (ignore whole))
+         (let ((target (string-trim '(#\Space #\Tab) (aref groups 0))))
+           (make-perform-node target))))
+      
+      ;; RETURN → :goback node
+      ((cl-ppcre:scan "^(?i)RETURN\\s*$" stmt)
+       (make-goback-node))
+      
+      ;; FOR loop: FOR I = 1 TO 10 [STEP n] → :perform with :varying
+      ((cl-ppcre:scan "^(?i)FOR\\s+([A-Za-z_][A-Za-z0-9_$]*)\\s*=\\s*(.+?)\\s+TO\\s+(.+?)(?:\\s+STEP\\s+(.+?))?\\s*$" stmt)
+       (multiple-value-bind (whole groups)
+           (cl-ppcre:scan-to-strings "^(?i)FOR\\s+([A-Za-z_][A-Za-z0-9_$]*)\\s*=\\s*(.+?)\\s+TO\\s+(.+?)(?:\\s+STEP\\s+(.+?))?\\s*$" stmt)
+         (declare (ignore whole))
+         (let ((var (aref groups 0))
+               (start (basic-parse-expression-from-string (aref groups 1)))
+               (end (basic-parse-expression-from-string (aref groups 2)))
+               (step (when (aref groups 3) (basic-parse-expression-from-string (aref groups 3)))))
+           (make-perform-node (format nil "FOR-~A" var)
+                             :varying var
+                             :from start
+                             :by (or step 1)
+                             :until (list :> (make-identifier var) end)))))
+      
+      ;; NEXT [var] → end of loop (implicit in AST structure)
+      ((cl-ppcre:scan "^(?i)NEXT" stmt)
+       nil)  ; NEXT doesn't generate AST in canonical form
+      
+      ;; IF...THEN...ELSE
+      ((cl-ppcre:scan "^(?i)IF\\s+(.+?)\\s+THEN\\s+(.+?)(?:\\s+ELSE\\s+(.+?))?\\s*$" stmt)
+       (multiple-value-bind (whole groups)
+           (cl-ppcre:scan-to-strings "^(?i)IF\\s+(.+?)\\s+THEN\\s+(.+?)(?:\\s+ELSE\\s+(.+?))?\\s*$" stmt)
+         (declare (ignore whole))
+         (let ((condition (aref groups 0))
+               (then-branch (aref groups 1))
+               (else-branch (aref groups 2)))
+           (make-if-node condition
+                        (list (basic-transpile-statement then-branch))
+                        (if else-branch
+                            (list (basic-transpile-statement else-branch))
+                            '())))))
+      
+      ;; PRINT statement
+      ((cl-ppcre:scan "^(?i)PRINT\\s+(.*)$" stmt)
+       (multiple-value-bind (whole groups)
+           (cl-ppcre:scan-to-strings "^(?i)PRINT\\s+(.*)$" stmt)
+         (declare (ignore whole))
+         (let ((expr-list (split-sequence:split-sequence #\, (aref groups 0) :remove-empty-subseqs t)))
+           (make-print-node (mapcar (lambda (e) (basic-parse-expression-from-string e))
+                                   expr-list)))))
+      
+      ;; INPUT statement
+      ((cl-ppcre:scan "^(?i)INPUT\\s+(.*)$" stmt)
+       (multiple-value-bind (whole groups)
+           (cl-ppcre:scan-to-strings "^(?i)INPUT\\s+(.*)$" stmt)
+         (declare (ignore whole))
+         (let ((var-list (split-sequence:split-sequence #\, (aref groups 0) :remove-empty-subseqs t)))
+           (make-input-node (mapcar (lambda (v) (make-identifier (string-trim '(#\Space #\Tab) v)))
+                                   var-list)))))
+      
+      ;; STOP statement
+      ((cl-ppcre:scan "^(?i)STOP\\s*$" stmt)
+       (make-stop-run-node))
+      
+      ;; Unrecognized statement
+      (t nil))))
 
-       ;; WHILE loop: WHILE condition → PERFORM WITH TEST BEFORE UNTIL NOT (condition)
-       ((cl-ppcre:scan "^\\s*WHILE\\s+(.+)\\s*$" l :case-insensitive-mode t)
-        (multiple-value-bind (whole parts)
-            (cl-ppcre:scan-to-strings "^\\s*WHILE\\s+(.+)\\s*$" l :case-insensitive-mode t)
-          (declare (ignore whole))
-          (format nil "PERFORM WITH TEST BEFORE UNTIL NOT (~A)" (aref parts 0))))
+(defun basic-ast-from-source (text &key (class-id "BasicProgram"))
+  "Parse BASIC source TEXT and emit canonical AST directly.
+   Returns a :program AST node with methods containing the BASIC code."
+  (let* ((lines (parse-basic-source-lines text))
+         (statements (mapcar (lambda (pair)
+                              (basic-transpile-statement (cdr pair)))
+                            lines))
+         (main-method (make-method-node "Main" :statements (remove nil statements))))
+    (make-program-node class-id
+                      :methods (list main-method)
+                      :data '())))
 
-       ;; UNTIL loop: UNTIL condition → PERFORM WITH TEST AFTER UNTIL condition
-       ((cl-ppcre:scan "^\\s*UNTIL\\s+(.+)\\s*$" l :case-insensitive-mode t)
-        (multiple-value-bind (whole parts)
-            (cl-ppcre:scan-to-strings "^\\s*UNTIL\\s+(.+)\\s*$" l :case-insensitive-mode t)
-          (declare (ignore whole))
-          (format nil "PERFORM WITH TEST AFTER UNTIL ~A" (aref parts 0))))
-
-       ;; Default: pass through as-is (should be handled by caller for unsupported statements)
-      (t l))))
-
-(defun transpile-basic-to-cobol-string (class-id basic-text &key (game-name *basic-default-game-name*))
-  "Transpile BASIC TEXT to COBOL string for CLASS-ID with GAME-NAME context.
-Returns a complete COBOL program string including class definition and method."
-  (let* ((lines (parse-basic-source-lines basic-text))
-         (methods (split-basic-into-methods lines))
-         (method-strings (loop for (method-name . method-lines) in methods
-                               collect (transpile-basic-method method-name method-lines)))
-         (class-header (format nil "
-~8tIDENTIFICATION DIVISION.
-~8tPROGRAM-ID. \"~A\".
-
-~8tDATA DIVISION.
-~8tWORKING-STORAGE SECTION.
-~8tCOPY \"~A-Globals\".
-
-~8tPROCEDURE DIVISION.
-
-" class-id game-name)))
-    (concatenate 'string class-header (format nil "~{~A~%~}" method-strings))))
-
-(defun transpile-basic-method (method-name method-lines)
-  "Transpile METHOD-LINES to a COBOL method with METHOD-NAME."
-  (let ((statements (loop for (line-num . line-text) in method-lines
-                          collect (basic-transpile-statement-one-line line-text))))
-    (format nil "METHOD-ID. \"~A\".~%PROCEDURE DIVISION.~%~{~%~A~}~%EXIT METHOD.~%~%END METHOD \"~A\".~%~%" 
-            method-name 
-            (remove-if #'null statements)
-            method-name)))
-
-(defun ensure-basic-line-numbers (lines)
-  "Ensure LINE-NUMBERS are sequential starting from 10, skipping multiples of 10 for labels."
-  (let ((current 10)
-        (result '()))
-    (dolist (pair lines)
-      (let ((original-line (car pair))
-            (line-text (cdr pair)))
-        (push (cons current line-text) result)
-        ;; Skip to next non-multiple of 10
-        (loop do (incf current 10)
-              while (zerop (mod current 10)))))
-    (nreverse result)))
-
-(defun basic-transpile-to-assembly (basic-text &key (cpu :6502))
-  "Transpile BASIC TEXT to assembly for CPU.
-Returns assembly string or NIL on error."
-  (handler-case
-      (let ((class-id "BasicProgram")
-            (cobol-text (transpile-basic-to-cobol-string class-id basic-text)))
-        (uiop:with-temporary-file (:pathname tmp-file :suffix "basic-transpile.cob")
-          (with-open-file (out tmp-file :direction :output :if-exists :supersede :external-format :utf-8)
-            (write-string cobol-text out))
-          (uiop:with-temporary-file (:pathname result-file :suffix ".s")
-            (let ((compile-result (compile-eightbol (list tmp-file)
-                                                  :cpus (list cpu)
-                                                  :output-file result-file)))
-              (when (zerop compile-result)
-                (with-open-file (in result-file :direction :input :element-type 'character)
-                  (let ((content (make-string (file-length in))))
-                    (read-sequence content in)
-                    content)))))))
-    (error (e)
-      (format *error-output* "BASIC transpile error: ~A~%" e)
-      nil)))
-
-(defun basic-shell-run (basic-text &key (cpu :6502) (game-name *basic-default-game-name*))
-  "Transpile BASIC TEXT and run it for CPU using Eightbol.
-Returns compilation result (0 on success)."
-  (handler-case
-      (let ((class-id "BasicProgram")
-            (cobol-text (transpile-basic-to-cobol-string class-id basic-text :game-name game-name)))
-        (uiop:with-temporary-file (:pathname tmp-file :suffix "basic-shell-run.cob")
-          (with-open-file (out tmp-file :direction :output :if-exists :supersede :external-format :utf-8)
-            (write-string cobol-text out))
-          (compile-eightbol (list tmp-file) :cpus (list cpu))))
-    (error (e)
-      (format *error-output* "BASIC shell run error: ~A~%" e)
-      1)))
+(defun compile-basic-from-path (bas-path
+                               &key (cpus '(:6502))
+                                    ast-output-file)
+  "Compile @code{.bas} at BAS-PATH to assembly via BASIC → AST → backend.
+   
+   Uses BASIC → AST compilation, directly emitting canonical AST nodes
+   without COBOL transpilation.
+   
+   @table @asis
+   @item BAS-PATH
+   Pathname designator to UTF-8 BASIC source.
+   @item CPUS
+   List of target CPUs (default @code{(:6502)}).
+   @item AST-OUTPUT-FILE
+   Optional path for AST output.
+   @end table
+   
+   @subsection Outputs
+   Returns the compiled AST plist."
+  (let* ((path (uiop:parse-native-namestring (namestring bas-path)))
+         (text (with-open-file (in path :direction :input :element-type 'character
+                                      :external-format :utf-8)
+                 (with-output-to-string (out)
+                   (loop for c = (read-char in nil nil)
+                         while c do (write-char c out)))))
+         (class-id (pathname-name path))
+         (ast (basic-ast-from-source text :class-id class-id)))
+    ;; Write AST to output file if requested
+    (when ast-output-file
+      (with-open-file (out (pathname ast-output-file)
+                          :direction :output
+                          :if-exists :supersede
+                          :if-does-not-exist :create
+                          :external-format :utf-8)
+        (write-ast ast out)))
+    ;; Compile AST directly (bypassing COBOL step)
+    (compile-eightbol-from-ast ast :cpus cpus)
+    ast))

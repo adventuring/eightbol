@@ -14,17 +14,20 @@
 ;;; Parser definition using YACC
 (yacc:define-parser *lua-parser*
       (:start-symbol program)
-      (:terminals (number string ident :comma |=| |+| |-| |*| |/| |\|\|| |&| 
+      (:terminals (number string ident :comma |=| |+| |-| |*| |/| |\|\|| |&| |~| |\^| |<<| |>>| 
                           |<| |>| |<=| |>=| |==| |~=| |(| |)| |{| |}| |[| |]| |\:|
                           |\;| keyword |break| |continue| |comment| |move| |to|
                           |if| |then| |else| |elseif| |end| |while| |do| |for|
                           |local| |return| |dialogue| |dialog| |print| |input| |copy|
                           |true| |false| |nil| |and| |or| |not| |function|))
                           (:precedence ((:left :|or|) (:left :|and|)
-                                                      (:left :|==| :|~=| :|<| :|>| :|<=| :|>=|)
-                              (:left :|+| :|-| )
-                              (:left :|*| :|/| )
-                              (:right :|not|)))
+                                                       (:left :|==| :|~=| :|<| :|>| :|<=| :|>=|)
+                               (:left :|+| :|-| )
+                               (:left :|*| :|/| )
+                               (:left :|<<| :|>>|)
+                               (:left :|&|)
+                               (:left :|^|)
+                               (:right :|not| :|~|)))
 
     (:muffle-conflicts t)
 
@@ -66,7 +69,7 @@
      (|local| ident |=| expression
               (lambda (_local var _eq expr)
                 (declare (ignore _local _eq))
-                (list :set var expr))))
+                (list :set :target var :value expr))))
 
     ;; Function declaration
     (function-declaration
@@ -244,14 +247,14 @@
              (lambda (_lp expr _rp)
                (declare (ignore _lp _rp))
                expr))
-        (expression |+| expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list :add left right)))
-        (expression |-| expression
-                    (lambda (left _op right)
-                      (declare (ignore _op))
-                      (list :subtract left right)))
+         (expression |+| expression
+                     (lambda (left _op right)
+                       (declare (ignore _op))
+                       (list :+ left right)))
+         (expression |-| expression
+                     (lambda (left _op right)
+                       (declare (ignore _op))
+                       (list :- left right)))
          (expression |*| expression
                      (lambda (left _op right)
                        (declare (ignore _op))
@@ -260,10 +263,10 @@
                      (lambda (left _op right)
                        (declare (ignore _op))
                        (list :÷ left right)))
-         (expression |== | expression
-                     (lambda (left _op right)
-                       (declare (ignore _op))
-                       (list := left right)))
+          (expression |==| expression
+                      (lambda (left _op right)
+                        (declare (ignore _op))
+                        (list := left right)))
          (expression |~=| expression
                      (lambda (left _op right)
                        (declare (ignore _op))
@@ -280,26 +283,50 @@
                      (lambda (left _op right)
                        (declare (ignore _op))
                        (list :≤ left right)))
-          (expression |>= | expression
-                      (lambda (left _op right)
-                        (declare (ignore _op))
-                        (list :≥ left right)))
+           (expression |>=| expression
+                       (lambda (left _op right)
+                         (declare (ignore _op))
+                         (list :≥ left right)))
          (expression |and| expression
                      (lambda (left _and right)
                        (declare (ignore _and))
                        (list :and left right)))
-         (expression |or| expression
-                     (lambda (left _or right)
-                       (declare (ignore _or))
-                       (list :or left right)))
-         (|not| expression
-                (lambda (_not expr)
-                  (declare (ignore _not))
-                  (list :not expr)))
-        (ident |=| expression
-              (lambda (var _eq expr)
-                (declare (ignore _eq))
-                (list :set var expr)))
+          (expression |or| expression
+                      (lambda (left _or right)
+                        (declare (ignore _or))
+                        (list :or left right)))
+          (expression |&| expression
+                      (lambda (left _op right)
+                        (declare (ignore _op))
+                        (list :bit-and left right)))
+          (expression |\|| expression
+                      (lambda (left _op right)
+                        (declare (ignore _op))
+                        (list :bit-or left right)))
+          (expression |\^| expression
+                      (lambda (left _op right)
+                        (declare (ignore _op))
+                        (list :bit-xor left right)))
+          (expression |<<| expression
+                      (lambda (left _op right)
+                        (declare (ignore _op))
+                        (list :ash :value left :shift right)))
+          (expression |>>| expression
+                      (lambda (left _op right)
+                        (declare (ignore _op))
+                        (list :ash :value left :shift (list :- 0 right))))
+          (|~| expression
+               (lambda (_op expr)
+                 (declare (ignore _op))
+                 (list :bit-not expr)))
+          (|not| expression
+                 (lambda (_not expr)
+                   (declare (ignore _not))
+                   (list :not expr)))
+         (ident |=| expression
+               (lambda (var _eq expr)
+                 (declare (ignore _eq))
+                 (list :set :target var :value expr)))
        (ident |:| ident function-args
               (lambda (obj _colon method args)
                 (declare (ignore _colon args))

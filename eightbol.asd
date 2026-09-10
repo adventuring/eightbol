@@ -28,10 +28,12 @@
                          (:file "conditions" :depends-on ("package"))
                          
                           ;; Core compiler infrastructure
-                          (:file "ast" :depends-on ("package"))
-                          (:file "ast-optimize" :depends-on ("package" "ast"))
-                          (:file "ast-validate"
-                           :depends-on ("package" "ast" "ast-optimize" "conditions"))
+                           (:file "ast" :depends-on ("package"))
+                           (:file "ast-optimize" :depends-on ("package" "ast"))
+                           (:file "optimizer-dead-code-elimination"
+                            :depends-on ("package" "ast"))
+                           (:file "ast-validate"
+                            :depends-on ("package" "ast" "ast-optimize" "conditions"))
                           (:file "backend" :depends-on ("package" "conditions" "ast"))
                           (:file "grammar-build" :depends-on ("package" "ast"))
                           (:file "expression-complexity"
@@ -42,6 +44,7 @@
                           :depends-on ("package"
                                        "ast"
                                        "ast-optimize"
+                                       "optimizer-dead-code-elimination"
                                        "ast-validate"
                                        "backend"
                                        "cobol-copybook"
