@@ -29,20 +29,30 @@
     :basic-make-parser
     
                                         ;(frontend-pascal:package) -- Derived from Turbo Pascal 7.0 syntax; exception handling→:perform; no WITH clauses; records→:dd
-    :pascal-lex
-    :pascal-parse
-    :pascal-tokenize
-    
-                                        ;(frontend-lingo:package) -- Based on Lingo for Director MX; 8-bit color & sprite constraints; no network/XML support; cast members→:dd
-    :lingo-lex
-    :lingo-parse
-    :lingo-tokenize
-    :lingo-make-parser
-    
-                                        ;(frontend-objective:package) -- Simplified subset with FORTRAN-style syntax; no Cocoa/Foundation frameworks
-    :objective-lex
-    :objective-parse
-    :objective-make-parser
+     :pascal-lex
+     :pascal-lex-line
+     :pascal-lex-source
+     :pascal-parse
+     :pascal-tokenize
+     :pascal-token-list
+     :pascal-make-parser
+     
+                                         ;(frontend-lingo:package) -- Based on Lingo for Director MX; 8-bit color & sprite constraints; no network/XML support; cast members→:dd
+     :lingo-lex
+     :lingo-lex-line
+     :lingo-lex-source
+     :lingo-parse
+     :lingo-tokenize
+     :lingo-token-list
+     :lingo-make-parser
+     
+                                         ;(frontend-objective:package) -- Simplified subset with FORTRAN-style syntax; no Cocoa/Foundation frameworks
+     :objective-lex
+     :objective-lex-line
+     :objective-lex-source
+     :objective-parse
+     :objective-token-list
+     :objective-make-parser
     
                                         ;(frontend-fortran:package) -- FORTRAN 77/90 subset with explicit numeric typing; no OOP, no modern modules
     :fortran-lex
@@ -57,14 +67,35 @@
      ;; AGI-specific API
      :compile-agi-from-path
      :make-agi-parser
+     :agi-lex-line
+     :agi-lex-source
+     :agi-token-list
+     
+     ;; BASIC frontend
+     :basic-lex-line
+     :basic-lex-source
+     :basic-token-list
+     :basic-make-parser
      
      ;; COBOL frontend
      :cobol-lex
      :cobol-lex-line
+     :cobol-token-list
+     :cobol-make-parser
      
-     ;; SmallTalk frontend
-     :smalltalk-make-parser
-     
+      ;; SmallTalk frontend
+      :smalltalk-lex-line
+      :smalltalk-lex-source
+      :smalltalk-token-list
+      :smalltalk-make-parser
+      
+      ;; Fountain frontend
+      :fountain-lex-line
+      :fountain-lex-source
+      :fountain-token-list
+      :fountain-make-parser
+      :compile-fountain-from-path
+      
       ;; Muddle frontend
       :muddle-lex-line
       :muddle-lex-source
