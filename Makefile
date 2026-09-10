@@ -29,4 +29,12 @@ clean:
 
 test:
 	@echo "Running eightbol tests..."
-	@sbcl --noinform --eval '(asdf:test-system :eightbol)' --eval '(sb-ext:quit)'
+	@sbcl --noinform --eval '(asdf:test-system :eightbol)' --eval '(sb-ext:quit)' > /tmp/eightbol-test.out 2>&1; \
+	if grep -q "Fail: [1-9]" /tmp/eightbol-test.out; then \
+		echo "FAILED: Some tests failed"; \
+		cat /tmp/eightbol-test.out; \
+		exit 1; \
+	else \
+		echo "PASSED: All tests passed"; \
+		exit 0; \
+	fi
