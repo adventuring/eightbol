@@ -1,0 +1,1116 @@
+@c -*- texinfo -*-
+@c lua_statements_comprehensive.texi - Comprehensive Lua Statements Documentation
+@c Part of the EightBol Compiler
+@c Target: 7,000+ words covering 12+ statements with compilable examples
+
+@setchapternewpage odd
+@chapter Lua Statements - Comprehensive Reference
+
+@cindex Lua statements
+@cindex Lua control flow
+@cindex Lua declarations
+@cindex Lua expressions
+@cindex Numeric types in Lua
+@cindex Lua functions
+@cindex Lua tables
+
+This chapter provides comprehensive documentation for all major Lua statements
+supported by the EightBol compiler. Each statement is documented with complete syntax,
+practical compilable examples, numeric type considerations, and edge cases.
+
+@menu
+* LUA/ASSIGNMENT Statement::
+* LUA/IF-THEN-ELSE Statement::
+* LUA/WHILE Loop::
+* LUA/REPEAT-UNTIL Loop::
+* LUA/FOR Numeric Loop::
+* LUA/FOR-IN Iterator::
+* LUA/FUNCTION Declaration::
+* LUA/LOCAL Declaration::
+* LUA/RETURN Statement::
+* LUA/BREAK Statement::
+* LUA/DO-END Block::
+* LUA/TABLE Construction::
+@end menu
+
+@node LUA/ASSIGNMENT Statement
+@section LUA ASSIGNMENT Statement
+
+@cindex Lua assignment
+@cindex Lua local
+@cindex Lua global
+@cindex Lua multiple assignment
+
+@subheading Purpose
+
+Assignment statements store values into variables, table fields, or other
+storage locations. Lua supports both local and global variable assignment,
+plus multiple simultaneous assignment.
+
+@subheading Syntax
+
+@example
+@var{variable} = @var{expression}
+local @var{variable} = @var{expression}
+local @var{var1}, @var{var2}, @var{var3} = @var{expr1}, @var{expr2}, @var{expr3}
+@end example
+
+Local variables are scoped to the current block. Global variables are visible
+throughout the program. Multiple assignment allows tuple-like semantics.
+
+@subheading Numeric Type Considerations
+
+Lua supports numeric operations on all types. Assignment performs implicit
+type conversion as needed:
+
+@example
+local score = 100              @r{BINARY-like number}
+local price = 9999             @r{DECIMAL-like number}
+local mixed = score + price    @r{arithmetic}
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Assignment}
+local score = 0
+local lives = 3
+score = score + 100
+print(score)    @r{output: 100}
+
+@r{Example 2: Local Variable}
+function testLocal()
+    local x = 10
+    local y = 20
+    return x + y
+end
+print(testLocal())  @r{output: 30}
+
+@r{Example 3: Global Variable}
+gameState = "running"
+function updateState()
+    gameState = "paused"
+end
+updateState()
+print(gameState)  @r{output: paused}
+
+@r{Example 4: Multiple Assignment}
+local x, y, z = 1, 2, 3
+print(x, y, z)  @r{output: 1 2 3}
+
+@r{Example 5: Swap Assignment}
+local a = 10
+local b = 20
+a, b = b, a      @r{swap values}
+print(a, b)  @r{output: 20 10}
+@end example
+
+@subheading Table and Field Assignment
+
+@example
+local player = @{@}
+player.x = 100
+player.y = 50
+player["health"] = 100
+
+local items = @{@}
+items[1] = "sword"
+items[2] = "shield"
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Nil Assignment:} Assigning nil to a variable makes it undefined.
+Accessing undefined variables returns nil.
+
+@item @strong{Type Mismatch:} Assigning a value of one type to a variable of
+another type works fine; Lua is dynamically typed.
+
+@item @strong{Uninitialized Variables:} Accessing a variable before assignment
+returns nil.
+
+@item @strong{Excess Values:} Multiple assignment with more values than variables
+ignores the extra values: @code{x, y = 1, 2, 3, 4} assigns 1 to x, 2 to y.
+
+@item @strong{Insufficient Values:} Multiple assignment with fewer values than
+variables assigns nil to remaining variables: @code{x, y, z = 1, 2} assigns z=nil.
+@end itemize
+
+@node LUA/IF-THEN-ELSE Statement
+@section LUA IF-THEN-ELSE Statement
+
+@cindex Lua if statement
+@cindex Lua conditional
+@cindex Lua elseif
+@cindex Lua end keyword
+
+@subheading Purpose
+
+IF-THEN-ELSE statements conditionally execute code based on boolean expressions.
+Lua supports simple if/then, if/then/else, and elseif chains.
+
+@subheading Syntax
+
+@example
+if @var{condition} then
+    @var{statements}
+end
+
+if @var{condition} then
+    @var{statements}
+else
+    @var{statements}
+end
+
+if @var{cond1} then
+    @var{stmts1}
+elseif @var{cond2} then
+    @var{stmts2}
+elseif @var{cond3} then
+    @var{stmts3}
+else
+    @var{stmts4}
+end
+@end example
+
+@subheading Truth Values
+
+In Lua, @code{nil} and @code{false} are falsy. All other values (0, "", @{@}, etc.)
+are truthy.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple if}
+local score = 150
+if score > 100 then
+    print("High Score!")
+end
+
+@r{Example 2: if-else}
+local health = 0
+if health > 0 then
+    print("Alive")
+else
+    print("Dead")
+end
+
+@r{Example 3: elseif Chain}
+local temperature = 25
+if temperature > 30 then
+    print("Hot")
+elseif temperature > 15 then
+    print("Warm")
+elseif temperature > 0 then
+    print("Cold")
+else
+    print("Freezing")
+end
+
+@r{Example 4: Nested if}
+local x = 5
+local y = 10
+if x > 0 then
+    if y > x then
+        print("Y is greater")
+    end
+end
+
+@r{Example 5: Complex Condition}
+local score = 100
+local lives = 3
+local level = 1
+if lives > 0 and score > 50 then
+    if level <= 10 then
+        print("Continue playing")
+    end
+end
+@end example
+
+@subheading Falsy vs Truthy
+
+@example
+if nil then print("Nil is true") end         @r{does nothing}
+if false then print("False is true") end     @r{does nothing}
+if 0 then print("Zero is true") end          @r{prints: Zero is true}
+if "" then print("Empty string is true") end @r{prints: Empty string is true}
+if @{@} then print("Empty table is true") end @r{prints: Empty table is true}
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Empty Condition:} Conditions must be valid expressions; invalid
+syntax causes parse errors.
+
+@item @strong{No else Required:} An if can exist without else. If the condition
+is false, execution continues after the end.
+
+@item @strong{Multiple elseifs:} Any number of elseif clauses can be chained;
+only the first true condition executes.
+
+@item @strong{Condition Side Effects:} If a condition is a function call, the
+function executes even though only its boolean result matters.
+@end itemize
+
+@node LUA/WHILE Loop
+@section LUA WHILE Loop (Pre-Test)
+
+@cindex Lua while loop
+@cindex Lua pre-test loop
+@cindex Lua do-end
+
+@subheading Purpose
+
+WHILE loops repeatedly execute statements while a condition remains true.
+The condition is tested before each iteration (pre-test).
+
+@subheading Syntax
+
+@example
+while @var{condition} do
+    @var{statements}
+end
+@end example
+
+If the condition is false initially, the loop body never executes.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Counter}
+local count = 1
+while count <= 10 do
+    print(count)
+    count = count + 1
+end
+
+@r{Example 2: Decrement Loop}
+local remaining = 100
+while remaining > 0 do
+    remaining = remaining - 10
+    print(remaining)
+end
+
+@r{Example 3: Game Loop}
+local running = true
+while running do
+    processEvents()
+    updateGame()
+    renderFrame()
+    if quitRequested then
+        running = false
+    end
+end
+
+@r{Example 4: Infinite Loop with Break}
+while true do
+    local input = getInput()
+    if input == "quit" then
+        break
+    end
+    processInput(input)
+end
+
+@r{Example 5: Nested Loops}
+local i = 1
+while i <= 3 do
+    local j = 1
+    while j <= 3 do
+        print(i, j)
+        j = j + 1
+    end
+    i = i + 1
+end
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Infinite Loop:} A condition that never becomes false causes
+infinite execution; use break or modify condition inside loop.
+
+@item @strong{Empty Body:} A while loop with no statements is allowed but
+accomplishes nothing.
+
+@item @strong{Modified Loop Variable:} Modifying the condition variable inside
+the loop affects the next iteration's condition test.
+
+@item @strong{Nested Loops:} Nested while loops are allowed; each break only
+exits the innermost loop.
+@end itemize
+
+@node LUA/REPEAT-UNTIL Loop
+@section LUA REPEAT-UNTIL Loop (Post-Test)
+
+@cindex Lua repeat loop
+@cindex Lua post-test loop
+@cindex Lua until
+
+@subheading Purpose
+
+REPEAT-UNTIL loops execute a statement block, then test a condition. The body
+always executes at least once (post-test). The loop exits when the condition
+becomes true.
+
+@subheading Syntax
+
+@example
+repeat
+    @var{statements}
+until @var{condition}
+@end example
+
+Note: UNTIL exits when condition is true (opposite of WHILE which continues
+while condition is true).
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Password Prompt}
+repeat
+    print("Enter password:")
+    local password = io.read()  @r{simplified}
+    if password == "secret" then
+        break
+    end
+until false  @r{or use explicit counter}
+
+@r{Example 2: Numeric Loop}
+local value = 1000
+repeat
+    print(value)
+    value = value - 100
+until value <= 0
+
+@r{Example 3: Input Validation}
+local input
+repeat
+    input = getInput()
+until input ~= ""  @r{continue until non-empty}
+
+@r{Example 4: Boundary Search}
+local power = 1
+repeat
+    power = power * 2
+until power > 1000
+print(power)  @r{first power of 2 > 1000}
+
+@r{Example 5: Guaranteed Execution}
+local count = 0
+repeat
+    count = count + 1
+    print("Execute at least once")
+until count >= 1
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Guaranteed Execution:} Body executes at least once, even if
+condition is initially true.
+
+@item @strong{Condition Inversion:} UNTIL exits when true; WHILE continues
+while true. Easy to confuse the logic.
+
+@item @strong{Modified Condition Variable:} Changing condition variable inside
+the loop affects the UNTIL test.
+
+@item @strong{break Statement:} Can exit a repeat loop early via break.
+@end itemize
+
+@node LUA/FOR Numeric Loop
+@section LUA FOR Numeric Loop (Counting Loop)
+
+@cindex Lua for loop
+@cindex Lua numeric for
+@cindex Lua loop counter
+
+@subheading Purpose
+
+FOR loops iterate a fixed number of times using an explicit counter variable.
+The loop variable automatically increments (or decrements) on each iteration.
+
+@subheading Syntax
+
+@example
+for @var{var} = @var{start}, @var{end} do
+    @var{statements}
+end
+
+for @var{var} = @var{start}, @var{end}, @var{step} do
+    @var{statements}
+end
+@end example
+
+The step defaults to 1 if omitted. Negative steps are supported for counting
+downward.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Forward Loop}
+for i = 1, 10 do
+    print(i)
+end
+
+@r{Example 2: Counting Down}
+for i = 10, 1, -1 do
+    print(i)
+end
+print("Blastoff!")
+
+@r{Example 3: Large Step}
+for value = 0, 100, 5 do
+    print(value)
+end
+
+@r{Example 4: Initialize Array}
+local arr = @{@}
+for i = 1, 10 do
+    arr[i] = i * 10
+end
+
+@r{Example 5: Nested Loops}
+for i = 1, 3 do
+    for j = 1, 3 do
+        print("(" .. i .. ", " .. j .. ")")
+    end
+end
+@end example
+
+@subheading Loop Variable Scope
+
+The loop variable is local to the for loop body and is not accessible outside:
+
+@example
+for i = 1, 10 do
+    print(i)
+end
+print(i)  @r{i is nil or previous value}
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Never-Executing Loop:} If start > end with positive step,
+loop body never executes.
+
+@item @strong{Zero Step:} Step of 0 causes infinite loop.
+
+@item @strong{Non-Integer Step:} Fractional steps work but may cause
+precision issues.
+
+@item @strong{Overflow:} Loop variable near maximum may overflow on increment.
+
+@item @strong{Modified Loop Variable:} Modifying the loop variable inside
+the body causes unpredictable behavior on next iteration.
+@end itemize
+
+@node LUA/FOR-IN Iterator
+@section LUA FOR-IN Iterator (Generic For)
+
+@cindex Lua for-in loop
+@cindex Lua generic for
+@cindex Lua iterator
+
+@subheading Purpose
+
+FOR-IN loops iterate over the keys and values of tables using iterator functions.
+This is Lua's generic iteration mechanism.
+
+@subheading Syntax
+
+@example
+for @var{key} in pairs(@var{table}) do
+    @var{statements}
+end
+
+for @var{index}, @var{value} in ipairs(@var{array}) do
+    @var{statements}
+end
+@end example
+
+@code{pairs()} iterates all key-value pairs; @code{ipairs()} iterates array
+indices and values in order.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Iterate Dictionary}
+local player = @{name = "Hero", health = 100, x = 50, y = 50@}
+for key in pairs(player) do
+    print(key)
+end
+
+@r{Example 2: Iterate Array Elements}
+local scores = @{100, 200, 150, 300@}
+for index, value in ipairs(scores) do
+    print("Score " .. index .. ": " .. value)
+end
+
+@r{Example 3: Sum Array Elements}
+local values = @{10, 20, 30, 40@}
+local sum = 0
+for index, value in ipairs(values) do
+    sum = sum + value
+end
+print("Sum: " .. sum)
+
+@r{Example 4: Find Item in Array}
+local items = @{"sword", "shield", "staff", "book"@}
+for index, item in ipairs(items) do
+    if item == "shield" then
+        print("Found at index " .. index)
+        break
+    end
+end
+
+@r{Example 5: Modify Table During Iteration}
+local data = @{a = 1, b = 2, c = 3@}
+for key in pairs(data) do
+    print(key .. ": " .. data[key])
+    data[key] = data[key] * 2
+end
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Modifying Table:} Modifying the table structure while iterating
+(adding/removing keys) may cause undefined behavior.
+
+@item @strong{Unordered Iteration:} @code{pairs()} iterates in undefined order;
+use @code{ipairs()} for ordered iteration of array parts.
+
+@item @strong{Sparse Arrays:} @code{ipairs()} stops at first nil; sparse arrays
+may not iterate fully.
+
+@item @strong{Multiple Loop Variables:} Both key and value are available in
+the loop body.
+@end itemize
+
+@node LUA/FUNCTION Declaration
+@section LUA FUNCTION Declaration
+
+@cindex Lua function
+@cindex Lua local function
+@cindex Lua function definition
+
+@subheading Purpose
+
+Functions are reusable blocks of code that can be called multiple times.
+Functions can take parameters and return values.
+
+@subheading Syntax
+
+@example
+function @var{name}(@var{params})
+    @var{statements}
+end
+
+local function @var{name}(@var{params})
+    @var{statements}
+end
+
+@var{var} = function(@var{params})
+    @var{statements}
+end
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Function}
+function greet()
+    print("Hello!")
+end
+greet()
+
+@r{Example 2: Function with Parameters}
+function add(a, b)
+    return a + b
+end
+local result = add(5, 3)
+print(result)  @r{output: 8}
+
+@r{Example 3: Function with Multiple Returns}
+function divmod(a, b)
+    return math.floor(a / b), a % b
+end
+local quotient, remainder = divmod(17, 5)
+print(quotient, remainder)  @r{output: 3 2}
+
+@r{Example 4: Local Function}
+function outer()
+    local function inner()
+        return "inner result"
+    end
+    return inner()
+end
+
+@r{Example 5: Anonymous Function}
+local double = function(x)
+    return x * 2
+end
+print(double(5))  @r{output: 10}
+@end example
+
+@subheading Variable Arguments
+
+@example
+function sum(...)
+    local total = 0
+    for i, v in ipairs(@{...@}) do
+        total = total + v
+    end
+    return total
+end
+print(sum(1, 2, 3, 4, 5))  @r{output: 15}
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Extra Arguments:} Extra arguments passed to a function are ignored.
+
+@item @strong{Missing Arguments:} Missing arguments are passed as nil.
+
+@item @strong{No Return:} A function without explicit return returns nil.
+
+@item @strong{Recursive Functions:} Functions can call themselves recursively;
+stack overflow is possible with deep recursion.
+
+@item @strong{Closures:} Functions capture variables from their enclosing scope,
+creating closures.
+@end itemize
+
+@node LUA/LOCAL Declaration
+@section LUA LOCAL Declaration (Local Variable)
+
+@cindex Lua local
+@cindex Lua variable scope
+@cindex Lua local function
+@cindex Lua local table
+
+@subheading Purpose
+
+LOCAL declarations create variables with block scope (limited to the current
+block, function, or file). Local variables do not pollute the global namespace.
+
+@subheading Syntax
+
+@example
+local @var{name}
+local @var{name} = @var{expression}
+local @var{name1}, @var{name2}, @var{name3}
+local @var{name1}, @var{name2} = @var{expr1}, @var{expr2}
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Local Variable}
+function testLocal()
+    local x = 10
+    print(x)  @r{output: 10}
+end
+print(x)  @r{output: nil}
+
+@r{Example 2: Multiple Local Variables}
+local a, b, c = 1, 2, 3
+print(a, b, c)  @r{output: 1 2 3}
+
+@r{Example 3: Local Without Initialization}
+local pending
+if pending == nil then
+    print("Uninitialized")
+end
+
+@r{Example 4: Local in Loop}
+for i = 1, 3 do
+    local message = "Iteration " .. i
+    print(message)
+end
+
+@r{Example 5: Local Function}
+local function helper(x)
+    return x * 2
+end
+print(helper(5))  @r{output: 10}
+@end example
+
+@subheading Block Scope
+
+@example
+do
+    local x = 10
+    print(x)  @r{output: 10}
+end
+print(x)  @r{output: nil}
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Shadowing:} A local variable with the same name as an outer
+scope variable shadows (hides) the outer variable.
+
+@item @strong{Forward Reference:} A local can be referenced before its declaration
+in the same scope; it will be nil until assigned.
+
+@item @strong{Multiple Declaration:} Declaring the same local name twice in
+the same scope is allowed; the second declaration shadows the first.
+@end itemize
+
+@node LUA/RETURN Statement
+@section LUA RETURN Statement (Function Return)
+
+@cindex Lua return
+@cindex Lua return value
+@cindex Lua multiple return
+
+@subheading Purpose
+
+RETURN statements exit a function, optionally returning one or more values
+to the caller.
+
+@subheading Syntax
+
+@example
+return
+return @var{expression}
+return @var{expr1}, @var{expr2}, @var{...}
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: No Return Value}
+function doSomething()
+    print("Working...")
+    return
+end
+
+@r{Example 2: Single Return Value}
+function getScore()
+    return 1000
+end
+local score = getScore()
+print(score)  @r{output: 1000}
+
+@r{Example 3: Multiple Return Values}
+function getMinMax(a, b, c)
+    if a < b then
+        if a < c then
+            if b < c then
+                return a, c
+            else
+                return a, b
+            end
+        else
+            return c, b
+        end
+    else
+        return b, c
+    end
+end
+local min, max = getMinMax(10, 5, 20)
+print(min, max)  @r{output: 5 20}
+
+@r{Example 4: Early Return}
+function findTarget(list, target)
+    for i, v in ipairs(list) do
+        if v == target then
+            return i
+        end
+    end
+    return nil
+end
+
+@r{Example 5: Conditional Return}
+function divide(a, b)
+    if b == 0 then
+        return nil
+    end
+    return a / b
+end
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{No Explicit Return:} Functions without explicit return return nil.
+
+@item @strong{Multiple Returns:} Extra return values are discarded unless
+captured by the caller.
+
+@item @strong{Missing Assignments:} Multiple returns with fewer assignments
+leave remaining variables nil.
+
+@item @strong{Return in Nested Block:} Return exits the entire function,
+not just the current block.
+@end itemize
+
+@node LUA/BREAK Statement
+@section LUA BREAK Statement (Loop Exit)
+
+@cindex Lua break
+@cindex Lua loop exit
+@cindex Lua early exit
+
+@subheading Purpose
+
+BREAK statements immediately exit the innermost enclosing loop (for, while, or repeat).
+
+@subheading Syntax
+
+@example
+break
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Search Loop}
+for i = 1, 100 do
+    if items[i] == target then
+        print("Found at " .. i)
+        break
+    end
+end
+
+@r{Example 2: Validation Loop}
+local valid = false
+repeat
+    local input = getInput()
+    if input == "quit" then
+        break
+    end
+    if validateInput(input) then
+        valid = true
+    end
+until valid
+
+@r{Example 3: Nested Loop with Break}
+for i = 1, 10 do
+    for j = 1, 10 do
+        if matrix[i][j] == 0 then
+            print("Found at " .. i .. ", " .. j)
+            break  @r{exits inner loop only}
+        end
+    end
+end
+
+@r{Example 4: Game Event Loop}
+while gameRunning do
+    local event = getEvent()
+    if event == "quit" then
+        break
+    end
+    processEvent(event)
+end
+
+@r{Example 5: Iterator with Early Exit}
+for key, value in pairs(data) do
+    if value > threshold then
+        print("Threshold exceeded")
+        break
+    end
+end
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Nested Loops:} break only exits the innermost loop; use flags or
+returns to exit outer loops.
+
+@item @strong{No Loop Context:} Using break outside a loop causes a syntax error.
+
+@item @strong{Multiple Breaks:} Multiple break statements in different branches
+of the same loop are allowed.
+@end itemize
+
+@node LUA/DO-END Block
+@section LUA DO-END Block (Explicit Block)
+
+@cindex Lua do-end
+@cindex Lua block
+@cindex Lua scope
+
+@subheading Purpose
+
+DO-END blocks create an explicit scope for local variables and statements.
+Blocks are useful for limiting variable scope and organizing code.
+
+@subheading Syntax
+
+@example
+do
+    @var{statements}
+end
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Local Scope}
+do
+    local x = 10
+    local y = 20
+    print(x + y)  @r{output: 30}
+end
+print(x)  @r{output: nil}
+
+@r{Example 2: Nested Blocks}
+do
+    local outer = "outer"
+    do
+        local inner = "inner"
+        print(outer)  @r{can access outer}
+        print(inner)
+    end
+    print(inner)  @r{nil, out of scope}
+end
+
+@r{Example 3: Resource Management}
+do
+    local file = openFile("data.txt")
+    local content = file:read()
+    file:close()
+    @r{file is out of scope after block}
+end
+
+@r{Example 4: Conditional Block}
+do
+    if gameDifficulty == "hard" then
+        local hardMultiplier = 2
+        enemyDamage = enemyDamage * hardMultiplier
+    end
+end
+
+@r{Example 5: Multiple Blocks}
+do
+    local temp = 100
+    temp = temp - 50
+    print(temp)  @r{output: 50}
+end
+do
+    local temp = 200
+    print(temp)  @r{output: 200, different temp}
+end
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Shadowing:} Variables in nested blocks can shadow outer variables.
+
+@item @strong{Empty Block:} A do-end with no statements is allowed.
+
+@item @strong{Nested Blocks:} Blocks can be arbitrarily nested.
+@end itemize
+
+@node LUA/TABLE Construction
+@section LUA TABLE Construction (Table Literal)
+
+@cindex Lua table
+@cindex Lua array
+@cindex Lua dictionary
+@cindex Lua table literal
+
+@subheading Purpose
+
+TABLE construction creates table values (Lua's primary data structure).
+Tables combine arrays, dictionaries, and objects into a single mechanism.
+
+@subheading Syntax
+
+@example
+@var{table} = @{ @}
+@var{array} = @{ @var{val1}, @var{val2}, @var{val3} @}
+@var{dict} = @{ key1 = @var{val1}, key2 = @var{val2} @}
+@var{mixed} = @{ 1, 2, name = "item", x = 10 @}
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Empty Table}
+local empty = @{@}
+print(#empty)  @r{output: 0}
+
+@r{Example 2: Array Literal}
+local scores = @{100, 200, 150, 300@}
+for i, v in ipairs(scores) do
+    print(v)
+end
+
+@r{Example 3: Dictionary Literal}
+local player = @{
+    name = "Hero",
+    health = 100,
+    x = 50,
+    y = 50
+@}
+print(player.name)  @r{output: Hero}
+
+@r{Example 4: Mixed Table}
+local mixed = @{
+    10, 20, 30,
+    name = "Mixed",
+    count = 3
+@}
+print(mixed[1])  @r{output: 10}
+print(mixed.name)  @r{output: Mixed}
+
+@r{Example 5: Nested Table}
+local matrix = @{
+    @{1, 0, 0@},
+    @{0, 1, 0@},
+    @{0, 0, 1@}
+@}
+print(matrix[2][2])  @r{output: 1}
+@end example
+
+@subheading Table Assignment
+
+@example
+local t = @{@}
+t.x = 100
+t["y"] = 200
+t[1] = "first"
+t[2] = "second"
+@end example
+
+@subheading Table Length
+
+@example
+local arr = @{10, 20, 30@}
+print(#arr)  @r{output: 3}
+table.insert(arr, 40)
+print(#arr)  @r{output: 4}
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Array vs Dictionary:} Arrays use numeric keys 1..N; dictionaries
+use string or arbitrary keys.
+
+@item @strong{Sparse Arrays:} Tables with gaps in numeric indices have undefined
+length; #table only counts consecutive 1..N indices.
+
+@item @strong{Table Identity:} Tables are compared by reference, not value.
+Two tables with identical contents are not equal.
+
+@item @strong{Mutable Structure:} Tables are mutable; modification affects all
+references to the same table.
+
+@item @strong{Nil Values:} Storing nil in a table removes the entry; table[key] = nil
+deletes the key.
+@end itemize
+
+@c End of Lua Statements Comprehensive Reference

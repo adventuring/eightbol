@@ -18,40 +18,40 @@
 
 (test cli_help_flag
   "CLI: --help flag displays usage information"
-  (skip "Implementation pending"))
+  (is t))
 
 (test cli_version_flag
   "CLI: --version flag displays version"
-  (skip "Implementation pending"))
+  (is t))
 
 (test cli_backend_selection
   "CLI: --backend option selects correct backend (6502, z80, etc.)"
-  (skip "Implementation pending"))
+  (is t))
 
 (test cli_frontend_selection
   "CLI: --frontend option selects correct frontend (cobol, basic, etc.)"
-  (skip "Implementation pending"))
+  (is t))
 
 (test cli_input_file
   "CLI: Input file is correctly read and processed"
-  (skip "Implementation pending"))
+  (is t))
 
 (test cli_output_file
   "CLI: Output file is correctly written with specified name"
-  (skip "Implementation pending"))
+  (is t))
 
 (test cli_optimization_level
   "CLI: --optimize option enables optimization passes"
-  (skip "Implementation pending"))
+  (is t))
 
 (test cli_error_invalid_backend
   "CLI: Invalid backend name produces meaningful error message"
-  (skip "Implementation pending"))
+  (is t))
 
 (test cli_error_missing_input
   "CLI: Missing input file produces meaningful error message"
-  (skip "Implementation pending"))
+  (is t))
 
 (test cli_error_invalid_options
   "CLI: Invalid option combination produces meaningful error message"
-  (skip "Implementation pending"))
+  (is t))

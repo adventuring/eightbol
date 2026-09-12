@@ -88,9 +88,12 @@ sta/iny/lda/sbc/sta for high byte (no tax/dey)."
   (let ((token (string token)))
     (if (search "--" token)
         (format nil "~{~a~^_~}" (mapcar (lambda (seg)
-                                          (if (string-equal seg "ID")
-                                              "ID"
-                                              (pascal-case seg)))
+                                          (cond
+                                            ((string-equal seg "ID") "ID")
+                                            ;; Preserve all-uppercase segments (e.g., "HP", "X", "Y")
+                                            ((string= seg (string-upcase seg))
+                                             (string-upcase seg))
+                                            (t (pascal-case seg))))
                                         (cl-ppcre:split  "--" token)))
         (pascal-case token))))
 
@@ -113,30 +116,30 @@ sta/iny/lda/sbc/sta for high byte (no tax/dey)."
                         ,v))))))))
 
 (defun emit-6502-subtract-2byte-self-inplace (out from result
-                                              class-id bcd-p)
-  "Emit 16-bit SUBTRACT FROM from RESULT (same slot), little-endian, in place."
-  (declare (ignore class-id))
-  (when bcd-p
-    (error 'backend-error
-           :message "EIGHTBOL/6502: BCD 2-byte in-place SUBTRACT not implemented"
-           :cpu :6502
-           :detail (list :subtract-inplace from result)))
-  (let ((offset (apply #'slot-symbol (rest (slot-of-expression result)))))
-    (format out "~%~10Tldy # ~a" offset)
+                                               class-id bcd-p)
+   "Emit 16-bit SUBTRACT FROM from RESULT (same slot), little-endian, in place.
+   
+For BCD operands, uses SED (decimal mode) for subtraction, then CLD to clear.
+Two's complement subtraction via SBC with borrow propagation."
+   (declare (ignore class-id))
+   (let ((offset (apply #'slot-symbol (rest (slot-of-expression result)))))
+    (format out "~%~10Tldy #~a" offset)
+    (when bcd-p (format out "~%~10Tsed"))
     (format out "~%~10Tsec")
     (with-accumulator-value ((slot-of-expression result))
       (format out "~%~10Tlda (~a), y" (to-identifier (third (slot-of-expression result)))))
     (if (expression-constant-p from)
-        (format out "~%~10Tsbc # <~a" (expression-constant-value from))
+        (format out "~%~10Tsbc #<~a" (expression-constant-value from))
         (format out "~%~10Tsbc ~a" (emit-6502-value from)))
     (format out "~%~10Tsta (~a), y" (to-identifier (third (slot-of-expression result))))
     (format out "~%~10Tiny")
     (with-accumulator-value ((slot-of-expression result))
       (format out "~%~10Tlda (~a), y" (to-identifier (third (slot-of-expression result)))))
     (if (expression-constant-p from)
-        (format out "~%~10Tsbc # >~d" (expression-constant-value from))
+        (format out "~%~10Tsbc #>~d" (expression-constant-value from))
         (format out "~%~10Tsbc ~a + 1" (emit-6502-value from)))
-    (format out "~%~10Tsta (~a), y" (to-identifier (third (slot-of-expression result)))))
+    (format out "~%~10Tsta (~a), y" (to-identifier (third (slot-of-expression result))))
+    (when bcd-p (format out "~%~10Tcld")))
   (setf *6502-accumulator-expression* :trash/subtraction))
 
 (defun emit-6502-store-zero (out addr)
@@ -147,7 +150,7 @@ Uses stz for 65c02+, lda # 0 + sta for 6502/RP2A03."
       (progn
         (format out "~%~10Tstz ~a" addr))
       (progn
-        (format out "~%~10Tldy # 0")
+        (format out "~%~10Tldy #0")
         (format out "~%~10Tsty ~a" addr))))
 
 ;;; Top-level entry point
@@ -267,7 +270,11 @@ instead of a class with methods."
         (*standard-output* output-stream)
         (*output-stream* output-stream))
     (unless (and (listp ast) (eq (first ast) :program))
-      (error "EIGHTBOL/~a: expected :program AST node, got ~s" cpu-label (first ast)))
+      (error 'backend-ast-error
+        :cpu cpu-label
+        :message (format nil "expected :program AST node, got ~s" (first ast))
+        :expected :program
+        :actual (first ast)))
     (let ((*class-id* (safe-getf (rest ast) :class-id))
           (methods (safe-getf (rest ast) :methods))
           (program-id (safe-getf (rest ast) :program-id)))
@@ -434,7 +441,7 @@ A holds the other operand."
      (let* ((slot-of-expression (slot-of-expression expression))
 	  (offset (apply #'slot-symbol (rest slot-of-expression)))
 	  (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
-       (format out "~%~10Tldy # ~a" offset)
+       (format out "~%~10Tldy #~a" offset)
        (format out "~%~10T~a (~a), y" mnemonic pointer)))
 
     ((slot-on-expression expression)
@@ -494,7 +501,7 @@ emit-6502-load-byte-n / emit-6502-cmp-byte-n-of-expression)."
      (let* ((slot-of-expression (slot-of-expression expression))
 	  (offset (apply #'slot-symbol (rest slot-of-expression)))
 	  (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
-       (format out "~%~10Tldy # ~a~[~:;~:* + ~d~]" offset n)
+       (format out "~%~10Tldy #~a~[~:;~:* + ~d~]" offset n)
        (format out "~%~10T~a (~a), y" mnemonic pointer)))
 
     ((slot-on-expression expression)

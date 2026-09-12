@@ -9,36 +9,45 @@
 @node What is Eightbol
 @section What is Eightbol
 
-EIGHTBOL is a sophisticated compiler system designed to translate programs
-written in various high-level languages into efficient assembly code for
-a wide range of 8-bit and 16-bit microprocessors. Originally developed
-for the Phantasia game engine, EIGHTBOL provides a unified compilation
-pipeline that supports multiple source languages while maintaining
-consistent code generation across different target architectures.
+EIGHTBOL is a compiler system  designed to translate programs written in
+various high-level  languages into  efficient assembly  code for  a wide
+range of 8-bit and 16-bit  microprocessors. Originally developed for the
+game @i{Phantasia}, EIGHTBOL,  the EIGHT-Bit-Oriented-Language, provides
+a unified  compilation pipeline that supports  multiple source languages
+while   maintaining   consistent   code  generation   across   different
+target architectures.
 
 @node Front-ends
 @section Front-ends
 
-EIGHTBOL supports fourteen distinct front-end languages, each with its
-own syntax and semantics, but all translating to a common intermediate
-representation (the Abstract Syntax Tree or AST) before being compiled
+EIGHTBOL supports twenty distinct front-end languages, each with its own
+syntax  and semantics,  but  all translating  to  a common  intermediate
+representation (the Abstract  Syntax Tree or AST)  before being compiled
 to target-specific assembly:
 
 @table @asis
-@item AGI — Adventure Game Interpreter language
-@item BASIC — Beginners' All-purpose Symbolic Instruction Code
-@item Burgermistress — the Thief of Fate scripting language by Burger Becky
-@item COBOL — COmmon Business Oriented Language
-@item FORTRAN — autmatic FORmula TRANslator
-@item Lingo — Macromedia Director Lingo script
-@item Lua
-@item Muddle — MIT Design Language “MDL”
-@item Objective-C — like C, but with objects
-@item Pascal
-@item SCI — Sierra Creative Interpreter language
-@item SCUMM — Script Creation Utility for Maniac Mansion
-@item SmallTalk
-@item ZIL — Zork Implementation Language
+@item AGI —  Adventure Game Interpreter language (Jeff  Stephenson & Ken
+Williams)
+@item  BASIC   —  Beginners'   All-purpose  Symbolic   Instruction  Code
+ (John G. Kemeny and Thomas E. Kurtz, Dartmouth University)
+@item BurgerMistress — the Thief of Fate interactive system (Rebecca
+Ann ``Burger Becky'' Heinemann)
+@item COBOL  — COmmon Business  Oriented Language (Dr RAdm  Grace Hopper)
+@item Forth (Chuck Moore)
+@item FORTRAN — autmatic FORmula TRANslator (John Backus)
+@item  Fountain  —  screenplay  format (as  redesigned  by  Bruce-Robert
+Pocock)
+@item Garry — Garry Kitchen's GameMaker
+@item GOAL — Game-Oriented Assembly Lisp (Andy Gavin)
+@item Lingo — MacroMind/Macromedia Director Lingo script (John Henry Thompson)
+@item Lua (TecGraf at PUC-Rio)
+@item Muddle — MIT Design Language “MDL” (MIT Project MAC)
+@item Objective-C — like C, but with objects (Tom Love & Brad Cox)
+@item Pascal (Niklaus Wirth)
+@item SCI — Sierra Creative Interpreter language (Jeff Stephenson)
+@item SCUMM — Script Creation Utility for Maniac Mansion (Ron Gilbert & Aric Wilmunder)
+@item SmallTalk (Alan Kay)
+@item ZIL — Zork Implementation Language (Marc Blank & Joel Berez)
 @end table
 
 @node Back-ends
@@ -61,6 +70,11 @@ with its own code generation backend:
 @item i286 — Intel 80286
 @item ARM7 — ARM Advanced RISC Machines ARM7
 @item F8 — Fairchild F8
+@item Stack — stack-based back-end
+@item JVM — Java Virtual Machine bytecodes
+@item wasm — Web Assembly
+@item zork — Zork/Infocom Z-Machine
+@item p — USCD P-machine
 @end table
 
 @node Invoking EIGHTBOL
@@ -76,11 +90,12 @@ Where @var{options} can include:
 
 @table @asis
 @item -l @var{language}
-Specify the source language (agi, basic, burgermistress, cobol, fortran,
-lingo, lua, muddle, objective-c, pascal, sci, scumm, smalltalk, zil)
+Specify the  source language (agi, basic,  burgermistress, cobol, forth,
+fortran, fountain, garry, goal, lingo, lua, muddle, objective, pascal, sci,
+scumm, smalltalk, zil)
 @item -c @var{cpu}
 Specify the target CPU (6502, 65c02, 65c816, huc6280, rp2a03, cp1610,
-z80, sm83, m6800, m68k, i286, arm7, f8)
+z80, sm83, m6800, m68k, i286, arm7, f8, stack, zork, wasm, jvm, p)
 @item -o @var{output-file}
 Specify the output assembly file
 @item -I @var{path}

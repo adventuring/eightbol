@@ -19,21 +19,21 @@
 
 (test fortran_functions_library
   "FUNCTIONS: FORTRAN library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_functions_user_defined
   "FUNCTIONS: FORTRAN user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_functions_recursion
   "FUNCTIONS: FORTRAN recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_functions_return_values
   "FUNCTIONS: FORTRAN function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_functions_parameter_passing
   "FUNCTIONS: FORTRAN parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

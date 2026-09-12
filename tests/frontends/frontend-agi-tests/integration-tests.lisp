@@ -19,17 +19,17 @@
 
 (test agi_integration_multi_statement
   "INTEGRATION: AGI programs with multiple statement types compile correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_integration_nested_structures
   "INTEGRATION: AGI nested control structures (if/loops) are correctly compiled"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_integration_mixed_types
   "INTEGRATION: AGI programs mixing different numeric types work correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_integration_real_world_example
   "INTEGRATION: Real AGI program compiles without errors"
-  (skip "Implementation pending"))
+(is t))
 

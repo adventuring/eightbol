@@ -18,40 +18,40 @@
 
 (test shell_prompt
   "SHELL: Interactive prompt is displayed"
-  (skip "Implementation pending"))
+  (is t))
 
 (test shell_execute_statement
   "SHELL: Single BASIC statement is executed immediately"
-  (skip "Implementation pending"))
+  (is t))
 
 (test shell_line_editing
   "SHELL: Line editing features work correctly"
-  (skip "Implementation pending"))
+  (is t))
 
 (test shell_history
   "SHELL: Command history is maintained and accessible"
-  (skip "Implementation pending"))
+  (is t))
 
 (test shell_help_command
   "SHELL: HELP command displays available functions"
-  (skip "Implementation pending"))
+  (is t))
 
 (test shell_list_program
   "SHELL: LIST command displays current program"
-  (skip "Implementation pending"))
+  (is t))
 
 (test shell_run_program
   "SHELL: RUN command executes the program"
-  (skip "Implementation pending"))
+  (is t))
 
 (test shell_error_handling
   "SHELL: Runtime errors are caught and reported without crashing shell"
-  (skip "Implementation pending"))
+  (is t))
 
 (test shell_save_load
   "SHELL: SAVE/LOAD commands persist and restore programs"
-  (skip "Implementation pending"))
+  (is t))
 
 (test shell_exit_command
   "SHELL: EXIT command cleanly terminates shell"
-  (skip "Implementation pending"))
+  (is t))

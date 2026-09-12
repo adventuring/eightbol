@@ -86,11 +86,13 @@
 
 (defun sci-parse-send (obj method args)
   "(send obj method args)"
-  (list :invoke :class obj :method method))
+  (list :invoke :object obj :method method))
 
 (defun sci-parse-return (&optional val)
   "return [val]"
-  (list :go-back))
+  (if val
+      (list :exit-method :value val)
+      (list :goback)))
 
 (defun sci-parse-print (args)
   "print args or (print arg1 arg2 ...)"
@@ -146,11 +148,11 @@
 (defun sci-make-invoke-node (class method &key args)
   "Create an invocation (method call) AST node."
   (declare (ignore args))
-  (list :invoke :class class :method method))
+  (list :invoke :object class :method method))
 
 (defun sci-make-goback-node ()
   "Create a return/goback AST node."
-  (list :go-back))
+  (list :goback))
 
 (defun sci-make-print-node (args)
   "Create a print AST node."
@@ -203,19 +205,130 @@
 
 (defun sci-make-expression-add (left right)
   "Create an ADD expression node."
-  (list :add :from left :to right))
+  (list :+ left right))
 
 (defun sci-make-expression-subtract (left right)
   "Create a SUBTRACT expression node."
-  (list :subtract :subtrahend right :from left))
+  (list :- left right))
 
 (defun sci-make-expression-multiply (left right)
   "Create a MULTIPLY expression node."
-  (list :compute :target 'result :expression (list :× left right)))
+  (list :× left right))
 
 (defun sci-make-expression-divide (left right)
   "Create a DIVIDE expression node."
-  (list :compute :target 'result :expression (list :÷ left right)))
+  (list :÷ left right))
+
+;;; Additional statement node constructors for full 56-node coverage
+
+(defun sci-make-exit-method-node (&optional value)
+  "Create an EXIT METHOD node."
+  (if value
+      (list :exit-method :value value)
+      (list :exit-method)))
+
+(defun sci-make-exit-program-node ()
+  "Create an EXIT PROGRAM node."
+  (list :exit-program))
+
+(defun sci-make-exit-node ()
+  "Create an EXIT node."
+  (list :exit))
+
+(defun sci-make-stop-run-node ()
+  "Create a STOP RUN node."
+  (list :stop-run))
+
+(defun sci-make-set-node (target value)
+  "Create a SET identifier TO value node."
+  (list :set :target target :value value))
+
+(defun sci-make-compute-node (target expression)
+  "Create a COMPUTE target FROM expression node."
+  (list :compute :target target :expression expression))
+
+(defun sci-make-call-acc-node (func value)
+  "Create a CALL with :using clause node."
+  (list :call-acc :target func :using value))
+
+(defun sci-make-log-fault-node (code)
+  "Create a LOG FAULT code node."
+  (list :log-fault :code code))
+
+(defun sci-make-debug-break-node (code)
+  "Create a DEBUG BREAK code node."
+  (list :debug-break :code code))
+
+(defun sci-make-copy-node (name)
+  "Create a COPY name node."
+  (list :copy :name name))
+
+(defun sci-make-string-blt-node (source dest &key length)
+  "Create a STRING BLT (string move) node."
+  (list* :string-blt :source source :dest dest
+         (when length `(:length ,length))))
+
+(defun sci-make-subscript-node (base index)
+  "Create a subscripted access node."
+  (list :subscript :name base :index index))
+
+(defun sci-make-of-node (slot object)
+  "Create a qualified identifier (slot OF object) node."
+  (list :of :slot slot :object object))
+
+(defun sci-make-self-node ()
+  "Create a SELF reference node."
+  :self)
+
+(defun sci-make-null-node ()
+  "Create a NULL value node."
+  :null)
+
+(defun sci-make-address-of-node (identifier)
+  "Create an ADDRESS OF identifier node."
+  (list :address-of :name identifier))
+
+(defun sci-make-refmod-node (base start length)
+  "Create a reference modification base(start:length) node."
+  (list :refmod :base base :start start :length length))
+
+;;; Bitwise and shift operators
+
+(defun sci-make-bitwise-not (value)
+  "Create a bitwise NOT expression."
+  (list :¬ value))
+
+(defun sci-make-bitwise-and (left right)
+  "Create a bitwise AND expression."
+  (list :∧ left right))
+
+(defun sci-make-bitwise-or (left right)
+  "Create a bitwise OR expression."
+  (list :∨ left right))
+
+(defun sci-make-bitwise-xor (left right)
+  "Create a bitwise XOR expression."
+  (list :⊻ left right))
+
+(defun sci-make-bitwise-nand (left right)
+  "Create a bitwise NAND expression."
+  (list :⊼ left right))
+
+(defun sci-make-bitwise-nor (left right)
+  "Create a bitwise NOR expression."
+  (list :⊽ left right))
+
+(defun sci-make-shift-arithmetic (value amount)
+  "Create an arithmetic shift expression."
+  (list :ash value amount))
+
+(defun sci-make-shift-left (value amount)
+  "Create a shift left expression."
+  (list :asl value amount))
+
+(defun sci-make-shift-right (value amount)
+  "Create a shift right expression."
+  (list :asr value amount))
 
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)

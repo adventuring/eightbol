@@ -1,0 +1,380 @@
+@chapter 6502 Backend
+@cindex 6502 backend
+
+The 6502 backend generates assembly code for the MOS Technology 6502 8-bit microprocessor
+and its successors. The 6502 is one of the most widely-used processors in retro computing,
+found in systems including the Commodore 64, Apple II, NES, and many arcade machines.
+
+@section Architecture Overview
+
+The 6502 is an 8-bit processor with:
+@itemize
+@item A single 8-bit accumulator (A)
+@item Two 8-bit index registers (X, Y)
+@item An 8-bit status register (flags)
+@item 16-bit address bus (64KB address space)
+@item 256-byte zero page (fast memory area)
+@item 256-byte hardware stack (page $01)
+@end itemize
+
+@section Register Allocation
+
+The EIGHTBOL 6502 backend uses the following register allocation strategy:
+
+@table @asis
+@item A (Accumulator)
+Primary register for arithmetic and logic operations. Used for function return values.
+
+@item X (Index Register)
+Typically used for loop counters and array indexing.
+
+@item Y (Index Register)
+Typically used for secondary indexing or temporary storage.
+
+@item Zero Page ($00-$FF)
+Used for local variables and temporary storage. The compiler allocates space dynamically.
+
+@item Stack ($0100-$01FF)
+Used for call returns and local stack frames.
+@end table
+
+@section Function Call Convention
+
+@subsection Subroutine Calls
+
+Subroutine calls use the JSR (Jump to Subroutine) instruction:
+
+@example
+JSR subroutine-name    ; Push return address and jump
+RTS                    ; Return to caller
+@end example
+
+The 6502 automatically pushes a 16-bit return address (minus 1) onto the stack.
+
+@subsection Return Values
+
+Return values are passed in the accumulator (A) for single-byte results. 
+Multi-byte results are returned via zero-page locations or stack conventions.
+
+@subsection Parameter Passing
+
+Parameters are passed via:
+@itemize
+@item Zero-page locations for small parameters
+@item The accumulator for primary parameters
+@item The stack for large or multiple parameters
+@end itemize
+
+@section Address Modes
+
+The 6502 supports multiple addressing modes:
+
+@table @asis
+@item Immediate
+@code{#$FF} - Load constant value directly
+
+@item Zero Page
+@code{$80} - Access single byte in zero page
+
+@item Zero Page, X
+@code{$80,X} - Zero page with X offset
+
+@item Zero Page, Y
+@code{$80,Y} - Zero page with Y offset
+
+@item Absolute
+@code{$1234} - 16-bit address
+
+@item Absolute, X
+@code{$1234,X} - Absolute with X offset
+
+@item Absolute, Y
+@code{$1234,Y} - Absolute with Y offset
+
+@item Indirect
+@code{($1234)} - Indirect addressing (JMP only)
+
+@item Indexed Indirect
+@code{($80,X)} - Indirect with X offset
+
+@item Indirect Indexed
+@code{($80),Y} - Indirect with Y offset (post-indexed)
+
+@item Relative
+@code{+/- offset} - Branch instructions
+@end table
+
+@section Instruction Set Summary
+
+@subsection Load/Store Instructions
+
+@table @asis
+@item LDA
+Load Accumulator (affects N, Z flags)
+
+@item LDX
+Load X Register (affects N, Z flags)
+
+@item LDY
+Load Y Register (affects N, Z flags)
+
+@item STA
+Store Accumulator
+
+@item STX
+Store X Register
+
+@item STY
+Store Y Register
+@end table
+
+@subsection Arithmetic Instructions
+
+@table @asis
+@item ADC
+Add with Carry (accumulator + memory + carry flag)
+
+@item SBC
+Subtract with Carry (accumulator - memory - not carry flag)
+
+@item CMP
+Compare (A - memory, affects N, Z, C flags)
+
+@item CPX
+Compare X (X - memory, affects N, Z, C flags)
+
+@item CPY
+Compare Y (Y - memory, affects N, Z, C flags)
+@end table
+
+@subsection Logical Instructions
+
+@table @asis
+@item AND
+Bitwise AND (affects N, Z flags)
+
+@item ORA
+Bitwise OR (affects N, Z flags)
+
+@item EOR
+Bitwise XOR (affects N, Z flags)
+
+@item BIT
+Bit test (affects N, V, Z flags)
+@end table
+
+@subsection Shift/Rotate Instructions
+
+@table @asis
+@item ASL
+Arithmetic Shift Left (multiply by 2)
+
+@item LSR
+Logical Shift Right (divide by 2 unsigned)
+
+@item ROL
+Rotate Left through Carry
+
+@item ROR
+Rotate Right through Carry
+@end table
+
+@subsection Jump/Branch Instructions
+
+@table @asis
+@item JMP
+Unconditional Jump
+
+@item JSR
+Jump to Subroutine (push return address)
+
+@item RTS
+Return from Subroutine (pop return address)
+
+@item BEQ
+Branch if Equal (Z flag set)
+
+@item BNE
+Branch if Not Equal (Z flag clear)
+
+@item BMI
+Branch if Minus (N flag set)
+
+@item BPL
+Branch if Plus (N flag clear)
+
+@item BVC
+Branch if Overflow Clear (V flag clear)
+
+@item BVS
+Branch if Overflow Set (V flag set)
+
+@item BCC
+Branch if Carry Clear (C flag clear)
+
+@item BCS
+Branch if Carry Set (C flag set)
+@end table
+
+@subsection Increment/Decrement Instructions
+
+@table @asis
+@item INC
+Increment (affects N, Z flags)
+
+@item DEC
+Decrement (affects N, Z flags)
+
+@item INX
+Increment X (affects N, Z flags)
+
+@item INY
+Increment Y (affects N, Z flags)
+
+@item DEX
+Decrement X (affects N, Z flags)
+
+@item DEY
+Decrement Y (affects N, Z flags)
+@end table
+
+@subsection Stack Instructions
+
+@table @asis
+@item PHA
+Push Accumulator
+
+@item PLA
+Pull (Pop) Accumulator (affects N, Z flags)
+
+@item PHP
+Push Processor Status (flags)
+
+@item PLP
+Pull (Pop) Processor Status
+
+@item TXS
+Transfer X to Stack Pointer
+
+@item TSX
+Transfer Stack Pointer to X
+@end table
+
+@section Status Flags
+
+The 6502 status register contains 8 flags:
+
+@table @asis
+@item N (Negative)
+Set if result has bit 7 set (is negative in signed representation)
+
+@item V (Overflow)
+Set if arithmetic operation resulted in signed overflow
+
+@item - (unused)
+Bit 5 is unused
+
+@item B (Break)
+Set when BRK instruction executed
+
+@item D (Decimal)
+Set to enable decimal (BCD) arithmetic mode
+
+@item I (Interrupt)
+Set to disable interrupts
+
+@item Z (Zero)
+Set if result is zero
+
+@item C (Carry)
+Set if arithmetic operation produced carry or borrow
+@end table
+
+@section Numeric Precision
+
+The 6502 backend supports:
+@itemize
+@item 8-bit unsigned (0-255)
+@item 8-bit signed (-128 to 127)
+@item 16-bit unsigned (0-65535) via multi-byte operations
+@item 16-bit signed (-32768 to 32767) via multi-byte operations
+@item Binary fixed-point with arbitrary precision
+@item BCD (Binary Coded Decimal) via decimal mode
+@end itemize
+
+@section Code Generation Strategy
+
+@subsection Variable Storage
+
+Local variables are allocated in zero page when possible (fast access).
+For larger programs, stack-based allocation is used.
+
+@subsection Expression Evaluation
+
+Expressions are typically evaluated left-to-right with results accumulated in:
+@itemize
+@item The A register (primary result)
+@item Zero-page locations (for intermediate results)
+@item The stack (for multi-value operations)
+@end itemize
+
+@subsection Loop Generation
+
+Counted loops typically use X or Y register as counter:
+
+@example
+LDX #$0A        ; Load counter (10)
+LoopLabel:
+  ; Loop body here
+  DEX             ; Decrement counter
+  BNE LoopLabel   ; Branch if not equal to zero
+@end example
+
+@subsection Conditional Execution
+
+Conditions are evaluated and flags are tested via branch instructions:
+
+@example
+; IF condition THEN...
+CMP #0          ; Compare A with zero
+BEQ ThenLabel   ; Branch if equal (true)
+; ELSE clause here
+JMP ElseEnd
+ThenLabel:
+; THEN clause here
+ElseEnd:
+@end example
+
+@section Optimization Strategies
+
+@itemize
+@item Zero-page addressing for hot variables
+@item Register caching to minimize loads/stores
+@item Dead code elimination
+@item Branch target optimization
+@item Constant propagation
+@end itemize
+
+@section Platform Specifics
+
+Different 6502-based systems have different memory layouts and conventions.
+The EIGHTBOL compiler can target:
+
+@subsection Commodore 64
+- 64KB address space
+- Zero page: $00-$FF
+- Stack: $0100-$01FF
+- BASIC ROM: $A000-$BFFF
+- Kernal ROM: $E000-$FFFF
+
+@subsection Apple II
+- 64KB address space (48KB standard)
+- Zero page: $00-$FF
+- Stack: $0100-$01FF
+- Alternate ROM banks
+
+@subsection NES (RP2A03)
+See backend-rp2a03 for NES-specific details
+
+@subsection Atari 2600 (6507)
+Derived from 6502 with reduced address space and I/O

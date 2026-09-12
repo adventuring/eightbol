@@ -1,0 +1,497 @@
+@node SCI Frontend
+@chapter SCI Frontend Language
+
+SCI is a scripting language used in the Sierra Creative Interpreter for adventure
+game development. The EIGHTBOL SCI frontend compiles SCI scripts to support
+retro game development on 8-bit and 16-bit platforms. This chapter documents the
+complete SCI language grammar, statements, expressions, types, and examples.
+
+@menu
+* SCI Lexical Elements::
+* SCI Grammar Overview::
+* SCI Statements::
+* SCI Expressions::
+* SCI Type System::
+* SCI Examples::
+@end menu
+
+@node SCI Lexical Elements
+@section Lexical Elements
+
+@subsection Keywords
+
+SCI reserves the following keywords (case-insensitive):
+
+@table @code
+@item and, or, not
+Logical operators
+@item break, continue
+Loop control
+@item class
+Class definition
+@item cond
+Conditional
+@item define
+Symbolic constant
+@item do, else, elseif, endif
+Conditional constructs
+@item enum
+Enumeration
+@item for, forall
+Iteration
+@item goto
+Jump statement
+@item if, ifnot, else, elif
+Conditionals
+@item instance, method
+OOP declarations
+@item local, param
+Variable declarations
+@item private, public, protected
+Access modifiers
+@item procedure
+Procedure definition
+@item return
+Function return
+@item self, rest
+Special parameters
+@item species
+Base class
+@item switch, case
+Case statement
+@item to, from, by
+Range specification
+@item while, repeat
+Loop constructs
+@end table
+
+@subsection Identifiers
+
+Identifiers follow standard C-like conventions:
+
+@itemize
+@item Case-insensitive
+@item Start with letter or underscore
+@item Contain alphanumerics, underscores
+@item Examples: @code{Player}, @code{_hp}, @code{score123}
+@end itemize
+
+@subsection Literals
+
+@subsubsection Numbers
+
+@example
+0
+42
+-100
+0xFF
+0b1010
+@end example
+
+@subsubsection Strings
+
+@example
+"Hello World"
+"It's a string"
+""
+@end example
+
+@subsection Comments
+
+@example
+; Line comment to end of line
+(* Block comment
+   spanning lines *)
+@end example
+
+@subsection Operators
+
+@subsubsection Arithmetic
+
+@table @code
+@item +
+Addition
+@item -
+Subtraction
+@item *
+Multiplication
+@item /
+Division
+@item %
+Modulo
+@item &
+Bitwise AND
+@item |
+Bitwise OR
+@item ^
+Bitwise XOR
+@item <<
+Left shift
+@item >>
+Right shift
+@end table
+
+@subsubsection Comparison
+
+@table @code
+@item ==
+Equality
+@item <>
+Inequality
+@item <
+Less than
+@item >
+Greater than
+@item <=
+Less than or equal
+@item >=
+Greater than or equal
+@end table
+
+@subsubsection Logical
+
+@table @code
+@item and
+AND
+@item or
+OR
+@item not
+NOT
+@end table
+
+@subsubsection Other
+
+@table @code
+@item =
+Assignment
+@item .
+Member access
+@item []
+Array indexing
+@item ()
+Function call
+@item ->
+Property access
+@end table
+
+@node SCI Grammar Overview
+@section Grammar Overview
+
+@subsection Class Structure
+
+@example
+(class Player &rest properties
+  (property x 0)
+  (property y 0)
+  (property health 100)
+  
+  (method initialize)
+  
+  (method move dx dy)
+  
+  (method take_damage amount)
+)
+@end example
+
+@subsection Script Organization
+
+Scripts typically contain:
+
+@enumerate
+@item Header (@code{define}, @code{include})
+@item Class definitions
+@item Procedure definitions
+@item Initialization code
+@end enumerate
+
+@node SCI Statements
+@section Statements
+
+@subsection Variable Declaration
+
+@strong{Syntax}:
+@example
+local name = value;
+param name = value;
+@end example
+
+@strong{Semantics}: Declares local or parameter variable.
+
+@strong{Examples}:
+
+@example
+local x = 10;
+local health = 100;
+param target_x = 0;
+@end example
+
+@strong{AST}: @code{(:move :target name :source value)}
+
+@subsection Assignment
+
+@strong{Syntax}:
+@example
+variable = expression;
+object.property = value;
+array[index] = value;
+@end example
+
+@strong{Semantics}: Assigns value to variable, property, or array element.
+
+@strong{Examples}:
+
+@example
+x = 100;
+player.health = player.health - 10;
+inventory[0] = sword;
+@end example
+
+@strong{AST}: @code{(:move :target variable :source expression)}
+
+@subsection Arithmetic Operations
+
+@strong{Syntax}:
+@example
+variable = expr1 + expr2;
+variable = expr1 - expr2;
+variable = expr1 * expr2;
+variable = expr1 / expr2;
+@end example
+
+@strong{Examples}:
+
+@example
+damage = attack * multiplier;
+new_health = health - damage;
+@end example
+
+@strong{AST}: @code{(:compute :op :+ :operands (expr1 expr2))}
+
+@subsection Conditional Statement
+
+@strong{Syntax}:
+@example
+if condition then
+  statements
+else
+  statements
+endif;
+
+ifnot condition
+  statements
+else
+  statements
+endif;
+@end example
+
+@strong{Examples}:
+
+@example
+if health <= 0 then
+begin
+  print("Game Over");
+  running = false;
+end;
+
+ifnot alive
+  respawn_player();
+endif;
+@end example
+
+@strong{AST}: @code{(:if :condition cond :then then-block :else else-block)}
+
+@subsection Case Statement
+
+@strong{Syntax}:
+@example
+switch selector
+case value1
+  statements;
+case value2
+  statements;
+endswitch;
+@end example
+
+@strong{Examples}:
+
+@example
+switch player_class
+case WARRIOR
+  add_strength(10);
+case MAGE
+  add_mana(20);
+endswitch;
+@end example
+
+@subsection Loop Statements
+
+@strong{Syntax}:
+@example
+while condition
+  body;
+endwhile;
+
+repeat
+  body
+until condition;
+
+for local i = 0 to 99 by 1
+  body;
+endfor;
+@end example
+
+@strong{Examples}:
+
+@example
+while health > 0
+  process_turn();
+endwhile;
+
+for local i = 1 to 10
+  print(i);
+endfor;
+@end example
+
+@strong{AST}: @code{(:perform :target loop-label)}
+
+@subsection Method Definition
+
+@strong{Syntax}:
+@example
+(method name &rest params
+  body
+)
+@end example
+
+@strong{Examples}:
+
+@example
+(method take_damage amount
+  (= health (- health amount))
+  (if (<= health 0) then
+    (send self death))
+)
+@end example
+
+@strong{AST}: @code{(:invoke :method "name" :using params)}
+
+@node SCI Expressions
+@section Expressions
+
+@subsection Arithmetic
+
+@example
+10 + 20
+x * y
+(a + b) / 2
+x mod 10
+@end example
+
+@subsection Logical
+
+@example
+health > 0
+state == IDLE
+(x > 0) and (x < 100)
+(alive) or (respawning)
+@end example
+
+@subsection Bitwise
+
+@example
+flags & MASK
+value | FLAG
+value ^ 0xFF
+value << 2
+@end example
+
+@subsection Method Calls
+
+@example
+(send object method arg1 arg2)
+(super method arg1)
+(self property_name)
+@end example
+
+@node SCI Type System
+@section Type System
+
+@subsection Primitive Types
+
+@table @code
+@item int
+Integer
+@item boolean
+True/false
+@item string
+Text
+@item list
+Collection
+@end table
+
+@subsection Object Types
+
+@itemize
+@item Classes and instances
+@item Methods and properties
+@item Inheritance via species
+@end itemize
+
+@node SCI Examples
+@section Examples
+
+@subsection Complete Program Example
+
+@example
+(define NORTH 0)
+(define SOUTH 1)
+(define EAST 2)
+(define WEST 3)
+
+(class Actor &rest properties
+  (property x 0)
+  (property y 0)
+  (property direction 0)
+  
+  (method initialize x0 y0
+    (= x x0)
+    (= y y0))
+  
+  (method move_by dx dy
+    (= x (+ x dx))
+    (= y (+ y dy)))
+  
+  (method is_alive
+    (> health 0)))
+
+(class Player species Actor
+  (property health 100)
+  (property score 0)
+  
+  (method take_damage amount
+    (= health (- health amount))
+    (if (<= health 0)
+      (send self die)))
+  
+  (method add_score points
+    (= score (+ score points))))
+
+(class Game
+  (method main
+    (local player)
+    (= player (new Player 50 50))
+    (send player move_by 10 5)
+    (send player take_damage 20)
+    (if (send player is_alive)
+      (print "Still alive!"))))
+@end example
+
+@subsection Best Practices
+
+@itemize
+@item Use classes to organize related data and methods
+@item Keep methods focused and single-purpose
+@item Use meaningful names for classes, methods, properties
+@item Document complex algorithms with comments
+@item Use constants for magic numbers
+@end itemize

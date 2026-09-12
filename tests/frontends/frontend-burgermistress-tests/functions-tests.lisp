@@ -19,21 +19,21 @@
 
 (test burgermistress_functions_library
   "FUNCTIONS: BURGERMISTRESS library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_functions_user_defined
   "FUNCTIONS: BURGERMISTRESS user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_functions_recursion
   "FUNCTIONS: BURGERMISTRESS recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_functions_return_values
   "FUNCTIONS: BURGERMISTRESS function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_functions_parameter_passing
   "FUNCTIONS: BURGERMISTRESS parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

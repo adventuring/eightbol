@@ -1,0 +1,572 @@
+\input texinfo @c -*-texinfo-*-
+@c %**start of header
+@setfilename PROGRAMMERS-REFERENCE.info
+@settitle EIGHTBOL Programmer's Reference Guide
+@documentencoding UTF-8
+@documentlanguage en
+@c %**end of header
+
+@copying
+Copyright @copyright{} 2026 Interworldly Adventuring, LLC.
+
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the MIT License, which can be found at
+@url{https://opensource.org/licenses/MIT}.
+@end copying
+
+@titlepage
+@title EIGHTBOL Programmer's Reference Guide
+@subtitle Quick Start, API Reference, and Developer Guidelines
+@subtitle Edition 1.0, for EIGHTBOL version 1.0
+@author Bruce-Robert Pocock
+
+@page
+@vskip 0pt plus 1filll
+@insertcopying
+@end titlepage
+
+@contents
+
+@ifnottex
+@node Top
+@top EIGHTBOL Programmer's Reference Guide
+
+This is a quick reference guide for EIGHTBOL compiler developers and
+contributors. It covers the essential developer information, quick starts,
+API reference, code examples, common patterns, error handling, and best practices.
+
+For the complete language and backend reference, see @file{doc/EIGHTBOL.texi}.
+For archived research, audits, and historical documentation, see @file{doc/archive/}.
+
+@insertcopying
+@end ifnottex
+
+@menu
+* Project Overview:: Quick introduction to EIGHTBOL
+* Key Paths and Structure:: Essential project paths and file organization
+* Compilation Pipeline:: Understanding the EIGHTBOL compilation process
+* Frontend Architecture:: How frontends are structured and implemented
+* Frontend Language Support:: Quick reference for all supported languages
+* Error Handling Guide:: Understanding error handling and restart patterns
+* AST Reference:: Abstract Syntax Tree node types and structure
+* Backend Reference:: Code generation and backend architecture
+* Testing and Verification:: Running tests and verifying functionality
+* Development Guidelines:: Code style, conventions, and best practices
+* Troubleshooting:: Common issues and solutions
+@end menu
+
+@node Project Overview
+@chapter Project Overview
+
+EIGHTBOL is a compiler for 8-bit and 16-bit microprocessor systems. It accepts
+programs written in seventeen different higher-level languages and generates
+efficient assembly code for a wide variety of processors.
+
+@section Supported Languages
+
+EIGHTBOL currently supports compilation from:
+AGI, BASIC, Burgermistress, COBOL, FORTH, FORTRAN, Lingo, Lua, Muddle,
+Objective-C, Pascal, SCI, SCUMM, SmallTalk, and ZIL.
+
+@section Supported Target Processors
+
+EIGHTBOL generates assembly code for:
+6502, 65c02, 65c816, HuC6280, RP2A03, cp1610, Z80, SM83, m68k, i286,
+ARM7 (Thumb), F8, and a stack-based virtual machine.
+
+@section Project Statistics
+
+As of September 2026:
+@itemize @bullet
+@item 23 error classes with 165+ error tests
+@item 57/57 COBOL AST nodes implemented
+@item 15+ language frontends with comprehensive coverage
+@item 14 backend architectures
+@item Comprehensive test suite with FiveAM integration
+@end itemize
+
+@node Key Paths and Structure
+@chapter Key Paths and File Organization
+
+@section Critical Files and Directories
+
+@table @file
+@item src/ast.lisp
+Core abstract syntax tree definitions and node types
+@item tests/eightbol-tests.lisp
+Main test suite (run via @code{(asdf:test-system :eightbol)})
+@item doc/EIGHTBOL.texi
+Master documentation for all language and backend details
+@item README.md
+Project overview and usage instructions
+@item AGENTS.md
+Development guidelines for AI agents and contributors
+@end table
+
+@section Directory Organization
+
+@itemize @bullet
+@item @file{src/frontend-*/} --- Language frontend implementations
+@item @file{src/backend-*/} --- Processor backend code generators
+@item @file{src/ast.lisp} --- Abstract syntax tree definitions
+@item @file{tests/} --- Test suite organization
+@item @file{doc/} --- Documentation and reference material
+@item @file{frontend_plans/} --- Language implementation task plans
+@end itemize
+
+@node Compilation Pipeline
+@chapter Understanding the Compilation Pipeline
+
+@section Standard Pipeline Overview
+
+The EIGHTBOL compilation process follows this pipeline:
+
+@enumerate
+@item @strong{Lexer} --- Tokenization and comment handling
+@item @strong{Parser} --- Grammar parsing (CL-YACC for most languages)
+@item @strong{AST Transformation} --- Canonical plist-based AST creation
+@item @strong{Transpile} --- Optional intermediate language transformation
+@item @strong{Serialize} --- Write AST to .eightbol file
+@item @strong{Backend} --- Code generation for target processor
+@item @strong{Assembly} --- Final assembly code output
+@end enumerate
+
+@section Key Pipeline Components
+
+@subsection Lexer (frontend-*-lexer.lisp)
+Performs tokenization, keyword recognition, operator classification, and
+inline COPY expansion at lexical analysis time.
+
+@subsection Parser (frontend-*-parser.lisp)
+Implements grammar parsing using CL-YACC (15/17 languages) or custom parsers
+(Forth, Goal, Fountain). Produces parse trees that are immediately transformed
+to canonical AST format.
+
+@subsection AST Transformation
+Parser actions invoke @code{make-*-node} functions that create canonical
+plist-based AST nodes. This ensures all backends can process output from any
+frontend.
+
+@subsection Backend (backend-*.lisp)
+Reads serialized AST from .eightbol file and generates processor-specific
+assembly code. Backends are self-contained and can be developed independently.
+
+@node Frontend Architecture
+@chapter Frontend Architecture and Implementation
+
+@section Architecture Overview
+
+All EIGHTBOL frontends follow a consistent architecture:
+
+@enumerate
+@item Source input (text, from file or stream)
+@item Lexical analysis with COPY expansion
+@item Syntax parsing to intermediate parse tree
+@item Semantic analysis and AST transformation
+@item Optional transpilation step
+@item Canonical AST plist creation
+@item Serialization to .eightbol file
+@end enumerate
+
+@section Frontend Phases
+
+@subsection Phase 1: Lexical Analysis
+Tokenizes input, expands COPY statements, tracks source location for error
+reporting. All frontends perform this phase.
+
+@subsection Phase 2: Parsing
+Builds parse tree according to language grammar. Most languages use CL-YACC
+(15/17); Forth uses recursive descent; Goal uses custom semantic parser;
+Fountain uses domain-specific parser.
+
+@subsection Phase 3: AST Transformation
+Converts parse tree to canonical AST format using @code{make-*-node} functions.
+This produces language-independent plist structure that all backends understand.
+
+@subsection Phase 4: Optional Transpilation
+6 frontends (BASIC, Objective-C, and others) include transpilation phase to
+convert to intermediate representation or intermediate language before passing
+to backends.
+
+@subsection Phase 5: AST Serialization
+Write canonical AST to .eightbol file in @file{Object/Classes/} directory for
+later processing by backends.
+
+@section Implementation Patterns
+
+All frontends follow these patterns:
+
+@itemize @bullet
+@item Error class: @code{source-error} with source location tracking
+@item Parser actions create canonical AST nodes via @code{make-*-node}
+@item Reference modification syntax: @code{name(start:length)}
+@item Subscript syntax: @code{array(index)}
+@item No explicit return values in procedure calls
+@end itemize
+
+@node Frontend Language Support
+@chapter Frontend Language Support Quick Reference
+
+@section Language Support Matrix
+
+@multitable @columnfractions 0.20 0.15 0.20 0.15 0.15 0.15
+@headitem Language @tab Status @tab Parser Type @tab Transpile @tab Tests @tab Lines
+@item AGI @tab Complete @tab CL-YACC @tab No @tab Yes @tab 500+
+@item BASIC @tab Complete @tab CL-YACC @tab COBOL @tab Yes @tab 700+
+@item Burgermistress @tab Partial @tab CL-YACC @tab No @tab Limited @tab 300+
+@item COBOL @tab 100% @tab CL-YACC @tab No @tab Complete @tab 1200+
+@item FORTH @tab Partial @tab Recursive @tab No @tab Limited @tab 400+
+@item FORTRAN @tab Partial @tab CL-YACC @tab No @tab Limited @tab 350+
+@item Lingo @tab Research @tab CL-YACC @tab No @tab Limited @tab 250+
+@item Lua @tab Partial @tab CL-YACC @tab No @tab Limited @tab 300+
+@item Muddle @tab Implementation @tab CL-YACC @tab No @tab Limited @tab 450+
+@item Objective-C @tab Partial @tab CL-YACC @tab Yes @tab Limited @tab 400+
+@item Pascal @tab Partial @tab CL-YACC @tab No @tab Limited @tab 380+
+@item SCI @tab Research @tab CL-YACC @tab No @tab Limited @tab 300+
+@item SCUMM @tab Research @tab CL-YACC @tab No @tab Limited @tab 350+
+@item SmallTalk @tab Research @tab CL-YACC @tab No @tab Limited @tab 400+
+@item ZIL @tab Research @tab CL-YACC @tab No @tab Limited @tab 320+
+@end multitable
+
+@section Language Implementation Status
+
+@subsection Complete (100% AST Coverage)
+@itemize @bullet
+@item @strong{COBOL} --- 57/57 AST nodes implemented, comprehensive test coverage
+@item @strong{BASIC} --- Full compatibility via COBOL transpilation
+@end itemize
+
+@subsection Partial (Core Features)
+@itemize @bullet
+@item FORTH, FORTRAN, Lua, Objective-C, Pascal --- Core language features
+@item Burgermistress, Muddle --- Active implementation
+@end itemize
+
+@subsection Research Phase
+@itemize @bullet
+@item AGI, Lingo, SCI, SCUMM, SmallTalk, ZIL --- Research and prototype phase
+@end itemize
+
+@node Error Handling Guide
+@chapter Error Handling and Restart Patterns
+
+@section Error Class Hierarchy
+
+EIGHTBOL uses a structured condition class hierarchy for error handling:
+
+@itemize @bullet
+@item @code{COMPILER-ERROR} --- Base class for all compiler errors
+@item @code{SOURCE-ERROR} --- Parse and syntax errors
+@item @code{SEMANTIC-ERROR} --- Type and semantic errors
+@item @code{BACKEND-ERROR} --- Code generation failures
+@item @code{COPYBOOK-ERROR} --- File inclusion issues
+@item @code{VALIDATION-ERROR} --- Constraint violations
+@end itemize
+
+@section Error Reporting Best Practices
+
+@subsection For Parser/Syntax Errors
+
+Use @code{source-error} with full context:
+
+@example
+(error 'source-error
+       :source-file (current-file)
+       :source-line (current-line)
+       :source-sequence (current-seq)
+       :message "Unexpected token DIVIDE")
+@end example
+
+@subsection For Backend Errors
+
+Use @code{backend-error} with processor context:
+
+@example
+(error 'backend-error
+       :cpu :6502
+       :message "DIVIDE not supported"
+       :detail "Use bit shift or target 65C816")
+@end example
+
+@subsection For Copybook Issues
+
+Use specific copybook error types:
+
+@example
+(error 'copybook-not-found
+       :copybook-name "Classes"
+       :library "Source/Classes"
+       :message "Cannot find copybook")
+@end example
+
+@section Current Status (September 2026)
+
+@itemize @bullet
+@item ✅ 23 error classes well-organized
+@item ✅ 165+ error tests covering all cases
+@item ⚠️ 2 restart handlers (need 15+)
+@item ⚠️ Parser errors halt (need recovery)
+@item ⚠️ Multi-file compilation fragile
+@end itemize
+
+@section Next Steps
+
+@itemize @bullet
+@item Implement 15+ restart handlers for error recovery
+@item Add 50+ restart tests
+@item Enable parser recovery per-method
+@item Make copybook resolution restartable
+@item Add skip/continue options throughout pipeline
+@end itemize
+
+@node AST Reference
+@chapter Abstract Syntax Tree Reference
+
+@section AST Node Types
+
+The EIGHTBOL AST consists of canonical plist-based nodes representing
+language constructs:
+
+@subsection Move Statement
+@code{(:move :source src-expr :destination dest-expr)}
+
+@subsection Add Statement
+@code{(:add :left left-expr :right right-expr :giving result-var)}
+
+@subsection Subtract Statement
+@code{(:subtract :left left-expr :right right-expr :giving result-var)}
+
+@subsection Compute Statement
+@code{(:compute :target var-name :expression expr)}
+
+@subsection If/Then/Else Statement
+@code{(:if :condition cond-expr :then then-body :else else-body)}
+
+@subsection Perform Statement
+@code{(:perform :procedure proc-name :using using-expr)}
+
+@subsection Invoke Statement
+@code{(:invoke :object obj-ref :method "MethodName" :using using-expr)}
+
+@subsection String Block Transfer
+@code{(:string-blt :source src-var :destination dest-var :length len-expr)}
+
+@section AST Serialization Format
+
+AST nodes are serialized to @file{Object/Classes/ClassName.eightbol} as
+S-expressions (plists). This allows round-trip serialization and
+deserialization.
+
+@section AST Optimization
+
+The @code{:ast-optimize} test suite verifies AST transformations and
+optimizations. See @file{tests/ast-optimize.lisp} for optimization rules.
+
+@node Backend Reference
+@chapter Backend Reference and Code Generation
+
+@section Backend Architecture
+
+Each backend is a self-contained code generator:
+
+@itemize @bullet
+@item Read serialized AST from .eightbol file
+@item Perform target-specific analysis
+@item Generate processor-specific assembly code
+@item Write output to .s file
+@end itemize
+
+@section Supported Backends
+
+@subsection 6502 Family
+6502, 65c02, 65c816 with extensive support for indexed addressing,
+bit operations, and processor-specific features.
+
+@subsection Other 8-bit
+HuC6280 (PC Engine), RP2A03 (NES), Z80, SM83 (Game Boy), cp1610 (Intellivision).
+
+@subsection 16-bit
+m68k (Motorola 68000), i286 (Intel 80286), ARM7 (Thumb).
+
+@subsection Virtual
+Stack-based virtual machine with standard instruction set.
+
+@section Backend Error Handling
+
+Backends report errors via @code{backend-error} condition:
+
+@example
+(error 'backend-error
+       :cpu :6502
+       :statement 'divide
+       :message "DIVIDE not supported on this CPU")
+@end example
+
+@node Testing and Verification
+@chapter Testing and Verification
+
+@section Running Tests
+
+Run the full test suite:
+
+@example
+(asdf:test-system :eightbol)
+@end example
+
+Run specific test suites:
+
+@example
+(fiveam:run! :backend-matrix)
+(fiveam:run! :ast-optimize)
+(fiveam:run! :compile-regression)
+@end example
+
+@section Test Suites
+
+@itemize @bullet
+@item @code{:eightbol} --- Main compiler tests
+@item @code{:backend-matrix} --- All backends
+@item @code{:ast-optimize} --- AST optimizations
+@item @code{:copybook-generation} --- COPY statement handling
+@item @code{:compile-regression} --- Regression testing
+@item @code{:phantasia-classes-compile} --- Integration tests (when Phantasia available)
+@item @code{:backend-output} --- Backend output verification
+@item @code{:parser-structure} --- Parser structure tests
+@item @code{:numeric-precision-all-backends} --- Numeric precision across backends
+@end itemize
+
+@section Coverage Areas
+
+@itemize @bullet
+@item Lexer --- tokenization, prefixed literals, reference modification
+@item Parser --- class structure, methods, statements
+@item AST --- node structure and round-trip serialization
+@item Unsupported features --- compile-time errors for DIVIDE, MULTIPLY, UNSTRING
+@item STRING BLT --- DELIMITED BY SIZE with reference modification
+@item Backends --- code generation for all processors
+@item Shift and bit operations
+@item Subscripted access
+@end itemize
+
+@node Development Guidelines
+@chapter Development Guidelines and Best Practices
+
+@section Code Organization
+
+@subsection Lisp Style
+@itemize @bullet
+@item Use hyphenated-names for symbols
+@item Use @code{+constants+} with crosses
+@item Use @code{*specials/dynamics*} with earmuffs
+@item Use @code{percent-for-private%} functions
+@item Use @code{_underscore-for-ignored} parameters
+@end itemize
+
+@subsection Assembly Style
+PascalCase naming conventions for all labels and symbols.
+
+@subsection COBOL/EIGHTBOL Style
+Header-Case-Capitalized names for routines, paragraphs, and variables.
+
+@subsection C/Java Style
+PascalCase types, snake_case functions (C), camelCase methods/properties (Java).
+
+@section Comment Guidelines
+
+@itemize @bullet
+@item Line comments: Use @code{;;} with normal indentation
+@item Section headers: Use @code{;;;} or @code{;;;;} for major sections
+@item End-of-line comments: Column 32--72 range
+@item Assembly end-of-line: Column 32--72, promote long comments to block form
+@item COBOL comments: All comments begin with @code{*} in column 7
+@end itemize
+
+@section Formatting Guidelines
+
+@itemize @bullet
+@item Prefer newline/fresh-line at @strong{start} of line: @code{"~%content"}
+@item Use @code{~10t} for indentation instead of literal spaces
+@item Follow existing project style
+@item Maintain backward compatibility
+@end itemize
+
+@section Function Design
+
+@itemize @bullet
+@item Lisp functions: 1--2 positional arguments (rarely 3), then keywords
+@item Follow SOLID principles
+@item Don't repeat yourself (DRY)
+@item Maintain existing interface compatibility
+@item Document non-obvious logic with docstrings
+@end itemize
+
+@node Troubleshooting
+@chapter Troubleshooting and Common Issues
+
+@section Parser Errors
+
+@subsection Unexpected Token
+Ensure correct language syntax. Check lexer tokenization with @code{trace}
+on lexer functions.
+
+@subsection Reference Modification Syntax
+Use @code{name(start:length)} for reference modification. Note: start is
+1-indexed, length is number of characters.
+
+@subsection Subscripted Access
+Use @code{array(index)} syntax. Array indexing is 1-based in COBOL.
+
+@section Backend Issues
+
+@subsection Unsupported Features
+DIVIDE and MULTIPLY are not supported. Use bit shift operations instead
+or target 65c816 or higher.
+
+@subsection CPU Constraints
+Some CPUs have limitations. See CPU-specific sections in main documentation.
+
+@subsection Address Calculation
+For complex addressing modes, verify with assembly output inspection.
+
+@section Compilation Failures
+
+@subsection Copybook Not Found
+Ensure COPY statement references valid copybook file in include path.
+Use @code{-I} flag to add library paths.
+
+@subsection AST Serialization
+Verify .eightbol file can be read. Check for corrupted serialization.
+
+@section Testing
+
+@subsection Test Failures
+Run individual test to isolate issue:
+@example
+(fiveam:run! :specific-test-name)
+@end example
+
+Review test output for detailed error messages and stack traces.
+
+@section Performance
+
+@subsection Slow Compilation
+Check for infinite loops in transpilation or backend phases.
+Enable tracing on specific functions to identify bottlenecks.
+
+@section Integration
+
+@subsection Multi-file Compilation
+Ensure copybook search paths are set correctly. Test with @code{-I} flags.
+
+@appendix References and Related Documentation
+
+For complete language and backend reference, see:
+@itemize @bullet
+@item @file{doc/EIGHTBOL.texi} --- Master compiler manual
+@item @file{doc/archive/audits/} --- Comprehensive audit reports
+@item @file{doc/archive/research/} --- Language research and implementation studies
+@item @file{README.md} --- Project overview and usage
+@item @file{AGENTS.md} --- Development guidelines
+@end itemize
+
+@bye

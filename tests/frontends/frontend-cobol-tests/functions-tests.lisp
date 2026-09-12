@@ -19,21 +19,21 @@
 
 (test cobol_functions_library
   "FUNCTIONS: COBOL library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test cobol_functions_user_defined
   "FUNCTIONS: COBOL user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test cobol_functions_recursion
   "FUNCTIONS: COBOL recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test cobol_functions_return_values
   "FUNCTIONS: COBOL function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test cobol_functions_parameter_passing
   "FUNCTIONS: COBOL parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

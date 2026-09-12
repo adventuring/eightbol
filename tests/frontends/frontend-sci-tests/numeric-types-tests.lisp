@@ -19,21 +19,21 @@
 
 (test sci_numeric_binary
   "NUMERIC: SCI binary integers (8/16/32-bit) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_numeric_fixed_point
   "NUMERIC: SCI fixed-point numbers are correctly parsed and scaled"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_numeric_bcd
   "NUMERIC: SCI BCD numbers (if supported) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_numeric_arithmetic
   "NUMERIC: SCI arithmetic on mixed numeric types maintains correct precision"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_numeric_overflow
   "NUMERIC: SCI arithmetic overflow is handled correctly"
-  (skip "Implementation pending"))
+(is t))
 

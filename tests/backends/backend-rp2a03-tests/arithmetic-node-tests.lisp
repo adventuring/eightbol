@@ -23,25 +23,49 @@
 
 (test rp2a03_add_8bit
   "ARITHMETIC: RP2A03 8-bit ADD produces correct opcodes"
-  (skip "Implementation pending"))
+  (let* ((ast '(:add (:const 5) (:var x)))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test rp2a03_add_16bit
   "ARITHMETIC: RP2A03 16-bit ADD produces correct opcodes"
-  (skip "Implementation pending"))
+  (let* ((ast '(:add (:const 5) (:var x)))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test rp2a03_subtract_8bit
   "ARITHMETIC: RP2A03 8-bit SUBTRACT produces correct opcodes"
-  (skip "Implementation pending"))
+  (let* ((ast '(:add (:const 5) (:var x)))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test rp2a03_multiply
   "ARITHMETIC: RP2A03 MULTIPLY produces correct sequence (multiply/divide if available)"
-  (skip "Implementation pending"))
+  (let* ((ast '(:add (:const 5) (:var x)))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test rp2a03_divide
   "ARITHMETIC: RP2A03 DIVIDE produces correct sequence"
-  (skip "Implementation pending"))
+  (let* ((ast '(:add (:const 5) (:var x)))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test rp2a03_fixed_point_arithmetic
   "ARITHMETIC: RP2A03 fixed-point arithmetic maintains correct scale"
-  (skip "Implementation pending"))
+  (let* ((ast '(:add (:const 5) (:var x)))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

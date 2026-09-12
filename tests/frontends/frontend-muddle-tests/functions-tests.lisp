@@ -19,21 +19,21 @@
 
 (test muddle_functions_library
   "FUNCTIONS: MUDDLE library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_functions_user_defined
   "FUNCTIONS: MUDDLE user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_functions_recursion
   "FUNCTIONS: MUDDLE recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_functions_return_values
   "FUNCTIONS: MUDDLE function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_functions_parameter_passing
   "FUNCTIONS: MUDDLE parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

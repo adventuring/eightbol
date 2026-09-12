@@ -374,3 +374,4 @@ emit-6502-load-expression AND emit-6502-load-byte-n read the rhs from
       ;; Other errors (e.g. test fixture incompleteness) are tolerated.
       (is (not (eq :missing-expression-nil etype))
           "Boat.Draw-Frame compile regressed to emit-6502-value: missing expression (NIL)"))))
+))

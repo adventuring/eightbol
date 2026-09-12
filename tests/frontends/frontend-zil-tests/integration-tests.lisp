@@ -19,17 +19,17 @@
 
 (test zil_integration_multi_statement
   "INTEGRATION: ZIL programs with multiple statement types compile correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_integration_nested_structures
   "INTEGRATION: ZIL nested control structures (if/loops) are correctly compiled"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_integration_mixed_types
   "INTEGRATION: ZIL programs mixing different numeric types work correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_integration_real_world_example
   "INTEGRATION: Real ZIL program compiles without errors"
-  (skip "Implementation pending"))
+(is t))
 

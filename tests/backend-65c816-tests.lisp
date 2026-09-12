@@ -230,9 +230,9 @@
 ;;;
 
 (test 65c816/goto
-  "GO TO target emits jmp to label."
+  "GO TO target emits bra to label (65C816 has BRA)."
   (let ((asm (65c816-asm '(:goto :target "Exit"))))
-    (is (search "jmp" asm))))
+    (is (search "bra" asm))))
 
 (test 65c816/paragraph
   "Paragraph emits label."

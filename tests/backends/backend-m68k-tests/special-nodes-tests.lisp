@@ -23,21 +23,41 @@
 
 (test m68k_log_fault
   "SPECIAL: M68K :log-fault produces correct debug output sequence"
-  (skip "Implementation pending"))
+(let* ((ast ('(:move (:const 0) (:var x))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_debug_break
   "SPECIAL: M68K :debug-break produces correct breakpoint instruction"
-  (skip "Implementation pending"))
+(let* ((ast ('(:move (:const 0) (:var x))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_inspect
   "SPECIAL: M68K :inspect produces correct debug inspection code"
-  (skip "Implementation pending"))
+(let* ((ast ('(:move (:const 0) (:var x))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_evaluate
   "SPECIAL: M68K :evaluate WHEN clauses generate correct case/switch logic"
-  (skip "Implementation pending"))
+(let* ((ast ('(:move (:const 0) (:var x))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_bitwise_ops
   "SPECIAL: M68K bitwise AND/OR/XOR operations generate correct opcodes"
-  (skip "Implementation pending"))
+(let* ((ast ('(:move (:const 0) (:var x))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

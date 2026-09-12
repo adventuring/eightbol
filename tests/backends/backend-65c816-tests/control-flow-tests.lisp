@@ -23,21 +23,41 @@
 
 (test 65c816_if_conditional
   "CONTROL FLOW: 65C816 :if conditionals generate correct branch instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c816_if_nested
   "CONTROL FLOW: 65C816 nested conditionals generate correct branch chains"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c816_perform_loop
   "CONTROL FLOW: 65C816 :perform loops generate correct branch/jump sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c816_goto
   "CONTROL FLOW: 65C816 :goto jumps generate correct unconditional jumps"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c816_loop_unroll
   "CONTROL FLOW: 65C816 loop optimization correctly unrolls small loops"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

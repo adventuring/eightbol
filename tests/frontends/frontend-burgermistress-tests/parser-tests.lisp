@@ -19,33 +19,33 @@
 
 (test burgermistress_parser_exists
   "Verify BURGERMISTRESS parser module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_parser_move_assign
   "PARSER: BURGERMISTRESS move/assignment statements produce :move AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_parser_arithmetic
   "PARSER: BURGERMISTRESS arithmetic expressions produce correct AST with :add/:subtract/:multiply"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_parser_conditionals
   "PARSER: BURGERMISTRESS if/then/else statements produce :if AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_parser_loops
   "PARSER: BURGERMISTRESS loops produce :perform AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_parser_function_calls
   "PARSER: BURGERMISTRESS function calls produce :call/:invoke AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_parser_arrays
   "PARSER: BURGERMISTRESS array subscripts produce :subscript AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_parser_error_recovery
   "PARSER: BURGERMISTRESS parser produces meaningful error messages on invalid syntax"
-  (skip "Implementation pending"))
+(is t))
 

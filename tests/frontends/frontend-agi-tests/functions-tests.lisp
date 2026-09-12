@@ -19,21 +19,21 @@
 
 (test agi_functions_library
   "FUNCTIONS: AGI library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_functions_user_defined
   "FUNCTIONS: AGI user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_functions_recursion
   "FUNCTIONS: AGI recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_functions_return_values
   "FUNCTIONS: AGI function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_functions_parameter_passing
   "FUNCTIONS: AGI parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

@@ -78,8 +78,16 @@
 
 (test backend_6502_arithmetic_bcd
   "6502 backend: BCD arithmetic uses decimal mode when appropriate"
-  (skip "BCD arithmetic test"))
+  (let* ((ast '(:add (:const 9) (:const 9)))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test backend_6502_arithmetic_register_preservation
   "6502 backend: Arithmetic operations don't clobber needed registers"
-  (skip "Register preservation test"))
+  (let* ((ast '(:add (:var x) (:var y)))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))

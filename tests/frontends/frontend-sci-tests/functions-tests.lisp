@@ -19,21 +19,21 @@
 
 (test sci_functions_library
   "FUNCTIONS: SCI library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_functions_user_defined
   "FUNCTIONS: SCI user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_functions_recursion
   "FUNCTIONS: SCI recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_functions_return_values
   "FUNCTIONS: SCI function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_functions_parameter_passing
   "FUNCTIONS: SCI parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

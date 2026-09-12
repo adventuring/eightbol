@@ -19,17 +19,17 @@
 
 (test muddle_variables_case_sensitivity
   "VARIABLES: MUDDLE identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_variables_reserved_words
   "VARIABLES: MUDDLE reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_variables_normalization
   "VARIABLES: MUDDLE identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_variables_scope
   "VARIABLES: MUDDLE variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

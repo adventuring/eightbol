@@ -1,0 +1,647 @@
+@chapter FORTH Frontend Language
+@cindex FORTH frontend language
+
+This chapter describes the FORTH frontend as implemented in the EightBol compiler.
+The FORTH frontend provides a stack-based, concatenative programming model for
+creating compiled applications targeting 8-bit and 16-bit microprocessors. FORTH
+programs are compiled to the EIGHTBOL Abstract Syntax Tree (AST) and then to
+assembly language for processors including the 6502, 65c02, 65c816, Z80, and others.
+
+@section Overview
+
+FORTH is a stack-based, concatenative language where programs consist of words
+(subroutines) that manipulate a parameter stack. The FORTH frontend in EIGHTBOL
+provides a comprehensive implementation supporting classic FORTH operations as well
+as domain-specific extensions for dialogue, narrative, and interactive fiction.
+
+The frontend handles:
+@itemize
+@item Stack operations (DUP, SWAP, DROP, OVER, ROT, 2DUP, 2SWAP, 2DROP)
+@item Arithmetic operations (+, -, *, /, MOD, ABS, NEGATE)
+@item Comparison operations (=, <, >, <=, >=, <>)
+@item Bitwise operations (AND, OR, XOR, NOT, <<, >>)
+@item Memory access (@ fetch, ! store, +! add-store, C@ byte-fetch, C! byte-store)
+@item Return stack operations (>R, R>, R@)
+@item Input/output (., ."", EMIT, CR, SPACE, SPACES, PAGE, KEY, ACCEPT)
+@item Control flow (IF/THEN/ELSE, BEGIN/UNTIL, BEGIN/WHILE, DO/LOOP, DO/+LOOP)
+@item Variables and constants (VARIABLE, CONSTANT)
+@item Word definitions (: ... ;)
+@item Multiple number formats (decimal, hexadecimal, octal, binary, dword)
+@item Dialogue and narrative extensions (SAY, NARRATE, SHOW, HIDE, FADE, MUSIC, SOUND)
+@end itemize
+
+@section Lexical Elements
+
+The FORTH frontend tokenizes source code into the following categories:
+
+@subsection Stack Operation Words
+Stack operations manipulate the parameter stack without performing computation:
+
+@table @asis
+@item @code{DUP}
+Duplicate top of stack. Stack effect: (x -- x x)
+
+@item @code{SWAP}
+Exchange top two stack items. Stack effect: (x y -- y x)
+
+@item @code{DROP}
+Discard top of stack. Stack effect: (x -- )
+
+@item @code{OVER}
+Copy second item to top. Stack effect: (x y -- x y x)
+
+@item @code{ROT}
+Rotate top three items. Stack effect: (x y z -- y z x)
+
+@item @code{2DUP}
+Duplicate top two items. Stack effect: (x y -- x y x y)
+
+@item @code{2SWAP}
+Swap top two pairs. Stack effect: (x1 x2 y1 y2 -- y1 y2 x1 x2)
+
+@item @code{2DROP}
+Discard top two items. Stack effect: (x y -- )
+@end table
+
+@subsection Arithmetic Words
+Arithmetic words perform calculations on stack values:
+
+@table @asis
+@item @code{+}
+Addition. Stack effect: (x y -- x+y)
+
+@item @code{-}
+Subtraction. Stack effect: (x y -- x-y)
+
+@item @code{*}
+Multiplication. Stack effect: (x y -- x*y)
+
+@item @code{/}
+Division. Stack effect: (x y -- x/y)
+
+@item @code{MOD}
+Modulo (remainder). Stack effect: (x y -- x mod y)
+
+@item @code{ABS}
+Absolute value. Stack effect: (x -- |x|)
+
+@item @code{NEGATE}
+Negate (unary minus). Stack effect: (x -- -x)
+
+@item @code{1+}
+Increment by 1. Stack effect: (x -- x+1)
+
+@item @code{1-}
+Decrement by 1. Stack effect: (x -- x-1)
+
+@item @code{2*}
+Multiply by 2 (left shift). Stack effect: (x -- 2x)
+
+@item @code{2/}
+Divide by 2 (right shift). Stack effect: (x -- x/2)
+@end table
+
+@subsection Comparison Words
+Comparison words test relationships between stack values:
+
+@table @asis
+@item @code{=}
+Equal. Stack effect: (x y -- f) where f is true/false
+
+@item @code{<}
+Less than. Stack effect: (x y -- f)
+
+@item @code{>}
+Greater than. Stack effect: (x y -- f)
+
+@item @code{<=}
+Less than or equal. Stack effect: (x y -- f)
+
+@item @code{>=}
+Greater than or equal. Stack effect: (x y -- f)
+
+@item @code{<>}
+Not equal. Stack effect: (x y -- f)
+
+@item @code{0=}
+Zero test. Stack effect: (x -- f)
+
+@item @code{0<}
+Negative test. Stack effect: (x -- f)
+
+@item @code{0>}
+Positive test. Stack effect: (x -- f)
+@end table
+
+@subsection Bitwise Words
+Bitwise words manipulate individual bits in stack values:
+
+@table @asis
+@item @code{AND}
+Bitwise AND. Stack effect: (x y -- x&y)
+
+@item @code{OR}
+Bitwise OR. Stack effect: (x y -- x|y)
+
+@item @code{XOR}
+Bitwise XOR. Stack effect: (x y -- x^y)
+
+@item @code{NOT}
+Bitwise NOT (complement). Stack effect: (x -- ~x)
+
+@item @code{<<}
+Left shift (logical). Stack effect: (x n -- x<<n)
+
+@item @code{>>}
+Right shift (logical). Stack effect: (x n -- x>>n)
+@end table
+
+@subsection Memory Access Words
+Memory access words read from and write to system memory:
+
+@table @asis
+@item @code{@}
+Fetch (read) from memory at address. Stack effect: (addr -- value)
+
+@item @code{!}
+Store (write) to memory at address. Stack effect: (value addr -- )
+
+@item @code{+!}
+Add to memory location. Stack effect: (incr addr -- )
+
+@item @code{C@}
+Fetch byte from memory. Stack effect: (addr -- byte)
+
+@item @code{C!}
+Store byte to memory. Stack effect: (byte addr -- )
+@end table
+
+@subsection Return Stack Words
+Return stack words access the return stack used for control flow:
+
+@table @asis
+@item @code{>R}
+Push to return stack. Stack effect: (x -- ) R: ( -- x)
+
+@item @code{R>}
+Pop from return stack. Stack effect: ( -- x) R: (x -- )
+
+@item @code{R@}
+Copy return stack top (read without popping). Stack effect: ( -- x) R: (x -- x)
+@end table
+
+@subsection Input/Output Words
+Input/output words handle communication with the user or display:
+
+@table @asis
+@item @code{.}
+Print top of stack as decimal number. Stack effect: (x -- )
+
+@item @code{."} text @code{"}
+Print string literal. Stack effect: ( -- )
+
+@item @code{EMIT}
+Output a single character (by ASCII/character code). Stack effect: (char -- )
+
+@item @code{CR}
+Output carriage return (newline). Stack effect: ( -- )
+
+@item @code{SPACE}
+Output a single space character. Stack effect: ( -- )
+
+@item @code{SPACES}
+Output N space characters. Stack effect: (n -- )
+
+@item @code{PAGE}
+Clear screen/output buffer. Stack effect: ( -- )
+
+@item @code{KEY}
+Read a single keystroke. Stack effect: ( -- char)
+
+@item @code{ACCEPT}
+Read a line of text from input. Stack effect: (addr len -- count)
+@end table
+
+@subsection Control Flow Words
+Control flow words direct program execution:
+
+@table @asis
+@item @code{IF} ... @code{THEN} ... @code{ELSE} ... @code{ENDIF}
+Conditional execution. If top of stack is true (non-zero), execute THEN clause; 
+otherwise execute ELSE clause. Stack effect: (f -- )
+
+@item @code{BEGIN} ... @code{UNTIL}
+Loop until condition is true. Stack effect: (repeated)
+
+@item @code{BEGIN} ... @code{WHILE} ... @code{REPEAT}
+Loop while condition is true. Stack effect: (repeated)
+
+@item @code{DO} ... @code{LOOP}
+Counted loop with implicit counter. Stack effect: (start end -- )
+
+@item @code{DO} ... @code{+LOOP}
+Counted loop with custom increment. Stack effect: (start end -- )
+
+@item @code{I}
+Fetch current loop counter (inside DO loops). Stack effect: ( -- n)
+
+@item @code{J}
+Fetch outer loop counter (for nested loops). Stack effect: ( -- n)
+
+@item @code{RECURSE}
+Recursive call to current word definition (tail-call optimization applied).
+@end table
+
+@subsection Variable and Constant Words
+Variable and constant words create named storage:
+
+@table @asis
+@item @code{VARIABLE} name
+Create a named variable. Example: @code{VARIABLE counter}
+
+@item @code{CONSTANT} name
+Create a named constant. Example: @code{42 CONSTANT ANSWER}
+
+@item @code{VALUE} name
+Create a named value (like constant but with @code{TO name} assignment).
+@end table
+
+@subsection Dialogue and Narrative Extensions
+FORTH dialect extensions enable narrative and dialogue functionality:
+
+@table @asis
+@item @code{SAY} "text"
+Output dialogue text. Stack effect: ( -- )
+
+@item @code{NARRATE} "text"
+Output narrative text. Stack effect: ( -- )
+
+@item @code{SHOW} sprite-name
+Display sprite or visual element. Stack effect: ( -- )
+
+@item @code{HIDE} sprite-name
+Hide sprite or visual element. Stack effect: ( -- )
+
+@item @code{FADE} direction
+Fade in or out (e.g., @code{FADE out}, @code{FADE in}). Stack effect: ( -- )
+
+@item @code{MUSIC} "filename"
+Play background music. Stack effect: ( -- )
+
+@item @code{SOUND} "filename"
+Play sound effect. Stack effect: ( -- )
+@end table
+
+@section Number Literal Formats
+
+The FORTH frontend supports multiple number literal formats:
+
+@table @asis
+@item Decimal
+Standard base-10 numbers. Examples: @code{42}, @code{-123}, @code{0}
+
+@item Hexadecimal
+Base-16 numbers prefixed with @code{$} or @code{0x}. 
+Examples: @code{$FF}, @code{$DEAD}, @code{0xDEADBEEF}
+
+@item Octal
+Base-8 numbers prefixed with @code{0o}. 
+Examples: @code{0o777}, @code{0o123}
+
+@item Binary
+Base-2 numbers prefixed with @code{%} or @code{0b}. 
+Examples: @code{%1010}, @code{%11111111}, @code{0b10101010}
+
+@item Dword (Character Literal)
+Four-character literals prefixed with @code{d'} and enclosed in single quotes.
+Examples: @code{d'CHAR'}, @code{d'TEST'}, @code{d'    '} (space-padded)
+@end table
+
+@section Identifiers and Comments
+
+Identifiers are sequences of alphanumeric characters, hyphens, and underscores.
+By convention, FORTH identifiers are uppercase, though the frontend normalizes 
+identifiers to uppercase automatically:
+
+@table @asis
+@item @code{counter} → @code{COUNTER}
+@item @code{my-word} → @code{MY_WORD}
+@item @code{_private} → @code{_PRIVATE}
+@end table
+
+Comments in FORTH use two formats:
+
+@table @asis
+@item Line comments
+Backslash (@code{\}) introduces a comment that extends to end of line.
+Example: @code{DUP SWAP \ Duplicate and swap}
+
+@item Parenthetical comments
+Parentheses delimit comments: @code{( comment text )}
+Example: @code{DUP ( x -- x x ) SWAP}
+@end table
+
+@section String Literals
+
+Strings are delimited by double quotes and can be used in output statements:
+
+@example
+." Hello, World!"
+." This is line 1"
+SAY "Greetings, brave adventurer!"
+@end example
+
+String escape sequences are supported:
+@itemize
+@item @code{\n} — Newline
+@item @code{\t} — Horizontal tab
+@item @code{\r} — Carriage return
+@item @code{\\} — Literal backslash
+@item @code{\"} — Literal double quote
+@end itemize
+
+@section Word Definitions
+
+Words (subroutines) are defined using colon definitions:
+
+@example
+: word-name
+  definition... ;
+@end example
+
+Word definitions can reference other words and can be recursive:
+
+@example
+: DOUBLE
+  DUP + ;
+
+: SQUARE
+  DUP * ;
+
+: FACTORIAL
+  DUP 1 > IF
+    DUP 1 - RECURSE *
+  THEN ;
+@end example
+
+Within word definitions, @code{RECURSE} provides tail-call optimization for 
+recursive definitions.
+
+@section Variables and State
+
+Variables are created with @code{VARIABLE} and accessed with @code{@@} (fetch) 
+and @code{!} (store):
+
+@example
+VARIABLE counter
+10 counter !           \ Store 10
+counter @ .            \ Fetch and print
+counter @ 1 + counter ! \ Increment
+@end example
+
+Constants are similar but immutable:
+
+@example
+42 CONSTANT ANSWER
+100 CONSTANT WIDTH
+ANSWER .               \ Prints: 42
+@end example
+
+@section Control Flow Structures
+
+@subsection Conditional Execution
+
+@example
+: ABS-VALUE
+  DUP 0< IF
+    NEGATE
+  THEN ;
+@end example
+
+@subsection Loops
+
+Begin-Until loops continue until the condition is true:
+
+@example
+: COUNT-TO
+  BEGIN
+    DUP .
+    1 +
+    DUP 10 >= UNTIL ;
+@end example
+
+Begin-While loops continue while the condition is true:
+
+@example
+: WHILE-COUNT
+  BEGIN
+    DUP 10 < WHILE
+    DUP . 1 +
+  REPEAT ;
+@end example
+
+Do loops are counted loops with implicit counter:
+
+@example
+: PRINT-1-TO-10
+  10 0 DO
+    I . CR
+  LOOP ;
+@end example
+
+@section Abstract Syntax Tree Mapping
+
+FORTH programs are parsed into EIGHTBOL AST nodes:
+
+@table @asis
+@item @code{:forth-program}
+Top-level program containing word definitions and statements
+
+@item @code{:forth-push-literal}
+Push numeric or string literal to stack
+
+@item @code{:forth-push-identifier}
+Push variable value to stack
+
+@item @code{:forth-stack-op}
+Stack manipulation operation (DUP, SWAP, DROP, etc.)
+
+@item @code{:forth-arithmetic}
+Arithmetic operation (+, -, *, /, MOD, ABS, NEGATE)
+
+@item @code{:forth-comparison}
+Comparison operation (=, <, >, <=, >=, <>)
+
+@item @code{:forth-bitwise}
+Bitwise operation (AND, OR, XOR, NOT, <<, >>)
+
+@item @code{:forth-fetch}
+Memory fetch operation (@)
+
+@item @code{:forth-store}
+Memory store operation (! or +!)
+
+@item @code{:forth-conditional}
+Conditional execution (IF/THEN/ELSE)
+
+@item @code{:forth-loop}
+Loop structure (BEGIN/UNTIL, BEGIN/WHILE, DO/LOOP)
+
+@item @code{:forth-input-key}
+Read keystroke (KEY)
+
+@item @code{:forth-input-line}
+Read line of text (ACCEPT)
+
+@item @code{:forth-print-value}
+Print numeric value (.)
+
+@item @code{:forth-print-string}
+Print string literal (.")
+
+@item @code{:forth-emit}
+Output single character (EMIT)
+
+@item @code{:forth-print-cr}
+Output newline (CR)
+
+@item @code{:forth-dialogue}
+Output narrative or dialogue text (SAY, NARRATE)
+
+@item @code{:forth-word-def}
+Word definition (:...;)
+
+@item @code{:forth-constant-def}
+Constant definition (CONSTANT)
+
+@item @code{:forth-variable-def}
+Variable definition (VARIABLE)
+@end table
+
+@section Example Programs
+
+@subsection Factorial Calculation
+
+@example
+: FACTORIAL
+  DUP 1 > IF
+    DUP 1 - RECURSE *
+  ELSE
+    DROP 1
+  THEN ;
+
+5 FACTORIAL . CR
+@end example
+
+@subsection String Output with Dialogue
+
+@example
+SAY "Welcome to the adventure!"
+CR
+NARRATE "You find yourself in a dark forest."
+CR
+MUSIC "dark-forest.mus"
+SOUND "wind-howl.snd"
+@end example
+
+@subsection Loop with Counter
+
+@example
+: LOOP-EXAMPLE
+  BEGIN
+    DUP . CR
+    1 +
+    DUP 10 = UNTIL
+  DROP ;
+
+0 LOOP-EXAMPLE
+@end example
+
+@subsection Memory Access
+
+@example
+VARIABLE buffer
+
+65 buffer !            \ Store ASCII 'A'
+buffer @ EMIT CR       \ Output 'A'
+buffer @ 1 + buffer !  \ Increment stored value
+buffer @ .             \ Print new value
+@end example
+
+@section Implementation Notes
+
+@subsection Tokenization
+
+The FORTH lexer tokenizes source into:
+@itemize
+@item Numeric literals (in multiple bases)
+@item String literals (quoted text)
+@item Words (identifiers and keywords)
+@item Comments (line and parenthetical)
+@end itemize
+
+@subsection Identifier Normalization
+
+All identifiers are automatically normalized to uppercase for consistency
+with FORTH convention and case-insensitive semantics.
+
+@subsection Type System
+
+FORTH is dynamically typed at runtime. The compiler infers types from context:
+@itemize
+@item Stack values are generic word-sized entities
+@item Memory locations can store arbitrary values
+@item Comparison operations produce boolean results
+@item Arithmetic operations maintain precision based on backend
+@end itemize
+
+@subsection Return Stack Implementation
+
+The return stack is implemented as a separate storage area:
+@itemize
+@item @code{>R} pushes data stack top to return stack
+@item @code{R>} pops return stack top to data stack
+@item @code{R@} copies return stack top to data stack (non-destructive)
+@end itemize
+
+@section Limitations and Unsupported Features
+
+The following FORTH features are not currently supported:
+
+@itemize
+@item Floating-point arithmetic (only integer operations supported)
+@item Structures and records (beyond simple variables)
+@item File I/O beyond program input/output
+@item Advanced control structures (LEAVE, AGAIN)
+@item Immediate words and compile-only words
+@item Dictionary inspection at runtime
+@item Vectored execution
+@item Deferred words
+@end itemize
+
+@section Backend Code Generation
+
+FORTH source is parsed to AST and then compiled to target assembly:
+
+@itemize
+@item 6502/65c02/65c816: Accumulator-based code generation
+@item Z80/HuC6280: Specialized code generation for each processor
+@item Stack VM: Direct stack machine code
+@end itemize
+
+For each backend, the compiler generates:
+@itemize
+@item Stack operations translated to platform-specific register moves
+@item Arithmetic translated to platform instruction sequences
+@item Memory access translated to platform load/store instructions
+@item Control flow translated to branch and jump instructions
+@end itemize
+
+@section Performance Considerations
+
+@itemize
+@item Word definitions enable tail-call optimization for recursive calls
+@item Constant folding optimizes compile-time constant expressions
+@item Dead code elimination removes unreachable word definitions
+@item Common subexpression elimination optimizes repeated computations
+@end itemize

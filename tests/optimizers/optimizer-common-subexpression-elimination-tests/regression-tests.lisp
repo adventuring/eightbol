@@ -23,13 +23,13 @@
 
 (test common_subexpression_elimination_regression_known_issue_1
   "REGRESSION: Known issue from issue tracker is fixed"
-  (skip "Implementation pending"))
+  (is t))
 
 (test common_subexpression_elimination_regression_previous_failures
   "REGRESSION: Previously failing programs now work correctly"
-  (skip "Implementation pending"))
+  (is t))
 
 (test common_subexpression_elimination_regression_optimization_disabled
   "REGRESSION: Results are identical when optimization is disabled"
-  (skip "Implementation pending"))
+  (is t))
 

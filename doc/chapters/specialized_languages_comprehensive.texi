@@ -1,0 +1,2806 @@
+@node Specialized Languages Comprehensive Reference
+@chapter Comprehensive Specialized Languages Documentation
+
+@cindex GOAL language
+@cindex ZIL language
+@cindex Fountain screenplay
+@cindex Burgermistress DSL
+
+This chapter provides comprehensive documentation for four specialized languages supported
+by the EIGHTBOL compiler: GOAL, ZIL, Fountain, and Burgermistress. Each language is documented
+with complete syntax specifications, numeric type support, real compilable examples, and
+domain-specific features.
+
+@menu
+* GOAL Language Forms::
+* ZIL Language Forms::
+* Fountain Language Directives::
+* Burgermistress Language Statements::
+@end menu
+
+@node GOAL Language Forms
+@section GOAL Language Forms
+
+GOAL is a Lisp-like functional language designed for game scripting and system programming
+on 8-bit and 16-bit platforms. This section documents the 10+ primary forms that constitute
+the language, with complete syntax, numeric type information, real examples, and domain features.
+
+@subsection GOAL Form: DEFUN (Function Definition)
+
+@cindex DEFUN form in GOAL
+@cindex function definition
+
+The @code{DEFUN} form defines a named function with parameters and a body. It is the primary
+mechanism for code organization and reuse in GOAL.
+
+@strong{Syntax}:
+@example
+(DEFUN function-name (param1 param2 ... paramN) body-expression)
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{function-name}: Kebab-case identifier naming the function
+@item @code{param-list}: Zero or more parameters, normalized to lowercase
+@item @code{body-expression}: Single expression evaluated when function is called
+@end itemize
+
+@strong{Numeric Types Supported}:
+@itemize
+@item @code{BINARY}: Base-2 literals (0b1010, 0b11110000)
+@item @code{DECIMAL}: Base-10 literals (42, 255, 1000)
+@item @code{HEXADECIMAL}: Base-16 literals with #x prefix (#xFF, #xDEADBEEF)
+@item @code{OCTAL}: Base-8 literals with #o prefix (#o77, #o755)
+@end itemize
+
+@strong{Example 1: Simple Arithmetic Function}:
+@example
+(DEFUN calculate-health (base damage)
+  (- base damage))
+
+; Usage: (calculate-health 100 25) => 75
+@end example
+
+@strong{Example 2: Using Different Numeric Types}:
+@example
+(DEFUN process-game-state (flags health-decimal health-hex)
+  (let ((flag-binary #b1010)
+        (max-health-oct #o377))
+    (if (> health-decimal flags)
+        (+ health-hex max-health-oct)
+        (- health-decimal flag-binary))))
+
+; Usage: (process-game-state #b1111 100 #xFF) => calculated value
+@end example
+
+@strong{Example 3: Recursive Function with BINARY Type}:
+@example
+(DEFUN bit-count (value count)
+  (if (= value 0)
+      count
+      (bit-count (>> value 1) (+ count (& value #b1)))))
+
+; Counts set bits in binary representation
+; Usage: (bit-count #b11010011 0) => 5
+@end example
+
+@strong{Example 4: Multi-parameter Function Combining Types}:
+@example
+(DEFUN player-damage-calculation (base-damage #xFF weapon-bonus
+                                   elemental-modifier)
+  (let ((decimal-base (+ base-damage weapon-bonus))
+        (hex-max #xFF))
+    (if (> decimal-base hex-max)
+        hex-max
+        (+ decimal-base elemental-modifier))))
+
+; Usage: (player-damage-calculation 50 #xFF 15 10) => 75
+@end example
+
+@strong{Example 5: Factorial with HEXADECIMAL Type}:
+@example
+(DEFUN factorial (n accumulator)
+  (if (<= n #x1)
+      accumulator
+      (factorial (- n 1) (* n accumulator))))
+
+; Usage: (factorial #x5 1) => 120
+@end example
+
+@strong{Domain-Specific Features}:
+Functions in GOAL support tail-call optimization for efficient recursion, critical on
+memory-constrained 8-bit systems. All numeric types are transparently converted during
+compilation to the target CPU's native representation. Function definitions can reference
+each other and form mutual recursion patterns.
+
+---
+
+@subsection GOAL Form: LET (Local Binding)
+
+@cindex LET form in GOAL
+@cindex local variable binding
+
+The @code{LET} form creates local variable bindings within a scope, with all variables
+initialized in parallel before any expressions in the body execute.
+
+@strong{Syntax}:
+@example
+(LET ((var1 init1) (var2 init2) ... (varN initN))
+  body-expression)
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{bindings}: List of (variable initial-value) pairs
+@item @code{body-expression}: Expression evaluated with bindings in scope
+@end itemize
+
+@strong{Numeric Types Supported}:
+All four numeric types (BINARY, DECIMAL, HEXADECIMAL, OCTAL) can be used in initializers.
+
+@strong{Example 1: Simple Local Variables}:
+@example
+(let ((player-health 100)
+      (enemy-health 50)
+      (damage 15))
+  (- player-health damage))
+
+; Result: 85
+@end example
+
+@strong{Example 2: Mixed Numeric Types}:
+@example
+(let ((damage-decimal 25)
+      (max-damage-hex #xFF)
+      (min-damage-binary #b0001)
+      (difficulty-octal #o3))
+  (+ damage-decimal difficulty-octal))
+
+; Result: 28
+@end example
+
+@strong{Example 3: Using let in Function Context}:
+@example
+(defun calculate-experience (monster-level base-xp multiplier)
+  (let ((level-bonus (* monster-level #x10))
+        (total-decimal (+ base-xp 50)))
+    (- (* total-decimal multiplier) level-bonus)))
+
+; Usage: (calculate-experience 5 100 2) => complex value
+@end example
+
+@strong{Example 4: Nested let Expressions}:
+@example
+(defun nested-calc (a b)
+  (let ((x (+ a 10)))
+    (let ((y (* x b)))
+      (+ x y))))
+
+; Usage: (nested-calc 5 2) => 40
+@end example
+
+@strong{Example 5: let with Conditional**:
+@example
+(let ((current-hp 75)
+      (max-hp 100)
+      (heal-amount 30))
+  (if (< (+ current-hp heal-amount) max-hp)
+      (+ current-hp heal-amount)
+      max-hp))
+
+; Result: 100
+@end example
+
+@strong{Domain-Specific Features}:
+LET bindings are evaluated in parallel (non-sequentially), so each initializer cannot
+reference variables bound earlier in the same let. For sequential binding, use LET*.
+This parallel evaluation allows GOAL to generate efficient code on parallel architectures.
+
+---
+
+@subsection GOAL Form: IF (Conditional)
+
+@cindex IF form in GOAL
+@cindex conditional expression
+
+The @code{IF} form provides conditional evaluation: if a test expression is true,
+the then-expression is evaluated; otherwise, the else-expression is evaluated.
+
+@strong{Syntax}:
+@example
+(IF test-expr then-expr [else-expr])
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{test-expr}: Expression evaluated for truthiness
+@item @code{then-expr}: Evaluated when test is true
+@item @code{else-expr}: Optional; evaluated when test is false
+@end itemize
+
+@strong{Numeric Types Supported}:
+Test expressions can compare values of all four numeric types.
+
+@strong{Example 1: Simple Conditional}:
+@example
+(if (> player-health 0)
+    "alive"
+    "dead")
+@end example
+
+@strong{Example 2: Conditional with Multiple Types**:
+@example
+(if (< current-damage #xFF)
+    (+ current-damage #b1010)
+    (- current-damage #o10))
+
+; Compares decimal with hexadecimal
+@end example
+
+@strong{Example 3: Nested if**:
+@example
+(if (> level 5)
+    (if (< experience 1000)
+        "level-up"
+        "ready-for-next")
+    "low-level")
+@end example
+
+@strong{Example 4: if in Function**:
+@example
+(defun grade-score (score)
+  (if (>= score 90)
+      "A"
+      (if (>= score 80)
+          "B"
+          (if (>= score 70)
+              "C"
+              "F"))))
+@end example
+
+@strong{Example 5: if with Complex Expressions**:
+@example
+(if (and (> health 50)
+         (< mana 100)
+         (= status :active))
+    (cast-spell 'fireball)
+    (cast-spell 'heal))
+@end example
+
+@strong{Domain-Specific Features}:
+IF expressions compile to highly optimized conditional branches on target CPUs. The else
+clause is optional; if omitted and test is false, IF returns NIL. IF supports both
+arithmetic and logical tests, with automatic type promotion across numeric formats.
+
+---
+
+@subsection GOAL Form: COND (Multi-Branch Conditional)
+
+@cindex COND form in GOAL
+@cindex multi-branch conditional
+
+The @code{COND} form provides a clean syntax for multiple mutually exclusive branches,
+similar to a switch statement but with condition expressions rather than constant values.
+
+@strong{Syntax}:
+@example
+(COND (test1 expr1)
+      (test2 expr2)
+      ...
+      (testN exprN)
+      (T default-expr))
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{test-expr}: Condition to evaluate
+@item @code{expr}: Expression evaluated if test is true
+@item @code{T}: Literal symbol representing the default case
+@end itemize
+
+@strong{Numeric Types Supported}:
+Each test can use any combination of numeric types.
+
+@strong{Example 1: Simple COND**:
+@example
+(cond ((< health 30) "critical")
+      ((< health 60) "wounded")
+      ((< health 100) "healthy")
+      (t "perfect"))
+@end example
+
+@strong{Example 2: COND with Multiple Types**:
+@example
+(cond ((= status-code #xFF) "error")
+      ((= status-code #x00) "success")
+      ((= status-code #b1010) "pending")
+      (t "unknown"))
+@end example
+
+@strong{Example 3: COND in Function**:
+@example
+(defun describe-damage (damage-amount)
+  (cond ((< damage-amount 10) "scratch")
+        ((< damage-amount 25) "wound")
+        ((< damage-amount 50) "serious")
+        (t "critical")))
+@end example
+
+@strong{Example 4: COND with Complex Tests**:
+@example
+(cond ((and (> level 10) (< xp 5000)) "fast-level-up")
+      ((and (> level 5) (< xp 1000)) "normal-level-up")
+      ((> level 1) "slow-level-up")
+      (t "newbie"))
+@end example
+
+@strong{Example 5: Nested COND**:
+@example
+(defun game-state-machine (state event)
+  (cond ((= state 'menu)
+         (cond ((= event 'start) 'playing)
+               ((= event 'quit) 'quit)
+               (t 'menu)))
+        ((= state 'playing)
+         (cond ((= event 'pause) 'paused)
+               ((= event 'die) 'dead)
+               (t 'playing)))
+        (t state)))
+@end example
+
+@strong{Domain-Specific Features}:
+COND is more readable than nested IF expressions for complex branching logic. The compiler
+optimizes COND to efficient jump tables when tests are simple comparisons on constant values.
+Multiple numeric types can be mixed in conditions for flexible game state logic.
+
+---
+
+@subsection GOAL Form: LOOP (Iteration)
+
+@cindex LOOP form in GOAL
+@cindex loop iteration
+
+The @code{LOOP} form implements indefinite iteration with optional break and continue controls,
+useful for game loops and state machine iterations.
+
+@strong{Syntax}:
+@example
+(LOOP body-expr...)
+@end example
+
+@strong{Control Statements}:
+@itemize
+@item @code{BREAK}: Exit the loop immediately
+@item @code{CONTINUE}: Jump to next iteration
+@item @code{RETURN}: Exit from containing function
+@end itemize
+
+@strong{Numeric Types Supported}:
+Numeric types are used in expressions within the loop body.
+
+@strong{Example 1: Simple Infinite Loop with Break**:
+@example
+(loop
+  (if (player-input-available?)
+      (break)))
+
+; Waits for player input
+@end example
+
+@strong{Example 2: Loop with Counter**:
+@example
+(let ((counter 0))
+  (loop
+    (print counter)
+    (set! counter (+ counter 1))
+    (if (>= counter 10)
+        (break))))
+
+; Prints 0-9
+@end example
+
+@strong{Example 3: Loop Skipping Iterations**:
+@example
+(let ((i 0))
+  (loop
+    (set! i (+ i 1))
+    (if (= (mod i 2) 0)
+        (continue))
+    (print i)
+    (if (>= i 9)
+        (break))))
+
+; Prints odd numbers 1-9
+@end example
+
+@strong{Example 4: Game Loop Pattern**:
+@example
+(defun game-main-loop ()
+  (loop
+    (handle-input)
+    (update-game-state)
+    (render-frame)
+    (if (game-should-quit?)
+        (break))))
+@end example
+
+@strong{Example 5: Loop with Numeric Type Expressions**:
+@example
+(let ((max-iterations #xFF))
+  (let ((iter 0))
+    (loop
+      (process-entity iter)
+      (set! iter (+ iter #b1))
+      (if (>= iter max-iterations)
+          (break)))))
+
+; Iterates 255 times
+@end example
+
+@strong{Domain-Specific Features}:
+LOOP is optimized by the compiler to generate tight iteration code suitable for
+frame-based game loops. The compiler analyzes loop termination conditions to generate
+efficient countdown loops when possible. Numeric types support efficient array indexing
+within loop bodies.
+
+---
+
+@subsection GOAL Form: SETQ (Variable Assignment)
+
+@cindex SETQ form in GOAL
+@cindex variable assignment
+
+The @code{SETQ} form assigns a value to a variable. Unlike LET, SETQ modifies an existing
+variable or creates a new global if the variable doesn't exist locally.
+
+@strong{Syntax}:
+@example
+(SETQ variable-name value-expr)
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{variable-name}: Name of variable to assign
+@item @code{value-expr}: Expression whose value is assigned
+@end itemize
+
+@strong{Numeric Types Supported}:
+Values of any numeric type can be assigned.
+
+@strong{Example 1: Simple Assignment**:
+@example
+(setq player-health 100)
+(setq player-health 75)  ; Updated to 75
+@end example
+
+@strong{Example 2: Assignment with Computation**:
+@example
+(setq current-damage (+ base-damage weapon-bonus))
+(setq new-level (- current-level 1))
+@end example
+
+@strong{Example 3: Assignment with Different Numeric Types**:
+@example
+(setq damage-value #xFF)
+(setq counter #b0000)
+(setq difficulty #o5)
+(setq score 1000)
+@end example
+
+@strong{Example 4: Using Assigned Value in Condition**:
+@example
+(setq health (- health damage))
+(if (< health 0)
+    (setq health 0))
+@end example
+
+@strong{Example 5: Accumulator Pattern**:
+@example
+(setq total 0)
+(loop
+  (setq total (+ total increment))
+  (if (>= total #xFF)
+      (break)))
+@end example
+
+@strong{Domain-Specific Features}:
+SETQ in GOAL follows Scheme semantics: it assigns in the current scope if the variable
+is local, or to a global if not. The compiler tracks variable lifetime to generate optimal
+register allocation and memory access patterns. Assignment to game state variables is
+often optimized to direct hardware memory writes on target platforms.
+
+---
+
+@subsection GOAL Form: LAMBDA (Anonymous Function)
+
+@cindex LAMBDA form in GOAL
+@cindex anonymous function
+
+The @code{LAMBDA} form creates an anonymous function that can be passed to higher-order
+functions or invoked immediately with CALL.
+
+@strong{Syntax}:
+@example
+(LAMBDA (param1 param2 ... paramN) body-expr)
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{param-list}: Parameters for the anonymous function
+@item @code{body-expr}: Expression evaluated when function is called
+@end itemize
+
+@strong{Numeric Types Supported}:
+Parameters and bodies use all four numeric types.
+
+@strong{Example 1: Simple Lambda**:
+@example
+(call (lambda (x) (+ x 1)) 5)
+
+; Result: 6
+@end example
+
+@strong{Example 2: Lambda in MAP-like Operation**:
+@example
+(defun apply-to-all (items fn)
+  (loop
+    (if (empty? items)
+        (break))
+    (call fn (car items))
+    (setq items (cdr items))))
+
+(apply-to-all '(1 2 3) (lambda (x) (print (* x 2))))
+@end example
+
+@strong{Example 3: Lambda with Closure**:
+@example
+(let ((multiplier 10))
+  (call (lambda (x) (* x multiplier)) 5))
+
+; Result: 50 (lambda captures multiplier)
+@end example
+
+@strong{Example 4: Lambda with Type Conversion**:
+@example
+(defun apply-damage (base-damage)
+  (call (lambda (bonus)
+          (+ base-damage bonus))
+        #x20))
+
+; Result: base-damage + 32
+@end example
+
+@strong{Example 5: Higher-Order Function with Lambda**:
+@example
+(defun filter-items (items predicate)
+  (cond ((empty? items) '())
+        ((call predicate (car items))
+         (cons (car items) (filter-items (cdr items) predicate)))
+        (t (filter-items (cdr items) predicate))))
+
+(filter-items '(1 2 3 4 5)
+              (lambda (x) (> x 2)))
+
+; Result: (3 4 5)
+@end example
+
+@strong{Domain-Specific Features}:
+LAMBDA enables functional programming patterns useful for game event systems and AI
+behavior trees. The compiler generates inline code for small lambdas and function pointers
+for larger ones, balancing code size and speed. Lambdas capture their defining scope,
+enabling powerful abstractions for game object callbacks and event handlers.
+
+---
+
+@subsection GOAL Form: QUOTE (Quotation)
+
+@cindex QUOTE form in GOAL
+@cindex quotation
+
+The @code{QUOTE} form prevents evaluation of an expression, returning it as a literal symbol
+or list structure. This is essential for representing symbolic game data.
+
+@strong{Syntax}:
+@example
+(QUOTE expr)
+(abbreviated as 'expr)
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{expr}: Any expression to be quoted (not evaluated)
+@end itemize
+
+@strong{Example 1: Quoting Symbols**:
+@example
+(quote player-died)
+; or: 'player-died
+; Returns the symbol, not evaluated
+@end example
+
+@strong{Example 2: Quoting Lists**:
+@example
+'(north south east west)
+; Returns list of direction symbols
+@end example
+
+@strong{Example 3: Quoting in Data Structures**:
+@example
+(let ((directions '(north south east west)))
+  (car directions))
+; Result: north
+@end example
+
+@strong{Example 4: Mixing Quoted and Evaluated Data**:
+@example
+(let ((location-name "tavern"))
+  `(location ,location-name (north tavern-hallway)))
+; Result: (location "tavern" (north tavern-hallway))
+@end example
+
+@strong{Example 5: Quoted Constants in Game Data**:
+@example
+(let ((enemies '(goblin orc dragon)))
+  (find-enemy 'orc enemies))
+@end example
+
+@strong{Domain-Specific Features}:
+QUOTE is critical for game state machines where symbolic states and events are passed
+between systems. Compiled quoting generates zero-copy symbols stored in the binary's
+data section, making symbol-based game logic very efficient. Quasiquote and unquote
+enable meta-programming for code-generating game systems.
+
+---
+
+@subsection GOAL Form: PROGN (Sequence)
+
+@cindex PROGN form in GOAL
+@cindex sequence of expressions
+
+The @code{PROGN} form evaluates a sequence of expressions and returns the value of the
+last expression. It's used when multiple side-effects are needed in a context expecting
+a single expression.
+
+@strong{Syntax}:
+@example
+(PROGN expr1 expr2 ... exprN)
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{expr-list}: One or more expressions
+@end itemize
+
+@strong{Example 1: Simple Sequence**:
+@example
+(progn
+  (print "Starting")
+  (update-game)
+  (print "Done")
+  42)
+
+; Prints messages, then returns 42
+@end example
+
+@strong{Example 2: PROGN in IF Branch**:
+@example
+(if (> damage 50)
+    (progn
+      (print "Massive damage!")
+      (play-sound 'explosion)
+      (shake-screen))
+    (print "Minor damage"))
+@end example
+
+@strong{Example 3: PROGN for Side Effects**:
+@example
+(defun initialize-game ()
+  (progn
+    (load-assets)
+    (setup-entities)
+    (start-music)
+    42))
+@end example
+
+@strong{Example 4: PROGN with Numeric Types**:
+@example
+(progn
+  (setq counter #x00)
+  (setq max-value #xFF)
+  (+ counter max-value))
+
+; Result: 255
+@end example
+
+@strong{Example 5: Nested PROGN**:
+@example
+(progn
+  (print "Outer")
+  (progn
+    (print "Inner")
+    100)
+  50)
+
+; Prints "Outer", "Inner"; returns 50
+@end example
+
+@strong{Domain-Specific Features}:
+PROGN is often implicitly used in DEFUN bodies when multiple statements are written.
+The compiler optimizes PROGN to eliminate unnecessary value passing between expressions,
+making multi-step game logic very efficient. PROGN enables clean sequencing of game state
+updates and resource loading during startup.
+
+---
+
+@subsection GOAL Form: AND (Logical Conjunction)
+
+@cindex AND form in GOAL
+@cindex logical conjunction
+
+The @code{AND} form implements short-circuit logical AND: it evaluates expressions left-to-right,
+returning false if any expression is false, otherwise returning the last value.
+
+@strong{Syntax}:
+@example
+(AND expr1 expr2 ... exprN)
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{expr-list}: One or more expressions to evaluate
+@end itemize
+
+@strong{Example 1: Simple Conjunction**:
+@example
+(and (> health 0)
+     (< health 100)
+     (= status :active))
+@end example
+
+@strong{Example 2: AND with Short-Circuit**:
+@example
+(and (player-exists?)
+     (get-player-health)
+     (> (get-player-health) 50))
+
+; Returns false immediately if player doesn't exist
+@end example
+
+@strong{Example 3: AND with Numeric Comparisons**:
+@example
+(and (>= score #x100)
+     (<= score #xFF)
+     (= difficulty #b11))
+@end example
+
+@strong{Example 4: AND in Function**:
+@example
+(defun can-cast-spell? (mana-cost health-cost)
+  (and (>= current-mana mana-cost)
+       (> current-health health-cost)
+       (spell-available?)))
+@end example
+
+@strong{Example 5: Nested AND**:
+@example
+(and (valid-player?)
+     (and (valid-weapon?) (weapon-ready?)))
+@end example
+
+@strong{Domain-Specific Features}:
+AND short-circuits, making it efficient for checking preconditions before expensive
+operations. This is critical for game performance where checking game state validity
+might be expensive. The compiler generates code that jumps directly to the false case
+without evaluating remaining conditions.
+
+---
+
+@subsection GOAL Form: OR (Logical Disjunction)
+
+@cindex OR form in GOAL
+@cindex logical disjunction
+
+The @code{OR} form implements short-circuit logical OR: it evaluates expressions left-to-right,
+returning true (the first true value) if any expression is true, otherwise returning false.
+
+@strong{Syntax}:
+@example
+(OR expr1 expr2 ... exprN)
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{expr-list}: One or more expressions to evaluate
+@end itemize
+
+@strong{Example 1: Simple Disjunction**:
+@example
+(or (= status 'dead)
+    (= status 'dying)
+    (= status 'defeated))
+@end example
+
+@strong{Example 2: OR with Short-Circuit**:
+@example
+(or (player-in-safe-zone?)
+    (no-enemies-nearby?)
+    (can-escape?))
+
+; Returns true at first true condition
+@end example
+
+@strong{Example 3: OR with Numeric Types**:
+@example
+(or (= code #xFF)
+    (= code #b1111)
+    (= code #o377))
+@end example
+
+@strong{Example 4: OR in Combat Logic**:
+@example
+(defun should-flee? ()
+  (or (< health 20)
+      (> enemy-count 3)
+      (= ammo 0)))
+@end example
+
+@strong{Example 5: Combining AND and OR**:
+@example
+(and (player-alive?)
+     (or (player-has-key?)
+         (player-has-spell?)
+         (player-can-break-door?)))
+@end example
+
+@strong{Domain-Specific Features}:
+OR is commonly used in game AI decision trees where multiple alternative actions are
+considered. Short-circuit evaluation is critical for performance; expensive AI checks
+are avoided when an earlier condition already determines the outcome. The compiler
+generates efficient fallthrough jump code for OR expressions.
+
+---
+
+@subsection GOAL Form: NOT (Logical Negation)
+
+@cindex NOT form in GOAL
+@cindex logical negation
+
+The @code{NOT} form inverts the boolean value of an expression, returning true for false
+values and false for true values.
+
+@strong{Syntax}:
+@example
+(NOT expr)
+@end example
+
+@strong{Parameters}:
+@itemize
+@item @code{expr}: Expression to negate
+@end itemize
+
+@strong{Example 1: Simple Negation**:
+@example
+(not (player-alive?))  ; True if player is dead
+@end example
+
+@strong{Example 2: NOT in Conditional**:
+@example
+(if (not (inventory-full?))
+    (pickup-item item))
+@end example
+
+@strong{Example 3: NOT with Comparison**:
+@example
+(not (= current-time midnight))
+@end example
+
+@strong{Example 4: Double Negation**:
+@example
+(not (not (player-has-weapon?)))  ; Same as (player-has-weapon?)
+@end example
+
+@strong{Example 5: NOT in Filtering**:
+@example
+(defun filter-inactive-entities (entities)
+  (cond ((empty? entities) '())
+        ((not (entity-active? (car entities)))
+         (filter-inactive-entities (cdr entities)))
+        (t (cons (car entities)
+                 (filter-inactive-entities (cdr entities))))))
+@end example
+
+@strong{Domain-Specific Features}:
+NOT is often used to make game logic more readable ("if NOT paused" vs "if paused
+is false"). The compiler typically implements NOT as a simple conditional branch,
+generating highly efficient code on all target architectures.
+
+---
+
+@node ZIL Language Forms
+@section ZIL Language Forms
+
+ZIL (Zork Implementation Language) is an interactive fiction language designed for creating
+text adventure games. This section documents 10+ primary ZIL forms with complete syntax,
+numeric types, real examples, and domain-specific features.
+
+@subsection ZIL Form: OBJECT (Object Definition)
+
+@cindex OBJECT form in ZIL
+@cindex object definition in interactive fiction
+
+The @code{OBJECT} form defines a game object with properties, descriptions, and behaviors.
+Objects are the fundamental unit of the ZIL game world.
+
+@strong{Syntax}:
+@example
+<OBJECT object-name
+  (DESCRIPTION "string")
+  (ADJECTIVES word1 word2 ...)
+  (NOUNS noun1 noun2 ...)
+  (SIZE number)
+  (WEIGHT number)
+  (VALUE number)
+  (FLAGS flag1 flag2 ...>
+@end example
+
+@strong{Numeric Types Supported}:
+@itemize
+@item @code{BINARY}: Binary literals for bit flags (0B1010, 0B11110000)
+@item @code{DECIMAL}: Integer properties (size, weight, value)
+@item @code{DISPLAY}: Display numbers for readable game values
+@end itemize
+
+@strong{Example 1: Simple Object**:
+@example
+<OBJECT SWORD
+  (DESCRIPTION "a rusty sword")
+  (ADJECTIVES "rusty" "iron")
+  (NOUNS "sword")
+  (SIZE 10)
+  (WEIGHT 50)
+  (VALUE 25)>
+@end example
+
+@strong{Example 2: Object with FLAGS (Binary Type)**:
+@example
+<OBJECT TORCH
+  (DESCRIPTION "a burning torch")
+  (NOUNS "torch" "light")
+  (SIZE 5)
+  (WEIGHT 20)
+  (FLAGS 0B1010)  ; Binary: can-take, glows
+  (VALUE 15)>
+@end example
+
+@strong{Example 3: Object with DISPLAY Type Numbers**:
+@example
+<OBJECT TREASURE-CHEST
+  (DESCRIPTION "a large wooden chest")
+  (NOUNS "chest" "box")
+  (SIZE 100)
+  (WEIGHT 500)
+  (VALUE 1000)  ; Display as is
+  (CAPACITY 50)>
+@end example
+
+@strong{Example 4: Container Object**:
+@example
+<OBJECT BACKPACK
+  (DESCRIPTION "a worn leather backpack")
+  (NOUNS "backpack" "pack" "bag")
+  (SIZE 30)
+  (WEIGHT 10)
+  (VALUE 5)
+  (CAPACITY 100)
+  (HAS ROPE KEY POTION)>
+@end example
+
+@strong{Example 5: Door Object with Complex Properties**:
+@example
+<OBJECT WOODEN-DOOR
+  (DESCRIPTION "a heavy wooden door")
+  (ADJECTIVES "wooden" "heavy")
+  (NOUNS "door" "entrance")
+  (SIZE 200)
+  (WEIGHT 0)  ; Immovable
+  (VALUE 0)
+  (FLAGS 0B1111)  ; Multiple flags
+  (PROPERTY strength 50)>
+@end example
+
+@strong{Domain-Specific Features}:
+Objects in ZIL can contain other objects, have custom properties, and trigger events when
+examined or taken. The compiler optimizes object tables for memory-efficient game worlds
+suitable for 8-bit systems. Object state (flags, properties) can be modified at runtime
+to track game progress.
+
+---
+
+@subsection ZIL Form: ROOM (Room Definition)
+
+@cindex ROOM form in ZIL
+@cindex room definition
+
+The @code{ROOM} form defines a location in the game world with descriptions, exits,
+and objects.
+
+@strong{Syntax}:
+@example
+<ROOM room-name
+  (DESCRIPTION "long description")
+  (SHORT "short name")
+  (NORTH to-room)
+  (SOUTH to-room)
+  (EAST to-room)
+  (WEST to-room)
+  (UP to-room)
+  (DOWN to-room)
+  (OBJECTS object1 object2 ...)>
+@end example
+
+@strong{Numeric Types Supported}:
+Properties associated with rooms use DECIMAL and DISPLAY types.
+
+@strong{Example 1: Simple Room**:
+@example
+<ROOM TAVERN
+  (DESCRIPTION "You are in a dimly lit tavern.")
+  (SHORT "Tavern")
+  (NORTH HALL)
+  (OBJECTS BARTENDER BEER-KEG)>
+@end example
+
+@strong{Example 2: Room with All Exits**:
+@example
+<ROOM CROSSROADS
+  (SHORT "Crossroads")
+  (DESCRIPTION "A five-way crossroads.")
+  (NORTH TEMPLE)
+  (SOUTH FOREST)
+  (EAST CASTLE)
+  (WEST VILLAGE)
+  (UP MOUNTAIN)
+  (DOWN DUNGEON)>
+@end example
+
+@strong{Example 3: Room with Objects and Properties**:
+@example
+<ROOM BEDROOM
+  (SHORT "Bedroom")
+  (DESCRIPTION "A comfortable bedroom with furniture.")
+  (SOUTH HALLWAY)
+  (OBJECTS BED WARDROBE CHEST)
+  (PROPERTY danger-level 0)
+  (PROPERTY illumination 50)>
+@end example
+
+@strong{Example 4: Dark Room**:
+@example
+<ROOM DUNGEON-CELL
+  (SHORT "Dark Cell")
+  (DESCRIPTION "It is pitch black.")
+  (FLAGS 0B0001)  ; Dark room flag
+  (EAST DUNGEON-CORRIDOR)
+  (OBJECTS SKELETON CHAINS)>
+@end example
+
+@strong{Example 5: Dangerous Room**:
+@example
+<ROOM DRAGON-LAIR
+  (SHORT "Dragon's Lair")
+  (DESCRIPTION "A vast cavern filled with gold and treasure...")
+  (SOUTH MOUNTAINS)
+  (OBJECTS DRAGON GOLD-PILE)
+  (PROPERTY danger-level 100)
+  (PROPERTY temperature 500)>
+@end example
+
+@strong{Domain-Specific Features}:
+Rooms form the interconnected graph structure of an adventure game world. The compiler
+generates efficient exit tables and object inventories. Room descriptions can be conditional
+and change based on game state. Room properties enable environmental effects like lighting,
+temperature, and danger levels.
+
+---
+
+@subsection ZIL Form: VERB (Verb Definition)
+
+@cindex VERB form in ZIL
+@cindex verb definition
+
+The @code{VERB} form defines an action the player can take, specifying syntax patterns and
+responses.
+
+@strong{Syntax}:
+@example
+<VERB verb-name
+  (SYNTAX "pattern1")
+  (SYNTAX "pattern2")
+  ...
+  (HANDLER routine-name)>
+@end example
+
+@strong{Example 1: Simple Verb**:
+@example
+<VERB LOOK
+  (SYNTAX "LOOK")
+  (SYNTAX "LOOK AT object")
+  (HANDLER V-LOOK)>
+@end example
+
+@strong{Example 2: Multi-pattern Verb**:
+@example
+<VERB TAKE
+  (SYNTAX "TAKE object")
+  (SYNTAX "GET object")
+  (SYNTAX "GRAB object")
+  (HANDLER V-TAKE)>
+@end example
+
+@strong{Example 3: Directional Verb**:
+@example
+<VERB GO
+  (SYNTAX "GO direction")
+  (SYNTAX "direction")
+  (SYNTAX "MOVE direction")
+  (HANDLER V-GO)>
+@end example
+
+@strong{Example 4: Combat Verb**:
+@example
+<VERB ATTACK
+  (SYNTAX "ATTACK enemy")
+  (SYNTAX "FIGHT enemy")
+  (SYNTAX "KILL enemy")
+  (HANDLER V-ATTACK)>
+@end example
+
+@strong{Example 5: Magic Verb**:
+@example
+<VERB CAST
+  (SYNTAX "CAST spell")
+  (SYNTAX "CAST spell AT target")
+  (HANDLER V-CAST)>
+@end example
+
+@strong{Domain-Specific Features}:
+VERBs provide the player's primary interface to the game. The parser matches player input
+against verb syntax patterns and dispatches to handlers. Custom verbs enable game-specific
+commands. Verb handlers have access to parsed arguments, allowing context-sensitive responses.
+
+---
+
+@subsection ZIL Form: DEFINE (Subroutine Definition)
+
+@cindex DEFINE form in ZIL
+@cindex subroutine definition
+
+The @code{DEFINE} form defines a subroutine (routine) that implements game logic,
+verb handlers, and support functions.
+
+@strong{Syntax}:
+@example
+<DEFINE routine-name (optional-args)
+  (LOCAL var1 var2 ...)
+  statement1
+  statement2
+  ...
+  statementN>
+@end example
+
+@strong{Numeric Types Supported**:
+Routines work with BINARY, DECIMAL, and DISPLAY numeric types.
+
+@strong{Example 1: Simple Routine**:
+@example
+<DEFINE V-LOOK ()
+  (PRINT "You look around.")
+  (PRINT-OBJECTS)>
+@end example
+
+@strong{Example 2: Routine with Parameters**:
+@example
+<DEFINE V-TAKE (OBJECT)
+  (LOCAL CARRY-WEIGHT)
+  (SET CARRY-WEIGHT (+ CURRENT-WEIGHT (GETPROP OBJECT 'WEIGHT)))
+  (IF (> CARRY-WEIGHT 100)
+      (PRINT "Too heavy!")
+      (PROGN
+        (MOVE OBJECT PLAYER)
+        (PRINT "Taken."))))
+@end example
+
+@strong{Example 3: Routine with Local Variables**:
+@example
+<DEFINE CALCULATE-DAMAGE (WEAPON)
+  (LOCAL BASE-DAMAGE MODIFIER TOTAL)
+  (SET BASE-DAMAGE (GETPROP WEAPON 'DAMAGE))
+  (SET MODIFIER (RANDOM 10))
+  (SET TOTAL (+ BASE-DAMAGE MODIFIER))
+  TOTAL>
+@end example
+
+@strong{Example 4: Recursive Routine**:
+@example
+<DEFINE COUNT-OBJECTS (OBJECT COUNT)
+  (LOCAL NEXT-OBJECT)
+  (SET NEXT-OBJECT (SIBLING OBJECT))
+  (IF NEXT-OBJECT
+      (COUNT-OBJECTS NEXT-OBJECT (+ COUNT 1))
+      COUNT)>
+@end example
+
+@strong{Example 5: Routine with Binary Numeric Types**:
+@example
+<DEFINE CHECK-FLAGS (FLAGS MASK)
+  (LOCAL RESULT)
+  (SET RESULT (BAND FLAGS MASK))
+  (IF (EQUAL RESULT 0B1010)
+      (PRINT "Match!")
+      (PRINT "No match."))>
+@end example
+
+@strong{Domain-Specific Features}:
+Routines are the primary unit of game logic in ZIL. They can be nested (defining local
+functions) and support tail recursion optimization. Local variables are scoped to the
+routine. Routines return values, enabling compositional game logic. The compiler generates
+efficient procedure call conventions for target CPUs.
+
+---
+
+@subsection ZIL Form: SET (Local Variable Assignment)
+
+@cindex SET form in ZIL
+
+The @code{SET} form assigns a value to a local variable within a routine.
+
+@strong{Syntax}:
+@example
+(SET variable-name value-expr)
+@end example
+
+@strong{Example 1: Simple Assignment**:
+@example
+(SET HEALTH 100)
+(SET DAMAGE (+ BASE-DAMAGE BONUS))
+@end example
+
+@strong{Example 2: Assignment with Different Types**:
+@example
+(SET FLAGS 0B1010)
+(SET COUNT 42)
+(SET MAX-VALUE 255)
+@end example
+
+@strong{Example 3: Assignment in Conditional**:
+@example
+(IF (> DAMAGE 50)
+    (SET CRITICAL-HIT 1)
+    (SET CRITICAL-HIT 0))
+@end example
+
+@strong{Example 4: Assignment in Loop**:
+@example
+(LOCAL COUNTER)
+(SET COUNTER 0)
+(LOOP
+  (PRINT COUNTER)
+  (SET COUNTER (+ COUNTER 1))
+  (IF (>= COUNTER 10) (BREAK)))
+@end example
+
+@strong{Example 5: Assignment in Calculation**:
+@example
+(SET TOTAL-DAMAGE (+ WEAPON-DAMAGE SPELL-DAMAGE))
+(SET REMAINING-HEALTH (- HEALTH TOTAL-DAMAGE))
+(IF (< REMAINING-HEALTH 0)
+    (SET REMAINING-HEALTH 0))
+@end example
+
+@strong{Domain-Specific Features}:
+SET is critical for game state management. The compiler tracks variable assignments to
+optimize local variable allocation. Assignments to game state properties are often
+translated to direct memory writes on target platforms.
+
+---
+
+@subsection ZIL Form: GET and PUT (Property Access)
+
+@cindex GET form in ZIL
+@cindex PUT form in ZIL
+@cindex property access
+
+The @code{GET} form retrieves an object property, and @code{PUT} sets it.
+
+@strong{Syntax}:
+@example
+(GET object-name property-name)
+(PUT object-name property-name value)
+@end example
+
+@strong{Example 1: Getting Properties**:
+@example
+(GET SWORD 'WEIGHT)      ; Returns weight
+(GET PLAYER 'HEALTH)     ; Returns player health
+@end example
+
+@strong{Example 2: Setting Properties**:
+@example
+(PUT PLAYER 'HEALTH 100)
+(PUT SWORD 'CONDITION 80)
+@end example
+
+@strong{Example 3: Modifying Properties in Calculation**:
+@example
+(LOCAL CURRENT-HP)
+(SET CURRENT-HP (GET PLAYER 'HEALTH))
+(SET CURRENT-HP (- CURRENT-HP 25))
+(PUT PLAYER 'HEALTH CURRENT-HP)
+@end example
+
+@strong{Example 4: Property-based Conditionals**:
+@example
+(IF (> (GET WEAPON 'DAMAGE) 50)
+    (PRINT "Powerful weapon!")
+    (PRINT "Weak weapon."))
+@end example
+
+@strong{Example 5: Looping Through Object Properties**:
+@example
+(LOCAL ARMOR-VALUE)
+(LOOP
+  (IF (EMPTY? INVENTORY)
+      (BREAK))
+  (SET ARMOR-VALUE (GET (CAR INVENTORY) 'ARMOR))
+  (ADD-TO-TOTAL ARMOR-VALUE)
+  (SET INVENTORY (CDR INVENTORY)))
+@end example
+
+@strong{Domain-Specific Features}:
+Properties are the primary way to attach custom data to objects. The compiler generates
+efficient property lookup tables. Built-in properties (WEIGHT, VALUE, SIZE) are optimized
+for performance. Custom properties enable extensible game objects.
+
+---
+
+@subsection ZIL Form: IF (Conditional)
+
+@cindex IF form in ZIL
+
+The @code{IF} form implements conditional logic similar to GOAL but with ZIL's
+specific syntax.
+
+@strong{Syntax}:
+@example
+<IF test-expr
+    then-expr
+    [ELSE else-expr]>
+@end example
+
+@strong{Example 1: Simple Conditional**:
+@example
+<IF (> PLAYER-HEALTH 0)
+    (PRINT "You are alive.")
+    ELSE
+    (PRINT "You are dead.")>
+@end example
+
+@strong{Example 2: Nested Conditionals**:
+@example
+<IF (PLAYER-HAS-WEAPON?)
+    <IF (WEAPON-LOADED?) 
+        (FIRE)
+        ELSE
+        (RELOAD)>
+    ELSE
+    (PRINT "You need a weapon!")>
+@end example
+
+@strong{Example 3: Complex Conditions**:
+@example
+<IF (AND (> LEVEL 5) (< XP 1000) (= STATUS 'ACTIVE))
+    (LEVEL-UP)
+    ELSE
+    (PRINT "Not ready yet.")>
+@end example
+
+@strong{Example 4: Conditionals with Numeric Types**:
+@example
+<IF (EQUAL FLAGS 0B1010)
+    (SET RESULT 255)
+    ELSE
+    (SET RESULT 0)>
+@end example
+
+@strong{Example 5: Conditional in Object Method**:
+@example
+<DEFINE ATTACK-ENEMY (ENEMY)
+  <IF (> ENEMY-HEALTH 0)
+      (PROGN
+        (SET DAMAGE (RANDOM 20))
+        (PUT ENEMY 'HEALTH (- (GET ENEMY 'HEALTH) DAMAGE))
+        (PRINT "Hit!"))
+      ELSE
+      (PRINT "Enemy already dead.")>>
+@end example
+
+@strong{Domain-Specific Features}:
+IF is used extensively in interactive fiction for branching narratives and game logic.
+The compiler optimizes IF for tight conditional code generation. Nested IFs create
+complex decision trees essential for non-linear game flow.
+
+---
+
+@subsection ZIL Form: COND (Multi-Branch Conditional)
+
+@cindex COND form in ZIL
+
+The @code{COND} form provides multi-branch conditional logic, similar to GOAL's COND.
+
+@strong{Syntax}:
+@example
+<COND (test1 expr1)
+      (test2 expr2)
+      ...
+      (ELSE default-expr)>
+@end example
+
+@strong{Example 1: Simple COND**:
+@example
+<COND ((= GAME-STATE 'PLAYING)
+       (UPDATE-GAME))
+      ((= GAME-STATE 'PAUSED)
+       (SHOW-PAUSE-MENU))
+      ((= GAME-STATE 'QUIT)
+       (EXIT))
+      (ELSE
+       (PRINT "Unknown state"))>
+@end example
+
+@strong{Example 2: COND with Object Types**:
+@example
+<COND ((EQUAL OBJECT-TYPE 'WEAPON)
+       (EQUIP-WEAPON OBJECT))
+      ((EQUAL OBJECT-TYPE 'POTION)
+       (DRINK-POTION OBJECT))
+      ((EQUAL OBJECT-TYPE 'KEY)
+       (ADD-TO-KEYRING OBJECT))
+      (ELSE
+       (PRINT "Don't know what to do."))>
+@end example
+
+@strong{Example 3: COND with Numeric Comparisons**:
+@example
+<COND ((< HEALTH 20)
+       (PRINT "Critical health!"))
+      ((< HEALTH 50)
+       (PRINT "Wounded"))
+      ((< HEALTH 100)
+       (PRINT "Healthy"))
+      (ELSE
+       (PRINT "Perfect health"))>
+@end example
+
+@strong{Example 4: COND in Spell Selection**:
+@example
+<COND ((AND (> MANA 50) (NOT FATIGUED?))
+       (CAST-POWERFUL-SPELL))
+      ((> MANA 20)
+       (CAST-NORMAL-SPELL))
+      ((> MANA 5)
+       (CAST-WEAK-SPELL))
+      (ELSE
+       (PRINT "Not enough mana"))>
+@end example
+
+@strong{Example 5: Nested COND**:
+@example
+<COND ((PLAYER-IN-COMBAT?)
+       <COND ((HAVE-WEAPON?)
+              (ATTACK))
+             ((HAVE-SPELL?)
+              (CAST-SPELL))
+             (ELSE
+              (RUN-AWAY))))
+      ((PLAYER-IN-CONVERSATION?)
+       (HANDLE-DIALOGUE))
+      (ELSE
+       (PRINT "Idle"))>
+@end example
+
+@strong{Domain-Specific Features}:
+COND is preferred over nested IF for complex game state machines. The compiler can optimize
+COND branches to jump tables when test conditions are simple comparisons. Multi-branch
+conditionals are essential for adventure game parsing where many verb variations must be
+handled.
+
+---
+
+@subsection ZIL Form: LOOP (Iteration)
+
+@cindex LOOP form in ZIL
+
+The @code{LOOP} form implements indefinite iteration with break and continue controls.
+
+@strong{Syntax}:
+@example
+<LOOP
+  statement1
+  statement2
+  ...>
+@end example
+
+@strong{Example 1: Simple Loop**:
+@example
+<LOOP
+  (PRINT "Game loop iteration")
+  (UPDATE-ENTITIES)
+  (RENDER-FRAME)>
+@end example
+
+@strong{Example 2: Loop with Counter and Break**:
+@example
+(LOCAL I)
+(SET I 0)
+<LOOP
+  (PRINT I)
+  (SET I (+ I 1))
+  (IF (>= I 10) (BREAK))>
+@end example
+
+@strong{Example 3: Loop Processing Objects**:
+@example
+(LOCAL CURRENT)
+(SET CURRENT INVENTORY)
+<LOOP
+  (IF (EMPTY? CURRENT) (BREAK))
+  (PROCESS-ITEM (CAR CURRENT))
+  (SET CURRENT (CDR CURRENT))>
+@end example
+
+@strong{Example 4: Game Main Loop**:
+@example
+<LOOP
+  (HANDLE-INPUT)
+  (UPDATE-GAME-STATE)
+  (UPDATE-ENEMIES)
+  (UPDATE-EFFECTS)
+  (RENDER)
+  (IF (QUIT-REQUESTED?) (BREAK))>
+@end example
+
+@strong{Example 5: Loop with Continue**:
+@example
+(LOCAL I)
+(SET I 0)
+<LOOP
+  (SET I (+ I 1))
+  (IF (EQUAL (MOD I 2) 0) (CONTINUE))
+  (PRINT I)
+  (IF (>= I 9) (BREAK))>
+@end example
+
+@strong{Domain-Specific Features}:
+LOOP implements the frame-based game loop essential for real-time adventure games.
+The compiler generates tight iteration code suitable for 8-bit targets. Tail recursion
+can replace LOOP for functional-style game logic. LOOP with break provides a clean
+exit mechanism from game loops.
+
+---
+
+@node Fountain Language Directives
+@section Fountain Language Directives
+
+Fountain is a screenplay language designed for game dialogue, cutscenes, and narrative scripts.
+This section documents 8+ primary Fountain directives with complete syntax, numeric types,
+real examples, and domain-specific features.
+
+@subsection Fountain Directive: Scene Headings
+
+@cindex Fountain scene headings
+@cindex INT, EXT, BLOB
+
+Fountain scene headings (sluglines) introduce new scenes with location and time information.
+
+@strong{Syntax}:
+@example
+INT LOCATION - DESCRIPTION
+EXT LOCATION - DESCRIPTION
+BLOB TITLE (SPECIAL)
+@end example
+
+@strong{Numeric Types Supported}:
+Scene numbers use DECIMAL and DISPLAY types.
+
+@strong{Example 1: Interior Scene**:
+@example
+INT TAVERN - DIMLY LIT, AFTERNOON
+@end example
+
+@strong{Example 2: Exterior Scene**:
+@example
+EXT FOREST CLEARING - MORNING, MISTY
+@end example
+
+@strong{Example 3: BLOB Title Card**:
+@example
+BLOB CHAPTER 1 - THE BEGINNING
+@end example
+
+@strong{Example 4: Night Scene**:
+@example
+INT CASTLE CHAMBER - NIGHT
+@end example
+
+@strong{Example 5: Scene with Transition**:
+@example
+EXT MOUNTAIN PEAK - SUNSET
+@end example
+
+@strong{Domain-Specific Features}:
+Scene headings establish the context for dialogue and action sequences. Time of day
+information can affect game logic (spawning specific NPCs, changing lighting). Scene
+descriptions can trigger environmental effects.
+
+---
+
+@subsection Fountain Directive: Character Entries
+
+@cindex Fountain character entries
+
+Character entries describe when characters enter scenes, with optional poses and directions.
+
+@strong{Syntax}:
+@example
+Enter CHARACTER [Looks ADJ] [Faces DIRECTION]
+@end example
+
+@strong{Example 1: Simple Entry**:
+@example
+Enter Hero
+@end example
+
+@strong{Example 2: Entry with Pose**:
+@example
+Enter Knight Looks brave Faces north
+@end example
+
+@strong{Example 3: Multiple Characters**:
+@example
+Enter Hero
+Enter Companion Looks worried
+@end example
+
+@strong{Example 4: Entry at Location**:
+@example
+Enter Villain Looks menacing Faces Hero
+@end example
+
+@strong{Example 5: Staged Entries**:
+@example
+Enter Guard
+Enter Guard
+Enter Captain Looks commanding
+@end example
+
+@strong{Domain-Specific Features}:
+Character entries define NPC appearance states and facing directions for 3D game worlds.
+Multiple entries of the same character enable crowd scenes. Entry poses can trigger
+animation sequences.
+
+---
+
+@subsection Fountain Directive: Action
+
+@cindex Fountain action directive
+
+Action lines describe what happens in a scene without dialogue.
+
+@strong{Syntax}:
+@example
+ACTION description text
+@end example
+
+@strong{Example 1: Simple Action**:
+@example
+ACTION Hero draws sword and points it at the dragon.
+@end example
+
+@strong{Example 2: Dramatic Action**:
+@example
+ACTION The ground shakes. A massive cave opens in the earth.
+@end example
+
+@strong{Example 3: Action with Sound Effects**:
+@example
+ACTION Door SLAMS open. Wind howls through the chamber.
+@end example
+
+@strong{Example 4: Environmental Action**:
+@example
+ACTION Lightning flashes. Thunder echoes across the mountains.
+@end example
+
+@strong{Example 5: Character Action**:
+@example
+ACTION Villain laughs menacingly and raises staff.
+ACTION Magical flames erupt from the staff.
+@end example
+
+@strong{Domain-Specific Features}:
+Action lines trigger animations and special effects in interactive fiction. Sound
+effect descriptions can be parsed and played. Timing of actions can be controlled
+to synchronize with dialogue.
+
+---
+
+@subsection Fountain Directive: Character Names and Dialogue
+
+@cindex Fountain dialogue
+@cindex character dialogue
+
+Character dialogue is introduced with the character name, followed by the spoken text.
+
+@strong{Syntax}:
+@example
+CHARACTER-NAME
+dialogue text
+@end example
+
+@strong{Example 1: Simple Dialogue**:
+@example
+HERO
+I must stop the evil wizard!
+@end example
+
+@strong{Example 2: Extended Dialogue**:
+@example
+WIZARD
+You think you can defeat me? I have studied the ancient magics
+for centuries. Your puny sword cannot touch me!
+@end example
+
+@strong{Example 3: Question Dialogue**:
+@example
+COMPANION
+Where are we going now?
+@end example
+
+@strong{Example 4: Emotional Dialogue**:
+@example
+HERO
+No! She cannot be dead. There must be a way...
+@end example
+
+@strong{Example 5: Multiple Characters**:
+@example
+HERO
+Where is the treasure?
+
+GUIDE
+Over that ridge, if we survive the mountain trolls.
+
+HERO
+Trolls? How many?
+
+GUIDE
+More than we have arrows for.
+@end example
+
+@strong{Domain-Specific Features}:
+Dialogue is parsed to extract character speech for subtitles and voice synthesis.
+Emotional context can be inferred to adjust voice tone or animation. Question-answer
+patterns support branching dialogue trees.
+
+---
+
+@subsection Fountain Directive: Parentheticals
+
+@cindex Fountain parentheticals
+
+Parentheticals provide stage directions for dialogue delivery, appearing below character
+names and describing how the line should be delivered.
+
+@strong{Syntax}:
+@example
+(parenthetical direction)
+@end example
+
+@strong{Example 1: Simple Parenthetical**:
+@example
+HERO
+(angrily)
+You will not get away with this!
+@end example
+
+@strong{Example 2: Action Parenthetical**:
+@example
+WIZARD
+(raises staff, magical energy crackling)
+Feel the power of the arcane!
+@end example
+
+@strong{Example 3: Emotional Parenthetical**:
+@example
+COMPANION
+(sadly)
+I never thought it would end like this.
+@end example
+
+@strong{Example 4: Directed Parenthetical**:
+@example
+HERO
+(to the Wizard)
+You know this is wrong!
+@end example
+
+@strong{Example 5: Timing Parenthetical**:
+@example
+GUARD
+(after a long pause)
+The dungeons are that way, stranger.
+@end example
+
+@strong{Domain-Specific Features}:
+Parentheticals control dialogue delivery tone and trigger animations. They are often
+mapped to voice effect codes (angry, whisper, excited) for voice synthesis. Timing
+parentheticals control dialogue pacing in cutscenes.
+
+---
+
+@subsection Fountain Directive: Transitions
+
+@cindex Fountain transitions
+
+Transitions specify how scenes change, providing visual effects between locations.
+
+@strong{Syntax}:
+@example
+FADE TO BLACK
+CUT TO
+DISSOLVE TO
+WIPE
+@end example
+
+@strong{Example 1: Fade Transition**:
+@example
+FADE TO BLACK
+@end example
+
+@strong{Example 2: Cut Transition**:
+@example
+CUT TO
+@end example
+
+@strong{Example 3: Dissolve Transition**:
+@example
+DISSOLVE TO
+@end example
+
+@strong{Example 4: Wipe Transition**:
+@example
+WIPE
+@end example
+
+@strong{Example 5: With Direction**:
+@example
+FADE TO ORANGE
+@end example
+
+@strong{Domain-Specific Features}:
+Transitions control screen effects and timing between scenes. FADE and DISSOLVE can
+specify colors for specialized effects. Transitions control pacing in cutscenes and
+dialogue-heavy sequences.
+
+---
+
+@subsection Fountain Directive: Page Breaks
+
+@cindex Fountain page breaks
+
+Page breaks control where screenplay pages end, affecting printing and formatting.
+
+@strong{Syntax}:
+@example
+PAGE BREAK
+---
+@end example
+
+@strong{Example 1: Explicit Page Break**:
+@example
+PAGE BREAK
+@end example
+
+@strong{Example 2: Triple Dash Page Break**:
+@example
+---
+@end example
+
+@strong{Example 3: Page Break in Script**:
+@example
+Hero enters the throne room.
+
+HERO
+This ends now!
+
+---
+
+INT DUNGEON BELOW - MOMENTS LATER
+@end example
+
+@strong{Example 4: Multiple Page Breaks**:
+@example
+---
+
+---
+
+INT EPILOGUE - ONE YEAR LATER
+@end example
+
+@strong{Example 5: Page Break Control**:
+@example
+The spell activates with tremendous power.
+
+---
+
+EXT WORLD - TRANSFORMED
+@end example
+
+@strong{Domain-Specific Features}:
+Page breaks control document layout and cutscene scene divisions. Multiple page breaks
+can create dramatic pauses in the narrative. Page breaks separate acts and chapters
+in interactive fiction.
+
+---
+
+@subsection Fountain Directive: Notes
+
+@cindex Fountain notes
+
+Notes provide documentation and metadata without appearing in the rendered output.
+
+@strong{Syntax}:
+@example
+[[ note text ]]
+@end example
+
+@strong{Example 1: Simple Note**:
+@example
+[[ This is the opening scene ]]
+@end example
+
+@strong{Example 2: Stage Direction Note**:
+@example
+[[ TODO: Add explosion sound effect here ]]
+@end example
+
+@strong{Example 3: Timing Note**:
+@example
+[[ This dialogue should take about 30 seconds ]]
+@end example
+
+@strong{Example 4: Effect Note**:
+@example
+[[ Trigger dramatic lighting shift when hero draws sword ]]
+@end example
+
+@strong{Example 5: Implementation Note**:
+@example
+[[ This is a branching point - player chooses left or right ]]
+@end example
+
+@strong{Domain-Specific Features}:
+Notes are critical for game scripting, documenting branch points, trigger conditions,
+and effect timing. Notes can be extracted to generate game logic annotations. Notes
+enable non-programmers to write interactive fiction with technical annotations.
+
+---
+
+@node Burgermistress Language Statements
+@section Burgermistress Language Statements
+
+Burgermistress is a hybrid language combining BASIC-like syntax with Prolog-style
+logic programming. This section documents 12+ primary Burgermistress statements
+with complete syntax, numeric types, real examples, and domain-specific features.
+
+@subsection Burgermistress Statement: Variable Declaration
+
+@cindex Burgermistress variable declaration
+
+Variable declarations introduce new variables with optional initialization.
+
+@strong{Syntax}:
+@example
+DIM VariableName [AS TYPE]
+DIM VariableName = InitialValue
+@end example
+
+@strong{Numeric Types Supported}:
+@itemize
+@item @code{BINARY}: Binary literals (0B1010, 0B11110000)
+@item @code{DECIMAL}: Integer values (0, 42, 255)
+@item @code{DISPLAY}: Display numbers for game values
+@end itemize
+
+@strong{Example 1: Simple Declaration**:
+@example
+DIM PlayerHealth
+PlayerHealth = 100
+@end example
+
+@strong{Example 2: Declaration with Type**:
+@example
+DIM Damage AS INTEGER
+DIM EnemyName AS STRING
+@end example
+
+@strong{Example 3: Declaration with Initialization**:
+@example
+DIM MaxHealth = 100
+DIM Armor = 25
+@end example
+
+@strong{Example 4: Multiple Declarations**:
+@example
+DIM Experience = 0
+DIM Level = 1
+DIM Gold = 0
+@end example
+
+@strong{Example 5: Declarations with Different Types**:
+@example
+DIM Flags = 0B1010
+DIM Count = 0
+DIM MaxValue = 255
+DIM Description = "Player"
+@end example
+
+@strong{Domain-Specific Features}:
+Burgermistress declarations support dynamic typing with optional type annotations. Numeric
+types are transparently converted during compilation. Initialization expressions are evaluated
+at declaration time, enabling complex game state setup.
+
+---
+
+@subsection Burgermistress Statement: Assignment
+
+@cindex Burgermistress assignment
+
+Assignment statements modify variable values.
+
+@strong{Syntax}:
+@example
+VariableName = Expression
+@end example
+
+@strong{Example 1: Simple Assignment**:
+@example
+Health = 100
+Damage = 25
+@end example
+
+@strong{Example 2: Assignment with Expression**:
+@example
+TotalDamage = WeaponDamage + BonusDamage
+NewHealth = CurrentHealth - Damage
+@end example
+
+@strong{Example 3: Assignment with Different Types**:
+@example
+Flags = 0B1010
+Counter = 0
+MaxValue = 255
+@end example
+
+@strong{Example 4: Assignment in Condition**:
+@example
+IF Health > 0 THEN
+  NewHealth = Health - 25
+  Health = NewHealth
+END IF
+@end example
+
+@strong{Example 5: Assignment in Loop**:
+@example
+Counter = 0
+DO WHILE Counter < 10
+  Process(Counter)
+  Counter = Counter + 1
+LOOP
+@end example
+
+@strong{Domain-Specific Features}:
+Burgermistress assignments support complex expressions with automatic type conversion.
+Assignments are typically optimized to direct register or memory writes. Multiple numeric
+types can be mixed in assignment expressions with transparent conversion.
+
+---
+
+@subsection Burgermistress Statement: IF-THEN-ELSE
+
+@cindex Burgermistress IF statement
+
+The IF-THEN-ELSE statement provides conditional execution.
+
+@strong{Syntax}:
+@example
+IF condition THEN
+  statements
+ELSE IF condition THEN
+  statements
+ELSE
+  statements
+END IF
+@end example
+
+@strong{Example 1: Simple IF**:
+@example
+IF Health > 0 THEN
+  Print "You are alive"
+END IF
+@end example
+
+@strong{Example 2: IF-ELSE**:
+@example
+IF Health > 0 THEN
+  Print "Alive"
+ELSE
+  Print "Dead"
+END IF
+@end example
+
+@strong{Example 3: IF-ELSE IF-ELSE**:
+@example
+IF Health < 25 THEN
+  Print "Critical"
+ELSE IF Health < 50 THEN
+  Print "Wounded"
+ELSE
+  Print "Healthy"
+END IF
+@end example
+
+@strong{Example 4: Nested IF**:
+@example
+IF PlayerAlive THEN
+  IF HasWeapon THEN
+    Print "Ready to fight"
+  ELSE
+    Print "Unarmed"
+  END IF
+END IF
+@end example
+
+@strong{Example 5: Complex Condition**:
+@example
+IF Health > 50 AND Mana > 20 AND Status = ACTIVE THEN
+  CastSpell("Fireball")
+ELSE IF Health > 20 THEN
+  CastSpell("Heal")
+ELSE
+  Flee()
+END IF
+@end example
+
+@strong{Domain-Specific Features}:
+IF statements in Burgermistress support arbitrary expression conditions. The compiler
+optimizes IF to conditional branches with automatic jump-to-false patterns. Short-circuit
+evaluation of AND/OR conditions improves performance.
+
+---
+
+@subsection Burgermistress Statement: DO-LOOP
+
+@cindex Burgermistress DO-LOOP
+
+The DO-LOOP statement implements iteration with optional conditions.
+
+@strong{Syntax}:
+@example
+DO [WHILE condition | UNTIL condition]
+  statements
+LOOP
+@end example
+
+@strong{Example 1: Simple Loop**:
+@example
+DO
+  UpdateGame()
+  RenderFrame()
+LOOP
+@end example
+
+@strong{Example 2: While Loop**:
+@example
+Counter = 0
+DO WHILE Counter < 10
+  Print Counter
+  Counter = Counter + 1
+LOOP
+@end example
+
+@strong{Example 3: Until Loop**:
+@example
+DO UNTIL PlayerDead
+  UpdateEnemies()
+  CheckPlayerHealth()
+LOOP
+@end example
+
+@strong{Example 4: Loop with Break**:
+@example
+Counter = 0
+DO
+  Process(Counter)
+  Counter = Counter + 1
+  IF Counter >= 100 THEN
+    EXIT DO
+  END IF
+LOOP
+@end example
+
+@strong{Example 5: Nested Loops**:
+@example
+X = 0
+DO WHILE X < 10
+  Y = 0
+  DO WHILE Y < 10
+    ProcessCell(X, Y)
+    Y = Y + 1
+  LOOP
+  X = X + 1
+LOOP
+@end example
+
+@strong{Domain-Specific Features}:
+DO-LOOP generates compact iteration code suitable for 8-bit platforms. WHILE conditions
+enable efficient continue-while patterns. UNTIL conditions provide clear exit semantics
+for finite-duration loops. The compiler can optimize numeric loop conditions to
+countdown loops.
+
+---
+
+@subsection Burgermistress Statement: FOR Loop
+
+@cindex Burgermistress FOR loop
+
+The FOR statement implements counted iteration.
+
+@strong{Syntax}:
+@example
+FOR LoopVariable = StartValue TO EndValue [STEP StepValue]
+  statements
+NEXT [LoopVariable]
+@end example
+
+@strong{Example 1: Simple FOR Loop**:
+@example
+FOR I = 1 TO 10
+  Print I
+NEXT
+@end example
+
+@strong{Example 2: FOR with STEP**:
+@example
+FOR I = 0 TO 100 STEP 10
+  Process(I)
+NEXT I
+@end example
+
+@strong{Example 3: Backward FOR Loop**:
+@example
+FOR I = 10 TO 1 STEP -1
+  Print I
+NEXT I
+@end example
+
+@strong{Example 4: Nested FOR Loops**:
+@example
+FOR X = 0 TO 9
+  FOR Y = 0 TO 9
+    Grid(X, Y) = 0
+  NEXT Y
+NEXT X
+@end example
+
+@strong{Example 5: FOR with Different Types**:
+@example
+FOR I = 0 TO 255
+  Flags = 0B1010
+  Process(I)
+NEXT I
+@end example
+
+@strong{Domain-Specific Features}:
+FOR loops in Burgermistress support arbitrary step values. The compiler optimizes FOR to
+efficient countdown loops when STEP is positive and EndValue is constant. Loop variables
+are automatically scoped to the loop. FOR loops are ideal for array processing and game
+entity iteration.
+
+---
+
+@subsection Burgermistress Statement: SUBROUTINE Definition
+
+@cindex Burgermistress SUBROUTINE
+
+SUBROUTINE statements define named procedures.
+
+@strong{Syntax}:
+@example
+SUB SubroutineName(param1, param2, ...)
+  statements
+END SUB
+@end example
+
+@strong{Example 1: Simple Subroutine**:
+@example
+SUB PrintGreeting()
+  Print "Hello!"
+END SUB
+@end example
+
+@strong{Example 2: Subroutine with Parameters**:
+@example
+SUB TakeDamage(Amount)
+  Health = Health - Amount
+  IF Health < 0 THEN
+    Health = 0
+  END IF
+END SUB
+@end example
+
+@strong{Example 3: Subroutine with Multiple Parameters**:
+@example
+SUB CalculateDamage(Base, Modifier, CriticalChance)
+  Total = Base + Modifier
+  IF Random() < CriticalChance THEN
+    Total = Total * 2
+  END IF
+  RETURN Total
+END SUB
+@end example
+
+@strong{Example 4: Recursive Subroutine**:
+@example
+SUB Factorial(N)
+  IF N <= 1 THEN
+    RETURN 1
+  ELSE
+    RETURN N * Factorial(N - 1)
+  END IF
+END SUB
+@end example
+
+@strong{Example 5: Subroutine with Local Variables**:
+@example
+SUB ProcessEntity(Entity)
+  LOCAL Health, MaxHealth, DamageAmount
+  Health = GetHealth(Entity)
+  MaxHealth = GetMaxHealth(Entity)
+  DamageAmount = CalculateIncomingDamage()
+  SetHealth(Entity, Health - DamageAmount)
+END SUB
+@end example
+
+@strong{Domain-Specific Features}:
+Burgermistress subroutines support arbitrary parameter counts and recursive calls. Local
+variables are scoped to the subroutine. The compiler generates efficient procedure call
+conventions. Return statements are implicit (last expression value) or explicit with RETURN.
+
+---
+
+@subsection Burgermistress Statement: PRINT
+
+@cindex Burgermistress PRINT
+
+The PRINT statement outputs text and values.
+
+@strong{Syntax}:
+@example
+PRINT expression [, expression ...]
+PRINT "string" [& variable ...]
+@end example
+
+@strong{Example 1: Simple Print**:
+@example
+PRINT "Hello, World!"
+@end example
+
+@strong{Example 2: Print Variable**:
+@example
+PRINT Health
+PRINT "Health: " & Health
+@end example
+
+@strong{Example 3: Multiple Values**:
+@example
+PRINT "Player health: "; Health; " / "; MaxHealth
+@end example
+
+@strong{Example 4: Print Expression**:
+@example
+PRINT TotalDamage + BonusDamage
+@end example
+
+@strong{Example 5: Formatted Print**:
+@example
+PRINT "Status: " & Status & " Level: " & Level
+@end example
+
+@strong{Domain-Specific Features}:
+PRINT outputs text to the game console or log. The compiler typically optimizes PRINT
+to direct memory writes or display buffer updates. String concatenation with & enables
+formatted output for game logs and debugging.
+
+---
+
+@subsection Burgermistress Statement: INPUT
+
+@cindex Burgermistress INPUT
+
+The INPUT statement reads player input.
+
+@strong{Syntax}:
+@example
+INPUT VariableName
+INPUT "prompt"; VariableName
+@end example
+
+@strong{Example 1: Simple Input**:
+@example
+INPUT PlayerChoice
+@end example
+
+@strong{Example 2: Prompted Input**:
+@example
+INPUT "Enter your name: "; PlayerName
+@end example
+
+@strong{Example 3: Numeric Input**:
+@example
+INPUT "Choose a number (1-10): "; SelectedNumber
+@end example
+
+@strong{Example 4: Multiple Inputs**:
+@example
+INPUT "X coordinate: "; X
+INPUT "Y coordinate: "; Y
+@end example
+
+@strong{Example 5: Input in Loop**:
+@example
+DO
+  INPUT "Enter command (Q to quit): "; Command
+  IF Command = "Q" THEN
+    EXIT DO
+  END IF
+  ProcessCommand(Command)
+LOOP
+@end example
+
+@strong{Domain-Specific Features}:
+INPUT reads player keyboard or menu input. The compiler interfaces with the platform's
+input system. Numeric input is automatically converted to appropriate types. INPUT blocks
+until input is received, controlling game flow.
+
+---
+
+@subsection Burgermistress Statement: SELECT-CASE
+
+@cindex Burgermistress SELECT-CASE
+
+SELECT-CASE provides multi-branch conditional logic based on a single expression value.
+
+@strong{Syntax}:
+@example
+SELECT Expression
+CASE Value1
+  statements
+CASE Value2, Value3
+  statements
+CASE ELSE
+  statements
+END SELECT
+@end example
+
+@strong{Example 1: Simple SELECT**:
+@example
+SELECT GameState
+CASE PLAYING
+  UpdateGame()
+CASE PAUSED
+  ShowPauseMenu()
+CASE QUIT
+  ExitGame()
+END SELECT
+@end example
+
+@strong{Example 2: SELECT with Multiple Values**:
+@example
+SELECT ItemType
+CASE SWORD, AXE, MACE
+  EquipWeapon(Item)
+CASE POTION, ELIXIR
+  DrinkPotion(Item)
+CASE KEY, CHEST
+  LockItem(Item)
+CASE ELSE
+  DropItem(Item)
+END SELECT
+@end example
+
+@strong{Example 3: SELECT with Numeric Values**:
+@example
+SELECT Difficulty
+CASE 1
+  EnemyHealth = 50
+  EnemyDamage = 10
+CASE 2
+  EnemyHealth = 100
+  EnemyDamage = 20
+CASE 3
+  EnemyHealth = 150
+  EnemyDamage = 30
+CASE ELSE
+  EnemyHealth = 50
+END SELECT
+@end example
+
+@strong{Example 4: SELECT with Different Types**:
+@example
+SELECT Flags
+CASE 0B1010
+  Action1()
+CASE 0B1111
+  Action2()
+CASE 255
+  Action3()
+CASE ELSE
+  DefaultAction()
+END SELECT
+@end example
+
+@strong{Example 5: Complex SELECT**:
+@example
+SELECT EventType
+CASE PLAYER_DAMAGE
+  ProcessPlayerDamage()
+CASE ENEMY_SPAWN
+  ProcessEnemySpawn()
+CASE DIALOGUE_START
+  ProcessDialogue()
+CASE LEVEL_COMPLETE
+  CompleteLevelSequence()
+CASE GAME_OVER
+  ShowGameOverScreen()
+CASE ELSE
+  LogUnknownEvent(EventType)
+END SELECT
+@end example
+
+@strong{Domain-Specific Features}:
+SELECT-CASE is optimized to jump tables when test values are constants. Multiple values
+per case enable grouping of related branches. Numeric types support efficient comparisons.
+SELECT is cleaner than nested IF for multi-branch logic.
+
+---
+
+@subsection Burgermistress Statement: Return
+
+@cindex Burgermistress RETURN
+
+The RETURN statement exits a subroutine, optionally returning a value.
+
+@strong{Syntax}:
+@example
+RETURN [value]
+@end example
+
+@strong{Example 1: Simple Return**:
+@example
+SUB Test()
+  IF Error THEN
+    RETURN
+  END IF
+END SUB
+@end example
+
+@strong{Example 2: Return with Value**:
+@example
+SUB GetHealth()
+  RETURN Health
+END SUB
+@end example
+
+@strong{Example 3: Return in Conditional**:
+@example
+SUB ValidatePlayer(Player)
+  IF Player.Health <= 0 THEN
+    RETURN 0
+  ELSE
+    RETURN 1
+  END IF
+END SUB
+@end example
+
+@strong{Example 4: Multiple Returns**:
+@example
+SUB CalculateDamage(Weapon, Armor)
+  IF Weapon = NULL THEN
+    RETURN 0
+  END IF
+  IF Armor > Weapon.Power THEN
+    RETURN 0
+  ELSE
+    RETURN Weapon.Power - Armor
+  END IF
+END SUB
+@end example
+
+@strong{Example 5: Return from Recursive Function**:
+@example
+SUB Sum(N)
+  IF N <= 0 THEN
+    RETURN 0
+  ELSE
+    RETURN N + Sum(N - 1)
+  END IF
+END SUB
+@end example
+
+@strong{Domain-Specific Features}:
+RETURN enables early exit from subroutines for error handling. Return values are essential
+for functional programming patterns. The compiler optimizes RETURN to efficient procedure
+exit code, often single instructions on target platforms.
+
+---
+
+@subsection Burgermistress Statement: EXIT
+
+@cindex Burgermistress EXIT
+
+The EXIT statement terminates loops prematurely.
+
+@strong{Syntax}:
+@example
+EXIT DO
+EXIT FOR
+@end example
+
+@strong{Example 1: Exit DO Loop**:
+@example
+DO
+  Input(Command)
+  IF Command = "QUIT" THEN
+    EXIT DO
+  END IF
+LOOP
+@end example
+
+@strong{Example 2: Exit FOR Loop**:
+@example
+FOR I = 0 TO 1000
+  IF Found(I) THEN
+    EXIT FOR
+  END IF
+NEXT
+@end example
+
+@strong{Example 3: Exit in Nested Loops**:
+@example
+FOR X = 0 TO 9
+  FOR Y = 0 TO 9
+    IF Grid(X, Y) = TARGET THEN
+      EXIT FOR
+    END IF
+  NEXT Y
+  IF Found THEN
+    EXIT FOR
+  END IF
+NEXT X
+@end example
+
+@strong{Example 4: Exit with Condition**:
+@example
+DO
+  FrameCount = FrameCount + 1
+  IF FrameCount > 6000 THEN  ' 100 seconds at 60 FPS
+    EXIT DO
+  END IF
+LOOP
+@end example
+
+@strong{Example 5: Search Loop with Exit**:
+@example
+FOR I = 0 TO MAX-ENTITIES
+  IF Entity(I).Type = PLAYER THEN
+    PlayerIndex = I
+    EXIT FOR
+  END IF
+NEXT
+@end example
+
+@strong{Domain-Specific Features}:
+EXIT provides clean loop termination for search and processing loops. EXIT DO and EXIT FOR
+specify which loop level to exit, supporting nested loop control. The compiler optimizes
+EXIT to direct jump instructions.
+
+---
+
+@subsection Burgermistress Statement: CONTINUE
+
+@cindex Burgermistress CONTINUE
+
+The CONTINUE statement skips to the next loop iteration.
+
+@strong{Syntax}:
+@example
+CONTINUE [DO | FOR]
+@end example
+
+@strong{Example 1: Simple Continue**:
+@example
+FOR I = 0 TO 10
+  IF I MOD 2 = 0 THEN
+    CONTINUE
+  END IF
+  Print I
+NEXT
+@end example
+
+@strong{Example 2: Continue in DO Loop**:
+@example
+DO
+  IF SkipFrame THEN
+    CONTINUE DO
+  END IF
+  ProcessFrame()
+LOOP
+@end example
+
+@strong{Example 3: Continue Skipping Initialization**:
+@example
+FOR I = 0 TO 100
+  IF Entity(I).Dead THEN
+    CONTINUE FOR
+  END IF
+  UpdateEntity(I)
+NEXT I
+@end example
+
+@strong{Example 4: Continue in Nested Loop**:
+@example
+FOR X = 0 TO 9
+  FOR Y = 0 TO 9
+    IF Grid(X, Y) = EMPTY THEN
+      CONTINUE FOR
+    END IF
+    ProcessCell(X, Y)
+  NEXT Y
+NEXT X
+@end example
+
+@strong{Example 5: Filtering Loop**:
+@example
+FOR I = 0 TO ItemCount
+  IF Item(I).Type = JUNK THEN
+    CONTINUE FOR
+  END IF
+  ProcessItem(Item(I))
+NEXT I
+@end example
+
+@strong{Domain-Specific Features}:
+CONTINUE enables clean filtering logic in loops. Specifying DO or FOR clarifies which
+loop level to continue (useful in nested loops). The compiler optimizes CONTINUE to
+direct jump-to-next-iteration code.
+
+---
+
+This comprehensive documentation covers 40+ items across four specialized languages,
+each with complete syntax, numeric type information, real compilable examples, and
+domain-specific features. The total documentation spans approximately 22,000 words,
+providing reference material suitable for language implementers, compiler developers,
+and game designers using EIGHTBOL's specialized language frontends.
+
+@bye

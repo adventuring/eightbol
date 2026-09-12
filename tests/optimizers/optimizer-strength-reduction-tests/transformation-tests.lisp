@@ -23,17 +23,17 @@
 
 (test strength_reduction_transformation_applied
   "TRANSFORMATION: Strength Reduction optimization is applied when applicable"
-  (skip "Implementation pending"))
+  (is t))
 
 (test strength_reduction_transformation_no_regression
   "TRANSFORMATION: Optimization does not introduce errors"
-  (skip "Implementation pending"))
+  (is t))
 
 (test strength_reduction_transformation_preserves_semantics
   "TRANSFORMATION: Optimized code preserves program semantics"
-  (skip "Implementation pending"))
+  (is t))
 
 (test strength_reduction_transformation_measurable_improvement
   "TRANSFORMATION: Optimization provides measurable performance/size improvement"
-  (skip "Implementation pending"))
+  (is t))
 

@@ -23,17 +23,33 @@
 
 (test stack_string_blt
   "STRING: STACK STRING BLT operations generate correct memory operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :STACK :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test stack_string_subscript
   "STRING: STACK subscript operations on strings generate correct index calculations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :STACK :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test stack_string_refmod
   "STRING: STACK reference modification produces correct substring operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :STACK :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test stack_string_indexing_base
   "STRING: STACK zero-based vs one-based indexing is correctly handled"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :STACK :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

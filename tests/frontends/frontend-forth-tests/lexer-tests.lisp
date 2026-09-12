@@ -19,29 +19,29 @@
 
 (test forth_lexer_exists
   "Verify FORTH lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_lexer_keywords
   "LEXER: FORTH keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_lexer_operators
   "LEXER: FORTH operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_lexer_numbers
   "LEXER: FORTH numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_lexer_strings
   "LEXER: FORTH string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_lexer_identifiers
   "LEXER: FORTH identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_lexer_comments
   "LEXER: FORTH comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

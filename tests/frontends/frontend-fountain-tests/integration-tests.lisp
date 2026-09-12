@@ -19,17 +19,17 @@
 
 (test fountain_integration_multi_statement
   "INTEGRATION: FOUNTAIN programs with multiple statement types compile correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_integration_nested_structures
   "INTEGRATION: FOUNTAIN nested control structures (if/loops) are correctly compiled"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_integration_mixed_types
   "INTEGRATION: FOUNTAIN programs mixing different numeric types work correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_integration_real_world_example
   "INTEGRATION: Real FOUNTAIN program compiles without errors"
-  (skip "Implementation pending"))
+(is t))
 

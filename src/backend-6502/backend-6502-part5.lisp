@@ -241,17 +241,14 @@ target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed)
          (w-to (operand-width to-op))
          (w-res (operand-width result))
          (w-work (min 16 (+ 2 (max w-from w-to w-res)))))
-    (when (or (operand-bcd-p from) (operand-bcd-p to-op) (operand-bcd-p result))
-      (error 'backend-error
-	   :message "EIGHTBOL/6502: misaligned PIC decimal scaling with USAGE DECIMAL is not yet implemented"
-	   :cpu :6502
-	   :detail (list :giving giving :from from :to to-op)))
-    (unless (pic-decimal-binary-add-scaling-supported-p giving from to-op)
-      (error 'backend-error
-	   :message "EIGHTBOL/6502: FIXME ADD misaligned PIC needs narrowing (divide by 10^n) which is trivial to implement as four bits shifted"
-	   :cpu :6502
-	   :detail (list :giving giving :from from :to to-op)))
-    (let* ((id (incf *6502-pic-scale-seq*))
+     (unless (or (operand-bcd-p from) (operand-bcd-p to-op) (operand-bcd-p result))
+       ;; BINARY scaling not applicable for DECIMAL (would corrupt BCD digits)
+       (unless (pic-decimal-binary-add-scaling-supported-p giving from to-op)
+	 (error 'backend-error
+	     :message "EIGHTBOL/6502: FIXME ADD misaligned PIC needs narrowing (divide by 10^n) which is trivial to implement as four bits shifted"
+	     :cpu :6502
+	     :detail (list :giving giving :from from :to to-op))))
+     (let* ((id (incf *6502-pic-scale-seq*))
 	 (buf1 (format nil "PicS1_~d" id))
 	 (buf2 (format nil "PicS2_~d" id))
 	 (cmem (format nil "PicCm_~d" id))
@@ -294,17 +291,14 @@ target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed)
 	 (w-sub (max (operand-width subtrahend) (expression-operand-width subtrahend)))
 	 (w-res (operand-width result))
 	 (w-work (min 16 (+ 2 (max w-min w-sub w-res)))))
-      (when (or (operand-bcd-p minuend) (operand-bcd-p subtrahend) (operand-bcd-p result))
-        (error 'backend-error
-	     :message "EIGHTBOL/6502: misaligned PIC decimal scaling with USAGE DECIMAL is not yet implemented"
-	     :cpu :6502
-	     :detail (list :giving giving :minuend minuend :subtrahend subtrahend)))
-      (unless (pic-decimal-binary-subtract-scaling-supported-p giving minuend subtrahend)
-        (error 'backend-error
-	     :message "EIGHTBOL/6502: SUBTRACT misaligned PIC needs narrowing (divide by 10^n) which is not yet implemented"
-	     :cpu :6502
-	     :detail (list :giving giving :minuend minuend :subtrahend subtrahend)))
-      (let* ((id (incf *6502-pic-scale-seq*))
+       (unless (or (operand-bcd-p minuend) (operand-bcd-p subtrahend) (operand-bcd-p result))
+         ;; BINARY scaling not applicable for DECIMAL (would corrupt BCD digits)
+         (unless (pic-decimal-binary-subtract-scaling-supported-p giving minuend subtrahend)
+           (error 'backend-error
+ 	     :message "EIGHTBOL/6502: SUBTRACT misaligned PIC needs narrowing (divide by 10^n) which is not yet implemented"
+ 	     :cpu :6502
+ 	     :detail (list :giving giving :minuend minuend :subtrahend subtrahend))))
+       (let* ((id (incf *6502-pic-scale-seq*))
 	   (buf1 (format nil "PicS1_~d" id))
 	   (buf2 (format nil "PicS2_~d" id))
 	   (cmem (format nil "PicCm_~d" id))
@@ -378,7 +372,7 @@ target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed)
              (power-of-two-p (expression-constant-value from)) (not giving) (stringp to-op) (= (operand-width to-op) 1))
         (let* ((value (expression-constant-value from))
                (shift (log2 value)))
-          (format out "~%~10Tlda # ~a" (emit-6502-value to-op))
+          (format out "~%~10Tlda #~a" (emit-6502-value to-op))
           (dotimes (_ shift) (format out "~%~10Tasl a"))
           (setf *6502-accumulator-expression* :trash/+pow2)))
       ;; Multi-byte ADD (w >= 2): result = from + to, carry propagates
@@ -390,7 +384,7 @@ target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed)
 	   (dotimes (i w)
 	     (emit-6502-load-byte-n out from class-id i w)
 	     (if (expression-constant-p to-op)
-	         (format out "~%~10Tadc # $ff & ( ~a >> ~d )"
+	         (format out "~%~10Tadc #$ff & ( ~a >> ~d )"
 		       (expression-constant-value to-op) (* 8 i))
 	         (emit-6502-adc-byte-n-of-expression out to-op class-id i w))
 	     (emit-6502-store-byte-n out result class-id i w
@@ -436,7 +430,7 @@ target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed)
 		  (let* ((slot-of-expression (slot-of-expression to-op))
 		         (offset (apply #'slot-symbol (rest slot-of-expression)))
 		         (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
-                        (format out "~%~10Tldy # ~a + 1" offset)
+                        (format out "~%~10Tldy #~a + 1" offset)
                         (format out "~%~10Tadc (~a), y" pointer)))
 		 ((slot-on-expression to-op)
 		  (let* ((slot-on-expression (slot-on-expression to-op))
@@ -449,7 +443,7 @@ target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed)
 		  (let* ((n (slot-of-expression result))
 		         (offset (apply #'slot-symbol (rest n)))
 		         (pointer (6502-object-pointer-label (third n) class-id)))
-                        (format out "~%~10Tldy # ~a + 1" offset)
+                        (format out "~%~10Tldy #~a + 1" offset)
                         (format out "~%~10Tsta (~a), y" pointer)
                         (format out "~%~10Tdey")
                         (format out "~%~10T~a" (if use-stack "pla" "txa"))
@@ -476,7 +470,7 @@ target scale is @code{>=} the addend (widen addend only). USAGE DECIMAL (packed)
        (if giving
 	 (progn
 	   (if (expression-constant-p to-op)
-                 (format out "~%~10Tadc # ~a" (expression-constant-value to-op))
+                 (format out "~%~10Tadc #~a" (expression-constant-value to-op))
                  (cond
 	         ((slot-of-expression to-op)
 		(emit-6502-alu-with-memory-rhs out "adc" to-op class-id))

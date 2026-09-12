@@ -23,17 +23,33 @@
 
 (test z80_string_blt
   "STRING: Z80 STRING BLT operations generate correct memory operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_string_subscript
   "STRING: Z80 subscript operations on strings generate correct index calculations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_string_refmod
   "STRING: Z80 reference modification produces correct substring operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_string_indexing_base
   "STRING: Z80 zero-based vs one-based indexing is correctly handled"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

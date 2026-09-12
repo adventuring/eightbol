@@ -13,5 +13,6 @@
                              (:file "numeric-types-tests" :depends-on ("package"))
                              (:file "variable-names-tests" :depends-on ("package"))
                              (:file "functions-tests" :depends-on ("package"))
-                             (:file "integration-tests" :depends-on ("package")))))
+                             (:file "integration-tests" :depends-on ("package"))
+                             (:file "statement-tests" :depends-on ("package")))))
   :in-order-to ((test-op (test-op :eightbol-test))))

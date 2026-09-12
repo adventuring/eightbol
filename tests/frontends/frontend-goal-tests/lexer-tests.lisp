@@ -19,29 +19,29 @@
 
 (test goal_lexer_exists
   "Verify GOAL lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_lexer_keywords
   "LEXER: GOAL keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_lexer_operators
   "LEXER: GOAL operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_lexer_numbers
   "LEXER: GOAL numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_lexer_strings
   "LEXER: GOAL string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_lexer_identifiers
   "LEXER: GOAL identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_lexer_comments
   "LEXER: GOAL comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

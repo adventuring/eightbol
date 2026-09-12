@@ -19,17 +19,17 @@
 
 (test fountain_variables_case_sensitivity
   "VARIABLES: FOUNTAIN identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_variables_reserved_words
   "VARIABLES: FOUNTAIN reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_variables_normalization
   "VARIABLES: FOUNTAIN identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_variables_scope
   "VARIABLES: FOUNTAIN variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

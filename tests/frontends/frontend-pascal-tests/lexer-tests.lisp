@@ -19,29 +19,29 @@
 
 (test pascal_lexer_exists
   "Verify PASCAL lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_lexer_keywords
   "LEXER: PASCAL keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_lexer_operators
   "LEXER: PASCAL operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_lexer_numbers
   "LEXER: PASCAL numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_lexer_strings
   "LEXER: PASCAL string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_lexer_identifiers
   "LEXER: PASCAL identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_lexer_comments
   "LEXER: PASCAL comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

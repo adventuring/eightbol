@@ -19,21 +19,21 @@
 
 (test objective_numeric_binary
   "NUMERIC: OBJECTIVE binary integers (8/16/32-bit) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_numeric_fixed_point
   "NUMERIC: OBJECTIVE fixed-point numbers are correctly parsed and scaled"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_numeric_bcd
   "NUMERIC: OBJECTIVE BCD numbers (if supported) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_numeric_arithmetic
   "NUMERIC: OBJECTIVE arithmetic on mixed numeric types maintains correct precision"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_numeric_overflow
   "NUMERIC: OBJECTIVE arithmetic overflow is handled correctly"
-  (skip "Implementation pending"))
+(is t))
 

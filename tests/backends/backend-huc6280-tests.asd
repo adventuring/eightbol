@@ -6,7 +6,7 @@
   :version "0.1.0"
   :depends-on (:eightbol :fiveam)
   :components ((:module "backend-huc6280"
-                :pathname "."
+                :pathname "backend-huc6280-tests"
                 :components ((:file "package")
                              (:file "move-node-tests" :depends-on ("package"))
                              (:file "arithmetic-node-tests" :depends-on ("package"))

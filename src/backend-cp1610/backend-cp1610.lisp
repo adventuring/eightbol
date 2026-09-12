@@ -159,6 +159,10 @@
   (let ((stmt (cons :procedure ast-node-data)))
     (compile-cp1610-paragraph stmt)))
 
+(def-cp1610-statement :paragraph
+  (let ((stmt (cons :paragraph ast-node-data)))
+    (compile-cp1610-paragraph stmt)))
+
 (def-cp1610-statement :evaluate
   (let ((stmt (cons :evaluate ast-node-data)))
     (compile-cp1610-evaluate stmt)))
@@ -179,10 +183,10 @@
          (getf ast-node-data :name)))
 
 (def-cp1610-statement :divide
-   (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :cp1610 :detail ast-node-data))
+   (error 'source-error :message "MULTIPLY/DIVIDE not supported" :detail ast-node-data))
 
  (def-cp1610-statement :multiply
-   (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :cp1610 :detail ast-node-data))
+   (error 'source-error :message "MULTIPLY/DIVIDE not supported" :detail ast-node-data))
 
 (def-cp1610-statement :invoke-super
   (unless (gethash *class-id* *parent-classes*)
@@ -1095,9 +1099,21 @@ W is the byte width (1 or 2). For w=2, corrects both bytes with carry."
   (cp1610-symbol (format nil "~a_~a_~a" *class-id* (or *method-id* "") name)))
 
 (defun compile-cp1610-paragraph (stmt)
-  (let ((name (if (eq (first stmt) :procedure)
-                  (getf (rest stmt) :name)
-                  (or (getf (rest stmt) :name) (getf (rest stmt) :paragraph) (second stmt)))))
+  (let* ((rest-stmt (rest stmt))
+         (name (if (eq (first stmt) :procedure)
+                   (getf rest-stmt :name)
+                   ;; For :paragraph, the name is either the second element directly,
+                   ;; or in a plist with :name or :paragraph keys
+                   (cond
+                     ((and (listp rest-stmt) (keywordp (first rest-stmt)))
+                      ;; It's a plist format
+                      (or (getf rest-stmt :name) (getf rest-stmt :paragraph)))
+                     ((listp rest-stmt)
+                      ;; It's a simple list, use the first element
+                      (first rest-stmt))
+                     (t
+                      ;; It's just a string or symbol
+                      rest-stmt)))))
     (when name
       (format *output-stream* "~&~a:" (cp1610-para-label (format nil "~a" name))))))
 

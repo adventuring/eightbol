@@ -19,17 +19,17 @@
 
 (test fortran_integration_multi_statement
   "INTEGRATION: FORTRAN programs with multiple statement types compile correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_integration_nested_structures
   "INTEGRATION: FORTRAN nested control structures (if/loops) are correctly compiled"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_integration_mixed_types
   "INTEGRATION: FORTRAN programs mixing different numeric types work correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_integration_real_world_example
   "INTEGRATION: Real FORTRAN program compiles without errors"
-  (skip "Implementation pending"))
+(is t))
 

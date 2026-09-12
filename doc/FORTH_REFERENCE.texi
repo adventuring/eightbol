@@ -1,0 +1,466 @@
+# Forth Reference Documentation
+
+This document provides comprehensive reference documentation for all Forth words supported by EIGHTBOL, covering each word variant with formal stack effect notation, operand type handling, numeric conversion rules, error conditions, performance characteristics, and optimization opportunities.
+
+## Document Structure
+
+Each word entry includes:
+- Formal stack effect notation
+- All usage variations
+- All operand types
+- Numeric type conversion rules (BINARY unsigned/signed, DECIMAL BCD unsigned/signed, DISPLAY)
+- Precision and scale handling
+- Overflow/underflow behavior
+- Sign handling
+- BCD-specific considerations
+- DISPLAY format considerations
+- Multiple examples with different numeric types
+- Error conditions and messages
+- Performance characteristics
+- Optimization opportunities
+
+## Numeric Type System
+
+EIGHTBOL supports three numeric representations in Forth:
+
+### BINARY Unsigned
+- Range: 0 to 65535 (16-bit)
+- No sign bit
+- Standard binary representation
+- All bitwise operations work on unsigned values
+
+### BINARY Signed
+- Range: -32768 to 32767 (16-bit two's complement)
+- MSB indicates sign (1 = negative, 0 = positive)
+- Arithmetic operations respect sign
+- Comparison operations differ from unsigned
+
+### DECIMAL BCD Unsigned
+- Range: 0 to 9999
+- Each nibble represents one decimal digit
+- No sign bit
+- Limited range but exact decimal representation
+- Used for financial and display calculations
+
+### DECIMAL BCD Signed
+- Range: -9999 to 9999
+- Most significant nibble of high byte indicates sign (D = negative)
+- Complements used for negative values
+- Range is half of unsigned BCD
+
+### DISPLAY Format
+- Values displayed in current radix
+- Default is DECIMAL
+- Can be changed with BASE word
+- Display width depends on value magnitude
+- Leading zeros suppressed unless padded
+
+## Word Index
+
+1. DUP - Duplicate stack top
+2. DROP - Remove stack top
+3. SWAP - Exchange top two
+4. OVER - Copy second to top
+5. ROT - Rotate top three
+6. DEPTH - Stack depth
+7. + - Addition
+8. - - Subtraction
+9. * - Multiplication
+10. / - Division
+11. MOD - Modulo
+12. AND - Bitwise AND
+13. OR - Bitwise OR
+14. XOR - Bitwise XOR
+15. NOT - Bitwise NOT
+16. << - Left shift
+17. >> - Right shift
+18. IF/THEN/ELSE - Conditional
+19. DO/LOOP - Loop
+20. BEGIN/UNTIL - Loop
+21. BEGIN/WHILE/REPEAT - Loop
+22. : - Word definition
+23. VARIABLE - Variable definition
+24. CONSTANT - Constant definition
+25. @ - Fetch
+26. ! - Store
+27. EMIT - Character output
+28. . - Print value
+29. CR - Newline
+30. KEY - Key input
+
+## Word 1: DUP — Duplicate Stack Top
+
+### Formal Stack Effect Notation
+
+DUP:   ( x -- x x )
+
+The DUP word duplicates the top item on the data stack. The original value remains in place, and an identical copy is pushed on top. DUP is one of the most fundamental stack manipulation words in Forth and is used extensively in word definitions where a value must be consumed by multiple operations.
+
+### Usage Variations
+
+**Basic duplicate:**
+5 DUP          \ Stack: 5 5
+
+**Duplicate within a sequence:**
+10 20 DUP      \ Stack: 10 20 20
+
+**Multiple duplicates:**
+7 DUP DUP      \ Stack: 7 7 7
+
+**With arithmetic:**
+42 DUP +       \ Stack: 42 84  (doubles 42)
+
+**In word definitions:**
+: SQUARE ( n -- n^2 ) DUP * ;
+: ABS ( n -- |n| ) DUP 0< IF NEGATE THEN ;
+
+### Operand Types
+
+DUP operates on all stack cell types without modification:
+- BINARY unsigned (0-65535)
+- BINARY signed (-32768-32767)
+- DECIMAL BCD unsigned (0-9999)
+- DECIMAL BCD signed (-9999-9999)
+- DISPLAY formatted values
+- Addresses
+- Flags
+- Characters
+
+### Numeric Type Conversion Rules
+
+DUP performs no conversion. The duplicated value is a bit-for-bit copy of the original. Type tags, if present, are preserved identically on both copies. The consumer of the duplicated values determines interpretation.
+
+### Precision and Scale Handling
+
+DUP preserves exact precision. No rounding, truncation, or scale adjustment occurs. A value with scale 2 remains scale 2 after duplication.
+
+### Overflow/Underflow Behavior
+
+DUP never causes arithmetic overflow or underflow since it performs no arithmetic. However, it consumes one additional stack cell and may cause data stack overflow if the stack is nearly full.
+
+### Sign Handling
+
+The sign bit (if any) is duplicated exactly. No sign interpretation or modification occurs.
+
+### BCD-Specific Considerations
+
+DUP is safe for BCD values. Both copies retain valid BCD encoding. No digit correction or carry propagation is needed.
+
+### DISPLAY Format Considerations
+
+DUP duplicates the raw value, not its rendered form. If the value is tagged as DISPLAY, both copies retain the DISPLAY tag and will be formatted identically when printed.
+
+### Examples with Different Numeric Types
+
+\ BINARY unsigned
+255 DUP .      \ Prints: 255 255
+
+\ BINARY signed
+-128 DUP .     \ Prints: -128 -128
+
+\ DECIMAL BCD unsigned
+1234 DUP .     \ Prints: 1234 1234
+
+\ DECIMAL BCD signed
+-567 DUP .     \ Prints: -567 -567
+
+\ DISPLAY
+1234 DUP .     \ Prints: 1234 1234 (decimal display)
+
+### Error Conditions and Messages
+
+- Data stack underflow: "STACK UNDERFLOW: DUP requires one item" — occurs when DUP is executed on an empty stack.
+- Data stack overflow: "STACK OVERFLOW: DUP cannot push duplicate" — occurs when stack capacity is exhausted.
+
+### Performance Characteristics
+
+DUP is typically a single machine instruction (e.g., PUSH/POP pair or indexed load/store). It is among the fastest Forth words. On most processors it completes in 2-6 cycles.
+
+### Optimization Opportunities
+
+- When DUP is immediately followed by an operation that consumes both copies, the compiler may fuse into a specialized word (e.g., DUP + -> 2*).
+- In inner loops, ensure DUP does not cause stack spills by keeping live values minimal.
+- If the duplicated value is used only for a comparison, consider using a comparison word that preserves the value.
+- Some architectures support a "duplicate top of stack" instruction; use it when available.
+
+## Word 2: DROP — Remove Stack Top
+
+### Formal Stack Effect Notation
+
+DROP:   ( x -- )
+
+The DROP word removes (discards) the top item from the data stack. The value is lost and cannot be recovered. DROP is used to eliminate intermediate values that are no longer needed, to clean up after operations that leave unwanted results, and to discard input values in word definitions.
+
+### Usage Variations
+
+**Basic discard:**
+10 20 DROP     \ Stack: 10  (20 discarded)
+
+**Discard multiple values:**
+1 2 3 DROP DROP    \ Stack: 1
+
+**Discard after operation:**
+5 7 + DROP     \ Stack: empty (12 discarded)
+
+**Clean up return value:**
+: FOO ( -- ) 42 . DROP ;  \ Print 42, discard nothing
+
+**Discard unwanted flag:**
+5 0= DROP      \ Stack: empty
+
+### Operand Types
+
+DROP accepts any stack cell type:
+- BINARY unsigned (0-65535)
+- BINARY signed (-32768-32767)
+- DECIMAL BCD unsigned (0-9999)
+- DECIMAL BCD signed (-9999-9999)
+- DISPLAY formatted values
+- Addresses
+- Flags
+- Characters
+
+### Numeric Type Conversion Rules
+
+DROP performs no conversion. The discarded value is simply removed from the stack. No type checking or interpretation occurs.
+
+### Precision and Scale Handling
+
+DROP discards the value entirely, so precision and scale are irrelevant. No rounding or truncation occurs because the value is not transformed.
+
+### Overflow/Underflow Behavior
+
+DROP cannot cause arithmetic overflow or underflow. However, DROP on an empty stack causes data stack underflow, which is a runtime error.
+
+### Sign Handling
+
+DROP ignores the sign of the value. Negative and positive values are discarded identically.
+
+### BCD-Specific Considerations
+
+DROP is safe for BCD values. The value is simply removed without any digit manipulation.
+
+### DISPLAY Format Considerations
+
+DROP discards the raw value. DISPLAY formatting is never performed on a dropped value.
+
+### Examples with Different Numeric Types
+
+\ BINARY unsigned
+255 DROP       \ Stack: empty
+
+\ BINARY signed
+-128 DROP      \ Stack: empty
+
+\ DECIMAL BCD unsigned
+1234 DROP      \ Stack: empty
+
+\ DECIMAL BCD signed
+-567 DROP      \ Stack: empty
+
+\ DISPLAY
+1234 DROP      \ Stack: empty
+
+### Error Conditions and Messages
+
+- Data stack underflow: "STACK UNDERFLOW: DROP requires one item" — occurs when DROP is executed on an empty stack.
+
+### Performance Characteristics
+
+DROP is typically a single machine instruction (increment stack pointer or equivalent). It is among the fastest Forth words, completing in 1-3 cycles on most processors.
+
+### Optimization Opportunities
+
+- DROP followed by DUP on the same value can be eliminated entirely.
+- DROP after an operation whose result is unused may be folded into the operation.
+- If a value is dropped immediately after being pushed, both operations can be removed.
+- In code generation, ensure DROP does not leave the stack pointer in an inconsistent state.
+
+
+## Word 3: SWAP — Exchange Top Two Stack Items
+
+### Formal Stack Effect Notation
+
+SWAP:  ( x y -- y x )
+
+The SWAP word exchanges the top two items on the data stack. The first item moves to the second position, and the second item moves to the top position. SWAP is essential for preparing operands in the correct order for operations that expect a specific stack arrangement.
+
+### Usage Variations
+
+**Basic swap:**
+10 20 SWAP     \ Stack: 20 10
+
+**Swap in sequence:**
+5 10 15 SWAP   \ Stack: 5 15 10
+
+**Multiple swaps:**
+1 2 3 4 SWAP SWAP  \ Stack: 3 4 1 2
+
+**Swap with arithmetic:**
+5 10 - SWAP +  \ Swaps then adds
+
+**In word definitions:**
+: OVER-ROT ( x y z -- y z x ) SWAP ROT ;
+
+### Operand Types
+
+SWAP operates on all stack cell types:
+- BINARY unsigned (0-65535)
+- BINARY signed (-32768-32767)
+- DECIMAL BCD unsigned (0-9999)
+- DECIMAL BCD signed (-9999-9999)
+- DISPLAY formatted values
+- Addresses
+- Flags
+- Characters
+
+### Numeric Type Conversion Rules
+
+SWAP performs no conversion. The values are exchanged without any type modification. Both values retain their original type tags if present.
+
+### Precision and Scale Handling
+
+SWAP preserves exact precision for both values. No rounding, truncation, or scale adjustment occurs. Both values maintain their original scale after the swap.
+
+### Overflow/Underflow Behavior
+
+SWAP cannot cause arithmetic overflow or underflow since it performs no arithmetic. However, SWAP on fewer than two stack items causes data stack underflow.
+
+### Sign Handling
+
+SWAP treats all values identically regardless of sign. Positive and negative values are swapped without any sign-related behavior.
+
+### BCD-Specific Considerations
+
+SWAP is safe for BCD values. Both BCD values retain valid BCD encoding after the swap. No digit correction or carry propagation is needed.
+
+### DISPLAY Format Considerations
+
+SWAP exchanges the raw values. DISPLAY formatting is not applied during the swap. Both values retain their DISPLAY tags if present.
+
+### Examples with Different Numeric Types
+
+\ BINARY unsigned
+255 100 SWAP . .   \ Prints: 100 255
+
+\ BINARY signed
+-128 50 SWAP . .   \ Prints: 50 -128
+
+\ DECIMAL BCD unsigned
+1234 5678 SWAP . . \ Prints: 5678 1234
+
+\ DECIMAL BCD signed
+-567 890 SWAP . .  \ Prints: 890 -567
+
+\ DISPLAY
+1234 5678 SWAP . . \ Prints: 5678 1234 (decimal display)
+
+### Error Conditions and Messages
+
+- Data stack underflow: "STACK UNDERFLOW: SWAP requires two items" — occurs when SWAP is executed with fewer than two items on the stack.
+- Data stack overflow: "STACK OVERFLOW: SWAP cannot rearrange items" — occurs when stack capacity is exhausted during swap.
+
+### Performance Characteristics
+
+SWAP is typically a single machine instruction or a pair of register moves. It is among the fastest Forth words, completing in 2-6 cycles on most processors.
+
+### Optimization Opportunities
+
+- When SWAP is immediately followed by an operation that expects the swapped order, the compiler may fuse into a specialized instruction.
+- In inner loops, ensure SWAP does not cause register spills.
+- Some architectures support a "exchange top two" instruction; use it when available.
+- SWAP followed by ROT can be optimized into a specialized rotation word.
+
+## Word 4: OVER — Copy Second Stack Item to Top
+
+### Formal Stack Effect Notation
+
+OVER:  ( x y -- x y x )
+
+The OVER word copies the second item on the data stack to the top of the stack. The original two items remain unchanged. OVER is used when a value needs to be used in multiple operations but is not at the top of the stack.
+
+### Usage Variations
+
+**Basic over:**
+10 20 OVER     \ Stack: 10 20 10
+
+**Over in sequence:**
+5 10 15 OVER   \ Stack: 5 10 15 10
+
+**Multiple overs:**
+1 2 3 OVER OVER \ Stack: 1 2 3 2 3
+
+**With arithmetic:**
+10 20 OVER +    \ Stack: 10 30 (20 + 10)
+
+**In word definitions:**
+: DUPLICATE-SECOND ( x y -- x y x y ) OVER OVER ;
+
+### Operand Types
+
+OVER operates on all stack cell types:
+- BINARY unsigned (0-65535)
+- BINARY signed (-32768-32767)
+- DECIMAL BCD unsigned (0-9999)
+- DECIMAL BCD signed (-9999-9999)
+- DISPLAY formatted values
+- Addresses
+- Flags
+- Characters
+
+### Numeric Type Conversion Rules
+
+OVER performs no conversion. The copied value is a bit-for-bit copy of the second stack item. Type tags are preserved identically on the original and copy.
+
+### Precision and Scale Handling
+
+OVER preserves exact precision. No rounding, truncation, or scale adjustment occurs. Both copies retain the original precision and scale.
+
+### Overflow/Underflow Behavior
+
+OVER cannot cause arithmetic overflow or underflow since it performs no arithmetic. However, OVER on fewer than two stack items causes data stack underflow.
+
+### Sign Handling
+
+OVER copies the second value exactly, including its sign bit if any. No sign interpretation or modification occurs.
+
+### BCD-Specific Considerations
+
+OVER is safe for BCD values. The copied BCD value retains valid BCD encoding. No digit correction or carry propagation is needed.
+
+### DISPLAY Format Considerations
+
+OVER duplicates the raw value, not its rendered form. If the value is tagged as DISPLAY, both copies retain the DISPLAY tag and will be formatted identically when printed.
+
+### Examples with Different Numeric Types
+
+\ BINARY unsigned
+255 100 OVER . . . \ Prints: 255 100 255
+
+\ BINARY signed
+-128 50 OVER . . . \ Prints: -128 50 -128
+
+\ DECIMAL BCD unsigned
+1234 5678 OVER . . . \ Prints: 1234 5678 1234
+
+\ DECIMAL BCD signed
+-567 890 OVER . . .  \ Prints: -567 890 -567
+
+\ DISPLAY
+1234 5678 OVER . . . \ Prints: 1234 5678 1234 (decimal display)
+
+### Error Conditions and Messages
+
+- Data stack underflow: "STACK UNDERFLOW: OVER requires two items" — occurs when OVER is executed with fewer than two items on the stack.
+- Data stack overflow: "STACK OVERFLOW: OVER cannot push copy" — occurs when stack capacity is exhausted.
+
+### Performance Characteristics
+
+OVER is typically a single memory load instruction. It is among the fastest Forth words, completing in 2-6 cycles on most processors.
+
+### Optimization Opportunities
+
+- When OVER is immediately followed by an operation that consumes both copies, the compiler may fuse into a specialized word.
+- In inner loops, ensure OVER does not cause stack spills by keeping live values minimal.
+- If the copied value is used only for a comparison, consider using a comparison word that preserves the value.
+- Some architectures support a "copy second to top" instruction; use it when available.

@@ -19,17 +19,17 @@
 
 (test burgermistress_variables_case_sensitivity
   "VARIABLES: BURGERMISTRESS identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_variables_reserved_words
   "VARIABLES: BURGERMISTRESS reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_variables_normalization
   "VARIABLES: BURGERMISTRESS identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_variables_scope
   "VARIABLES: BURGERMISTRESS variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

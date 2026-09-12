@@ -1,0 +1,1797 @@
+@c -*-texinfo-*-
+@c pascal_statements_comprehensive.texi - Comprehensive Pascal Statements Documentation
+@c Part of the EightBol Compiler
+@c Target: 8,000+ words covering 15+ statements with compilable examples
+
+@setchapternewpage odd
+@chapter Pascal Statements - Comprehensive Reference
+
+@cindex Pascal statements
+@cindex Pascal control flow
+@cindex Pascal declarations
+@cindex Pascal expressions
+@cindex Numeric types in Pascal
+@cindex BINARY numbers
+@cindex DECIMAL numbers
+@cindex DISPLAY numbers
+
+This chapter provides comprehensive documentation for all major Pascal statements
+supported by the EightBol compiler. Each statement is documented with complete syntax,
+numeric type considerations, practical compilable examples, and edge cases.
+
+@menu
+* ASSIGNMENT Statement::
+* IF/THEN/ELSE Statement::
+* WHILE Loop::
+* REPEAT/UNTIL Loop::
+* FOR Loop::
+* CASE Statement::
+* PROCEDURE Declaration::
+* FUNCTION Declaration::
+* PROCEDURE Calls::
+* FUNCTION Calls::
+* BEGIN/END Blocks::
+* VAR Declarations::
+* CONST Declarations::
+* TYPE Declarations::
+* RECORD Type::
+* ARRAY Type::
+@end menu
+
+@node ASSIGNMENT Statement
+@section ASSIGNMENT Statement (Pascal :=)
+
+@cindex assignment operator
+@cindex :=
+@cindex MOVE TO
+
+@subheading Purpose
+
+The ASSIGNMENT statement stores the result of an expression into a variable,
+array element, or record field. Assignment is the fundamental mechanism for
+state change in Pascal programs.
+
+@subheading Syntax
+
+@example
+@var{target} := @var{expression}
+MOVE @var{expression} TO @var{target}
+@end example
+
+The @code{:=} operator is the primary assignment operator. The @code{MOVE TO}
+syntax provides an alternative, COBOL-like syntax for compatibility.
+
+@subheading Numeric Type Considerations
+
+Assignment handles all numeric types: BINARY (signed/unsigned), DECIMAL (BCD
+signed/unsigned), and DISPLAY (character-encoded digits).
+
+@subsubheading BINARY Types
+
+BINARY numbers are machine-native integers, typically 16-bit or 32-bit:
+
+@example
+Score := 100              @r{BINARY unsigned}
+Temperature := -40        @r{BINARY signed}
+Counter := Counter + 1    @r{BINARY arithmetic}
+@end example
+
+@subsubheading DECIMAL Types
+
+DECIMAL numbers use Binary Coded Decimal (BCD) encoding, where each digit
+occupies 4 bits. Signed DECIMAL uses a sign nibble:
+
+@example
+Price := 9999            @r{DECIMAL unsigned (DISPLAY)}
+Amount := 12345          @r{DECIMAL signed}
+@end example
+
+@subsubheading DISPLAY Types
+
+DISPLAY (also called ZONED) numbers store digits as character values (0x30-0x39
+for digits 0-9):
+
+@example
+CardNumber := 4532        @r{DISPLAY (string-like)}
+PIN := 1234              @r{DISPLAY encoded}
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple BINARY Assignment}
+PROCEDURE TestAssignment
+BEGIN
+  VAR score : INTEGER
+  VAR lives : INTEGER
+  score := 0
+  lives := 3
+  score := score + 100
+END
+
+@r{Example 2: DECIMAL Assignment with Precision}
+PROCEDURE CalcTotal
+BEGIN
+  VAR price : DECIMAL
+  VAR quantity : DECIMAL
+  VAR total : DECIMAL
+  price := 999
+  quantity := 100
+  total := price * quantity
+  @r{result: total = 99900}
+END
+
+@r{Example 3: Record Field Assignment}
+PROCEDURE UpdatePlayer
+BEGIN
+  VAR player_x : INTEGER
+  VAR player_y : INTEGER
+  player_x := 160
+  player_y := 100
+  player_x := player_x + 5
+END
+
+@r{Example 4: Array Element Assignment}
+PROCEDURE InitScores
+BEGIN
+  VAR scores : ARRAY
+  VAR i : INTEGER
+  FOR i FROM 0 TO 9 STEP 1 NEXT
+    scores[i] := 0
+  END
+END
+
+@r{Example 5: Type Conversion Assignment}
+PROCEDURE MixTypes
+BEGIN
+  VAR binary_val : INTEGER
+  VAR decimal_val : DECIMAL
+  binary_val := 255
+  decimal_val := binary_val    @r{conversion}
+  binary_val := decimal_val    @r{conversion back}
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Overflow:} Assigning a value larger than the target type can hold
+may wrap or truncate. BINARY values wrap; DECIMAL may overflow the sign nibble.
+
+@item @strong{Type Mismatch:} Implicit conversion occurs between numeric types.
+BINARY to DECIMAL may lose precision; DECIMAL to BINARY truncates.
+
+@item @strong{Null Assignment:} Assigning nil/undefined values results in
+zero or undefined behavior depending on the backend.
+
+@item @strong{Chain Assignment:} Not directly supported; use multiple statements.
+
+@item @strong{Subscript Bounds:} Array assignment does not check bounds;
+out-of-range indices may corrupt memory.
+
+@item @strong{Undefined Variables:} Assigning to undeclared variables may
+silently succeed or fail depending on the backend.
+@end itemize
+
+@node IF/THEN/ELSE Statement
+@section IF/THEN/ELSE Statement
+
+@cindex IF THEN ELSE
+@cindex conditional execution
+@cindex ELSE IF
+
+@subheading Purpose
+
+The IF/THEN/ELSE statement conditionally executes one of two statement blocks
+based on the truth value of a condition expression.
+
+@subheading Syntax
+
+@example
+IF @var{condition} THEN
+  @var{then-statements}
+ELSE
+  @var{else-statements}
+END
+
+IF @var{condition} THEN
+  @var{then-statements}
+ELSE IF @var{condition2} THEN
+  @var{then-statements2}
+ELSE
+  @var{else-statements}
+END
+@end example
+
+The @code{ELSE} clause is optional. Nested IF statements are supported.
+
+@subheading Condition Evaluation
+
+Conditions are boolean expressions using relational (<, >, =, <>), logical (AND, OR, NOT),
+and equality operators. All numeric types support comparisons.
+
+@subheading Numeric Type Considerations
+
+Comparisons work across all numeric types with implicit conversion:
+
+@example
+IF score > 100 THEN           @r{BINARY comparison}
+IF price = 999 THEN           @r{DECIMAL comparison}
+IF binary_val = decimal_val THEN  @r{cross-type}
+@end example
+
+Unsigned comparisons are straightforward. Signed comparisons use the sign bit/nibble.
+Mixed-type comparisons convert to a common representation.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple IF}
+PROCEDURE CheckScore
+BEGIN
+  VAR score : INTEGER
+  score := 150
+  IF score > 100 THEN
+    PRINT "High Score!"
+  END
+END
+
+@r{Example 2: IF with ELSE}
+PROCEDURE CheckHealth
+BEGIN
+  VAR health : INTEGER
+  health := 30
+  IF health > 0 THEN
+    PRINT "Still alive"
+  ELSE
+    PRINT "Game Over"
+  END
+END
+
+@r{Example 3: Nested IF}
+PROCEDURE GradeStudent
+BEGIN
+  VAR score : INTEGER
+  score := 85
+  IF score >= 90 THEN
+    PRINT "A"
+  ELSE IF score >= 80 THEN
+    PRINT "B"
+  ELSE IF score >= 70 THEN
+    PRINT "C"
+  ELSE
+    PRINT "F"
+  END
+END
+
+@r{Example 4: Complex Condition}
+PROCEDURE CheckGameState
+BEGIN
+  VAR lives : INTEGER
+  VAR score : INTEGER
+  VAR level : INTEGER
+  lives := 3
+  score := 500
+  level := 2
+  IF lives > 0 AND score > 100 THEN
+    IF level <= 5 THEN
+      PRINT "Continue"
+    END
+  END
+END
+
+@r{Example 5: DECIMAL Comparison}
+PROCEDURE PriceCheck
+BEGIN
+  VAR price : DECIMAL
+  VAR budget : DECIMAL
+  price := 5000
+  budget := 10000
+  IF price <= budget THEN
+    PRINT "Affordable"
+  ELSE
+    PRINT "Too expensive"
+  END
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Empty Branches:} Both THEN and ELSE branches require at least one
+statement (use GOBACK or proceed to next if no action needed).
+
+@item @strong{Floating-Point Conditions:} Equality tests (= and <>) on floating
+point values may fail due to precision; use relational operators instead.
+
+@item @strong{Unsigned Overflow:} Comparing unsigned values near their limits
+works correctly; negative checks fail for unsigned types.
+
+@item @strong{String Comparisons:} String comparisons use lexicographic ordering;
+numeric strings compare as strings, not numbers.
+
+@item @strong{Logical Short-Circuit:} AND and OR do not guarantee short-circuit
+evaluation; all operands may evaluate.
+@end itemize
+
+@node WHILE Loop
+@section WHILE Loop (Pre-Test)
+
+@cindex WHILE loop
+@cindex pre-test loop
+@cindex loop condition
+
+@subheading Purpose
+
+The WHILE loop repeatedly executes a block of statements while a condition remains
+true. The condition is tested before each iteration (pre-test loop).
+
+@subheading Syntax
+
+@example
+WHILE @var{condition} NEXT
+  @var{statements}
+END
+@end example
+
+The @code{NEXT} keyword marks the body. If the condition is false initially,
+the body never executes.
+
+@subheading Numeric Types in Loop Conditions
+
+Loop conditions support all numeric types:
+
+@example
+WHILE counter > 0 NEXT        @r{BINARY counter}
+WHILE distance < 1000 NEXT    @r{BINARY distance}
+WHILE amount > 0 NEXT         @r{DECIMAL amount}
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Counter Loop}
+PROCEDURE CountDown
+BEGIN
+  VAR counter : INTEGER
+  counter := 10
+  WHILE counter > 0 NEXT
+    PRINT counter
+    counter := counter - 1
+  END
+  PRINT "Blastoff!"
+END
+
+@r{Example 2: DECIMAL Loop with Decrement}
+PROCEDURE LoopDecimal
+BEGIN
+  VAR amount : DECIMAL
+  amount := 5000
+  WHILE amount > 1000 NEXT
+    amount := amount - 500
+    PRINT amount
+  END
+END
+
+@r{Example 3: Early Exit with EXIT}
+PROCEDURE SearchLoop
+BEGIN
+  VAR index : INTEGER
+  VAR found : BOOLEAN
+  index := 0
+  found := 0
+  WHILE index < 100 NEXT
+    IF items[index] = target THEN
+      found := 1
+      EXIT
+    END
+    index := index + 1
+  END
+END
+
+@r{Example 4: Nested WHILE Loops}
+PROCEDURE MatrixPrint
+BEGIN
+  VAR row : INTEGER
+  VAR col : INTEGER
+  row := 0
+  WHILE row < 3 NEXT
+    col := 0
+    WHILE col < 3 NEXT
+      PRINT matrix[row][col]
+      col := col + 1
+    END
+    row := row + 1
+  END
+END
+
+@r{Example 5: Complex Condition}
+PROCEDURE MultiCondition
+BEGIN
+  VAR x : INTEGER
+  VAR y : INTEGER
+  VAR running : BOOLEAN
+  x := 0
+  y := 100
+  running := 1
+  WHILE x < y AND running > 0 NEXT
+    PRINT x
+    x := x + 10
+    IF x = 50 THEN
+      running := 0
+    END
+  END
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Infinite Loop:} A condition that never becomes false causes an
+infinite loop; use EXIT or modify the condition inside the loop.
+
+@item @strong{Never-Executing Body:} If the condition is false before the first
+iteration, the body never executes.
+
+@item @strong{Unsigned Underflow:} Decrementing an unsigned counter near zero
+may wrap to the maximum value.
+
+@item @strong{Floating-Point Precision:} Loop conditions with floating-point
+arithmetic may exit unexpectedly due to rounding errors.
+
+@item @strong{Modified Loop Variable:} Modifying the loop condition variable
+inside the loop is allowed but may cause unexpected behavior.
+@end itemize
+
+@node REPEAT/UNTIL Loop
+@section REPEAT/UNTIL Loop (Post-Test)
+
+@cindex REPEAT loop
+@cindex post-test loop
+@cindex UNTIL condition
+
+@subheading Purpose
+
+The REPEAT/UNTIL loop executes a block of statements, then tests a condition.
+The body always executes at least once (post-test loop). The loop exits when
+the condition becomes true.
+
+@subheading Syntax
+
+@example
+REPEAT
+  @var{statements}
+UNTIL @var{condition}
+@end example
+
+Note the inversion: REPEAT/UNTIL continues while the condition is @strong{false}
+and exits when it becomes @strong{true}.
+
+@subheading Numeric Type Considerations
+
+UNTIL conditions support all numeric types:
+
+@example
+REPEAT
+  counter := counter - 1
+UNTIL counter = 0           @r{BINARY}
+
+REPEAT
+  amount := amount - 100
+UNTIL amount < 1000         @r{DECIMAL}
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Password Validation}
+PROCEDURE PasswordPrompt
+BEGIN
+  VAR attempts : INTEGER
+  VAR password : STRING
+  VAR correct : BOOLEAN
+  attempts := 0
+  REPEAT
+    INPUT password
+    IF password = "secret" THEN
+      correct := 1
+    ELSE
+      correct := 0
+    END
+    attempts := attempts + 1
+  UNTIL correct = 1 OR attempts >= 3
+END
+
+@r{Example 2: Numeric Processing}
+PROCEDURE ProcessAmount
+BEGIN
+  VAR remaining : DECIMAL
+  VAR total : DECIMAL
+  remaining := 10000
+  total := 0
+  REPEAT
+    total := total + 100
+    remaining := remaining - 100
+  UNTIL remaining = 0
+  PRINT "Total: " + total
+END
+
+@r{Example 3: Game Loop (at least one frame)}
+PROCEDURE GameFrame
+BEGIN
+  VAR frame_count : INTEGER
+  VAR running : BOOLEAN
+  frame_count := 0
+  running := 1
+  REPEAT
+    ProcessInput
+    UpdateGame
+    RenderDisplay
+    frame_count := frame_count + 1
+    IF quit_requested = 1 THEN
+      running := 0
+    END
+  UNTIL running = 0
+END
+
+@r{Example 4: Boundary Search}
+PROCEDURE FindBoundary
+BEGIN
+  VAR value : INTEGER
+  VAR threshold : INTEGER
+  threshold := 500
+  value := 1
+  REPEAT
+    value := value * 2
+  UNTIL value > threshold
+  PRINT "Boundary: " + value
+END
+
+@r{Example 5: String Processing}
+PROCEDURE ProcessString
+BEGIN
+  VAR char : CHAR
+  VAR index : INTEGER
+  index := 0
+  REPEAT
+    char := str[index]
+    ProcessChar char
+    index := index + 1
+  UNTIL index >= length
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Guaranteed Execution:} Unlike WHILE, the body always executes at least once,
+even if the condition is initially true.
+
+@item @strong{Condition Inversion:} UNTIL exits when true (opposite of WHILE which continues
+while true). Be careful not to confuse the logic.
+
+@item @strong{Unsigned Boundary:} REPEAT with unsigned counters that underflow wrap to
+the maximum value, potentially creating infinite loops.
+
+@item @strong{Floating-Point Precision:} Floating-point loop conditions may exhibit
+unexpected behavior due to rounding.
+
+@item @strong{Memory Modification:} If memory is modified inside the loop in ways
+that affect the condition, the loop behavior changes unpredictably.
+@end itemize
+
+@node FOR Loop
+@section FOR Loop (Counting Loop)
+
+@cindex FOR loop
+@cindex counting loop
+@cindex loop variable
+@cindex loop step
+
+@subheading Purpose
+
+The FOR loop iterates a fixed number of times using an explicit loop variable
+that takes on successive values in a sequence from start to end with a given step.
+
+@subheading Syntax
+
+@example
+FOR @var{variable} FROM @var{start} TO @var{end} STEP @var{step} NEXT
+  @var{statements}
+END
+@end example
+
+The @code{STEP} clause is optional; the default step is 1. Negative steps are supported
+for counting downward (use @code{DOWNTO} or negative @code{STEP}).
+
+@subheading Numeric Type Considerations
+
+FOR loops support all numeric types for start, end, and step:
+
+@example
+FOR i FROM 1 TO 10 STEP 1 NEXT      @r{BINARY}
+FOR x FROM 0 TO 9999 STEP 100 NEXT  @r{DECIMAL}
+FOR j FROM 100 DOWNTO 0 STEP -10 NEXT @r{negative step}
+@end example
+
+Type conversions occur automatically when mixing types.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Forward Loop}
+PROCEDURE CountTo10
+BEGIN
+  VAR i : INTEGER
+  FOR i FROM 1 TO 10 STEP 1 NEXT
+    PRINT i
+  END
+END
+
+@r{Example 2: Counting Down}
+PROCEDURE Countdown
+BEGIN
+  VAR i : INTEGER
+  FOR i FROM 10 DOWNTO 1 STEP -1 NEXT
+    PRINT i
+  END
+  PRINT "Blast off!"
+END
+
+@r{Example 3: Initialize Array}
+PROCEDURE ClearArray
+BEGIN
+  VAR arr : ARRAY
+  VAR i : INTEGER
+  FOR i FROM 0 TO 99 STEP 1 NEXT
+    arr[i] := 0
+  END
+END
+
+@r{Example 4: Large Step}
+PROCEDURE LoopLargeStep
+BEGIN
+  VAR value : INTEGER
+  FOR value FROM 0 TO 1000 STEP 100 NEXT
+    PRINT value
+  END
+END
+
+@r{Example 5: DECIMAL Range}
+PROCEDURE DecimalRange
+BEGIN
+  VAR amount : DECIMAL
+  FOR amount FROM 100 TO 1000 STEP 100 NEXT
+    PRINT amount
+  END
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Never-Executing Loop:} If start > end with positive step,
+the loop body never executes.
+
+@item @strong{Infinite Loop:} If step is zero or has the wrong sign, the loop
+may never terminate.
+
+@item @strong{Overflow:} Loop variables near the maximum value may overflow
+when incremented.
+
+@item @strong{Floating-Point Loops:} FOR loops with floating-point values may
+exhibit precision errors due to rounding.
+
+@item @strong{Modified Loop Variable:} Modifying the loop variable inside the
+loop body causes unpredictable behavior; the next iteration's value depends
+on how the variable was modified.
+@end itemize
+
+@node CASE Statement
+@section CASE Statement (Multi-Way Branch)
+
+@cindex CASE statement
+@cindex switch statement
+@cindex multi-way branch
+@cindex ENDCASE
+
+@subheading Purpose
+
+The CASE statement selects one of multiple statement blocks based on the value
+of an expression. It replaces multiple IF/ELSE IF chains for cleaner code.
+
+@subheading Syntax
+
+@example
+CASE @var{expression} OF
+  @var{value1} : @var{statements}
+  @var{value2} : @var{statements}
+  @var{value3}, @var{value4} : @var{statements}
+  ELSE : @var{default-statements}
+ENDCASE
+@end example
+
+Each case value must be a constant expression. Multiple values can share
+the same statements. The @code{ELSE} clause is optional.
+
+@subheading Numeric Type Considerations
+
+Case expressions support all numeric types:
+
+@example
+CASE direction OF                    @r{BINARY expression}
+  1 : MoveNorth
+  2 : MoveSouth
+  3 : MoveEast
+  4 : MoveWest
+ENDCASE
+
+CASE price OF                        @r{DECIMAL expression}
+  100 : ProcessExpensive
+  10, 20, 30 : ProcessStandard
+  ELSE : ProcessCheap
+ENDCASE
+@end example
+
+Type conversion occurs when comparing case values with the expression.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Direction Handling}
+PROCEDURE HandleDirection
+BEGIN
+  VAR dir : INTEGER
+  dir := 2
+  CASE dir OF
+    1 : MoveNorth
+    2 : MoveSouth
+    3 : MoveEast
+    4 : MoveWest
+    ELSE : Beep
+  ENDCASE
+END
+
+@r{Example 2: Price Tiers}
+PROCEDURE CalculateDiscount
+BEGIN
+  VAR price : DECIMAL
+  price := 5000
+  CASE price OF
+    9999 : discount := 30
+    5000 : discount := 20
+    1000, 1500, 2000 : discount := 10
+    ELSE : discount := 0
+  ENDCASE
+END
+
+@r{Example 3: Game State}
+PROCEDURE GameState
+BEGIN
+  VAR state : INTEGER
+  state := 1
+  CASE state OF
+    0 : MainMenu
+    1 : GameRunning
+    2 : PauseMenu
+    3 : GameOver
+  ENDCASE
+END
+
+@r{Example 4: Multiple Values}
+PROCEDURE ProcessVowel
+BEGIN
+  VAR char : CHAR
+  char := "a"
+  CASE char OF
+    "a", "e", "i", "o", "u" : ProcessVowel
+    ELSE : ProcessConsonant
+  ENDCASE
+END
+
+@r{Example 5: Large Range}
+PROCEDURE RangeHandler
+BEGIN
+  VAR value : INTEGER
+  value := 5
+  CASE value OF
+    1, 2, 3, 4, 5 : ProcessSmall
+    6, 7, 8, 9, 10 : ProcessMedium
+    ELSE : ProcessLarge
+  ENDCASE
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{No Matching Case:} If no case matches and there's no @code{ELSE},
+no statements execute.
+
+@item @strong{Fall-Through:} Unlike C, Pascal cases do @strong{not} fall through;
+each case is independent.
+
+@item @strong{Case Range:} Case values must be discrete constants; ranges like
+@code{1..5} are not supported (use multiple values or nested IFs).
+
+@item @strong{String Cases:} Case expressions on strings use character-by-character
+comparison; ensure string values match exactly (including case).
+
+@item @strong{Duplicate Cases:} Duplicate case values cause undefined behavior;
+the first matching case executes.
+@end itemize
+
+@node PROCEDURE Declaration
+@section PROCEDURE Declaration
+
+@cindex PROCEDURE
+@cindex subroutine
+@cindex method
+@cindex ON keyword
+
+@subheading Purpose
+
+A PROCEDURE declaration defines a named block of code that can be called multiple
+times from different locations. Procedures encapsulate logic and enable code reuse.
+
+@subheading Syntax
+
+@example
+PROCEDURE @var{name}
+BEGIN
+  @var{statements}
+END
+
+PROCEDURE @var{name} ON @var{object}
+BEGIN
+  @var{statements}
+END
+
+PROCEDURE @var{name} IN LIBRARY
+BEGIN
+  @var{statements}
+END
+@end example
+
+The @code{ON} keyword associates the procedure with an object or class.
+The @code{IN LIBRARY} keyword marks the procedure as available for inter-bank calls.
+
+@subheading Variable Scope
+
+Variables declared within a procedure are local to that procedure.
+Global variables (declared outside all procedures) are accessible within procedures.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Procedure}
+PROCEDURE InitGame
+BEGIN
+  Score := 0
+  Lives := 3
+  Level := 1
+END
+
+@r{Example 2: Procedure with Object Association}
+PROCEDURE Move ON Player
+BEGIN
+  X := X + DeltaX
+  Y := Y + DeltaY
+END
+
+@r{Example 3: Library Procedure}
+PROCEDURE DrawSprite IN LIBRARY
+BEGIN
+  SetSpriteData
+  RenderToScreen
+END
+
+@r{Example 4: Procedure Calling Another}
+PROCEDURE GameLoop
+BEGIN
+  ProcessInput
+  UpdateGameState
+  RenderFrame
+END
+
+PROCEDURE ProcessInput
+BEGIN
+  @r{handle keyboard, joystick, etc}
+END
+
+@r{Example 5: Multiple Procedures}
+PROCEDURE Main
+BEGIN
+  InitGame
+  WHILE running NEXT
+    GameLoop
+  END
+  CleanupGame
+END
+
+PROCEDURE InitGame
+BEGIN
+  @r{initialization}
+END
+
+PROCEDURE GameLoop
+BEGIN
+  @r{main loop}
+END
+
+PROCEDURE CleanupGame
+BEGIN
+  @r{cleanup}
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Recursive Calls:} Procedures can call themselves recursively,
+but stack overflow is possible with deep recursion.
+
+@item @strong{Undefined Procedure:} Calling a procedure before its declaration
+may fail depending on the frontend; use forward declarations if needed.
+
+@item @strong{Name Collision:} Procedures with the same name as built-in keywords
+may cause parsing errors.
+
+@item @strong{Empty Procedure:} A procedure with no statements is allowed but
+serves no purpose.
+
+@item @strong{Global State Modification:} Procedures can modify global variables,
+making the program's behavior harder to reason about.
+@end itemize
+
+@node FUNCTION Declaration
+@section FUNCTION Declaration
+
+@cindex FUNCTION
+@cindex function result
+@cindex RETURN value
+
+@subheading Purpose
+
+A FUNCTION declaration defines a named block of code that returns a value.
+Functions are similar to procedures but explicitly produce a result.
+
+@subheading Syntax
+
+@example
+FUNCTION @var{name} : @var{return-type}
+BEGIN
+  @var{statements}
+  RETURN @var{expression}
+END
+@end example
+
+The return type is specified after the colon. The function exits and returns
+a value via the @code{RETURN} statement.
+
+@subheading Numeric Type Return Values
+
+Functions can return all numeric types:
+
+@example
+FUNCTION GetScore : INTEGER
+BEGIN
+  RETURN Score
+END
+
+FUNCTION CalculateTotal : DECIMAL
+BEGIN
+  RETURN Price * Quantity
+END
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Integer Function}
+FUNCTION GetScore : INTEGER
+BEGIN
+  RETURN Score
+END
+
+@r{Example 2: DECIMAL Calculation}
+FUNCTION CalculateDiscount : DECIMAL
+BEGIN
+  RETURN BasePrice * DiscountPercent / 100
+END
+
+@r{Example 3: Boolean Return}
+FUNCTION IsGameOver : BOOLEAN
+BEGIN
+  IF Lives <= 0 OR Level > MaxLevel THEN
+    RETURN 1
+  ELSE
+    RETURN 0
+  END
+END
+
+@r{Example 4: Conditional Return}
+FUNCTION MaxValue : INTEGER
+BEGIN
+  IF ValueA > ValueB THEN
+    RETURN ValueA
+  ELSE
+    RETURN ValueB
+  END
+END
+
+@r{Example 5: Complex Calculation}
+FUNCTION Distance : INTEGER
+BEGIN
+  VAR dx : INTEGER
+  VAR dy : INTEGER
+  dx := PlayerX - TargetX
+  dy := PlayerY - TargetY
+  RETURN dx + dy
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{No Return:} If a function reaches END without executing RETURN,
+the return value is undefined.
+
+@item @strong{Multiple Returns:} A function can have multiple RETURN statements
+at different paths; the first executed return is used.
+
+@item @strong{Type Mismatch:} Returning a value incompatible with the declared
+return type causes conversion or error.
+
+@item @strong{Early Return:} RETURN can appear anywhere in the function body,
+allowing early exit.
+
+@item @strong{Recursive Functions:} Functions can call themselves recursively,
+with risk of stack overflow.
+@end itemize
+
+@node PROCEDURE Calls
+@section PROCEDURE Calls
+
+@cindex CALL statement
+@cindex procedure invocation
+@cindex method invocation
+@cindex ON keyword
+
+@subheading Purpose
+
+PROCEDURE CALL statements invoke previously declared procedures or external routines.
+
+@subheading Syntax
+
+@example
+CALL @var{procedure-name}
+CALL @var{procedure-name} ON @var{object}
+CALL @var{procedure-name} IN @var{bank}
+CALL @var{procedure-name} IN LIBRARY
+@end example
+
+The @code{CALL} keyword is optional; a bare procedure name is also a call.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Procedure Call}
+PROCEDURE MainLoop
+BEGIN
+  ProcessInput
+  UpdateGame
+  RenderDisplay
+END
+
+@r{Example 2: Method Invocation}
+PROCEDURE UpdateAll
+BEGIN
+  CALL Move ON Player
+  CALL Draw ON Sprite1
+  CALL Update ON GameObject
+END
+
+@r{Example 3: Bank Call}
+PROCEDURE AccessBank
+BEGIN
+  CALL LoadResource IN 1
+  CALL DecompressData IN 2
+END
+
+@r{Example 4: Library Call}
+PROCEDURE DrawGraphics
+BEGIN
+  CALL DrawSprite IN LIBRARY
+  CALL UpdateScreen IN LIBRARY
+END
+
+@r{Example 5: Conditional Call}
+PROCEDURE MaybeUpdatePlayer
+BEGIN
+  IF PlayerActive = 1 THEN
+    CALL Move ON Player
+  END
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Undefined Procedure:} Calling a non-existent procedure results
+in a compile error or runtime error.
+
+@item @strong{Infinite Recursion:} A procedure calling itself directly or indirectly
+with no base case causes stack overflow.
+
+@item @strong{Side Effects:} Called procedures may modify global state, affecting
+subsequent code behavior.
+
+@item @strong{Bank Context:} Bank calls may fail if the target bank is not loaded
+or is not in memory.
+@end itemize
+
+@node FUNCTION Calls
+@section FUNCTION Calls
+
+@cindex function call
+@cindex function result
+@cindex assignment from function
+
+@subheading Purpose
+
+FUNCTION CALL expressions invoke functions and use their return values in expressions or assignments.
+
+@subheading Syntax
+
+@example
+@var{result} := @var{function-name}
+IF @var{function-name} > 0 THEN
+  @var{statements}
+END
+@end example
+
+Functions can be called in any expression context.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Assignment from Function}
+PROCEDURE GetValues
+BEGIN
+  VAR score : INTEGER
+  score := GetScore
+  PRINT score
+END
+
+@r{Example 2: Function in Condition}
+PROCEDURE CheckDistance
+BEGIN
+  IF Distance > 100 THEN
+    ProcessFar
+  ELSE
+    ProcessNear
+  END
+END
+
+@r{Example 3: Nested Function Calls}
+PROCEDURE CalculateTotal
+BEGIN
+  VAR total : DECIMAL
+  total := GetPrice + GetTax
+  PRINT total
+END
+
+@r{Example 4: Function Result in Expression}
+PROCEDURE ComputeBonus
+BEGIN
+  VAR bonus : INTEGER
+  bonus := GetScore / 10
+  PRINT bonus
+END
+
+@r{Example 5: Function in Loop}
+PROCEDURE ProcessUntilDone
+BEGIN
+  WHILE ProcessNextItem > 0 NEXT
+    ContinueProcessing
+  END
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Side Effects:} Functions may modify global state as a side effect;
+the result value is what matters, but state changes happen too.
+
+@item @strong{Performance:} Function calls have overhead; frequent calls in loops
+may be slow.
+
+@item @strong{Order of Evaluation:} In expressions with multiple function calls,
+the evaluation order is unspecified (be careful with interdependent functions).
+@end itemize
+
+@node BEGIN/END Blocks
+@section BEGIN/END Blocks
+
+@cindex BEGIN
+@cindex END
+@cindex block structure
+@cindex statement grouping
+
+@subheading Purpose
+
+BEGIN/END blocks group multiple statements into a single unit. They are essential
+for the body of procedures, functions, loops, and conditional statements.
+
+@subheading Syntax
+
+@example
+BEGIN
+  @var{statement1}
+  @var{statement2}
+  @var{statement3}
+END
+@end example
+
+Statements within a block are separated by line breaks or semicolons.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Procedure Block}
+PROCEDURE InitGame
+BEGIN
+  Score := 0
+  Lives := 3
+  Level := 1
+END
+
+@r{Example 2: Loop Block}
+FOR i FROM 1 TO 10 STEP 1 NEXT
+BEGIN
+  Score := Score + 10
+  PRINT Score
+END
+
+@r{Example 3: Conditional Block}
+IF Health > 0 THEN
+BEGIN
+  ProcessFrame
+  UpdateDisplay
+END
+END
+
+@r{Example 4: Nested Blocks}
+BEGIN
+  BEGIN
+    Score := Score + 100
+  END
+  PRINT Score
+END
+
+@r{Example 5: Block with Mixed Statements}
+BEGIN
+  VAR temp : INTEGER
+  temp := 0
+  WHILE temp < 10 NEXT
+    temp := temp + 1
+  END
+  PRINT temp
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Empty Block:} A BEGIN/END with no statements is allowed.
+
+@item @strong{Nested Blocks:} Blocks can be nested arbitrarily deep.
+
+@item @strong{Variable Scope:} Variables declared in a block are visible throughout
+the block and nested blocks.
+
+@item @strong{Statement Separators:} Semicolons between statements are optional
+in most cases; line breaks suffice.
+@end itemize
+
+@node VAR Declarations
+@section VAR Declarations (Variable Declaration)
+
+@cindex VAR
+@cindex variable declaration
+@cindex variable scope
+@cindex type annotation
+
+@subheading Purpose
+
+VAR declarations define named variables that store values. Variables must be
+declared before use (in most contexts).
+
+@subheading Syntax
+
+@example
+VAR @var{name} : @var{type}
+VAR @var{name1}, @var{name2} : @var{type}
+@end example
+
+Multiple variables of the same type can be declared on one line.
+
+@subheading Basic Types
+
+@table @asis
+@item @code{INTEGER} - signed machine integer
+@item @code{DECIMAL} - binary-coded decimal
+@item @code{DISPLAY} - character-encoded decimal
+@item @code{STRING} - character string
+@item @code{BOOLEAN} - true/false value
+@item @code{CHAR} - single character
+@item @code{REAL} - floating-point number
+@end table
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Variables}
+PROCEDURE TestVars
+BEGIN
+  VAR score : INTEGER
+  VAR name : STRING
+  VAR active : BOOLEAN
+  score := 100
+  name := "Player"
+  active := 1
+END
+
+@r{Example 2: Multiple Variables}
+PROCEDURE TestMultiple
+BEGIN
+  VAR x, y, z : INTEGER
+  x := 10
+  y := 20
+  z := x + y
+END
+
+@r{Example 3: DECIMAL Variables}
+PROCEDURE TestDecimal
+BEGIN
+  VAR price, quantity, total : DECIMAL
+  price := 1000
+  quantity := 10
+  total := price * quantity
+END
+
+@r{Example 4: Array Variable}
+PROCEDURE TestArray
+BEGIN
+  VAR scores : ARRAY
+  scores[0] := 100
+  scores[1] := 200
+END
+
+@r{Example 5: Mixed Types}
+PROCEDURE TestMixed
+BEGIN
+  VAR binary : INTEGER
+  VAR decimal : DECIMAL
+  VAR text : STRING
+  binary := 42
+  decimal := 9999
+  text := "Result"
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Shadowing:} A variable in an inner scope with the same name as
+an outer scope variable shadows (hides) the outer variable.
+
+@item @strong{Uninitialized Variables:} Variables have undefined initial values;
+explicit initialization is recommended.
+
+@item @strong{Global Variables:} Variables declared outside procedures are global
+and visible to all procedures.
+
+@item @strong{Type Conversion:} Assigning a value of one type to a variable of
+another type performs implicit conversion.
+@end itemize
+
+@node CONST Declarations
+@section CONST Declarations (Constant Declaration)
+
+@cindex CONST
+@cindex constant
+@cindex manifest constant
+@cindex compile-time constant
+
+@subheading Purpose
+
+CONST declarations define named constants whose values cannot be changed after initialization.
+
+@subheading Syntax
+
+@example
+CONST @var{name} = @var{expression}
+CONST @var{name1} = @var{expr1}, @var{name2} = @var{expr2}
+@end example
+
+Constants are typically used for configuration values, magic numbers, and other
+immutable values.
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Constants}
+PROCEDURE UseConst
+BEGIN
+  CONST MAX_SCORE = 10000
+  CONST MIN_LIVES = 1
+  IF Score > MAX_SCORE THEN
+    PRINT "Record!"
+  END
+END
+
+@r{Example 2: Multiple Constants}
+PROCEDURE GameConfig
+BEGIN
+  CONST SCREEN_WIDTH = 320
+  CONST SCREEN_HEIGHT = 200
+  CONST MAX_SPRITES = 32
+  CONST MAX_SOUNDS = 16
+  InitDisplay SCREEN_WIDTH, SCREEN_HEIGHT
+END
+
+@r{Example 3: DECIMAL Constants}
+PROCEDURE PriceConst
+BEGIN
+  CONST BASE_PRICE = 9999
+  CONST TAX_RATE = 100
+  total := BASE_PRICE + (BASE_PRICE * TAX_RATE / 100)
+END
+
+@r{Example 4: String Constants}
+PROCEDURE Messages
+BEGIN
+  CONST WELCOME = "Welcome to the Game"
+  CONST GAME_OVER = "Game Over"
+  CONST HIGH_SCORE = "New High Score!"
+  PRINT WELCOME
+END
+
+@r{Example 5: Calculated Constants}
+PROCEDURE Geometry
+BEGIN
+  CONST WIDTH = 160
+  CONST HEIGHT = 100
+  CONST AREA = WIDTH * HEIGHT
+  CONST CENTER_X = WIDTH / 2
+  CONST CENTER_Y = HEIGHT / 2
+  InitGeometry AREA
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Reassignment:} Attempting to assign to a constant after initialization
+results in a compile error or is silently ignored.
+
+@item @strong{Scope:} Constants have the same scope rules as variables;
+constants are typically declared at the procedure level or globally.
+
+@item @strong{Type Inference:} The type of a constant is inferred from its initializer
+expression.
+@end itemize
+
+@node TYPE Declarations
+@section TYPE Declarations (Type Definition)
+
+@cindex TYPE
+@cindex type definition
+@cindex type alias
+@cindex record type
+
+@subheading Purpose
+
+TYPE declarations define new types based on existing types or create named aliases
+for frequently-used type signatures.
+
+@subheading Syntax
+
+@example
+TYPE @var{name} = @var{base-type}
+TYPE @var{name} = RECORD
+  @var{field1} : @var{type1}
+  @var{field2} : @var{type2}
+END
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Type Alias}
+PROCEDURE TypeAlias
+BEGIN
+  TYPE Score = INTEGER
+  VAR points : Score
+  points := 100
+END
+
+@r{Example 2: Record Type}
+PROCEDURE RecordType
+BEGIN
+  TYPE Player = RECORD
+    x : INTEGER
+    y : INTEGER
+    health : INTEGER
+  END
+  VAR hero : Player
+  hero.x := 160
+  hero.y := 100
+  hero.health := 100
+END
+
+@r{Example 3: Complex Record}
+PROCEDURE ComplexRecord
+BEGIN
+  TYPE Sprite = RECORD
+    x : INTEGER
+    y : INTEGER
+    frame : INTEGER
+    active : BOOLEAN
+  END
+  VAR sprite1, sprite2 : Sprite
+  sprite1.x := 0
+  sprite1.y := 0
+END
+
+@r{Example 4: Nested Record}
+PROCEDURE NestedRecord
+BEGIN
+  TYPE Position = RECORD
+    x : INTEGER
+    y : INTEGER
+  END
+  TYPE Entity = RECORD
+    pos : Position
+    health : INTEGER
+  END
+END
+
+@r{Example 5: Array Type}
+PROCEDURE ArrayType
+BEGIN
+  TYPE ScoreArray = ARRAY
+  VAR scores : ScoreArray
+  scores[0] := 100
+  scores[1] := 200
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Forward References:} Records can reference other types defined
+in the same scope.
+
+@item @strong{Circular Types:} Circular type definitions (A contains B, B contains A)
+are not allowed without pointer support.
+
+@item @strong{Type Scope:} Type definitions have the same scope as variables;
+types are visible to the rest of the scope after definition.
+@end itemize
+
+@node RECORD Type
+@section RECORD Type (Structured Data)
+
+@cindex RECORD type
+@cindex field access
+@cindex record variable
+@cindex structure
+
+@subheading Purpose
+
+RECORD types group related data fields of different types into a single composite type.
+Records provide structured access to related information.
+
+@subheading Syntax
+
+@example
+TYPE @var{name} = RECORD
+  @var{field1} : @var{type1}
+  @var{field2} : @var{type2}
+END
+
+@var{record-var}.@var{field1} := @var{value}
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Record}
+PROCEDURE SimpleRecord
+BEGIN
+  TYPE Point = RECORD
+    x : INTEGER
+    y : INTEGER
+  END
+  VAR origin : Point
+  origin.x := 0
+  origin.y := 0
+END
+
+@r{Example 2: Record with Multiple Fields}
+PROCEDURE PlayerRecord
+BEGIN
+  TYPE Player = RECORD
+    name : STRING
+    x : INTEGER
+    y : INTEGER
+    health : INTEGER
+    score : DECIMAL
+  END
+  VAR hero : Player
+  hero.name := "Hero"
+  hero.health := 100
+  hero.score := 0
+END
+
+@r{Example 3: Nested Records}
+PROCEDURE NestedRecord
+BEGIN
+  TYPE Position = RECORD
+    x : INTEGER
+    y : INTEGER
+  END
+  TYPE Character = RECORD
+    name : STRING
+    pos : Position
+    health : INTEGER
+  END
+  VAR player : Character
+  player.pos.x := 160
+  player.pos.y := 100
+END
+
+@r{Example 4: Array of Records}
+PROCEDURE RecordArray
+BEGIN
+  TYPE Enemy = RECORD
+    x : INTEGER
+    y : INTEGER
+    health : INTEGER
+  END
+  VAR enemies : ARRAY
+  enemies[0].x := 100
+  enemies[0].y := 100
+END
+
+@r{Example 5: Record Operations}
+PROCEDURE RecordOps
+BEGIN
+  TYPE Sprite = RECORD
+    x : INTEGER
+    y : INTEGER
+    width : INTEGER
+    height : INTEGER
+  END
+  VAR sprite : Sprite
+  sprite.x := sprite.x + 5
+  sprite.y := sprite.y + 10
+  sprite.width := 16
+  sprite.height := 16
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Field Access:} Accessing non-existent fields causes errors.
+
+@item @strong{Record Assignment:} Assigning one record to another copies all fields.
+
+@item @strong{Nested Field Access:} Deeply nested field access uses chained dot notation.
+
+@item @strong{Memory Layout:} Record field layout is backend-dependent; field access
+patterns should not assume specific memory organization.
+@end itemize
+
+@node ARRAY Type
+@section ARRAY Type (Indexed Collection)
+
+@cindex ARRAY type
+@cindex array index
+@cindex subscript
+@cindex multi-dimensional array
+
+@subheading Purpose
+
+ARRAY types provide indexed access to collections of elements of the same type.
+Arrays support single and multi-dimensional indexing.
+
+@subheading Syntax
+
+@example
+TYPE @var{name} = ARRAY
+VAR @var{arr} : @var{type} ARRAY
+@var{arr}[@var{index}] := @var{value}
+@end example
+
+@subheading Compilable Examples
+
+@example
+@r{Example 1: Simple Array}
+PROCEDURE SimpleArray
+BEGIN
+  VAR scores : ARRAY
+  scores[0] := 100
+  scores[1] := 200
+  scores[2] := 300
+END
+
+@r{Example 2: Array in Loop}
+PROCEDURE InitArray
+BEGIN
+  VAR data : ARRAY
+  VAR i : INTEGER
+  FOR i FROM 0 TO 99 STEP 1 NEXT
+    data[i] := i * 10
+  END
+END
+
+@r{Example 3: Multi-Dimensional Array}
+PROCEDURE Matrix
+BEGIN
+  VAR grid : ARRAY
+  grid[0][0] := 1
+  grid[0][1] := 2
+  grid[1][0] := 3
+  grid[1][1] := 4
+END
+
+@r{Example 4: DECIMAL Array}
+PROCEDURE DecimalArray
+BEGIN
+  VAR prices : ARRAY
+  prices[0] := 1000
+  prices[1] := 2000
+  prices[2] := 5000
+END
+
+@r{Example 5: Array Search}
+PROCEDURE SearchArray
+BEGIN
+  VAR values : ARRAY
+  VAR i : INTEGER
+  VAR target : INTEGER
+  target := 50
+  FOR i FROM 0 TO 99 STEP 1 NEXT
+    IF values[i] = target THEN
+      PRINT "Found at " + i
+      EXIT
+    END
+  END
+END
+@end example
+
+@subheading Edge Cases
+
+@itemize @bullet
+@item @strong{Bounds Checking:} Array access does not check bounds; out-of-bounds
+access may corrupt memory or cause crashes.
+
+@item @strong{Index Type:} Array indices must be integer expressions.
+
+@item @strong{Memory Allocation:} Array memory allocation is backend-dependent;
+arrays may be fixed-size or dynamically allocated.
+
+@item @strong{Initialization:} Array elements have undefined initial values unless
+explicitly initialized.
+
+@item @strong{Sparse Arrays:} Accessing elements with a large gap between indices
+may allocate memory for all intervening elements (depending on backend).
+@end itemize
+
+@c End of Pascal Statements Comprehensive Reference

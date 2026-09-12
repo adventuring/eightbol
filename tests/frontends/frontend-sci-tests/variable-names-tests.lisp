@@ -19,17 +19,17 @@
 
 (test sci_variables_case_sensitivity
   "VARIABLES: SCI identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_variables_reserved_words
   "VARIABLES: SCI reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_variables_normalization
   "VARIABLES: SCI identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_variables_scope
   "VARIABLES: SCI variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

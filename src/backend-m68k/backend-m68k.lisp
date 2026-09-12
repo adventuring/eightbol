@@ -30,7 +30,11 @@
 
 (defmethod compile-to-assembly (ast (cpu (eql :m68k)) output-stream)
   (unless (and (listp ast) (eq (first ast) :program))
-    (error "EIGHTBOL/m68k: expected :program AST node, got ~s" (first ast)))
+    (error 'backend-ast-error
+      :cpu :m68k
+      :message (format nil "expected :program AST node, got ~s" (first ast))
+      :expected :program
+      :actual (first ast)))
   (let* ((class-id (getf (rest ast) :class-id))
          (methods  (getf (rest ast) :methods)))
     (multiple-value-bind (slot-table type-table const-table service-bank-table usage-table sign-table
@@ -97,13 +101,19 @@
   (declare (ignore ast-node-data))
   (if *m68k-break-label*
       (format *output-stream* "~&~10tjmp ~a~%" *m68k-break-label*)
-      (error "BREAK statement outside of PERFORM loop")))
+      (error 'backend-loop-control-error
+        :cpu :m68k
+        :message "BREAK statement outside of PERFORM loop"
+        :statement-type "BREAK")))
   
 (def-m68k-statement :continue
   (declare (ignore ast-node-data))
   (if *m68k-continue-label*
       (format *output-stream* "~&~10tjmp ~a~%" *m68k-continue-label*)
-      (error "CONTINUE statement outside of PERFORM loop")))
+      (error 'backend-loop-control-error
+        :cpu :m68k
+        :message "CONTINUE statement outside of PERFORM loop"
+        :statement-type "CONTINUE")))
 
 (def-m68k-statement :stop-run
   (format *output-stream* "~&~10trts"))
@@ -188,8 +198,10 @@
                 (princ-to-string text)))))
 
 (def-m68k-statement :copy
-  (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
-         (getf ast-node-data :name)))
+  (error 'backend-copy-not-expanded
+    :cpu :m68k
+    :message "COPY should have been expanded at lex time"
+    :copy-name (getf ast-node-data :name)))
 
 (def-m68k-statement :divide
   (let* ((divisor (getf ast-node-data :divisor))
@@ -251,7 +263,11 @@
     (format *output-stream* "~&~10tjsr     Method~a~a"
             (m68k-symbol parent-class)
             (m68k-symbol (format nil "~a" *method-id*)))
-    (error "Can't figure out parent class of ~a" *class-id*)))
+    (error 'backend-symbol-not-found
+      :cpu :m68k
+      :message (format nil "Cannot determine parent class for ~a" *class-id*)
+      :symbol-name *class-id*
+      :symbol-type :class)))
 
 (def-m68k-statement :shift-left
   (let* ((target (getf ast-node-data :target))
@@ -503,7 +519,11 @@
        (format *output-stream* "~&~a:" label-cond2)
        (compile-m68k-condition (third condition) branch-label)
        (format *output-stream* "~&~a:" label-skip)))
-    (t (error "EIGHTBOL: condition ~s not implemented" condition))))
+    (t (error 'backend-unsupported-feature
+         :cpu :m68k
+         :message "Condition type not supported"
+         :feature-name "condition"
+         :reason (format nil "~s" condition)))))
 
 ;;; EVALUATE
 

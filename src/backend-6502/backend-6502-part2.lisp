@@ -332,7 +332,7 @@ emit-6502-load-expression."
      (format out "~%~10Ttax"))
     ((and (slot-of-expression expression) (6502-use-undocumented-p))
      (let ((so (slot-of-expression expression)))
-       (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest so)))
+       (format out "~%~10Tldy #~a" (apply #'slot-symbol (rest so)))
        (format out "~%~10Tlax (Self), y")
        (setf *6502-accumulator-expression* so
 	   *6502-x-index-expression* so)))
@@ -375,23 +375,23 @@ treat as bare NAME (immediate lda #), not an instance slot."
 
       ((and (expression-constant-p expression) (= 1 (expression-operand-width expression)))
        (with-accumulator-value (expression)
-         (format out "~%~10Tlda # ~a" (expression-constant-value expression)))
+         (format out "~%~10Tlda #~a" (expression-constant-value expression)))
        (return-from emit-6502-load-expression))
 
-      ((and (listp expression) (eq (first expression) :bit-or))
-       (with-accumulator-value (expression)
-         (emit-6502-load-expression out (second expression))
-         (emit-6502-alu-with-memory-rhs out "ora" (third expression) class-id)))
+       ((and (listp expression) (eq (first expression) :bit-or))
+        (with-accumulator-value (expression)
+          (emit-6502-load-expression out (second expression) class-id)
+          (emit-6502-alu-with-memory-rhs out "ora" (third expression) class-id)))
 
-      ((and (listp expression) (eq (first expression) :bit-and))
-       (with-accumulator-value (expression)
-         (emit-6502-load-expression out (second expression))
-         (emit-6502-alu-with-memory-rhs out "and" (third expression) class-id)))
+       ((and (listp expression) (eq (first expression) :bit-and))
+        (with-accumulator-value (expression)
+          (emit-6502-load-expression out (second expression) class-id)
+          (emit-6502-alu-with-memory-rhs out "and" (third expression) class-id)))
 
-      ((and (listp expression) (eq (first expression) :bit-xor))
-       (with-accumulator-value (expression)
-         (emit-6502-load-expression out (second expression))
-         (emit-6502-alu-with-memory-rhs out "eor" (third expression) class-id)))
+       ((and (listp expression) (eq (first expression) :bit-xor))
+        (with-accumulator-value (expression)
+          (emit-6502-load-expression out (second expression) class-id)
+          (emit-6502-alu-with-memory-rhs out "eor" (third expression) class-id)))
 
       ;; Arithmetic: a + b
       ((and (listp expression) (eq (first expression) :add))
@@ -430,7 +430,7 @@ treat as bare NAME (immediate lda #), not an instance slot."
       ;; Slot OF Object -- indexed indirect via pointer
       ((slot-of-expression expression)
        (let ((so (slot-of-expression expression)))
-         (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest so)))
+         (format out "~%~10Tldy #~a" (apply #'slot-symbol (rest so)))
          (with-accumulator-value (so)
 	 (format out "~%~10Tlda (~a), y" (to-identifier (third so))))))
 
@@ -483,17 +483,17 @@ treat as bare NAME (immediate lda #), not an instance slot."
       ((and (listp expression) (eq (first expression) :low))
        (if (and (listp (second expression)) (eql :address-of (first (second expression))))
 	 (with-accumulator-value (expression)
-	   (format out "~%~10Tlda # <~a" (to-identifier (second (second expression)))))
+	   (format out "~%~10Tlda #<~a" (to-identifier (second (second expression)))))
 	 (with-accumulator-value (expression)
-	   (format out "~%~10Tlda # <~a" (to-identifier (second expression))))))
+	   (format out "~%~10Tlda #<~a" (to-identifier (second expression))))))
 
       ;; High value
       ((and (listp expression) (eq (first expression) :high))
        (if (and (listp (second expression)) (eql :address-of (first (second expression))))
 	 (with-accumulator-value (expression)
-	   (format out "~%~10Tlda # >~a" (to-identifier (second (second expression)))))
+	   (format out "~%~10Tlda #>~a" (to-identifier (second (second expression)))))
 	 (with-accumulator-value (expression)
-	   (format out "~%~10Tlda # >~a" (to-identifier (second expression))))))
+	   (format out "~%~10Tlda #>~a" (to-identifier (second expression))))))
 
       ;; literal expression (constant for assembler to evaluate)
       ((and (listp expression) (eq (first expression) :literal))
@@ -512,18 +512,24 @@ treat as bare NAME (immediate lda #), not an instance slot."
       ;; Numeric literal
       ((numberp expression)
        (with-accumulator-value (expression)
-         (format out "~%~10Tlda # $~2,'0x" expression)))
+         (format out "~%~10Tlda #$~2,'0x" expression)))
 
-      ;; Bare data name: constants immediate; instance slots via (Self),y; else absolute (bare-data)
-      ((stringp expression)
-       (if (expression-constant-p expression)
-	 (with-accumulator-value (expression)
-	   (format out "~%~10Tlda # ~a" (expression-constant-value expression)))
-	 (with-accumulator-value (expression)
-	   (format out "~%~10Tlda ~a" (to-identifier expression)))))
+       ;; Bare data name: constants immediate; instance slots via (Self),y; else absolute (bare-data)
+       ((stringp expression)
+        (cond
+           ((expression-constant-p expression)
+            (with-accumulator-value (expression)
+              (format out "~%~10Tlda #~a" (expression-constant-value expression))))
+          ((and class-id (implicit-instance-slot-p expression class-id))
+           ;; Instance slot of current class — load via (Self),y
+           (with-accumulator-value (expression)
+             (format out "~%~10Tldy #~a" (slot-symbol expression "Self"))
+             (format out "~%~10Tlda (Self), y")))
+          (t
+           ;; Bare global name
+           (with-accumulator-value (expression)
+             (format out "~%~10Tlda ~a" (to-identifier expression))))))
 
-       (t
-        (with-accumulator-value (expression)
-          (format out "~%~10Tlda ~a" (emit-6502-value expression)))))))
-
-
+      (t
+       (with-accumulator-value (expression)
+         (format out "~%~10Tlda ~a" (emit-6502-value expression)))))))

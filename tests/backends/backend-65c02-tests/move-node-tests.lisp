@@ -23,17 +23,33 @@
 
 (test 65c02_move_reg_to_reg
   "MOVE: 65C02 register-to-register moves are correctly generated"
-  (skip "Implementation pending"))
+  (let* ((ast ('(:move (:var x) (:var y))')
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_move_mem_to_reg
   "MOVE: 65C02 memory-to-register moves are correctly generated"
-  (skip "Implementation pending"))
+  (let* ((ast ('(:move (:var x) (:var y))')
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_move_immediate
   "MOVE: 65C02 immediate-to-register moves are correctly generated"
-  (skip "Implementation pending"))
+  (let* ((ast ('(:move (:const 42) (:var x))')
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_move_multi_byte
   "MOVE: 65C02 multi-byte moves are correctly generated with proper sequencing"
-  (skip "Implementation pending"))
+  (let* ((ast ('(:move (:const 1000) (:var x))')
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

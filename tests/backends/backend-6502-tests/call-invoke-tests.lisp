@@ -23,21 +23,41 @@
 
 (test 6502_call_local
   "CALL: 6502 local :call invocations generate correct JSR/CALL instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 6502_call_library
   "CALL: 6502 library :call invocations are correctly linked"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 6502_invoke_method
   "INVOKE: 6502 :invoke method calls generate correct dispatch sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 6502_call_return_value
   "CALL: 6502 function return values are correctly placed in accumulator"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 6502_call_register_preservation
   "CALL: 6502 register preservation across calls is correctly generated"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

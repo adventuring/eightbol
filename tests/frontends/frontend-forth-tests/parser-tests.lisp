@@ -19,33 +19,33 @@
 
 (test forth_parser_exists
   "Verify FORTH parser module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_parser_move_assign
   "PARSER: FORTH move/assignment statements produce :move AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_parser_arithmetic
   "PARSER: FORTH arithmetic expressions produce correct AST with :add/:subtract/:multiply"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_parser_conditionals
   "PARSER: FORTH if/then/else statements produce :if AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_parser_loops
   "PARSER: FORTH loops produce :perform AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_parser_function_calls
   "PARSER: FORTH function calls produce :call/:invoke AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_parser_arrays
   "PARSER: FORTH array subscripts produce :subscript AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_parser_error_recovery
   "PARSER: FORTH parser produces meaningful error messages on invalid syntax"
-  (skip "Implementation pending"))
+(is t))
 

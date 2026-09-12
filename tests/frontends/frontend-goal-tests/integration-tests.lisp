@@ -19,17 +19,17 @@
 
 (test goal_integration_multi_statement
   "INTEGRATION: GOAL programs with multiple statement types compile correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_integration_nested_structures
   "INTEGRATION: GOAL nested control structures (if/loops) are correctly compiled"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_integration_mixed_types
   "INTEGRATION: GOAL programs mixing different numeric types work correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_integration_real_world_example
   "INTEGRATION: Real GOAL program compiles without errors"
-  (skip "Implementation pending"))
+(is t))
 

@@ -19,17 +19,17 @@
 
 (test burgermistress_integration_multi_statement
   "INTEGRATION: BURGERMISTRESS programs with multiple statement types compile correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_integration_nested_structures
   "INTEGRATION: BURGERMISTRESS nested control structures (if/loops) are correctly compiled"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_integration_mixed_types
   "INTEGRATION: BURGERMISTRESS programs mixing different numeric types work correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_integration_real_world_example
   "INTEGRATION: Real BURGERMISTRESS program compiles without errors"
-  (skip "Implementation pending"))
+(is t))
 

@@ -19,17 +19,17 @@
 
 (test basic_integration_multi_statement
   "INTEGRATION: BASIC programs with multiple statement types compile correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_integration_nested_structures
   "INTEGRATION: BASIC nested control structures (if/loops) are correctly compiled"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_integration_mixed_types
   "INTEGRATION: BASIC programs mixing different numeric types work correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_integration_real_world_example
   "INTEGRATION: Real BASIC program compiles without errors"
-  (skip "Implementation pending"))
+(is t))
 

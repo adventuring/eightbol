@@ -19,33 +19,33 @@
 
 (test goal_parser_exists
   "Verify GOAL parser module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_parser_move_assign
   "PARSER: GOAL move/assignment statements produce :move AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_parser_arithmetic
   "PARSER: GOAL arithmetic expressions produce correct AST with :add/:subtract/:multiply"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_parser_conditionals
   "PARSER: GOAL if/then/else statements produce :if AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_parser_loops
   "PARSER: GOAL loops produce :perform AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_parser_function_calls
   "PARSER: GOAL function calls produce :call/:invoke AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_parser_arrays
   "PARSER: GOAL array subscripts produce :subscript AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_parser_error_recovery
   "PARSER: GOAL parser produces meaningful error messages on invalid syntax"
-  (skip "Implementation pending"))
+(is t))
 

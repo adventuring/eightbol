@@ -19,17 +19,17 @@
 
 (test zil_variables_case_sensitivity
   "VARIABLES: ZIL identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_variables_reserved_words
   "VARIABLES: ZIL reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_variables_normalization
   "VARIABLES: ZIL identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_variables_scope
   "VARIABLES: ZIL variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

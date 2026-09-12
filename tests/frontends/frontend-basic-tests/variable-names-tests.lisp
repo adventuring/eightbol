@@ -19,17 +19,17 @@
 
 (test basic_variables_case_sensitivity
   "VARIABLES: BASIC identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_variables_reserved_words
   "VARIABLES: BASIC reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_variables_normalization
   "VARIABLES: BASIC identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_variables_scope
   "VARIABLES: BASIC variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

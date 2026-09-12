@@ -6,7 +6,7 @@
   :version "0.1.0"
   :depends-on (:eightbol :fiveam)
   :components ((:module "backend-z80"
-                :pathname "."
+                :pathname "backend-z80-tests"
                 :components ((:file "package")
                              (:file "move-node-tests" :depends-on ("package"))
                              (:file "arithmetic-node-tests" :depends-on ("package"))

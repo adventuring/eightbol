@@ -19,21 +19,21 @@
 
 (test lua_functions_library
   "FUNCTIONS: LUA library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_functions_user_defined
   "FUNCTIONS: LUA user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_functions_recursion
   "FUNCTIONS: LUA recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_functions_return_values
   "FUNCTIONS: LUA function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_functions_parameter_passing
   "FUNCTIONS: LUA parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

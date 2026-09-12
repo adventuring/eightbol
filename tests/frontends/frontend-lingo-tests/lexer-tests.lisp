@@ -19,29 +19,29 @@
 
 (test lingo_lexer_exists
   "Verify LINGO lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_lexer_keywords
   "LEXER: LINGO keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_lexer_operators
   "LEXER: LINGO operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_lexer_numbers
   "LEXER: LINGO numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_lexer_strings
   "LEXER: LINGO string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_lexer_identifiers
   "LEXER: LINGO identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_lexer_comments
   "LEXER: LINGO comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

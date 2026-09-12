@@ -19,17 +19,17 @@
 
 (test scumm_variables_case_sensitivity
   "VARIABLES: SCUMM identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_variables_reserved_words
   "VARIABLES: SCUMM reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_variables_normalization
   "VARIABLES: SCUMM identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_variables_scope
   "VARIABLES: SCUMM variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

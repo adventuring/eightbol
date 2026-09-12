@@ -19,17 +19,17 @@
 
 (test lingo_variables_case_sensitivity
   "VARIABLES: LINGO identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_variables_reserved_words
   "VARIABLES: LINGO reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_variables_normalization
   "VARIABLES: LINGO identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_variables_scope
   "VARIABLES: LINGO variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

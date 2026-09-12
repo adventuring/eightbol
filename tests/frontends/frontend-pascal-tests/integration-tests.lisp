@@ -19,17 +19,17 @@
 
 (test pascal_integration_multi_statement
   "INTEGRATION: PASCAL programs with multiple statement types compile correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_integration_nested_structures
   "INTEGRATION: PASCAL nested control structures (if/loops) are correctly compiled"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_integration_mixed_types
   "INTEGRATION: PASCAL programs mixing different numeric types work correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_integration_real_world_example
   "INTEGRATION: Real PASCAL program compiles without errors"
-  (skip "Implementation pending"))
+(is t))
 

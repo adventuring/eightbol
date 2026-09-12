@@ -1,0 +1,780 @@
+@node Fountain Frontend Full Documentation
+@chapter Fountain Frontend Language - Complete Reference Manual
+
+@cindex Fountain frontend
+@cindex Screenplay language
+@cindex Canonical AST coverage
+@cindex Numeric type conversion
+
+The Fountain frontend is a screenplay language compiler for the EIGHTBOL compiler system. It provides full support for all 56 canonical EIGHTBOL AST node types, enabling compilation of interactive fiction, adventure game scripts, and dialogue-driven narratives to multiple target CPUs.
+
+This document is the complete, exhaustive reference for the Fountain language syntax. It documents every directive type, every variant of every directive, the formal BNF grammar for each, all keyword variations, all clause combinations, all operand types, and the numeric type conversion rules that govern how Fountain handles BINARY, DECIMAL BCD, and DISPLAY numeric representations.
+
+@section Overview
+
+@subsection Language Purpose
+
+Fountain is a human-readable screenplay format designed for game dialogue, cutscenes, and narrative scripts. The EIGHTBOL Fountain frontend transpiles Fountain screenplay syntax to canonical EIGHTBOL AST, ensuring full compatibility with the compiler backend.
+
+@subsection Design Philosophy
+
+The frontend operates in three phases:
+@enumerate
+@item @strong{Lexical Analysis}: Tokenize source into meaningful units
+@item @strong{Parsing}: Build Fountain-specific AST with screenplay-domain nodes
+@item @strong{Canonicalization}: Transform Fountain nodes to canonical EIGHTBOL form
+@end enumerate
+
+@section Lexical Syntax
+
+@subsection Whitespace and Comments
+
+Fountain ignores insignificant whitespace and supports line comments:
+@example
+# This is a comment to end of line
+INT TAVERN - The Local Tavern    # Can also comment here
+@end example
+
+@subsection Keywords
+
+Reserved keywords (case-insensitive):
+@itemize
+@item Scene headers: @code{INT}, @code{EXT}, @code{BLOB}
+@item Transitions: @code{FADE}, @code{CUT}, @code{DISSOLVE}, @code{WIPE}
+@item Actions: @code{ENTER}, @code{LOOKS}, @code{FACES}, @code{GESTURES}, @code{ANIMATES}
+@item Camera: @code{TRUCK}, @code{DOLLY}, @code{CLOSE}, @code{FRAME}
+@item Timing: @code{BEAT}, @code{BEATS}, @code{WAIT}, @code{PAUSE}, @code{SECONDS}
+@item Control: @code{WHEN}, @code{UNLESS}, @code{THEN}, @code{PRINT}, @code{INPUT}
+@item Special: @code{NULL}, @code{SELF}
+@end itemize
+
+@subsection Token Types
+
+@strong{Identifiers}: @code{Character}, @code{HeroName}, @code{LocationName}
+Identifiers are normalized to PascalCase during canonicalization.
+
+@strong{String Literals}: @code{"quoted text"}
+@strong{Numbers}: Decimal, hex (@code{0xABCD}), octal (@code{0o755}), binary (@code{0b1010})
+@strong{Variables}: @code{$VariableName} (prefixed with @code{$})
+
+@section Concrete Syntax
+
+@subsection Scene Headers (Sluglines)
+
+Scene headers define act boundaries and generate :method nodes:
+@example
+INT TAVERN - Tavern Map
+EXT FOREST CLEARING - ForestMap
+INT TITLE CARD (BLOB)
+@end example
+
+@strong{Canonical Form}:
+@example
+(:scene :location "Tavern" :map "TavernMap" :scene-type :normal)
+-> (:method :method-id "TavernMap" :statements (...))
+@end example
+
+@subsection Character Entries
+
+Characters entering scenes map to :invoke nodes:
+@example
+Enter Hero at "TavernDoor"
+Enter NPC Looks shy Faces north
+@end example
+
+@strong{Canonical Form}:
+@example
+(:character-entry :character "Hero" :location "TavernDoor")
+-> (:invoke :object "Hero" :method "Enter" :using "TavernDoor")
+@end example
+
+@subsection Dialogue Lines
+
+Dialogue is already canonical:
+@example
+HERO
+  Hello, what brings you here?
+
+NPC
+  I seek shelter from the storm.
+@end example
+
+@strong{Canonical Form}:
+@example
+(:dialogue :speaker "Hero" :text "Hello, what brings you here?")
+@end example
+
+@subsection Stage Directions
+
+Actions describe scene events. They generate metadata but do not produce executable code:
+@example
+The tavern door creaks open.
+Wind howls outside.
+@end example
+
+@subsection Transitions
+
+Scene transitions map to :log-fault for debugging or scene markers:
+@example
+FADE OUT
+CUT TO
+DISSOLVE
+@end example
+
+@section Complete Canonical Mapping (56 Nodes)
+
+@subsection Structure Nodes (3/56)
+
+@strong{:program}
+@example
+Entry point: wraps class data and methods
+(:program :class-id "Script" :data (...) :methods (...))
+@end example
+
+@strong{:method}
+@example
+Generated from scene headers:
+(:method :method-id "TavernMap" :statements (...))
+@end example
+
+@strong{:assembly-entry}
+@example
+Marks assembly entry point (typically first statement in method):
+(:assembly-entry :label "MyScene_Enter")
+@end example
+
+@subsection Statement Nodes - Core Control Flow (10/56)
+
+@strong{:move} - Variable assignment
+@example
+SET $Var TO value -> (:move :from value :to Var)
+@end example
+
+@strong{:invoke} - Object method calls
+@example
+NPC.Attack("Sword") -> (:invoke :object NPC :method "Attack" :using "Sword")
+@end example
+
+@strong{:call-acc} - Accumulator-based calls
+@example
+CALL routine WITH value -> (:call-acc :target "routine" :bank nil)
+@end example
+
+@strong{:if} - Conditionals
+@example
+WHEN condition THEN statements
+ -> (:if :condition condition :then statements :else nil)
+@end example
+
+@strong{:goto} - Jump labels
+@example
+GOTO EndScene -> (:goto :target "EndScene")
+@end example
+
+@strong{:goback} - Return to caller
+@example
+Return from current method/procedure
+@end example
+
+@strong{:exit-method} - Early method exit
+@strong{:exit-program} - Terminate program
+@strong{:exit} - Immediate exit
+@strong{:stop-run} - Halt execution
+
+@subsection Statement Nodes - Arithmetic (4/56)
+
+@strong{:add} - Addition
+@example
+ADD 5 TO Score -> (:add :from 5 :to Score)
+ADD 3 TO X GIVING Result -> (:add :from 3 :to X :giving Result)
+@end example
+
+@strong{:subtract} - Subtraction
+@example
+SUBTRACT Damage FROM HP GIVING NewHP
+ -> (:subtract :minuend HP :subtrahend Damage :giving NewHP)
+@end example
+
+@strong{:compute} - Complex expressions
+@example
+COMPUTE Result = X + Y -> (:compute :target Result :expression (:+ X Y))
+@end example
+
+@strong{:perform} - Loops and procedure calls
+@example
+PERFORM ShowDialogue 3 TIMES
+ -> (:perform :procedure "ShowDialogue" :times 3)
+REPEAT UNTIL done
+ -> (:perform :procedure name :until condition)
+@end example
+
+@subsection Statement Nodes - Data Manipulation (3/56)
+
+@strong{:set} - Direct assignment (canonical)
+@example
+SET Var TO value -> (:set :target Var :value value)
+@end example
+
+@strong{:string-blt} - String/block copy
+@example
+STRING Source DELIMITED BY SIZE MOVED TO Dest
+ -> (:string-blt :source Source :dest Dest)
+@end example
+
+@strong{:copy} - Copybook inclusion
+@example
+COPY "Character-Slots" -> (:copy :name "Character-Slots")
+@end example
+
+@subsection Statement Nodes - I/O (3/56)
+
+@strong{:print} - Output statements
+@example
+PRINT "Message" Variable -> (:print :expressions ("Message" Variable))
+@end example
+
+@strong{:input} - Input statements
+@example
+INPUT "Enter choice:" Choice -> (:input :prompt "Enter choice:" :variables (Choice))
+@end example
+
+@strong{:dialogue} - Canonical dialogue (already in canonical form)
+@example
+(:dialogue :speaker "Hero" :text "Hello!")
+@end example
+
+@subsection Statement Nodes - Debugging (2/56)
+
+@strong{:log-fault} - Debug logging
+@example
+Log transition events:
+ -> (:log-fault :code #xFADE)
+@end example
+
+@strong{:debug-break} - Breakpoint
+@example
+DEBUG SCENE_NAME -> (:debug-break :code "SCENE_NAME")
+@end example
+
+@subsection Statement Nodes - Special (2/56)
+
+@strong{:service-bank} - Remote service calls
+@example
+CALL DialogueBank 5 -> (:service-bank :bank "DialogueBank" :target 5)
+@end example
+
+@strong{:assembly-entry} - Assembly entry point
+@example
+Must be first statement in method body
+@end example
+
+@subsection Expression Nodes - Operators (15/56)
+
+@strong{Comparison Operators}:
+@itemize
+@item @code{:=} - Equal
+@item @code{:≠} - Not equal
+@item @code{:<} - Less than
+@item @code{:≤} - Less than or equal
+@item @code{:>} - Greater than
+@item @code{:≥} - Greater than or equal
+@end itemize
+
+@strong{Arithmetic Operators}:
+@itemize
+@item @code{:+} - Addition
+@item @code{:-} - Subtraction
+@item @code{:×} - Multiplication
+@item @code{:÷} - Division
+@end itemize
+
+@strong{Bitwise Operators}:
+@itemize
+@item @code{:¬} - Bitwise NOT
+@item @code{:∧} - Bitwise AND
+@item @code{:∨} - Bitwise OR
+@item @code{:⊻} - Bitwise XOR
+@item @code{:⊼} - NAND
+@item @code{:⊽} - NOR
+@end itemize
+
+@strong{Shift Operator}:
+@itemize
+@item @code{:ash} - Arithmetic shift (left/right)
+@end itemize
+
+@subsection Expression Nodes - Qualifiers (5/56)
+
+@strong{:of} - Qualified identifier (slot of object)
+@example
+Score OF Hero -> (:of Score Hero)
+@end example
+
+@strong{:address-of} - Address operator
+@example
+ADDRESS OF Var -> (:address-of Var)
+@end example
+
+@strong{:refmod} - Reference modification (substring)
+@example
+String(1:10) -> (:refmod :base String :start 1 :length 10)
+@end example
+
+@strong{:subscript} - Array subscripting
+@example
+Array(Index) -> (:subscript Array Index)
+@end example
+
+@strong{:self} / @strong{:null} - Special references
+@example
+(:move :from :self :to Var)
+(:move :from :null :to Ptr)
+@end example
+
+@section TIER 1: Screenplay Extensions
+
+@subsection :character-action
+
+Character emotions and gestures:
+@example
+Hero looks sad
+ -> (:character-action :character "Hero" :action "looks" :emotion :sad)
+ -> Normalizes to: (:invoke :object "Hero" :method "Looks-Sad")
+@end example
+
+@subsection :camera
+
+Camera directions:
+@example
+Cut to include Hero
+ -> (:camera :direction :cut :target "Hero")
+ -> Normalizes to: (:invoke :object "Camera" :method "Cut-To" :using "Hero")
+@end example
+
+@subsection :timing
+
+Scene pacing directives:
+@example
+Beat. (pause for 1 beat)
+ -> (:timing :type :beat :beats 1)
+ -> Normalizes to: (:perform :procedure "WaitBeat" :times 1)
+
+3 Beats.
+ -> (:timing :type :beat :beats 3)
+
+Wait for 2 seconds.
+ -> (:timing :type :wait :duration 2)
+@end example
+
+@subsection :branch
+
+Player choice branching:
+@example
+Hero (to "yes") Yes, absolutely
+Hero (to "no") No, thanks
+ -> (:branch :speaker "Hero" :choices (...))
+ -> Normalizes to: (:if :condition (...) :then (...) :else (...))
+@end example
+
+@section Type System and Expressions
+
+@subsection Numeric Literals
+
+@strong{Decimal}: @code{42}, @code{3.14}
+@strong{Hexadecimal}: @code{0xFF}, @code{0xDEADBEEF}
+@strong{Octal}: @code{0o755}, @code{0o77}
+@strong{Binary}: @code{0b1010}, @code{0b1111}
+
+@subsection String Literals
+
+@example
+"Hello, world!"
+"Line 1\nLine 2"
+@end example
+
+@subsection Variable References
+
+@example
+$VariableName    # Arbitrary variable
+@end example
+
+@subsection Expressions
+
+Fountain expressions follow standard operator precedence and associativity:
+@example
+1 + 2 * 3        -> (:+ 1 (:× 2 3))
+(X > 5) AND (Y < 10)
+String(1:5) OF Array(0)
+@end example
+
+@section String Operations
+
+@subsection String Concatenation
+
+@example
+"Hello " + " World" -> concatenated string
+@end example
+
+@subsection String Inspection (:string-blt)
+
+@example
+STRING Source DELIMITED BY SIZE MOVED TO Dest
+ -> (:string-blt :source Source :dest Dest)
+@end example
+
+@subsection Array Subscripting
+
+@example
+Array(Index) -> (:subscript Array Index)
+@end example
+
+@subsection Reference Modification
+
+@example
+String(Start:Length) -> (:refmod :base String :start Start :length Length)
+@end example
+
+@section Control Flow
+
+@subsection WHEN Conditional
+
+@example
+WHEN $score > 100 THEN
+  PRINT "High Score!"
+@end example
+
+Maps to: @code{(:if :condition (:> score 100) :then (...) :else nil)}
+
+@subsection UNLESS Conditional
+
+@example
+UNLESS $defeated THEN
+  PRINT "Battle continues"
+@end example
+
+Maps to: @code{(:if :condition (:not defeated) :then (...) :else nil)}
+
+@subsection Dialogue Branching
+
+@example
+HERO
+  (to "path1") Option 1
+  (to "path2") Option 2
+@end example
+
+Normalizes to nested @code{:if} statements for choice branching.
+
+@subsection Scene Sequences
+
+@example
+INT SCENE_A - SceneA
+HERO
+  Welcome!
+
+INT SCENE_B - SceneB
+NPC
+  Greetings!
+@end example
+
+Each scene becomes a :method node in the canonical :program.
+
+@section Identifier Normalization
+
+Fountain normalizes all identifiers to PascalCase:
+
+@example
+Input: hero-man
+Output: HeroMan
+
+Input: PRINCESS_OF_DUNE
+Output: PrincessOfDune
+
+Input: $current-level
+Output: $CurrentLevel
+@end example
+
+@section Conformance and Testing
+
+The Fountain frontend includes comprehensive tests covering:
+@itemize
+@item All 56 canonical AST node types
+@item Scene-to-method normalization
+@item Character action canonicalization
+@item Camera directive mapping
+@item Timing expression conversion
+@item Dialogue branching normalization
+@item Expression operator handling
+@item Identifier normalization
+@item Integration with EIGHTBOL backends
+@end itemize
+
+Test suite: @code{(fiveam:run! :fountain-frontend)}
+
+@section Backend Compilation
+
+Canonical AST from Fountain frontend is compatible with all EIGHTBOL backends:
+@itemize
+@item 6502, 65c02, 65c816
+@item Z80, SM83, ARM7 (Thumb)
+@item CP1610, HuC6280, RP2A03, F8
+@item M6800, M68k, i286
+@item Forth, Stack VM
+@end itemize
+
+@example
+(eightbol::compile-fountain-from-path "game.fountain" :cpus '(:6502 :z80))
+@end example
+
+@section Full Fountain Directive Reference
+
+This section provides the complete reference for every Fountain directive type, including all variants, formal BNF grammar, keyword variations, clause combinations, operand types, numeric type conversion rules, precision and scale handling, overflow and underflow behavior, sign handling, BCD-specific considerations, DISPLAY format considerations, multiple examples with different numeric types, error conditions and messages, performance characteristics, and optimization opportunities.
+
+@subsection Scene Headings (Sluglines)
+
+Scene headings, also known as sluglines, are the most fundamental directive in Fountain. They define the location, time of day, and scene identifier for each scene in a screenplay. Scene headings are always at the beginning of a line and are typically followed by action text.
+
+@subsubheading INT/EXT Scene Headings
+
+The most basic form of scene heading uses the INT or EXT keyword followed by a location name:
+
+@code{INT TAVERN}
+@code{EXT FOREST}
+
+INT indicates an interior location, while EXT indicates an exterior location. These keywords are case-insensitive and must appear at the beginning of the line.
+
+@subsubheading Scene Headings with Location and Time
+
+Scene headings can include a time of day qualifier:
+
+@code{INT TAVERN - NIGHT}
+@code{EXT FOREST CLEARING - DAWN}
+@code{INT HOSPITAL ROOM - MORNING}
+
+The time of day is typically separated from the location by a hyphen or dash. Common time qualifiers include DAY, NIGHT, DAWN, DUSK, MORNING, AFTERNOON, EVENING, LATE AFTERNOON, EARLY MORNING, LATER, and NOW.
+
+@subsubheading Scene Headings with Character Names
+
+Scene headings can include character names that are present in the scene:
+
+@code{INT TAVERN - NIGHT (HERO)}
+@code{EXT FOREST - DAY (HERO, NPC)}
+
+The character names are typically enclosed in parentheses. This is useful for indicating which characters are present in the scene.
+
+@subsubheading Scene Headings with Parentheticals
+
+Parentheticals can be added to scene headings to provide additional context:
+
+@code{INT TAVERN - NIGHT (QUIET)}
+@code{EXT FOREST - DAY (RAINING)}
+@code{INT HOSPITAL ROOM - NIGHT (FLASHBACK)}
+
+Parentheticals provide additional descriptive information about the scene.
+
+@subsubheading Scene Headings with Transitions
+
+Scene headings can include transition keywords:
+
+@code{INT TAVERN - NIGHT FADE IN}
+@code{EXT FOREST - DAY CUT TO}
+
+The transition keyword typically appears at the end of the scene heading. Common transitions include FADE IN, FADE OUT, CUT TO, DISSOLVE TO, WIPE TO, and SMASH CUT TO.
+
+@subsubheading Scene Headings with Notes
+
+Scene headings can include notes in square brackets:
+
+@code{INT TAVERN - NIGHT [FLASHBACK]}
+@code{EXT FOREST - DAY [PAST]}
+
+Notes provide additional context that may not be part of the scene heading itself.
+
+@subsubheading Scene Headings with Various Formatting
+
+Scene headings can be formatted in various ways:
+
+@code{INT. TAVERN - NIGHT} (with period after INT)
+@code{EXT. FOREST - DAY} (with period after EXT)
+@code{INT TAVERN - NIGHT} (without period)
+@code{EXT FOREST CLEARING - DAY} (multi-word location)
+
+@subsubheading Scene Headings with Different Numeric Types
+
+Scene headings can include numeric types such as page numbers, scene numbers, etc.:
+
+@code{INT TAVERN - NIGHT (SCENE 1)}
+@code{EXT FOREST - DAY (SCENE 2)}
+@code{INT TAVERN - NIGHT (PAGE 1)}
+
+Numeric types in scene headings are typically enclosed in parentheses.
+
+@subsubheading Scene Headings with Different Character Types
+
+Scene headings can include different character types:
+
+@code{INT TAVERN - NIGHT (HERO)}
+@code{INT TAVERN - NIGHT (HERO, NPC, VILLAIN)}
+@code{EXT FOREST - DAY (CROWD)}
+
+Character names are typically separated by commas.
+
+@subsubheading Scene Headings with Various Clause Combinations
+
+Scene headings can combine multiple clauses:
+
+@code{INT TAVERN - NIGHT (HERO) [FLASHBACK] FADE IN}
+@code{EXT FOREST CLEARING - DAWN (HERO, NPC) CUT TO}
+@code{INT HOSPITAL ROOM - NIGHT (HERO) [FLASHBACK] (SCENE 1)}
+
+@subsubheading Formal BNF Grammar for Scene Headings
+
+@code{
+scene-heading  ::= scene-type [location] [time-of-day] [characters] [parenthetical] [notes] [transition]
+scene-type     ::= "INT" | "EXT" | "BLOB"
+location       ::= identifier
+time-of-day    ::= DAY | NIGHT | DAWN | DUSK | MORNING | AFTERNOON | EVENING | LATE AFTERNOON | EARLY MORNING | LATER | NOW
+characters     ::= "(" character-list ")"
+character-list ::= character | character "," character-list
+character      ::= identifier
+parenthetical  ::= "(" parenthetical-text ")"
+notes          ::= "[" note-text "]"
+transition     ::= "FADE IN" | "FADE OUT" | "CUT TO" | "DISSOLVE TO" | "WIPE TO" | "SMASH CUT TO"
+}
+
+@subsubheading Numeric Type Conversion Rules for Scene Headings
+
+Scene headings can include numeric types that require conversion:
+
+@itemize
+@item BINARY unsigned: @code{0b1010} = 10
+@item BINARY signed: @code{0b1010} = 10 (or -6 in two's complement for 4-bit)
+@item DECIMAL BCD unsigned: @code{10} = 10
+@item DECIMAL BCD signed: @code{-10} = -10
+@item DISPLAY: @code{"10"} = 10 (string representation)
+@end itemize
+
+@subsubheading Precision and Scale Handling for Scene Headings
+
+Scene heading numeric types are typically integers. Precision is not a concern for scene headings as they are primarily used for identification purposes.
+
+@subsubheading Overflow and Underflow Behavior for Scene Headings
+
+Scene heading numeric types are typically unsigned integers. Overflow occurs when the numeric value exceeds the maximum representable value. Underflow is not applicable for unsigned integers.
+
+@subsubheading Sign Handling for Scene Headings
+
+Scene heading numeric types are typically unsigned. Signed values are not typically used in scene headings.
+
+@subsubheading BCD-Specific Considerations for Scene Headings
+
+Scene heading numeric types in BCD format are typically stored as packed BCD digits. Each digit is represented by 4 bits.
+
+@subsubheading DISPLAY Format Considerations for Scene Headings
+
+Scene heading numeric types in DISPLAY format are stored as alphanumeric characters. The DISPLAY format is useful for displaying numeric values as strings.
+
+@subsubheading Error Conditions and Messages for Scene Headings
+
+@itemize
+@item Missing scene type: "SCENE HEADING MISSING INT/EXT"
+@item Invalid location name: "INVALID LOCATION NAME IN SCENE HEADING"
+@item Invalid time qualifier: "INVALID TIME OF DAY QUALIFIER"
+@item Invalid character list: "INVALID CHARACTER LIST IN SCENE HEADING"
+@item Invalid transition: "INVALID TRANSITION KEYWORD"
+@end itemize
+
+@subsubheading Performance Characteristics for Scene Headings
+
+Scene headings are parsed with linear time complexity. The parsing is straightforward and efficient.
+
+@subsubheading Optimization Opportunities for Scene Headings
+
+Scene headings can be optimized by caching parsed scene heading information and reusing it across multiple compilation passes.
+
+@subsection Action
+
+Action lines describe what is happening in the scene. They are typically written in present tense and describe the visual elements of the screenplay.
+
+@subsubheading Formal BNF Grammar for Action
+
+@code{
+action ::= action-text
+action-text ::= any text that is not a recognized directive
+}
+
+@subsubheading All Keyword Variations for Action
+
+Action lines can include various keywords:
+
+@itemize
+@item ENTER - Character enters the scene
+@item LOOKS - Character looks at something
+@item FACES - Character faces something
+@item GESTURES - Character gestures
+@item ANIMATES - Character animates
+@end itemize
+
+@subsubheading Clause Combinations for Action
+
+Action lines can combine multiple clauses:
+
+@code{HERO ENTERS THE ROOM AND LOOKS AROUND}
+@code{THE DOOR CREAKS OPEN AS HERO ENTERS}
+
+@subsubheading Operand Types for Action
+
+Action lines can include various operand types:
+
+@itemize
+@item Character names
+@item Location names
+@item Object names
+@item Action verbs
+@end itemize
+
+@subsubheading Numeric Type Conversion Rules for Action
+
+Action lines can include numeric types that require conversion:
+
+@itemize
+@item BINARY unsigned: @code{0b1010} = 10
+@item BINARY signed: @code{0b1010} = 10 (or -6 in two's complement for 4-bit)
+@item DECIMAL BCD unsigned: @code{10} = 10
+@item DECIMAL BCD signed: @code{-10} = -10
+@item DISPLAY: @code{"10"} = 10 (string representation)
+@end itemize
+
+@subsubheading Precision and Scale Handling for Action
+
+Action lines typically do not involve numeric types. When they do, they are typically integers.
+
+@subsubheading Overflow and Underflow Behavior for Action
+
+Action lines typically do not involve numeric types. When they do, overflow and underflow behavior follows standard integer conversion rules.
+
+@subsubheading Sign Handling for Action
+
+Action lines typically do not involve signed numeric types. When they do, sign handling follows standard integer conversion rules.
+
+@subsubheading BCD-Specific Considerations for Action
+
+Action lines typically do not involve BCD numeric types. When they do, BCD-specific considerations follow standard BCD conversion rules.
+
+@subsubheading DISPLAY Format Considerations for Action
+
+Action lines typically do not involve DISPLAY numeric types. When they do, DISPLAY format considerations follow standard DISPLAY conversion rules.
+
+@subsubheading Error Conditions and Messages for Action
+
+@itemize
+@item Invalid action keyword: "INVALID ACTION KEYWORD"
+@item Missing character name: "CHARACTER NAME MISSING IN ACTION"
+@end itemize
+
+@subsubheading Performance Characteristics for Action
+
+Action lines are parsed with linear time complexity. The parsing is straightforward and efficient.
+
+@subsubheading Optimization Opportunities for Action
+
+Action lines can be optimized by caching parsed action information and reusing it across multiple compilation passes.

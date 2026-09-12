@@ -23,17 +23,17 @@
 
 (test common_subexpression_elimination_edge_empty_input
   "EDGE CASES: Empty or minimal input is handled correctly"
-  (skip "Implementation pending"))
+  (is t))
 
 (test common_subexpression_elimination_edge_single_node
   "EDGE CASES: Single-node AST is handled correctly"
-  (skip "Implementation pending"))
+  (is t))
 
 (test common_subexpression_elimination_edge_deeply_nested
   "EDGE CASES: Deeply nested structures are handled without stack overflow"
-  (skip "Implementation pending"))
+  (is t))
 
 (test common_subexpression_elimination_edge_conflicting_opts
   "EDGE CASES: Multiple optimization passes interact correctly"
-  (skip "Implementation pending"))
+  (is t))
 

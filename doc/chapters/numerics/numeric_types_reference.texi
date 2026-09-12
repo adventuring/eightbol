@@ -1,0 +1,540 @@
+@node Numeric Types Reference
+@chapter Numeric Types Reference
+
+This chapter documents the numeric type system used across all EIGHTBOL language frontends.
+This is a shared reference; specific statements in each frontend chapter will reference this
+documentation for numeric type behavior details.
+
+@menu
+* Numeric Type Categories::
+* Type Characteristics Table::
+* Binary Fixed-Point (BINARY)::
+* Binary Signed (BINARY SIGNED)::
+* Decimal (BCD)::
+* Display Numeric::
+* Type Conversion and Coercion::
+* Overflow and Underflow Behavior::
+* Rounding Modes::
+* Precision and Scale::
+@end menu
+
+@node Numeric Type Categories
+@section Numeric Type Categories
+
+EIGHTBOL supports four primary numeric type categories across all frontends:
+
+@enumerate
+@item @strong{BINARY} — Unsigned binary integers, range 0 to 2^N-1
+@item @strong{BINARY SIGNED} — Two's complement signed integers, range -(2^(N-1)) to 2^(N-1)-1
+@item @strong{DECIMAL (BCD)} — Binary-Coded Decimal, for fixed-point arithmetic with decimal semantics
+@item @strong{DISPLAY} — Zoned decimal representation (EBCDIC/ASCII encoded numbers as strings)
+@end enumerate
+
+@node Type Characteristics Table
+@section Type Characteristics Table
+
+@multitable @columnfractions 0.15 0.15 0.15 0.15 0.15 0.15
+@headitem Type @tab Min Value @tab Max Value @tab Range @tab Signedness @tab Storage Model
+@item BINARY (8-bit) @tab 0 @tab 255 @tab 0-255 @tab Unsigned @tab 8-bit unsigned
+@item BINARY (16-bit) @tab 0 @tab 65535 @tab 0-65535 @tab Unsigned @tab 16-bit unsigned
+@item BINARY (32-bit) @tab 0 @tab 4,294,967,295 @tab 0-4G @tab Unsigned @tab 32-bit unsigned
+@item BINARY SIGNED (8-bit) @tab -128 @tab 127 @tab -128 to 127 @tab Signed @tab 8-bit two's complement
+@item BINARY SIGNED (16-bit) @tab -32768 @tab 32767 @tab -32K to 32K @tab Signed @tab 16-bit two's complement
+@item BINARY SIGNED (32-bit) @tab -2147483648 @tab 2147483647 @tab -2G to 2G @tab Signed @tab 32-bit two's complement
+@item DECIMAL (2 digits) @tab 0 @tab 99 @tab 0-99 @tab Unsigned @tab 4 bits per digit + sign
+@item DECIMAL (4 digits) @tab 0 @tab 9999 @tab 0-9999 @tab Unsigned @tab 8 bits per digit + sign
+@item DECIMAL (8 digits) @tab 0 @tab 99999999 @tab 0-99M @tab Unsigned @tab 16 bits per digit + sign
+@item DISPLAY (numeric string) @tab Variable @tab Variable @tab N/A @tab Variable @tab ASCII/EBCDIC encoded
+@end multitable
+
+@node Binary Fixed-Point (BINARY)
+@section Binary Fixed-Point (BINARY)
+
+@subsection Characteristics
+
+BINARY types represent unsigned binary integers with no decimal point. They are stored as
+raw binary values in registers or memory with 8, 16, or 32-bit width typical in EIGHTBOL targets.
+
+@table @asis
+@item Size
+Typically 1, 2, or 4 bytes (8, 16, 32 bits)
+
+@item Range
+For N bits: 0 to 2^N - 1
+
+@item Signedness
+Unsigned (all bits represent magnitude)
+
+@item Overflow Behavior
+Wraps silently; overflow to 0, 1, 2, ... (modulo 2^N)
+
+@item Example: 8-bit BINARY
+@code{PIC 9(3) -> BINARY 8-bit -> range 0-255}
+Storing 300 results in 300 MOD 256 = 44
+
+@item Example: 16-bit BINARY
+@code{PIC 9(5) -> BINARY 16-bit -> range 0-65535}
+@end table
+
+@subsection Arithmetic with BINARY
+
+When performing arithmetic with BINARY operands:
+
+@itemize
+@item Addition: Result wraps at 2^N boundary
+@item Subtraction: If result is negative, wraps (e.g., 5 - 10 = -5 becomes 256 - 5 = 251 in 8-bit)
+@item Multiplication: High bits are truncated
+@item Division: Integer division; remainder is discarded
+@end itemize
+
+@subsection Cross-Language Notes
+
+@itemize
+@item COBOL: @code{PIC 9(n)} declarations with USAGE BINARY
+@item FORTRAN: @code{INTEGER} without explicit sign
+@item Forth: Native machine integers (cell size dependent)
+@item Objective-C: @code{unsigned int}, @code{unsigned long}
+@item Pascal: @code{word}, @code{longword}, @code{cardinal}
+@item Lua: Integers in default implementation
+@end itemize
+
+@node Binary Signed (BINARY SIGNED)
+@section Binary Signed (BINARY SIGNED)
+
+@subsection Characteristics
+
+BINARY SIGNED types represent signed binary integers using two's complement representation.
+They provide a full range of negative and positive values within an N-bit word.
+
+@table @asis
+@item Size
+Typically 1, 2, or 4 bytes (8, 16, 32 bits)
+
+@item Range
+For N bits: -(2^(N-1)) to 2^(N-1) - 1
+
+@item Signedness
+Signed (one bit for sign, N-1 bits for magnitude)
+
+@item Overflow Behavior
+Wraps silently; overflow to negative values, underflow to positive values
+
+@item Example: 8-bit BINARY SIGNED
+@code{PIC S9(2) -> BINARY SIGNED 8-bit -> range -128 to 127}
+Storing 200 results in 200 - 256 = -56
+
+@item Example: 16-bit BINARY SIGNED
+@code{PIC S9(4) -> BINARY SIGNED 16-bit -> range -32768 to 32767}
+@end table
+
+@subsection Arithmetic with BINARY SIGNED
+
+When performing arithmetic with BINARY SIGNED operands:
+
+@itemize
+@item Addition: Honors signs; overflow wraps (e.g., 127 + 1 = -128 in 8-bit)
+@item Subtraction: Honors signs; underflow wraps
+@item Multiplication: Result sign is determined by XOR of operand signs
+@item Division: Result sign is determined by XOR of operand signs (round toward zero)
+@end itemize
+
+@subsection Two's Complement Detail
+
+Two's complement representation allows symmetric range around zero. The most significant bit
+is the sign bit (1 = negative, 0 = non-negative). Negation is achieved by inverting all bits
+and adding 1.
+
+Example (8-bit two's complement):
+@example
+  0 = 0x00 = 00000000
+  1 = 0x01 = 00000001
+-1 = 0xFF = 11111111 (invert 00000000, add 1)
+127 = 0x7F = 01111111
+-128 = 0x80 = 10000000
+@end example
+
+@subsection Cross-Language Notes
+
+@itemize
+@item COBOL: @code{PIC S9(n)} declarations with USAGE BINARY or COMP
+@item FORTRAN: @code{INTEGER} (typically signed by default)
+@item Forth: Arithmetic operators on signed integers
+@item Objective-C: @code{int}, @code{long}, @code{short}
+@item Pascal: @code{integer}, @code{shortint}, @code{longint}
+@item C-based languages: Default @code{int} type
+@end itemize
+
+@node Decimal (BCD)
+@section Decimal (BCD)
+
+@subsection Characteristics
+
+DECIMAL types use Binary-Coded Decimal representation, where each decimal digit (0-9) is stored
+in 4 bits (a nibble). This provides decimal semantics with fixed-point arithmetic.
+
+@table @asis
+@item Size
+N digits × 4 bits per digit + 4 bits for sign (or packed format)
+
+@item Range
+For N digits: 0 to 10^N - 1
+
+@item Signedness
+Can be signed or unsigned depending on SIGN specification
+
+@item Decimal Places
+Specified separately via PICTURE clause (e.g., @code{PIC 9(5)V99} = 5 digits before decimal, 2 after)
+
+@item Overflow Behavior
+Depends on implementation; typically truncates or errors
+
+@item Example: 4-digit BCD unsigned
+@code{PIC 9(4)} = 4 decimal digits, range 0-9999, stored in 2 bytes (8 nibbles, 4 used)
+
+@item Example: 6-digit BCD signed
+@code{PIC S9(6)} = 6 decimal digits with sign, range -999999 to 999999, stored in 4 bytes
+@end table
+
+@subsection Decimal Representation Detail
+
+In packed BCD (most common):
+@itemize
+@item Two digits per byte: high nibble (4 bits) + low nibble (4 bits)
+@item Sign occupies the low nibble of the last byte: C=positive, D=negative (EBCDIC)
+@item Decimal point is implicit (specified in PICTURE clause, not stored)
+@end itemize
+
+Example (6-digit BCD with PICTURE 9(4)V99):
+@example
+Value: 1234.56
+Stored: 12 34 56 C  (four bytes: digits 1, 2, 3, 4, 5, 6, and sign C)
+@end example
+
+@subsection Arithmetic with DECIMAL (BCD)
+
+When performing arithmetic with DECIMAL operands:
+
+@itemize
+@item Addition: Decimal digit-by-digit addition, carry propagates, decimal point preserved
+@item Subtraction: Decimal digit-by-digit subtraction, borrow propagates, sign adjusts
+@item Multiplication: Result scale is sum of operand scales (requires GIVING clause)
+@item Division: Result scale determined by explicit GIVING clause specification
+@item Rounding: Occurs at precision boundary specified in PICTURE clause
+@end itemize
+
+@subsection Precision and Scale
+
+DECIMAL types have explicit precision (total digits) and scale (digits after decimal point):
+
+@table @asis
+@item PICTURE 9(5)
+Precision=5, scale=0 (5 integer digits, no fractional part)
+
+@item PICTURE 9(3)V99
+Precision=5, scale=2 (3 integer digits, 2 fractional digits)
+
+@item PICTURE S9(7)V999
+Precision=10, scale=3 (7 integer digits, 3 fractional digits, signed)
+@end table
+
+@subsection Cross-Language Notes
+
+@itemize
+@item COBOL: @code{PIC 9(n)[Vfrac]} with USAGE PACKED-DECIMAL or COMP-3
+@item FORTRAN: @code{REAL} types approximate; true BCD is not standard
+@item Most other languages lack native BCD support; COBOL is specialized here
+@end itemize
+
+@node Display Numeric
+@section Display Numeric
+
+@subsection Characteristics
+
+DISPLAY numeric types store numbers as character strings in ASCII or EBCDIC encoding, with
+optional embedded decimal point or sign characters.
+
+@table @asis
+@item Size
+N + 1 bytes (N for digits, 1 for sign character or embedded)
+
+@item Range
+Limited by string length; typically 0-9...9 or -9...9
+
+@item Signedness
+Specified via SIGN IS SEPARATE or SIGN IS LEADING/TRAILING
+
+@item Overflow Behavior
+Truncates or errors (depends on implementation)
+
+@item Example: DISPLAY with PIC 9(4)
+@code{PIC 9(4)} = "1234" (4 bytes, ASCII digits)
+
+@item Example: DISPLAY signed with PIC S9(4)
+@code{PIC S9(4)} = "+1234" or "-1234" (5 bytes, digit + ASCII digits)
+@end table
+
+@subsection Representation Detail
+
+DISPLAY numbers are stored as zoned decimal (EBCDIC) or standard ASCII:
+
+EBCDIC zoned decimal:
+@itemize
+@item Positive: High nibble = 0xF (represented as '0'-'9' in EBCDIC)
+@item Negative: High nibble = 0xD (represented as 'A'-'I' in EBCDIC)
+@end itemize
+
+Example (COBOL DISPLAY with PIC S9(4)):
+@example
+Value: +1234
+Stored (EBCDIC): F1 F2 F3 F4  (zone bits all 0xF, digits 1,2,3,4)
+
+Value: -1234
+Stored (EBCDIC): F1 F2 F3 D4  (zone bits 0xF except last, which is 0xD, digit 4 modified)
+@end example
+
+@subsection Arithmetic with DISPLAY
+
+Direct arithmetic on DISPLAY numbers is not typically supported. They must be converted
+to BINARY or DECIMAL types first:
+
+@itemize
+@item Move to BINARY variable, perform arithmetic, move back to DISPLAY
+@item Move to DECIMAL variable, perform arithmetic, move back to DISPLAY
+@item Explicit conversion functions in target language
+@end itemize
+
+@subsection Cross-Language Notes
+
+@itemize
+@item COBOL: @code{PIC 9(n)} or @code{PIC X(n)} with numeric content (USAGE DISPLAY)
+@item BASIC: String representation of numbers (then converted for arithmetic)
+@item Most languages: Strings + explicit conversion functions
+@end itemize
+
+@node Type Conversion and Coercion
+@section Type Conversion and Coercion
+
+@subsection Implicit Conversions
+
+When operands of different types are mixed in an arithmetic operation, conversions occur:
+
+@table @asis
+@item DISPLAY → BINARY
+Parse the string, convert digits to numeric value
+
+@item DISPLAY → DECIMAL
+Parse the string including decimal point position, convert to BCD
+
+@item BINARY → DECIMAL
+Direct value transfer with appropriate scale application
+
+@item BINARY → DISPLAY
+Convert numeric value to ASCII/EBCDIC string representation
+
+@item DECIMAL → BINARY
+Truncate fractional part, transfer integer portion
+
+@item DECIMAL → DISPLAY
+Format with zone bits or ASCII characters as required
+@end table
+
+@subsection Explicit Conversions (Language-Specific)
+
+Each language provides explicit conversion mechanisms:
+
+@itemize
+@item COBOL: MOVE source TO destination (implicit); no explicit cast syntax
+@item FORTRAN: INT(), REAL(), type-specific conversion functions
+@item Objective-C: Type casts with @code{(type) value}
+@item Pascal: @code{integer(x)}, @code{real(x)} functions
+@item Lua: @code{tonumber()}, @code{tostring()}, @code{math.floor()}
+@end itemize
+
+@subsection Conversion Precision Loss
+
+Conversions can lose precision or range:
+
+@itemize
+@item BINARY (32-bit) → DECIMAL (8 digits): Max 99,999,999 < 4,294,967,295 (loss of range)
+@item DECIMAL (5,2) → BINARY: Fractional part lost if BINARY is integer-only
+@item DISPLAY "1.234" → BINARY: Decimal point must be in correct position or conversion fails
+@end itemize
+
+@node Overflow and Underflow Behavior
+@section Overflow and Underflow Behavior
+
+@subsection BINARY Type Overflow
+
+@table @asis
+@item Behavior
+Silent wrap-around (modulo 2^N)
+
+@item Example: 8-bit BINARY
+255 + 1 = 0 (wraps)
+0 - 1 = 255 (wraps)
+
+@item Detection
+Requires explicit comparison to check range or use platform-specific flags (carry/borrow)
+
+@item Language Support
+Most languages don't detect automatically; platform/compiler-specific exceptions possible
+@end table
+
+@subsection BINARY SIGNED Type Overflow
+
+@table @asis
+@item Behavior
+Silent wrap-around with sign changes (two's complement)
+
+@item Example: 8-bit BINARY SIGNED
+127 + 1 = -128 (wraps)
+-128 - 1 = 127 (wraps)
+
+@item Detection
+Requires comparison or platform-specific flag checking
+
+@item Language Support
+Some C compilers warn with @code{-Woverflow}; FORTRAN has CHECK= options
+@end table
+
+@subsection DECIMAL Type Overflow
+
+@table @asis
+@item Behavior
+Depends on implementation: truncation (most common), error, or rounding to max value
+
+@item Example: PIC 9(4) with value 10000
+Typically: 10000 truncated to 9999 or error raised
+
+@item Fractional Overflow
+Example: PIC 9(3)V99 = 999.99 max
+Adding 0.01 → 1000.00 (10 digits) → requires GIVING clause to specify result size
+
+@item Detection
+Platform-dependent; COBOL may set status code; some languages don't detect at all
+
+@item Language Support
+COBOL: May set status variable; FORTRAN: compile-time options; most others: no automatic detection
+@end table
+
+@subsection Underflow (DECIMAL Fractional)
+
+@table @asis
+@item Behavior
+Fractional part lost or rounded, depending on rounding mode
+
+@item Example: PIC 9(3)V2 (scale=2) with intermediate result 123.456
+Stored as 123.46 (rounded) or 123.45 (truncated)
+
+@item Detection
+Depends on rounding specification in declaration or operation
+@end table
+
+@node Rounding Modes
+@section Rounding Modes
+
+DECIMAL arithmetic specifies rounding at scale boundaries. Four standard modes:
+
+@table @asis
+@item TRUNCATE (Round toward zero)
+Fractional part discarded regardless of value
+
+@item HALF-UP (Round half to positive infinity)
+Standard rounding: 0.5 rounds up, 0.4 rounds down
+
+@item HALF-EVEN (Round half to even, banker's rounding)
+Fractional part 0.5 rounds to nearest even digit
+
+@item TOWARD-INF (Round toward positive infinity)
+Always rounds up (ceiling function)
+@end table
+
+@subsection Language Support
+
+@table @asis
+@item COBOL
+Controlled by compiler directive or explicit ROUNDING clause in DIVIDE statement
+
+@item FORTRAN
+NINT (nearest integer), INT (truncate), CEILING, FLOOR functions available
+
+@item Others
+Platform/compiler-dependent; manual rounding via multiplication/division common
+@end table
+
+@subsection Examples
+
+8-digit DECIMAL number with PIC 9(5)V3 (scale=3), rounding modes applied to 1234.567:
+
+@table @asis
+@item Original Value
+1234.567 (7 significant digits, 3 fractional)
+
+@item TRUNCATE
+1234.567 → 1234 (fractional discarded)
+
+@item HALF-UP
+1234.567 → 1235 (0.567 > 0.5, rounds up)
+
+@item HALF-EVEN
+1234.567 → 1235 (0.5 rounds to even: 1234=even, 1235=odd → rounds to 1235)
+Actually: 1234.6 would round to 1234 (even), 1234.5 also rounds to 1234 (even)
+
+@item TOWARD-INF
+1234.567 → 1235 (ceiling)
+@end table
+
+@node Precision and Scale
+@section Precision and Scale
+
+@subsection Definitions
+
+@table @asis
+@item Precision
+Total number of significant digits (before and after decimal point)
+
+@item Scale
+Number of digits after the decimal point (fractional digits)
+
+@item Integer Digits
+Precision - Scale
+
+@end table
+
+@subsection PICTURE Clause Notation (COBOL example)
+
+@table @asis
+@item PIC 9(5)
+Precision=5, Scale=0 (5 digits, no decimal point)
+
+@item PIC 9(5)V99
+Precision=7, Scale=2 (5 digits before V, 2 after = 7 total; implicit decimal point)
+
+@item PIC S9(6)V999
+Precision=9, Scale=3 (signed, 6 integer digits, 3 fractional digits)
+
+@item PIC 9(3).99
+Precision=5, Scale=2 (3 digits, then decimal point, 2 fractional)
+
+@end table
+
+@subsection Arithmetic Result Precision
+
+When arithmetic operations combine operands of different scales:
+
+@itemize
+@item Addition: Result scale = MAX(operand scales); precision = max precision needed
+@item Subtraction: Result scale = MAX(operand scales); precision = max precision needed
+@item Multiplication: Result scale = sum of operand scales; precision = sum of precisions (can double)
+@item Division: Result scale specified explicitly; precision determined by operation requirements
+@end itemize
+
+@subsection Precision Loss Scenarios
+
+@enumerate
+@item Division by number larger than dividend: Result < 1.0; decimal result stored exactly if scale sufficient
+@item Multiplication of two large numbers: Result scale is sum of operand scales; may exceed storage capacity
+@item Rounding to smaller scale: Fractional part lost; stored as integer multiple of 10^(-scale)
+@end enumerate
+
+@end node

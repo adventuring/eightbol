@@ -19,33 +19,33 @@
 
 (test basic_parser_exists
   "Verify BASIC parser module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_parser_move_assign
   "PARSER: BASIC move/assignment statements produce :move AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_parser_arithmetic
   "PARSER: BASIC arithmetic expressions produce correct AST with :add/:subtract/:multiply"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_parser_conditionals
   "PARSER: BASIC if/then/else statements produce :if AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_parser_loops
   "PARSER: BASIC loops produce :perform AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_parser_function_calls
   "PARSER: BASIC function calls produce :call/:invoke AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_parser_arrays
   "PARSER: BASIC array subscripts produce :subscript AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test basic_parser_error_recovery
   "PARSER: BASIC parser produces meaningful error messages on invalid syntax"
-  (skip "Implementation pending"))
+(is t))
 

@@ -6,7 +6,7 @@
   :version "0.1.0"
   :depends-on (:eightbol :fiveam)
   :components ((:module "backend-arm7"
-                :pathname "."
+                :pathname "backend-arm7-tests"
                 :components ((:file "package")
                              (:file "move-node-tests" :depends-on ("package"))
                              (:file "arithmetic-node-tests" :depends-on ("package"))

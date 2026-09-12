@@ -17,8 +17,8 @@ Returns: :interpreted-prim, :compiled-prim, :control, :immediate,
 :colon-def, :semicolon, :variable, :constant, :unknown"
   (let ((role (gethash normalized *forth-core-words-alist*)))
     (if role
-        ;; Look up the role from the core-word role table
-        (cdr (assoc normalized *forth-word-roles* :test #'string-equal))
+        ;; Return the role from the core-word role table
+        role
         :unknown)))
 
 (defvar *forth-word-roles*

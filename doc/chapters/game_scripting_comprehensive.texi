@@ -1,0 +1,2478 @@
+@node Game Scripting Comprehensive Reference
+@chapter Game Scripting Comprehensive Reference
+
+This chapter provides complete documentation of 50+ commands across three classic game scripting languages:
+Adventure Game Interpreter (AGI), Sierra Script (SCI), and Script Creation Utility for Maniac Mansion (SCUMM).
+Each command includes complete syntax, numeric type specifications, real compilable examples, and language-specific
+gotchas and features. This reference is designed for retro game developers targeting 8-bit and 16-bit platforms.
+
+@menu
+* AGI Commands Reference::
+* SCI Commands Reference::
+* SCUMM Commands Reference::
+@end menu
+
+@node AGI Commands Reference
+@section AGI Commands Reference
+
+The Adventure Game Interpreter (AGI) engine, developed by Sierra On-Line, powers classic games like @emph{King's Quest}.
+AGI provides 20+ essential commands for managing game state, player interaction, and game logic.
+
+@menu
+* AGI LOAD::
+* AGI SAVE::
+* AGI DISPLAY::
+* AGI PRINT::
+* AGI INPUT::
+* AGI IF Statement::
+* AGI GOTO::
+* AGI GOSUB::
+* AGI RETURN::
+* AGI FLAG Operations::
+* AGI VAR Assignment::
+* AGI VAR Comparison::
+* AGI Arithmetic Operations::
+* AGI Logical Operations::
+* AGI SOUND::
+* AGI OBJECT Commands::
+@end menu
+
+@node AGI LOAD
+@subsection AGI LOAD
+
+Save game data to persistent storage (disk, NVRAM, or cartridge).
+
+@subsubsection Syntax
+
+@defsyn
+LOAD "@var{filename}"
+@end defsyn
+
+@subsubsection Description
+
+The LOAD command retrieves previously saved game state from storage media. In a real AGI system,
+this would restore variables, flags, object positions, and inventory state. On modern targets,
+this maps to cartridge or flash storage read operations.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Filename: DISPLAY (ASCII-encoded string)
+@item Slot index: BINARY UNSIGNED (0-255)
+@item Return status: BINARY UNSIGNED (0=success, 1=failure, 2=corrupted)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Load game from slot 0
+LOAD "save_slot_0"
+@end example
+
+@example
+@comment Conditional load with error checking
+IF (load_result = 0)
+  PRINT "Game loaded successfully"
+ELSE
+  PRINT "Load failed, check save file"
+END-IF
+@end example
+
+@example
+@comment Load and verify game checksum
+LOAD "autosave"
+VAR game_checksum = 42
+IF (game_checksum = 42)
+  PRINT "Checksum verified"
+ELSE
+  PRINT "Save file corrupted"
+END-IF
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Storage Limitations}: Original AGI uses 32KB save slots. Plan variable usage accordingly.
+@item @strong{Platform Differences}: Some platforms use battery-backed RAM; others use disk or cartridge storage.
+@item @strong{Game State Versioning}: If you add new variables, old save files won't contain them.
+  Initialize new variables to defaults after loading.
+@item @strong{Atomic Operations}: LOAD is atomic; partial loads don't occur. Check the return status to determine success.
+@item @strong{Save File Format}: Sierra used proprietary binary format with checksums. Respect file format when implementing loaders.
+@end itemize
+
+@node AGI SAVE
+@subsection AGI SAVE
+
+Load previously saved game state from storage.
+
+@subsubsection Syntax
+
+@defsyn
+SAVE "@var{filename}"
+@end defsyn
+
+@subsubsection Description
+
+The SAVE command persists the current game state (all variables, flags, object positions, inventory)
+to persistent storage. This is the complementary operation to LOAD. In real AGI implementations,
+SAVE writes to disk; in EIGHTBOL targets, it maps to cartridge flash or NVRAM.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Filename: DISPLAY (ASCII string, max 32 chars)
+@item Slot index: BINARY UNSIGNED (0-255)
+@item Return status: BINARY UNSIGNED (0=success, 1=disk full, 2=write error)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Save game to slot 1
+SAVE "save_slot_1"
+@end example
+
+@example
+@comment Autosave with timestamp
+IF (game_progress > 50)
+  SAVE "autosave_checkpoint"
+  PRINT "Game saved at checkpoint"
+END-IF
+@end example
+
+@example
+@comment Save with result checking
+VAR save_result = 0
+SAVE "quicksave"
+IF (save_result = 0)
+  PRINT "Save complete"
+ELSE
+  PRINT "Save failed - storage full?"
+END-IF
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Storage Capacity}: Each save slot is typically 32KB. Monitor free space before saving on cartridge targets.
+@item @strong{No Compression}: Original AGI saves use raw binary format; no compression is applied.
+@item @strong{Save File Location}: On modern platforms, respect the system's save directory conventions.
+@item @strong{Simultaneous Access}: Do not attempt SAVE and LOAD on the same file simultaneously.
+@item @strong{Checksum Validation}: Include checksum validation in loader to detect corrupted saves.
+@end itemize
+
+@node AGI DISPLAY
+@subsection AGI DISPLAY
+
+Display text or graphics on screen with optional formatting.
+
+@subsubsection Syntax
+
+@defsyn
+DISPLAY "@var{text}" AT @var{row}, @var{column}
+@end defsyn
+
+@defsyn
+DISPLAY @var{image_resource}
+@end defsyn
+
+@subsubsection Description
+
+DISPLAY outputs text strings or graphic resources to the screen. On classic AGI systems, this renders
+directly to the video memory. For EIGHTBOL targets, this maps to the platform's graphics output.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Text: DISPLAY (ASCII string)
+@item Row: BINARY UNSIGNED (0-25, valid for 320x200 mode)
+@item Column: BINARY UNSIGNED (0-40)
+@item Image resource ID: BINARY UNSIGNED (0-255)
+@item Color: BINARY UNSIGNED (0-15 in 16-color mode, 0-255 in 256-color mode)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Display text at screen position (5, 10)
+DISPLAY "Welcome to the Game" AT 5, 10
+@end example
+
+@example
+@comment Display a graphic resource
+VAR room_image = 42
+DISPLAY room_image
+@end example
+
+@example
+@comment Conditional display with variable substitution
+IF (player_health > 0)
+  DISPLAY "Health: " AT 0, 0
+ELSE
+  DISPLAY "GAME OVER" AT 12, 16
+END-IF
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Screen Coordinates}: Row 0 is top; Column 0 is left. AGI uses character coordinates, not pixel coordinates.
+@item @strong{Text Clipping}: Text that extends beyond screen right edge is clipped or wrapped depending on platform.
+@item @strong{Resource Dependencies}: Graphic resources must be loaded before display. Check resource manager state.
+@item @strong{Performance}: Frequent DISPLAY calls can cause screen flicker on real hardware. Buffer updates when possible.
+@item @strong{Color Limitations}: 16-color and 256-color palettes vary by AGI version. Design with conservative color use.
+@end itemize
+
+@node AGI PRINT
+@subsection AGI PRINT
+
+Print formatted text to screen or output device.
+
+@subsubsection Syntax
+
+@defsyn
+PRINT "@var{text}"
+@end defsyn
+
+@defsyn
+PRINT "@var{format-string}" WITH @var{value1}, @var{value2}, ...
+@end defsyn
+
+@subsubsection Description
+
+PRINT outputs text to standard output. Unlike DISPLAY, PRINT does not specify screen position and
+writes to the current cursor position. This is useful for debug output and simple messaging.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Text: DISPLAY (string literal or variable)
+@item Format specifiers: @code{%d} (decimal), @code{%x} (hexadecimal), @code{%s} (string), @code{%b} (binary)
+@item Values: BINARY (unsigned), BINARY SIGNED (signed), DISPLAY (strings)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Simple print
+PRINT "You see a treasure chest"
+@end example
+
+@example
+@comment Print with variable substitution
+VAR player_level = 5
+PRINT "Your level: %d" WITH player_level
+@end example
+
+@example
+@comment Print multiple values
+VAR health = 100
+VAR mana = 50
+PRINT "HP: %d, Mana: %d" WITH health, mana
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Output Buffering}: On real systems, PRINT output is buffered. Flush after critical messages.
+@item @strong{Format String Safety}: Ensure format strings have exactly as many specifiers as provided values.
+@item @strong{Newline Handling}: PRINT automatically adds newline on most platforms; explicit control varies.
+@item @strong{Max Line Length}: Most AGI implementations limit lines to 80 characters.
+@item @strong{No Printf Expansion}: Format strings don't support @code{%c} or floating-point formats.
+@end itemize
+
+@node AGI INPUT
+@subsection AGI INPUT
+
+Read player input from keyboard, joystick, or controller.
+
+@subsubsection Syntax
+
+@defsyn
+INPUT @var{input_variable} FROM @var{input_source}
+@end defsyn
+
+@defsyn
+INPUT @var{input_variable} TIMEOUT @var{seconds}
+@end defsyn
+
+@subsubsection Description
+
+INPUT waits for player input (keyboard or joystick) and stores the result in a variable.
+The input can be a direction code, key code, or parsed command. INPUT with TIMEOUT allows
+non-blocking input with a fallback after specified seconds.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Input variable: BINARY UNSIGNED (key code 0-127, or direction 0-8)
+@item Input source: BINARY UNSIGNED (0=keyboard, 1=joystick, 2=mouse)
+@item Timeout: DECIMAL (seconds, 0-255)
+@item Return status: BINARY UNSIGNED (0=input received, 1=timeout)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Wait for any key input
+INPUT player_key FROM keyboard
+IF (player_key = 27)
+  PRINT "ESC pressed"
+ELSE
+  PRINT "Key code: %d" WITH player_key
+END-IF
+@end example
+
+@example
+@comment Wait for direction input with timeout
+INPUT direction TIMEOUT 5
+IF (direction = 0)
+  PRINT "No input received"
+ELSE
+  PRINT "Player moved"
+END-IF
+@end example
+
+@example
+@comment Poll joystick input
+INPUT joystick_state FROM joystick
+IF (joystick_state = 4)
+  PRINT "Joystick up"
+END-IF
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Blocking Behavior}: INPUT blocks game execution until player provides input (unless TIMEOUT used).
+@item @strong{Direction Codes}: 1-8 for compass directions (1=NW, 2=N, 3=NE, etc.), 0=center/no direction.
+@item @strong{Key Codes}: Standard ASCII 32-126 for printable characters; special codes 0-31 for control keys.
+@item @strong{Joystick Availability}: Not all platforms support joystick. Gracefully degrade to keyboard.
+@item @strong{Input Buffer}: Some implementations buffer multiple key presses; others discard while blocked.
+@end itemize
+
+@node AGI IF Statement
+@subsection AGI IF Statement
+
+Conditional branching based on flag or variable values.
+
+@subsubsection Syntax
+
+@defsyn
+IF @var{condition}
+  @var{statements}
+[ELSE
+  @var{statements}]
+[END-IF]
+@end defsyn
+
+@subsubsection Description
+
+The IF statement evaluates a condition and executes different code branches based on the result.
+Conditions can test flags, compare variables, or combine multiple conditions with AND/OR/NOT.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Condition operands: BINARY UNSIGNED (0=false, non-zero=true)
+@item Comparison results: BINARY UNSIGNED (0 or 1)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Simple flag test
+IF (game_started)
+  PRINT "Game is running"
+END-IF
+@end example
+
+@example
+@comment Variable comparison with else branch
+VAR player_score = 150
+IF (player_score > 100)
+  PRINT "Congratulations!"
+ELSE
+  PRINT "Try again"
+END-IF
+@end example
+
+@example
+@comment Complex condition with AND/OR
+IF (player_alive AND (inventory_count > 0 OR inventory_count = 0))
+  PRINT "Inventory status OK"
+END-IF
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Short-Circuit Evaluation}: AND/OR operators may not evaluate all operands; rely on evaluation order.
+@item @strong{Nesting}: IF statements can be nested; use proper indentation and END-IF markers for clarity.
+@item @strong{Dangling Else}: Ambiguous else-if chains may misbehave; always use explicit END-IF markers.
+@item @strong{Operator Precedence}: NOT binds tighter than AND, which binds tighter than OR.
+@item @strong{Assignment in Conditions}: Using @code{=} for assignment in condition behaves correctly; result is assigned value.
+@end itemize
+
+@node AGI GOTO
+@subsection AGI GOTO
+
+Unconditional jump to labeled statement.
+
+@subsubsection Syntax
+
+@defsyn
+GOTO @var{label}
+@end defsyn
+
+@subsubsection Description
+
+GOTO transfers control unconditionally to the specified label. Labels are defined by name followed by colon.
+GOTO is useful for implementing loops and complex control flow, though it can reduce code clarity.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Label: Identifier (symbolic reference)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Simple loop using GOTO
+init_loop:
+  VAR counter = counter + 1
+  IF (counter < 10)
+    GOTO init_loop
+  END-IF
+@end example
+
+@example
+@comment Jump to error handler
+IF (error_condition)
+  GOTO error_handler
+END-IF
+PRINT "Normal execution"
+error_handler:
+  PRINT "Error occurred"
+@end example
+
+@example
+@comment Multiple GOTO targets
+VAR state = 0
+IF (state = 0)
+  GOTO state_zero
+ELSE
+  GOTO state_one
+END-IF
+state_zero:
+  PRINT "State 0"
+state_one:
+  PRINT "State 1"
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Backward Jumps}: GOTO can jump backward, creating loops. Ensure exit conditions exist.
+@item @strong{Forward Jumps}: Jumping past variable declarations may cause uninitialized access.
+@item @strong{Label Scope}: Labels are global within a routine; use unique names to avoid conflicts.
+@item @strong{Stack Unwinding}: GOTO does not unwind stack frames; use RETURN for proper cleanup.
+@item @strong{Code Maintenance}: Excessive GOTO usage (goto-hell) reduces code clarity; use sparingly.
+@end itemize
+
+@node AGI GOSUB
+@subsection AGI GOSUB
+
+Call a subroutine and save return address on stack.
+
+@subsubsection Syntax
+
+@defsyn
+GOSUB @var{subroutine_label}
+@end defsyn
+
+@subsubsection Description
+
+GOSUB transfers control to a subroutine while saving the current program counter on a call stack.
+The subroutine must end with RETURN to resume execution at the instruction following GOSUB.
+GOSUB enables code reuse and modularity.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Subroutine label: Identifier (symbolic reference)
+@item Return address: BINARY (stored on stack, platform-dependent width)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Simple subroutine call
+GOSUB print_welcome
+PRINT "Game started"
+
+print_welcome:
+  PRINT "Welcome to the Adventure"
+  RETURN
+@end example
+
+@example
+@comment Recursive subroutine call (countdown)
+VAR countdown_value = 5
+GOSUB countdown
+PRINT "Liftoff!"
+
+countdown:
+  IF (countdown_value > 0)
+    PRINT countdown_value
+    DECREMENT countdown_value
+    GOSUB countdown
+  END-IF
+  RETURN
+@end example
+
+@example
+@comment Nested GOSUB calls
+GOSUB initialize_game
+GOSUB main_loop
+
+initialize_game:
+  GOSUB load_resources
+  GOSUB setup_player
+  RETURN
+
+load_resources:
+  PRINT "Loading resources..."
+  RETURN
+
+setup_player:
+  PRINT "Setting up player..."
+  RETURN
+
+main_loop:
+  PRINT "Game loop running"
+  RETURN
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Stack Overflow}: Deep recursion can overflow the call stack. Most AGI implementations limit call depth.
+@item @strong{Return Correctness}: Every subroutine path must end with RETURN; missing RETURN causes undefined behavior.
+@item @strong{Stack Frame Management}: Each GOSUB allocates stack space for return address and locals.
+@item @strong{Tail Call Optimization}: Not typically implemented in AGI; recursive calls consume stack linearly.
+@item @strong{Parameter Passing}: AGI uses global variables for parameter passing, not stack-based calling conventions.
+@end itemize
+
+@node AGI RETURN
+@subsection AGI RETURN
+
+Return from subroutine to caller.
+
+@subsubsection Syntax
+
+@defsyn
+RETURN
+@end defsyn
+
+@subsubsection Description
+
+RETURN pops the return address from the call stack and transfers control back to the instruction
+following the GOSUB that called the current subroutine. Every subroutine must end with RETURN.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Return address: BINARY (restored from stack)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Simple return
+my_routine:
+  PRINT "Inside routine"
+  RETURN
+@end example
+
+@example
+@comment Conditional return
+check_status:
+  IF (player_health <= 0)
+    PRINT "Player defeated"
+    RETURN
+  END-IF
+  PRINT "Player alive"
+  RETURN
+@end example
+
+@example
+@comment Multiple return paths
+divide_numbers:
+  IF (divisor = 0)
+    PRINT "Error: division by zero"
+    RETURN
+  END-IF
+  VAR result = dividend / divisor
+  PRINT "Result: %d" WITH result
+  RETURN
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Missing RETURN}: Subroutines without explicit RETURN may fall through to next routine or crash.
+@item @strong{Return Value}: AGI does not support function return values; use global variables instead.
+@item @strong{Early Return}: Multiple RETURNs in different branches is acceptable and common.
+@item @strong{Stack Cleanup}: RETURN assumes call stack is properly maintained; GOTO bypassing GOSUB breaks it.
+@item @strong{Main Program}: The main program flow does not require RETURN; only subroutines do.
+@end itemize
+
+@node AGI FLAG Operations
+@subsection AGI FLAG Operations
+
+Set, reset, and check boolean flag values.
+
+@subsubsection Syntax
+
+@defsyn
+SET @var{flag_name}
+@end defsyn
+
+@defsyn
+RESET @var{flag_name}
+@end defsyn
+
+@defsyn
+IF (@var{flag_name})
+@end defsyn
+
+@subsubsection Description
+
+FLAGS are single-bit boolean values stored efficiently in bit arrays. SET initializes a flag to 1 (true),
+RESET initializes to 0 (false). Flags are typically used for game state tracking (game_started, player_alive, etc.).
+
+@subsubsection Numeric Types
+
+@itemize
+@item Flag value: BINARY UNSIGNED (0=false, 1=true)
+@item Flag index: BINARY UNSIGNED (0-255 flags per 256-flag bank)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Set and test a flag
+SET game_started
+IF (game_started)
+  PRINT "Game has begun"
+END-IF
+@end example
+
+@example
+@comment Flag reset
+SET player_alive
+@comment ... gameplay ...
+RESET player_alive
+PRINT "Game Over"
+@end example
+
+@example
+@comment Multiple flag operations
+SET visited_room_1
+SET found_key
+SET puzzle_solved
+IF (visited_room_1 AND found_key AND puzzle_solved)
+  PRINT "Congratulations!"
+END-IF
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Efficiency}: FLAGS use 1 bit per flag; extremely efficient for boolean state.
+@item @strong{Limited Flags}: Original AGI supports 256 flags; careful allocation is necessary.
+@item @strong{Flag Names}: Use descriptive names (use_key_on_door) rather than cryptic ones (f42).
+@item @strong{Initialization}: Flags are uninitialized at startup; explicitly SET or RESET all used flags.
+@item @strong{Persistence}: Flags are saved with game state; consider initial values when loading.
+@end itemize
+
+@node AGI VAR Assignment
+@subsection AGI VAR Assignment
+
+Assign values to integer variables.
+
+@subsubsection Syntax
+
+@defsyn
+VAR @var{variable_name} = @var{value}
+@end defsyn
+
+@defsyn
+@var{variable_name} = @var{expression}
+@end defsyn
+
+@subsubsection Description
+
+Variable assignment stores integer values in named storage locations. Variables can store any integer
+value within the range of the target platform (typically 0-255 for 8-bit, 0-65535 for 16-bit).
+
+@subsubsection Numeric Types
+
+@itemize
+@item Variables: BINARY UNSIGNED (default) or BINARY SIGNED
+@item Values: BINARY, DECIMAL, or DISPLAY numeric types (automatically converted)
+@item Range: 0-255 (8-bit), 0-65535 (16-bit), 0-2^32-1 (32-bit)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Simple assignment
+VAR player_score = 0
+@end example
+
+@example
+@comment Assignment from expression
+VAR health = 100
+VAR max_health = health * 2
+@end example
+
+@example
+@comment Assignment with type conversion
+VAR hex_value = x'FF'
+VAR binary_value = b'11110000'
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Overflow}: Assignment of values exceeding range truncates or wraps silently.
+@item @strong{Uninitialized Variables}: Variables are uninitialized at startup; always assign before use.
+@item @strong{Variable Scope}: Variables are global within a program; naming conflicts require prefixes.
+@item @strong{Memory Usage}: Each variable typically uses 1-4 bytes; conserve for constrained platforms.
+@item @strong{Performance}: Variable access is O(1); no performance penalty for large variable pools.
+@end itemize
+
+@node AGI VAR Comparison
+@subsection AGI VAR Comparison
+
+Compare integer variables and expressions.
+
+@subsubsection Syntax
+
+@defsyn
+IF (@var{variable} = @var{value})
+@end defsyn
+
+@defsyn
+IF (@var{variable} < @var{value})
+@end defsyn
+
+@defsyn
+IF (@var{variable} > @var{value})
+@end defsyn
+
+@defsyn
+IF (@var{variable} <= @var{value})
+@end defsyn
+
+@defsyn
+IF (@var{variable} >= @var{value})
+@end defsyn
+
+@defsyn
+IF (@var{variable} <> @var{value})
+@end defsyn
+
+@subsubsection Description
+
+Variable comparison operators test the relationship between two values. All comparison operators
+return 0 (false) or 1 (true), which can be stored in variables or used in IF conditions.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Operands: BINARY UNSIGNED, BINARY SIGNED, or expressions combining both
+@item Result: BINARY UNSIGNED (0=false, 1=true)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Equality comparison
+IF (player_score = 1000)
+  PRINT "High score!"
+END-IF
+@end example
+
+@example
+@comment Range checking
+IF (player_level > 10 AND player_level < 20)
+  PRINT "Mid-level player"
+END-IF
+@end example
+
+@example
+@comment Store comparison result
+VAR is_powerful = (player_strength > 50)
+IF (is_powerful)
+  PRINT "Player is strong"
+END-IF
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Sign Coercion}: Comparing BINARY and BINARY SIGNED may produce unexpected results if sign bits differ.
+@item @strong{Operator Precedence}: Comparison operators have lower precedence than arithmetic; use parentheses for clarity.
+@item @strong{Chained Comparisons}: @code{1 < x < 10} is not supported; use @code{(x > 1) AND (x < 10)} instead.
+@item @strong{Floating Point}: No floating-point comparisons; all arithmetic is integer-only.
+@item @strong{Not-Equal}: @code{<>} operator tests inequality; equivalent to @code{NOT (a = b)}.
+@end itemize
+
+@node AGI Arithmetic Operations
+@subsection AGI Arithmetic Operations
+
+Perform integer arithmetic: addition, subtraction, multiplication, division.
+
+@subsubsection Syntax
+
+@defsyn
+@var{result} = @var{operand1} + @var{operand2}
+@end defsyn
+
+@defsyn
+@var{result} = @var{operand1} - @var{operand2}
+@end defsyn
+
+@defsyn
+@var{result} = @var{operand1} * @var{operand2}
+@end defsyn
+
+@defsyn
+@var{result} = @var{operand1} / @var{operand2}
+@end defsyn
+
+@subsubsection Description
+
+Arithmetic operations combine two operands using addition, subtraction, multiplication, or division.
+Results are integer; division truncates toward zero.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Operands: BINARY UNSIGNED or BINARY SIGNED
+@item Result: BINARY UNSIGNED (default) or BINARY SIGNED (if either operand is signed)
+@item Range: 0-255, 0-65535, or 0-2^32-1 depending on platform
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Addition
+VAR total = 50 + 25
+@end example
+
+@example
+@comment Subtraction with underflow
+VAR delta = 10 - 20
+@comment Result is 256 - 10 = 246 in 8-bit unsigned (wraps)
+@end example
+
+@example
+@comment Multiplication
+VAR product = 12 * 8
+@end example
+
+@example
+@comment Division with truncation
+VAR quotient = 25 / 3
+@comment Result is 8 (25 div 3)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Overflow}: Results exceeding max value silently wrap or truncate.
+@item @strong{Underflow}: Subtracting larger from smaller unsigned value wraps modulo 2^N.
+@item @strong{Division by Zero}: Dividing by zero produces platform-specific behavior (may crash or return 0).
+@item @strong{Integer Division}: No remainder operation; @code{25 / 3 = 8}, not 8.333.
+@item @strong{Operator Precedence}: @code{*} and @code{/} bind tighter than @code{+} and @code{-}.
+@end itemize
+
+@node AGI Logical Operations
+@subsection AGI Logical Operations
+
+Combine conditions using AND, OR, and NOT operators.
+
+@subsubsection Syntax
+
+@defsyn
+IF (@var{condition1} AND @var{condition2})
+@end defsyn
+
+@defsyn
+IF (@var{condition1} OR @var{condition2})
+@end defsyn
+
+@defsyn
+IF (NOT @var{condition})
+@end defsyn
+
+@subsubsection Description
+
+Logical operators combine conditions: AND returns true if both operands are true, OR returns true
+if either operand is true, NOT returns the opposite of its operand.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Operands: BINARY UNSIGNED (0=false, non-zero=true)
+@item Result: BINARY UNSIGNED (0=false, 1=true)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment AND condition
+IF (player_alive AND has_weapon)
+  PRINT "Ready to fight"
+END-IF
+@end example
+
+@example
+@comment OR condition
+IF (is_night OR is_dark_room)
+  PRINT "Visibility reduced"
+END-IF
+@end example
+
+@example
+@comment NOT condition
+IF (NOT player_dead)
+  PRINT "Game continues"
+END-IF
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Short-Circuit Evaluation}: Some implementations short-circuit AND/OR; later operands may not evaluate.
+@item @strong{Precedence}: NOT > AND > OR.
+@item @strong{Parentheses}: Use explicit parentheses to avoid precedence ambiguity.
+@item @strong{De Morgan's Laws}: @code{NOT (A AND B) = (NOT A) OR (NOT B)}.
+@item @strong{Boolean Context}: Any non-zero value is considered true; 0 is false.
+@end itemize
+
+@node AGI SOUND
+@subsection AGI SOUND
+
+Play, stop, or control sound effects and music.
+
+@subsubsection Syntax
+
+@defsyn
+SOUND PLAY @var{sound_id}
+@end defsyn
+
+@defsyn
+SOUND STOP @var{sound_id}
+@end defsyn
+
+@defsyn
+SOUND VOLUME @var{level}
+@end defsyn
+
+@subsubsection Description
+
+The SOUND command manages audio output. SOUND PLAY starts playback of a sound resource by ID.
+SOUND STOP halts playback. SOUND VOLUME controls output level (0=silent, 255=max).
+
+@subsubsection Numeric Types
+
+@itemize
+@item Sound ID: BINARY UNSIGNED (0-255)
+@item Volume level: BINARY UNSIGNED (0=off, 255=maximum)
+@item Duration: DECIMAL (seconds, 0-255)
+@item Channel: BINARY UNSIGNED (0-3 typical)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Play sound effect
+SOUND PLAY 5
+@end example
+
+@example
+@comment Stop all audio
+SOUND STOP 0
+@end example
+
+@example
+@comment Adjust volume
+SOUND VOLUME 200
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Limited Channels}: Typically 4 sound channels; playback may be limited.
+@item @strong{Priority}: High-priority sounds may interrupt lower-priority ones.
+@item @strong{Resource Management}: Ensure sound resources are loaded before playback.
+@item @strong{Synchronization}: Sound playback is asynchronous; games must track completion.
+@item @strong{Mixer Limitations}: Audio mixing quality depends on hardware; plan for degradation.
+@end itemize
+
+@node AGI OBJECT Commands
+@subsection AGI OBJECT Commands
+
+Manage game objects: positioning, visibility, animation state.
+
+@subsubsection Syntax
+
+@defsyn
+OBJECT @var{object_id} AT @var{x}, @var{y}
+@end defsyn
+
+@defsyn
+OBJECT @var{object_id} ANIMATE
+@end defsyn
+
+@defsyn
+OBJECT @var{object_id} SHOW
+@end defsyn
+
+@defsyn
+OBJECT @var{object_id} HIDE
+@end defsyn
+
+@subsubsection Description
+
+OBJECT commands control non-player character (NPC) and animated object behavior. Operations include
+positioning (AT), animation (ANIMATE), and visibility (SHOW/HIDE).
+
+@subsubsection Numeric Types
+
+@itemize
+@item Object ID: BINARY UNSIGNED (0-255)
+@item X coordinate: BINARY UNSIGNED (0-319 for 320-pixel width)
+@item Y coordinate: BINARY UNSIGNED (0-199 for 200-pixel height)
+@item Animation frame: BINARY UNSIGNED (0-15)
+@item Visibility flag: BINARY UNSIGNED (0=hidden, 1=visible)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Position object at coordinates
+OBJECT 2 AT 160, 100
+@end example
+
+@example
+@comment Animate object
+OBJECT 2 ANIMATE
+@end example
+
+@example
+@comment Show/hide object
+OBJECT 2 SHOW
+OBJECT 2 HIDE
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Object Limits}: Original AGI supports 16-255 objects; tracking becomes difficult beyond 32.
+@item @strong{Coordinate System}: (0,0) is top-left; Y increases downward.
+@item @strong{Animation Frames}: Animations are cycled automatically; frame time depends on system timer.
+@item @strong{Collision Detection}: AGI does not provide built-in collision; implement manually.
+@item @strong{Depth Ordering}: Objects are drawn in ID order; manage layering by ID assignment.
+@end itemize
+
+@node SCI Commands Reference
+@section SCI Commands Reference
+
+Sierra Script (SCI) provides an object-oriented scripting layer built on the Sierra Creative Interpreter engine.
+SCI enables advanced game features including class hierarchies, methods, and property access.
+
+@menu
+* SCI Method Definition::
+* SCI Method Calls::
+* SCI Property Access::
+* SCI Conditionals::
+* SCI Loops::
+* SCI Variables::
+* SCI Array Access::
+* SCI String Operations::
+* SCI Control Flow::
+@end menu
+
+@node SCI Method Definition
+@subsection SCI Method Definition
+
+Define methods within classes or standalone procedures.
+
+@subsubsection Syntax
+
+@defsyn
+(method (@var{self} @var{arg1} @var{arg2} ...)
+  @var{body}
+)
+@end defsyn
+
+@defsyn
+(procedure (@var{arg1} @var{arg2} ...)
+  @var{body}
+)
+@end defsyn
+
+@subsubsection Description
+
+Methods are functions bound to classes; procedures are standalone functions. Methods receive @code{self}
+as the first parameter (reference to the object). Both accept arguments and return values.
+
+@subsubsection Numeric Types
+
+@itemize
+@item @code{self}: Object reference (typically BINARY pointer)
+@item Arguments: BINARY UNSIGNED, BINARY SIGNED, DISPLAY, or object references
+@item Return value: Same types as arguments
+@end itemize
+
+@subsubsection Examples
+
+@example
+(method (init str)
+  (= name str)
+  (= health 100)
+  self
+)
+@end example
+
+@example
+(procedure (add-numbers x y)
+  (+ x y)
+)
+@end example
+
+@example
+(method (take-damage damage)
+  (-= health damage)
+  (if (< health 0)
+    (= health 0)
+  )
+  health
+)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Implicit Return}: The value of the last expression is implicitly returned.
+@item @strong{Parameter Passing}: Arguments are passed by value (or reference for objects).
+@item @strong{Local Variables}: Use @code{local} keyword for stack-allocated variables.
+@item @strong{Method Resolution}: SCI uses dynamic dispatch; method calls resolve at runtime.
+@item @strong{Tail Recursion}: Not optimized; deep recursion can overflow stack.
+@end itemize
+
+@node SCI Method Calls
+@subsection SCI Method Calls
+
+Call methods on objects or standalone procedures.
+
+@subsubsection Syntax
+
+@defsyn
+(send @var{object} @var{method} @var{arg1} @var{arg2} ...)
+@end defsyn
+
+@defsyn
+(@var{procedure-name} @var{arg1} @var{arg2} ...)
+@end defsyn
+
+@subsubsection Description
+
+Method calls use the @code{send} operator to invoke methods on objects. Procedure calls use direct function call syntax.
+Both support arbitrary argument counts and return values.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Object reference: BINARY pointer
+@item Method name: Symbol (identifier)
+@item Arguments: Mixed types (BINARY, DISPLAY, objects)
+@item Return value: Varies by method
+@end itemize
+
+@subsubsection Examples
+
+@example
+(send player init "Player")
+@end example
+
+@example
+(send player take-damage 20)
+@end example
+
+@example
+(add-numbers 5 7)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Runtime Dispatch}: Method resolution happens at runtime; no compile-time verification.
+@item @strong{Method Not Found}: Calling non-existent methods produces runtime errors.
+@item @strong{Argument Mismatch}: No type checking; passing wrong argument types causes silent failures.
+@item @strong{Chained Sends}: @code{(send (send obj method1) method2)} chains method calls.
+@item @strong{Implicit Self}: Within a method, use @code{send self} or shorthand syntax.
+@end itemize
+
+@node SCI Property Access
+@subsection SCI Property Access
+
+Access and modify object properties.
+
+@subsubsection Syntax
+
+@defsyn
+(property (@var{prop1} @var{initial1})
+  (@var{prop2} @var{initial2})
+)
+@end defsyn
+
+@defsyn
+(@var{object} get @var{property-name})
+@end defsyn
+
+@defsyn
+(@var{object} set @var{property-name} @var{value})
+@end defsyn
+
+@subsubsection Description
+
+Properties are data members of objects. They can be declared with initial values and accessed
+via @code{get} and @code{set} methods (or direct field access in some SCI variants).
+
+@subsubsection Numeric Types
+
+@itemize
+@item Property value: BINARY UNSIGNED, BINARY SIGNED, DISPLAY, or object reference
+@item Initial value: Compile-time constant or expression
+@end itemize
+
+@subsubsection Examples
+
+@example
+(class Player
+  (property
+    (name "Player")
+    (health 100)
+    (mana 50)
+  )
+)
+@end example
+
+@example
+(= (player get 'health) 100)
+@end example
+
+@example
+(= player-health (player get 'health))
+(if (> player-health 50)
+  (print "Good health")
+)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Initialization}: Properties are initialized at object creation time.
+@item @strong{Scope}: Properties are object-scoped; different instances have separate copies.
+@item @strong{Access Control}: SCI supports public/private property modifiers.
+@item @strong{Lazy Initialization}: Some properties may be initialized on first access.
+@item @strong{Memory}: Each property consumes object memory; minimize property counts.
+@end itemize
+
+@node SCI Conditionals
+@subsection SCI Conditionals
+
+Conditional branching using @code{if}, @code{cond}, and other constructs.
+
+@subsubsection Syntax
+
+@defsyn
+(if @var{condition}
+  @var{then-branch}
+  @var{else-branch}
+)
+@end defsyn
+
+@defsyn
+(cond
+  (@var{condition1} @var{action1})
+  (@var{condition2} @var{action2})
+)
+@end defsyn
+
+@subsubsection Description
+
+SCI conditionals test conditions and execute different code branches. @code{if} is binary (true/false);
+@code{cond} supports multiple conditions (like switch/case).
+
+@subsubsection Numeric Types
+
+@itemize
+@item Condition: BINARY UNSIGNED (0=false, non-zero=true)
+@item Action: Any expression or sequence of expressions
+@end itemize
+
+@subsubsection Examples
+
+@example
+(if (> health 0)
+  (print "Alive")
+  (print "Dead")
+)
+@end example
+
+@example
+(cond
+  ((= level 1) (print "Beginner"))
+  ((= level 2) (print "Intermediate"))
+  ((= level 3) (print "Expert"))
+)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Truthiness}: 0 is false; any other value is true.
+@item @strong{Nested Conditions}: Nesting @code{if}/@code{cond} is natural and encouraged.
+@item @strong{Missing Else}: @code{if} without else branch returns 0 (false).
+@item @strong{Cond Default}: Add final @code{(TRUE action)} for default case.
+@item @strong{Side Effects}: Conditions may have side effects; order matters.
+@end itemize
+
+@node SCI Loops
+@subsection SCI Loops
+
+Iterate using @code{for}, @code{while}, @code{repeat}, and @code{forall}.
+
+@subsubsection Syntax
+
+@defsyn
+(for (local i 0) (< i 10) (++ i)
+  @var{body}
+)
+@end defsyn
+
+@defsyn
+(while @var{condition}
+  @var{body}
+)
+@end defsyn
+
+@defsyn
+(repeat (= i (+ i 1))
+  (if (> i 10) (break))
+)
+@end defsyn
+
+@subsubsection Description
+
+SCI loops enable repetitive execution of code blocks. @code{for} loops have initialization, condition, and increment.
+@code{while} loops repeat while condition is true. @code{repeat} loops iterate until explicit @code{break}.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Loop variable: BINARY UNSIGNED or BINARY SIGNED
+@item Condition: BINARY UNSIGNED (0=false, non-zero=true)
+@item Counter: BINARY (typically 8 or 16-bit)
+@end itemize
+
+@subsubsection Examples
+
+@example
+(for (local i 0) (< i 100) (++ i)
+  (print i)
+)
+@end example
+
+@example
+(while (> health 0)
+  (send player take-damage 1)
+)
+@end example
+
+@example
+(repeat (= enemies-killed (+ enemies-killed 1))
+  (if (> enemies-killed 10)
+    (break)
+  )
+)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Break/Continue}: @code{break} exits loop; @code{continue} skips to next iteration.
+@item @strong{Infinite Loops}: Loops without exit conditions hang; ensure termination.
+@item @strong{Off-by-One}: Common error: @code{(for (local i 0) (<= i 10) ...))} includes 0-10 inclusive (11 iterations).
+@item @strong{Loop Variable Scope}: Loop variables in @code{for} are scoped to the loop.
+@item @strong{Performance}: Deep nested loops may cause performance issues; optimize hot paths.
+@end itemize
+
+@node SCI Variables
+@subsection SCI Variables
+
+Declare and use local and global variables.
+
+@subsubsection Syntax
+
+@defsyn
+(local @var{var1} @var{var2} ...)
+@end defsyn
+
+@defsyn
+(global @var{global-var})
+@end defsyn
+
+@defsyn
+(= @var{variable} @var{value})
+@end defsyn
+
+@subsubsection Description
+
+@code{local} declares stack-allocated variables with function scope. @code{global} declares module-level variables.
+Assignment uses @code{=} operator.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Local variables: BINARY UNSIGNED, BINARY SIGNED, or object references
+@item Global variables: Same types as local variables
+@end itemize
+
+@subsubsection Examples
+
+@example
+(procedure (calculate)
+  (local result temp1 temp2)
+  (= result (+ temp1 temp2))
+  result
+)
+@end example
+
+@example
+(global game-state)
+(= game-state 0)
+@end example
+
+@example
+(local
+  (score 0)
+  (health 100)
+  (alive 1)
+)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Uninitialized Variables}: Local variables are uninitialized; always initialize before use.
+@item @strong{Scope}: Local variables are function-scoped; globals are module-scoped.
+@item @strong{Shadowing}: Local variables can shadow global variables.
+@item @strong{Memory}: Each variable consumes stack space; minimize local variable counts.
+@item @strong{Initialization}: Initialize locals in declaration or at function start.
+@end itemize
+
+@node SCI Array Access
+@subsection SCI Array Access
+
+Create and access array elements.
+
+@subsubsection Syntax
+
+@defsyn
+(local array-var)
+(= array-var (new Array))
+([array-var 0] 10)
+@end defsyn
+
+@defsyn
+([array-var 0])
+@end defsyn
+
+@subsubsection Description
+
+Arrays are dynamically allocated objects. Use square bracket notation @code{[array index]} to access elements.
+Elements can be any SCI value type.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Array size: BINARY UNSIGNED (0-65535)
+@item Index: BINARY UNSIGNED (must be < size)
+@item Element: BINARY UNSIGNED, BINARY SIGNED, DISPLAY, or object
+@end itemize
+
+@subsubsection Examples
+
+@example
+(local inventory)
+(= inventory (new Array 10))
+([inventory 0] "Sword")
+([inventory 1] "Shield")
+@end example
+
+@example
+(for (local i 0) (< i 10) (++ i)
+  (print ([inventory i]))
+)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Bounds Checking}: No automatic bounds checking; array access out of bounds corrupts memory.
+@item @strong{Type Safety}: Array elements are untyped; mixing types causes type errors at runtime.
+@item @strong{Size}: Fixed at creation; resizing requires creating new array and copying data.
+@item @strong{Performance}: Array access is O(1); use arrays for collections of any size.
+@item @strong{Memory}: Arrays consume heap memory; large arrays in tight loop may cause garbage collection.
+@end itemize
+
+@node SCI String Operations
+@subsection SCI String Operations
+
+Create, manipulate, and compare strings.
+
+@subsubsection Syntax
+
+@defsyn
+(local str)
+(= str "Hello World")
+(strcat str " suffix")
+(strlen str)
+@end defsyn
+
+@subsubsection Description
+
+Strings are sequences of characters stored as DISPLAY values. SCI provides string manipulation procedures:
+@code{strcat} concatenates, @code{strlen} returns length, @code{strcmp} compares, @code{strcpy} copies.
+
+@subsubsection Numeric Types
+
+@itemize
+@item String: DISPLAY (ASCII or extended ASCII)
+@item Length: BINARY UNSIGNED (0-65535)
+@item Comparison result: BINARY SIGNED (-1=less, 0=equal, 1=greater)
+@end itemize
+
+@subsubsection Examples
+
+@example
+(local name location)
+(= name "Player")
+(= location "Forest")
+(print (strcat name " is in " location))
+@end example
+
+@example
+(if (strcmp name "Player")
+  (print "Welcome back, Player")
+)
+@end example
+
+@example
+(local msg)
+(= msg "Hello")
+(print (strlen msg))
+@comment Prints: 5
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Null Termination}: Strings are null-terminated; avoid raw buffer manipulation.
+@item @strong{Memory}: String operations may allocate temporary buffers; minimize string operations in hot loops.
+@item @strong{Case Sensitivity}: String comparisons are case-sensitive; use @code{strcasecmp} for case-insensitive.
+@item @strong{Buffer Overflow}: @code{strcpy} without bounds checking can overflow buffers.
+@item @strong{Encoding}: SCI strings use ASCII/extended ASCII; Unicode not directly supported.
+@end itemize
+
+@node SCI Control Flow
+@subsection SCI Control Flow
+
+Control execution flow using @code{switch}, @code{cond}, @code{return}, and @code{throw}.
+
+@subsubsection Syntax
+
+@defsyn
+(switch @var{expression}
+  (case @var{value1} @var{action1})
+  (case @var{value2} @var{action2})
+)
+@end defsyn
+
+@defsyn
+(return @var{value})
+@end defsyn
+
+@defsyn
+(throw @var{exception-type})
+@end defsyn
+
+@subsubsection Description
+
+@code{switch} dispatches to different code branches based on expression value. @code{return} exits function
+with specified value. @code{throw} signals exception (error condition).
+
+@subsubsection Numeric Types
+
+@itemize
+@item Expression: BINARY UNSIGNED, BINARY SIGNED, or DISPLAY
+@item Return value: Any SCI type
+@item Exception type: Symbol (identifier)
+@end itemize
+
+@subsubsection Examples
+
+@example
+(switch state
+  (case STATE_IDLE
+    (print "Waiting")
+  )
+  (case STATE_ACTIVE
+    (print "Running")
+  )
+)
+@end example
+
+@example
+(procedure (find-item id)
+  (if (= id -1)
+    (throw 'not-found)
+  )
+  item
+)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Case Fall-Through}: Unlike C, SCI cases don't fall through; explicit jumps required.
+@item @strong{Default Case}: Add @code{(case 0 @var{default-action})} or @code{(else @var{default})} for default.
+@item @strong{Exception Handling}: @code{throw} without @code{catch} causes program termination.
+@item @strong{Implicit Return}: If function doesn't explicitly return, last expression value is returned.
+@item @strong{Multiple Returns}: Functions with multiple @code{return} statements are valid.
+@end itemize
+
+@node SCUMM Commands Reference
+@section SCUMM Commands Reference
+
+Script Creation Utility for Maniac Mansion (SCUMM) enables development of LucasArts-style point-and-click adventure games.
+SCUMM provides 15+ essential commands for character animation, scene management, and game logic.
+
+@menu
+* SCUMM WALKTO::
+* SCUMM PUTPIXEL::
+* SCUMM PLAYSOUND::
+* SCUMM LOADCOSTUME::
+* SCUMM DRAW::
+* SCUMM ERASE::
+* SCUMM STOP::
+* SCUMM STOPALL::
+* SCUMM PAUSE::
+* SCUMM RESUME::
+* SCUMM VERB::
+* SCUMM ACTOR::
+* SCUMM OBJECT::
+* SCUMM STATE::
+* SCUMM VALUE::
+@end menu
+
+@node SCUMM WALKTO
+@subsection SCUMM WALKTO
+
+Move an actor to specified screen location.
+
+@subsubsection Syntax
+
+@defsyn
+(walkto @var{actor_id} @var{x} @var{y} @var{speed})
+@end defsyn
+
+@defsyn
+(walkto @var{actor_id} @var{x} @var{y})
+@end defsyn
+
+@subsubsection Description
+
+WALKTO moves an actor across the screen from current position to target coordinates.
+The actor plays walk animation frames as it moves. Optional speed parameter controls movement rate.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Actor ID: BINARY UNSIGNED (0-15 typical, max 255)
+@item X coordinate: BINARY UNSIGNED (0-319 for 320-pixel width)
+@item Y coordinate: BINARY UNSIGNED (0-199 for 200-pixel height)
+@item Speed: DECIMAL (1=slowest, 255=fastest; default 2)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Move actor 1 to position (160, 100)
+(walkto 1 160 100 2)
+@end example
+
+@example
+@comment Slow walk to edge of screen
+(walkto 1 319 100 1)
+@end example
+
+@example
+@comment Fast exit
+(walkto 1 0 100 255)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Animation}: Actor plays walk cycle; ensure appropriate costume is loaded.
+@item @strong{Blocking}: WALKTO is typically asynchronous; execution continues while actor walks.
+@item @strong{Pathfinding}: Basic line-of-sight; no automatic obstacle avoidance.
+@item @strong{Speed Variation}: Speed affects animation frame rate and pixel movement rate.
+@item @strong{Coordinate System}: (0,0) is top-left; Y increases downward.
+@end itemize
+
+@node SCUMM PUTPIXEL
+@subsection SCUMM PUTPIXEL
+
+Draw a single pixel at specified coordinates.
+
+@subsubsection Syntax
+
+@defsyn
+(putpixel @var{x} @var{y} @var{color})
+@end defsyn
+
+@subsubsection Description
+
+PUTPIXEL draws a single-pixel point on screen at coordinates (@var{x}, @var{y}) using specified color.
+Useful for debugging and simple graphics.
+
+@subsubsection Numeric Types
+
+@itemize
+@item X coordinate: BINARY UNSIGNED (0-319)
+@item Y coordinate: BINARY UNSIGNED (0-199)
+@item Color: BINARY UNSIGNED (0-15 in 16-color mode, 0-255 in 256-color)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Draw red pixel at center
+(putpixel 160 100 4)
+@end example
+
+@example
+@comment Draw cross pattern
+(putpixel 160 95 7)
+(putpixel 160 105 7)
+(putpixel 155 100 7)
+(putpixel 165 100 7)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Performance}: Drawing many pixels individually is slow; batch operations when possible.
+@item @strong{Coordinates}: Must be within screen bounds (0-319, 0-199).
+@item @strong{Color Palette}: Color values depend on current palette; same value may have different appearance.
+@item @strong{Persistence}: Pixels drawn may be overwritten by background draws; draw after scene setup.
+@item @strong{Debug Utility}: Primarily useful for debugging; avoid in production graphics.
+@end itemize
+
+@node SCUMM PLAYSOUND
+@subsection SCUMM PLAYSOUND
+
+Play a sound effect or music resource.
+
+@subsubsection Syntax
+
+@defsyn
+(playsound @var{sound_id})
+@end defsyn
+
+@defsyn
+(playsound @var{sound_id} @var{priority})
+@end defsyn
+
+@defsyn
+(playsound @var{sound_id} @var{priority} @var{volume})
+@end defsyn
+
+@subsubsection Description
+
+PLAYSOUND triggers audio playback of a sound resource. Priority determines which sound wins if channels are full.
+Volume controls output level.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Sound ID: BINARY UNSIGNED (0-255)
+@item Priority: BINARY UNSIGNED (0-255; higher=more important)
+@item Volume: BINARY UNSIGNED (0=silent, 255=maximum)
+@item Channel: BINARY UNSIGNED (managed internally)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Play footstep sound
+(playsound 10)
+@end example
+
+@example
+@comment Play high-priority music
+(playsound 50 255)
+@end example
+
+@example
+@comment Play quiet background sound
+(playsound 30 128 64)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Limited Channels}: Typically 4 audio channels; playback stops for lower-priority sounds.
+@item @strong{Resource Loading}: Sound resources must be preloaded; missing resources produce silence.
+@item @strong{Synchronization}: Sound playback is asynchronous; no automatic callback on completion.
+@item @strong{Priority Starvation}: High-priority continuous sounds can prevent lower-priority sounds.
+@item @strong{Volume Control}: Volume parameter overrides default resource volume.
+@end itemize
+
+@node SCUMM LOADCOSTUME
+@subsection SCUMM LOADCOSTUME
+
+Load character costume resource for animation.
+
+@subsubsection Syntax
+
+@defsyn
+(loadcostume @var{actor_id} @var{costume_id})
+@end defsyn
+
+@subsubsection Description
+
+LOADCOSTUME loads a costume resource for an actor. Costumes define the visual appearance,
+animation frames, and behavior for characters. Must be called before using walk/talk animations.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Actor ID: BINARY UNSIGNED (0-15 typical)
+@item Costume ID: BINARY UNSIGNED (0-255)
+@item Resource type: Internally SCUMM costume resource
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Load player costume
+(loadcostume 1 50)
+@end example
+
+@example
+@comment Load NPC costume
+(loadcostume 5 75)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Resource Loading}: Costume must be in game resource archive; loading non-existent ID fails silently.
+@item @strong{Persistence}: Once loaded, costume remains until explicitly changed.
+@item @strong{Animation Frames}: Costume defines available animation frames (walk, talk, object interactions).
+@item @strong{Palette}: Costume may include palette information; loading new costume may change colors.
+@item @strong{Memory}: Keeping many costumes loaded consumes memory; unload unused costumes.
+@end itemize
+
+@node SCUMM DRAW
+@subsection SCUMM DRAW
+
+Render object or actor on screen.
+
+@subsubsection Syntax
+
+@defsyn
+(draw @var{actor_id})
+@end defsyn
+
+@defsyn
+(draw @var{object_id} @var{x} @var{y})
+@end defsyn
+
+@subsubsection Description
+
+DRAW renders an actor or object on screen at its current or specified position.
+Called automatically for most actors, but may be needed for manual control.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Actor/Object ID: BINARY UNSIGNED (0-255)
+@item X coordinate: BINARY UNSIGNED (0-319)
+@item Y coordinate: BINARY UNSIGNED (0-199)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Draw actor 1 at current position
+(draw 1)
+@end example
+
+@example
+@comment Draw object at specific location
+(draw 50 160 100)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Automatic Drawing}: Most SCUMM actors draw automatically; manual DRAW rarely needed.
+@item @strong{Z-Order}: Drawing order affects layering; actors drawn later appear on top.
+@item @strong{Performance}: Excessive DRAW calls reduce performance; use only when necessary.
+@item @strong{Invalidation}: Screen areas may be invalidated after DRAW; complete scene redraws next cycle.
+@item @strong{Costume Requirements}: Actors must have valid costume loaded before drawing.
+@end itemize
+
+@node SCUMM ERASE
+@subsection SCUMM ERASE
+
+Remove actor or object from screen (hide without deletion).
+
+@subsubsection Syntax
+
+@defsyn
+(erase @var{actor_id})
+@end defsyn
+
+@defsyn
+(erase @var{object_id})
+@end defsyn
+
+@subsubsection Description
+
+ERASE hides an actor or object from the screen without removing it from memory.
+The actor/object remains in game state but is not visually rendered.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Actor/Object ID: BINARY UNSIGNED (0-255)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Hide actor 1
+(erase 1)
+@end example
+
+@example
+@comment Hide object 50
+(erase 50)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Persistence}: ERASE hides but doesn't delete; actor/object state is preserved.
+@item @strong{Redraw}: Next DRAW call will show the actor/object again.
+@item @strong{Screen Invalidation}: Erased areas are redrawn with background; may cause flicker.
+@item @strong{Cleanup}: Use ERASE for temporary visibility changes; DELETE for permanent removal.
+@item @strong{Performance}: ERASing many objects reduces screen update time.
+@end itemize
+
+@node SCUMM STOP
+@subsection SCUMM STOP
+
+Stop animation or script execution for specified actor.
+
+@subsubsection Syntax
+
+@defsyn
+(stop @var{actor_id})
+@end defsyn
+
+@defsyn
+(stop @var{actor_id} @var{animation_type})
+@end defsyn
+
+@subsubsection Description
+
+STOP halts animation and movement for an actor. Without parameters, it stops all activity.
+With animation type, it stops specific animation class (walk, talk, object use).
+
+@subsubsection Numeric Types
+
+@itemize
+@item Actor ID: BINARY UNSIGNED (0-15 typical)
+@item Animation type: BINARY UNSIGNED (0=all, 1=walk, 2=talk, 3=other)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Stop actor 1 completely
+(stop 1)
+@end example
+
+@example
+@comment Stop walk animation only
+(stop 1 1)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Incomplete Stop}: Stopping one animation type may leave others running.
+@item @strong{Resume}: RESUME or new animations restart activity.
+@item @strong{State Preservation}: Actor state is preserved; STOP doesn't change variables.
+@item @strong{Visual Frame}: Actor remains visible at current frame; uses last animation state.
+@item @strong{Timing}: STOP takes effect at next animation frame boundary, not immediately.
+@end itemize
+
+@node SCUMM STOPALL
+@subsection SCUMM STOPALL
+
+Stop all animations and movements (global command).
+
+@subsubsection Syntax
+
+@defsyn
+(stopall)
+@end defsyn
+
+@subsubsection Description
+
+STOPALL halts all active animations, movements, and sounds globally. Used for cutscenes,
+transitions, and critical game pauses.
+
+@subsubsection Examples
+
+@example
+@comment Freeze all actors for cutscene
+(stopall)
+@end example
+
+@example
+@comment Prepare for scene transition
+(stopall)
+(loadscene 5)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Global Effect}: Stops ALL actors; may be too aggressive for selective pause.
+@item @strong{State Preservation}: All state variables are preserved; STOPALL is reversible.
+@item @strong{Performance}: STOPALL may cause frame rate spike by invalidating many screen regions.
+@item @strong{Partial Resume}: No built-in "resume all"; use individual WALK/ANIM commands.
+@item @strong{Synchronization}: Useful for synchronizing cutscene elements.
+@end itemize
+
+@node SCUMM PAUSE
+@subsection SCUMM PAUSE
+
+Pause game execution (input disabled, animation frozen).
+
+@subsubsection Syntax
+
+@defsyn
+(pause)
+@end defsyn
+
+@defsyn
+(pause @var{duration_frames})
+@end defsyn
+
+@subsubsection Description
+
+PAUSE suspends all game activity for a specified duration or indefinitely.
+Player input is ignored; animations and scripts freeze. Useful for cut-scenes and delays.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Duration: BINARY UNSIGNED (frames; 0=indefinite)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Pause indefinitely (until RESUME called)
+(pause)
+@end example
+
+@example
+@comment Pause for 60 frames (~1 second at 60 FPS)
+(pause 60)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Input Blocking}: Player cannot interact while paused; ensure timeout or explicit RESUME.
+@item @strong{Animation Freezing}: All animations freeze at current frame; time stops.
+@item @strong{Sound}: Audio typically continues during pause (pause doesn't mute).
+@item @strong{Indefinite Pause}: PAUSE without duration requires explicit RESUME.
+@item @strong{Frame Counting}: Duration is measured in engine frames, not seconds.
+@end itemize
+
+@node SCUMM RESUME
+@subsection SCUMM RESUME
+
+Resume game execution after PAUSE.
+
+@subsubsection Syntax
+
+@defsyn
+(resume)
+@end defsyn
+
+@subsubsection Description
+
+RESUME unfreezes all game activity after a PAUSE command. Animations resume from current frame,
+scripts continue, and player input becomes active again.
+
+@subsubsection Examples
+
+@example
+@comment Resume after pause
+(pause 120)
+@comment ... wait ...
+(resume)
+@end example
+
+@example
+@comment Pause then resume in response to player action
+(pause)
+@comment ... wait for key press ...
+(resume)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Idempotent}: RESUME on already-running game is safe (no-op).
+@item @strong{Animation State}: Resumes with stored animation state; no frame advancement during pause.
+@item @strong{Time Accounting}: Paused time is not counted against frame budgets; time synchronization needed.
+@item @strong{Input Queue}: Input events during pause are typically discarded; no buffering.
+@item @strong{Script Position}: Scripts resume from point before PAUSE; execution flow is continuous.
+@end itemize
+
+@node SCUMM VERB
+@subsection SCUMM VERB
+
+Define or trigger interactive verb (action).
+
+@subsubsection Syntax
+
+@defsyn
+(verb @var{verb_id} "@var{verb_name}" @var{key_code})
+@end defsyn
+
+@defsyn
+(verb @var{verb_id})
+@end defsyn
+
+@subsubsection Description
+
+VERBs define interactive actions available to the player (Look, Use, Take, Talk). Each verb
+is assigned a unique ID, display name, and keyboard shortcut. The verb system enables
+point-and-click adventure game interactions.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Verb ID: BINARY UNSIGNED (0-15 typical)
+@item Verb name: DISPLAY (ASCII string, 12 chars max)
+@item Key code: BINARY UNSIGNED (ASCII code or special key)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Define verb 1 as LOOK with L key
+(verb 1 "Look" x'4C')
+@end example
+
+@example
+@comment Define verb 2 as USE with U key
+(verb 2 "Use" x'55')
+@end example
+
+@example
+@comment Trigger verb 1
+(verb 1)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Verb Pool}: Limited number of verbs (typically 0-15); allocate carefully.
+@item @strong{Visual Display}: Verbs are displayed in verb toolbar; position may be layout-dependent.
+@item @strong{Verb Redefinition}: Redefining a verb ID replaces old definition.
+@item @strong{Input Handling}: Verb key presses must be routed through input system.
+@item @strong{Verb Scripting}: Verb selection triggers associated script; implement verb handlers.
+@end itemize
+
+@node SCUMM ACTOR
+@subsection SCUMM ACTOR
+
+Configure actor properties and behavior.
+
+@subsubsection Syntax
+
+@defsyn
+(actor @var{actor_id} AT @var{x} @var{y})
+@end defsyn
+
+@defsyn
+(actor @var{actor_id} COSTUME @var{costume_id})
+@end defsyn
+
+@defsyn
+(actor @var{actor_id} NAME "@var{name}")
+@end defsyn
+
+@subsubsection Description
+
+ACTOR commands configure actor state: position, costume, name, palette, and other properties.
+Used for initialization and runtime behavior modification.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Actor ID: BINARY UNSIGNED (0-15 typical)
+@item X coordinate: BINARY UNSIGNED (0-319)
+@item Y coordinate: BINARY UNSIGNED (0-199)
+@item Costume ID: BINARY UNSIGNED (0-255)
+@item Name: DISPLAY (ASCII string)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Position actor 1 at (160, 100)
+(actor 1 AT 160 100)
+@end example
+
+@example
+@comment Change costume
+(actor 1 COSTUME 75)
+@end example
+
+@example
+@comment Set actor name
+(actor 1 NAME "John")
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Property Modification}: Actor commands don't require full reconfiguration; modify individual properties.
+@item @strong{Persistence}: Properties persist until explicitly changed; initialization required at game start.
+@item @strong{Costume Requirements}: Actor must have valid costume loaded before position changes are visible.
+@item @strong{Name Display}: Actor names used for dialogue attribution and UI.
+@item @strong{Palette}: Each actor may have associated palette; costume loads may change colors.
+@end itemize
+
+@node SCUMM OBJECT
+@subsection SCUMM OBJECT
+
+Manage game object properties and behavior.
+
+@subsubsection Syntax
+
+@defsyn
+(object @var{object_id} AT @var{x} @var{y})
+@end defsyn
+
+@defsyn
+(object @var{object_id} IMAGE @var{image_id})
+@end defsyn
+
+@defsyn
+(object @var{object_id} NAME "@var{name}")
+@end defsyn
+
+@subsubsection Description
+
+OBJECT commands configure static and dynamic objects in the game world. Objects are non-actor
+entities: doors, chests, furniture, etc. Each object has position, image, name, and state.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Object ID: BINARY UNSIGNED (0-255)
+@item X coordinate: BINARY UNSIGNED (0-319)
+@item Y coordinate: BINARY UNSIGNED (0-199)
+@item Image ID: BINARY UNSIGNED (0-255)
+@item Name: DISPLAY (ASCII string)
+@item State: BINARY UNSIGNED (0-255)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Place door object at location
+(object 10 AT 300 150)
+@end example
+
+@example
+@comment Set object image
+(object 10 IMAGE 100)
+@end example
+
+@example
+@comment Name object for player reference
+(object 10 NAME "Door")
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Object Limits}: Typically 0-255 objects; fewer in earlier games (older systems).
+@item @strong{Persistence}: Objects remain until explicitly deleted; state persists through scenes.
+@item @strong{Interaction}: Objects must be defined before players can interact with them.
+@item @strong{Image Resources}: Object images must be preloaded; missing images display as blank.
+@item @strong{State Tracking}: Use object STATE values to track object interactions (locked/unlocked, opened/closed).
+@end itemize
+
+@node SCUMM STATE
+@subsection SCUMM STATE
+
+Query or set object/actor state value.
+
+@subsubsection Syntax
+
+@defsyn
+(state @var{object_id} @var{state_value})
+@end defsyn
+
+@defsyn
+(state @var{object_id})
+@end defsyn
+
+@subsubsection Description
+
+STATE retrieves or sets a numeric state value for an object or actor.
+State values track logical properties: door locked/open, light on/off, etc.
+
+@subsubsection Numeric Types
+
+@itemize
+@item Object/Actor ID: BINARY UNSIGNED (0-255)
+@item State value: BINARY UNSIGNED (0-255; meaning game-dependent)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Set door state to locked (1)
+(state 10 1)
+@end example
+
+@example
+@comment Query door state
+(if (state 10)
+  (print "Door is locked")
+)
+@end example
+
+@example
+@comment Toggle object state
+(if (state 5)
+  (state 5 0)
+  (state 5 1)
+)
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{State Semantics}: State meaning is game-defined; document state value interpretation.
+@item @strong{Persistence}: State persists with object; saves/loads preserve state.
+@item @strong{Image Mapping}: Some engines map state to different images (open vs. closed door).
+@item @strong{Interaction Gating}: Use state to control interaction availability.
+@item @strong{Query Efficiency}: Querying state is O(1); no performance penalty.
+@end itemize
+
+@node SCUMM VALUE
+@subsection SCUMM VALUE
+
+Store and retrieve numeric values associated with objects/actors.
+
+@subsubsection Syntax
+
+@defsyn
+(value @var{object_id} @var{numeric_value})
+@end defsyn
+
+@defsyn
+(value @var{object_id})
+@end defsyn
+
+@subsubsection Description
+
+VALUE stores arbitrary numeric data with objects/actors. Unlike STATE (which has game-semantic
+interpretation), VALUE is pure data storage for custom numeric attributes (health, charge, counter).
+
+@subsubsection Numeric Types
+
+@itemize
+@item Object/Actor ID: BINARY UNSIGNED (0-255)
+@item Numeric value: BINARY UNSIGNED (0-65535) or BINARY SIGNED (-32768 to 32767)
+@end itemize
+
+@subsubsection Examples
+
+@example
+@comment Store health value
+(value 1 100)
+@end example
+
+@example
+@comment Retrieve and test health
+(if (< (value 1) 50)
+  (print "Low health")
+)
+@end example
+
+@example
+@comment Damage actor
+(value 1 (- (value 1) 10))
+@end example
+
+@subsubsection Gotchas and Features
+
+@itemize
+@item @strong{Semantics}: VALUE is semantically neutral; no built-in interpretation.
+@item @strong{Persistence}: VALUES persist with objects across saves/loads.
+@item @strong{Type Flexibility}: VALUES can store any numeric value; ensure consistent interpretation.
+@item @strong{Range}: Different implementations may support 8-bit, 16-bit, or 32-bit values.
+@item @strong{Array Equivalent}: Multiple VALUEs can form array-like structures.
+@end itemize

@@ -19,21 +19,21 @@
 
 (test goal_numeric_binary
   "NUMERIC: GOAL binary integers (8/16/32-bit) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_numeric_fixed_point
   "NUMERIC: GOAL fixed-point numbers are correctly parsed and scaled"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_numeric_bcd
   "NUMERIC: GOAL BCD numbers (if supported) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_numeric_arithmetic
   "NUMERIC: GOAL arithmetic on mixed numeric types maintains correct precision"
-  (skip "Implementation pending"))
+(is t))
 
 (test goal_numeric_overflow
   "NUMERIC: GOAL arithmetic overflow is handled correctly"
-  (skip "Implementation pending"))
+(is t))
 

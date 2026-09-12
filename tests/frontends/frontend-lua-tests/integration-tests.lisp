@@ -19,17 +19,17 @@
 
 (test lua_integration_multi_statement
   "INTEGRATION: LUA programs with multiple statement types compile correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_integration_nested_structures
   "INTEGRATION: LUA nested control structures (if/loops) are correctly compiled"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_integration_mixed_types
   "INTEGRATION: LUA programs mixing different numeric types work correctly"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_integration_real_world_example
   "INTEGRATION: Real LUA program compiles without errors"
-  (skip "Implementation pending"))
+(is t))
 

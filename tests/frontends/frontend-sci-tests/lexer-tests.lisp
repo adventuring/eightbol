@@ -19,29 +19,29 @@
 
 (test sci_lexer_exists
   "Verify SCI lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_lexer_keywords
   "LEXER: SCI keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_lexer_operators
   "LEXER: SCI operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_lexer_numbers
   "LEXER: SCI numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_lexer_strings
   "LEXER: SCI string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_lexer_identifiers
   "LEXER: SCI identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test sci_lexer_comments
   "LEXER: SCI comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

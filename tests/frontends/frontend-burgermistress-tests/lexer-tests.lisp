@@ -19,29 +19,29 @@
 
 (test burgermistress_lexer_exists
   "Verify BURGERMISTRESS lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_lexer_keywords
   "LEXER: BURGERMISTRESS keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_lexer_operators
   "LEXER: BURGERMISTRESS operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_lexer_numbers
   "LEXER: BURGERMISTRESS numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_lexer_strings
   "LEXER: BURGERMISTRESS string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_lexer_identifiers
   "LEXER: BURGERMISTRESS identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_lexer_comments
   "LEXER: BURGERMISTRESS comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

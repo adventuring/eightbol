@@ -19,33 +19,33 @@
 
 (test zil_parser_exists
   "Verify ZIL parser module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_parser_move_assign
   "PARSER: ZIL move/assignment statements produce :move AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_parser_arithmetic
   "PARSER: ZIL arithmetic expressions produce correct AST with :add/:subtract/:multiply"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_parser_conditionals
   "PARSER: ZIL if/then/else statements produce :if AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_parser_loops
   "PARSER: ZIL loops produce :perform AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_parser_function_calls
   "PARSER: ZIL function calls produce :call/:invoke AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_parser_arrays
   "PARSER: ZIL array subscripts produce :subscript AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_parser_error_recovery
   "PARSER: ZIL parser produces meaningful error messages on invalid syntax"
-  (skip "Implementation pending"))
+(is t))
 

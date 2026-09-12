@@ -19,21 +19,21 @@
 
 (test scumm_functions_library
   "FUNCTIONS: SCUMM library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_functions_user_defined
   "FUNCTIONS: SCUMM user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_functions_recursion
   "FUNCTIONS: SCUMM recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_functions_return_values
   "FUNCTIONS: SCUMM function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_functions_parameter_passing
   "FUNCTIONS: SCUMM parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

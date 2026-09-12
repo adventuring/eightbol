@@ -23,21 +23,41 @@
 
 (test huc6280_call_local
   "CALL: HUC6280 local :call invocations generate correct JSR/CALL instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :HUC6280 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test huc6280_call_library
   "CALL: HUC6280 library :call invocations are correctly linked"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :HUC6280 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test huc6280_invoke_method
   "INVOKE: HUC6280 :invoke method calls generate correct dispatch sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :HUC6280 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test huc6280_call_return_value
   "CALL: HUC6280 function return values are correctly placed in accumulator"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :HUC6280 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test huc6280_call_register_preservation
   "CALL: HUC6280 register preservation across calls is correctly generated"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :HUC6280 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

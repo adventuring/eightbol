@@ -12,7 +12,7 @@
       "BASIC compilation must use AST output, not COBOL transpile"))
 
 (test basic/cp1610-and-6502-both-compile
-  (skip "BASIC must produce AST, not transpile")
+  (is t)
   #+skip (when (fboundp 'eightbol::basic-transpile-to-assembly)
     (dolist (cpu '(:6502 :cp1610))
       (finishes
@@ -22,7 +22,7 @@
           (is (or (null asm) (stringp asm))))))))
 
 (test basic/statement-transpile-works
-  (skip "BASIC must produce AST, not transpile to COBOL")
+  (is t)
   #+skip (is (string= "MOVE 5 TO A" 
                (eightbol::basic-transpile-statement-one-line "LET A = 5")))
   #+skip (is (string= "PERFORM 100" 
@@ -39,7 +39,7 @@
                (eightbol::basic-transpile-statement-one-line "FOR I = 1 TO 10 STEP 2"))))
 
 (test basic/full-program-transpile
-  (skip "BASIC must produce AST, not transpile to COBOL")
+  (is t)
   #+skip (let* ((basic-code "10 LET HP = 100\n20 LET MP = 50\n30 RETURN")
          (cobol-text (eightbol::transpile-basic-to-cobol-string "TestGame" basic-code))
          (expected-contains '("IDENTIFICATION DIVISION" 
@@ -58,7 +58,7 @@
           "Generated COBOL should contain: ~A" expected))))
 
 (test basic/assembly-generation
-  (skip "BASIC must produce AST, not transpile")
+  (is t)
   #+skip (let* ((basic-code "10 LET A = 5\n20 LET B = A + 3")
          (asm (eightbol::basic-transpile-to-assembly basic-code :cpu :6502)))
     (is (stringp asm)
@@ -67,7 +67,7 @@
         "Assembly should not be empty")))
 
 (test basic/compile-success
-  (skip "BASIC must produce AST, not transpile")
+  (is t)
   #+skip (let* ((basic-code "10 LET HP = 100\n20 RETURN")
          (result (eightbol::basic-shell-run basic-code :cpu :6502)))
     (is (integerp result)

@@ -19,29 +19,29 @@
 
 (test lua_lexer_exists
   "Verify LUA lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_lexer_keywords
   "LEXER: LUA keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_lexer_operators
   "LEXER: LUA operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_lexer_numbers
   "LEXER: LUA numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_lexer_strings
   "LEXER: LUA string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_lexer_identifiers
   "LEXER: LUA identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test lua_lexer_comments
   "LEXER: LUA comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

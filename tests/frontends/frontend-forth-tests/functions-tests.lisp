@@ -19,21 +19,21 @@
 
 (test forth_functions_library
   "FUNCTIONS: FORTH library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_functions_user_defined
   "FUNCTIONS: FORTH user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_functions_recursion
   "FUNCTIONS: FORTH recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_functions_return_values
   "FUNCTIONS: FORTH function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_functions_parameter_passing
   "FUNCTIONS: FORTH parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

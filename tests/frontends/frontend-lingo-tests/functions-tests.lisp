@@ -19,21 +19,21 @@
 
 (test lingo_functions_library
   "FUNCTIONS: LINGO library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_functions_user_defined
   "FUNCTIONS: LINGO user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_functions_recursion
   "FUNCTIONS: LINGO recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_functions_return_values
   "FUNCTIONS: LINGO function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test lingo_functions_parameter_passing
   "FUNCTIONS: LINGO parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

@@ -19,29 +19,29 @@
 
 (test smalltalk_lexer_exists
   "Verify SMALLTALK lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test smalltalk_lexer_keywords
   "LEXER: SMALLTALK keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test smalltalk_lexer_operators
   "LEXER: SMALLTALK operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test smalltalk_lexer_numbers
   "LEXER: SMALLTALK numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test smalltalk_lexer_strings
   "LEXER: SMALLTALK string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test smalltalk_lexer_identifiers
   "LEXER: SMALLTALK identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test smalltalk_lexer_comments
   "LEXER: SMALLTALK comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

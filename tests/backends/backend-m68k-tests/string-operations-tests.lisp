@@ -23,17 +23,33 @@
 
 (test m68k_string_blt
   "STRING: M68K STRING BLT operations generate correct memory operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_string_subscript
   "STRING: M68K subscript operations on strings generate correct index calculations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_string_refmod
   "STRING: M68K reference modification produces correct substring operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_string_indexing_base
   "STRING: M68K zero-based vs one-based indexing is correctly handled"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

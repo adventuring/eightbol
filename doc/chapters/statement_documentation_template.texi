@@ -1,0 +1,206 @@
+@c STATEMENT DOCUMENTATION TEMPLATE FOR EIGHTBOL LANGUAGE FRONTENDS
+@c This file provides the standard structure and sections for documenting each statement type.
+@c Copy this template for each new statement to be documented.
+
+@c ========================================================================
+@c TEMPLATE: Statement Name
+@c ========================================================================
+@c Replace "Statement Name" with actual statement (e.g., "MOVE Statement", "IF/THEN", etc.)
+
+@page
+@node [STATEMENT NAME]
+@section [STATEMENT NAME]
+
+@subsection Purpose and Semantics
+
+@c Describe what this statement does in 2-3 paragraphs:
+@c - What operation does it perform?
+@c - What are its primary use cases?
+@c - How does it differ from related statements in the language?
+@c - Why does this language have this statement type?
+
+[PURPOSE TEXT HERE]
+
+@subsection Syntax and Grammar
+
+Present the BNF or EBNF grammar for this statement:
+
+@example
+[FORMAL GRAMMAR IN BNF/EBNF]
+@end example
+
+List all keyword variations and optional clauses:
+
+@table @asis
+@item Keyword 1
+Description of this keyword's role
+
+@item Keyword 2
+Description of this keyword's role
+
+@item Optional Clause 1
+Description of when this clause is optional vs. required
+
+@end table
+
+@subsection Statement Forms and Variants
+
+List all commonly used forms of this statement:
+
+@enumerate
+@item @strong{Basic form}: [BASIC SYNTAX]
+   Description of the simple case
+
+@item @strong{Extended form 1}: [EXTENDED SYNTAX]
+   Description of this variant and when to use it
+
+@item @strong{Extended form 2}: [EXTENDED SYNTAX]
+   Description of this variant and when to use it
+
+@item @strong{Unusual form}: [RARE SYNTAX]
+   Description of rare/special case if applicable
+
+@end enumerate
+
+@subsection Operand Types and Specifications
+
+@table @asis
+@item Operand 1 (name)
+Valid types: [TYPE LIST]
+Constraints: [ANY CONSTRAINTS]
+Examples: [1-2 EXAMPLES]
+
+@item Operand 2 (name)
+Valid types: [TYPE LIST]
+Constraints: [ANY CONSTRAINTS]
+Examples: [1-2 EXAMPLES]
+
+@end table
+
+Refer to @ref{Numeric Types Reference} for detailed numeric type information.
+
+@subsection Detailed Examples
+
+Provide 4-5 compilable examples demonstrating the statement:
+
+@subsubsection Example 1: Simple Case
+
+@example
+[CODE EXAMPLE 1]
+@end example
+
+@strong{Explanation}: [1-2 SENTENCE EXPLANATION]
+
+@subsubsection Example 2: Complex Case with All Features
+
+@example
+[CODE EXAMPLE 2]
+@end example
+
+@strong{Explanation}: [2-3 SENTENCE EXPLANATION OF HOW ALL FEATURES ARE USED]
+
+@subsubsection Example 3: Edge Case or Boundary Condition
+
+@example
+[CODE EXAMPLE 3]
+@end example
+
+@strong{Explanation}: [2-3 SENTENCE EXPLANATION OF EDGE CASE]
+
+@subsubsection Example 4: Common Mistake/Gotcha
+
+@example
+[CODE EXAMPLE 4 - INCORRECT]
+@end example
+
+@strong{Problem}: [WHAT IS WRONG AND WHY]
+
+@strong{Corrected}: 
+@example
+[CODE EXAMPLE 4 - CORRECT]
+@end example
+
+@subsubsection Example 5: Combined Features
+
+@example
+[CODE EXAMPLE 5]
+@end example
+
+@strong{Explanation}: [2-3 SENTENCE EXPLANATION]
+
+@subsection Clause-by-Clause Breakdown
+
+For statements with multiple clauses, provide detailed explanation of each:
+
+@subsubsection [CLAUSE NAME]
+
+Description of what this clause does, when it's required, and how it interacts
+with other clauses. Include constraints and gotchas specific to this clause.
+
+@strong{Syntax}: @code{[CLAUSE SYNTAX]}
+
+@strong{Valid operands}: [LIST]
+
+@strong{Required when}: [CONDITION]
+
+@strong{Mutually exclusive with}: [OTHER CLAUSES IF APPLICABLE]
+
+@subsection Interaction with Other Statements
+
+Describe how this statement interacts with related statements or constructs:
+
+@itemize
+@item Interaction 1: [DESCRIPTION]
+
+@item Interaction 2: [DESCRIPTION]
+
+@item Interaction 3: [DESCRIPTION]
+
+@end itemize
+
+@subsection AST Representation
+
+Show how this statement is represented in the Abstract Syntax Tree:
+
+@example
+(:statement-type :operand1 value1 :operand2 value2 ...)
+@end example
+
+@subsection Cross-Language Equivalents
+
+Brief mentions of equivalent constructs in other EIGHTBOL frontends:
+
+@itemize
+@item [LANGUAGE NAME]: [EQUIVALENT STATEMENT/FORM]
+
+@item [LANGUAGE NAME]: [EQUIVALENT STATEMENT/FORM]
+
+@end itemize
+
+@subsection Notes and Caveats
+
+@itemize
+@item Note 1: [IMPORTANT BEHAVIOR OR CONSTRAINT]
+
+@item Note 2: [COMMON MISUNDERSTANDING OR PITFALL]
+
+@item Note 3: [PERFORMANCE CONSIDERATION OR OPTIMIZATION]
+
+@item Note 4: [PLATFORM-SPECIFIC BEHAVIOR]
+
+@end itemize
+
+@subsection Performance Considerations
+
+If applicable, discuss performance implications:
+
+@itemize
+@item Runtime cost compared to alternatives
+@item Memory implications
+@item Optimization hints or techniques
+@end itemize
+
+@c ========================================================================
+@c END TEMPLATE
+@c ========================================================================
+

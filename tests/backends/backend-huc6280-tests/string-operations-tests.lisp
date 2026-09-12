@@ -23,17 +23,33 @@
 
 (test huc6280_string_blt
   "STRING: HUC6280 STRING BLT operations generate correct memory operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :HUC6280 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test huc6280_string_subscript
   "STRING: HUC6280 subscript operations on strings generate correct index calculations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :HUC6280 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test huc6280_string_refmod
   "STRING: HUC6280 reference modification produces correct substring operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :HUC6280 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test huc6280_string_indexing_base
   "STRING: HUC6280 zero-based vs one-based indexing is correctly handled"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :HUC6280 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

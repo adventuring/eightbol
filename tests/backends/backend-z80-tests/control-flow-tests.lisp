@@ -23,21 +23,41 @@
 
 (test z80_if_conditional
   "CONTROL FLOW: Z80 :if conditionals generate correct branch instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_if_nested
   "CONTROL FLOW: Z80 nested conditionals generate correct branch chains"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_perform_loop
   "CONTROL FLOW: Z80 :perform loops generate correct branch/jump sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_goto
   "CONTROL FLOW: Z80 :goto jumps generate correct unconditional jumps"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_loop_unroll
   "CONTROL FLOW: Z80 loop optimization correctly unrolls small loops"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

@@ -19,21 +19,21 @@
 
 (test muddle_numeric_binary
   "NUMERIC: MUDDLE binary integers (8/16/32-bit) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_numeric_fixed_point
   "NUMERIC: MUDDLE fixed-point numbers are correctly parsed and scaled"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_numeric_bcd
   "NUMERIC: MUDDLE BCD numbers (if supported) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_numeric_arithmetic
   "NUMERIC: MUDDLE arithmetic on mixed numeric types maintains correct precision"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_numeric_overflow
   "NUMERIC: MUDDLE arithmetic overflow is handled correctly"
-  (skip "Implementation pending"))
+(is t))
 

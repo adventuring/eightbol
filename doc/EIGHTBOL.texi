@@ -16,8 +16,8 @@ under the terms of the MIT License, which can be found at
 
 @titlepage
 @title EIGHTBOL Compiler Manual
-@subtitle A Programmer's Reference for Fourteen Front-End Languages
-@subtitle Edition 0.9, for EIGHTBOL version 0.9
+@subtitle A Programmer's Reference for Seventeen Front-End Languages
+@subtitle Edition 1.0, for EIGHTBOL version 1.0
 @author Bruce-Robert Pocock
 
 @page
@@ -32,11 +32,11 @@ under the terms of the MIT License, which can be found at
 @top EIGHTBOL Compiler Manual
 
 This manual documents EIGHTBOL, a compiler that accepts programs written
-in any of fourteen higher-level languages --- AGI, BASIC, Burgermistress,
-COBOL, FORTRAN, Lingo, Lua, Muddle, Objective-C, Pascal, SCI, SCUMM,
+in any of seventeen higher-level languages --- AGI, BASIC, Burgermistress,
+COBOL, FORTH, FORTRAN, Lingo, Lua, Muddle, Objective-C, Pascal, SCI, SCUMM,
 SmallTalk, and ZIL --- and generates assembly code for a wide variety of
-8-bit and 16-bit microprocessors, including the 6502, 65c02, 65c816,
-HuC6280, RP2A03, cp1610, Z80, SM83, m68k, i286, ARM7, and F8.
+8-bit, 16-bit, and 32-bit microprocessors, including the 6502, 65c02, 65c816,
+HuC6280, RP2A03, cp1610, Z80, SM83, m6800, m68k, i286, ARM7, F8, and a stack-based virtual machine.
 
 The manual is organized in the manner of the classic Programmer's
 Reference Guides published for the Commodore VIC-20, 64, and 128, with a
@@ -50,20 +50,40 @@ supported processor.
 
 @include chapters/introduction.texi
 @include chapters/editing_classes_defs.texi
-@include chapters/agi_adventure_game_interpreter_language.texi
-@include chapters/basic_beginners_all_purpose_symbolic_instruction_code.texi
-@include chapters/burgermistress_the_thief_of_fate_scripting_language_by_burger_becky.texi
-@include chapters/cobol_common_business_oriented_language.texi
-@include chapters/fortran_autmatic_formula_translator.texi
-@include chapters/lingo_macromedia_director_lingo_script.texi
-@include chapters/lua.texi
-@include chapters/muddle_mit_design_language_mdl.texi
-@include chapters/objective_c_like_c_but_with_objects.texi
-@include chapters/pascal.texi
-@include chapters/sci_sierra_creative_interpreter_language.texi
-@include chapters/scumm_script_creation_utility_for_maniac_mansion.texi
-@include chapters/smalltalk.texi
-@include chapters/zil_zork_implementation_language.texi
+@include chapters/agi_frontend.texi
+@include chapters/basic_frontend.texi
+@include chapters/burgermistress_frontend.texi
+@include chapters/cobol_frontend.texi
+@include chapters/forth_frontend.texi
+@include chapters/fortran_frontend.texi
+@include chapters/fountain_frontend_comprehensive.texi
+@include chapters/goal_frontend.texi
+@include chapters/lingo_frontend.texi
+@include chapters/lua_frontend.texi
+@include chapters/muddle_frontend.texi
+@include chapters/objective_frontend.texi
+@include chapters/pascal_frontend.texi
+@include chapters/sci_frontend.texi
+@include chapters/scumm_frontend.texi
+@include chapters/smalltalk_frontend.texi
+@include chapters/zil_frontend.texi
+@include chapters/abstract_syntax_tree.texi
+@include chapters/backends_comprehensive_reference.texi
+@include chapters/backend_6502_abi.texi
+@include chapters/backend_65c02_abi.texi
+@include chapters/backend_65c816_abi.texi
+@include chapters/backend_arm7_abi.texi
+@include chapters/backend_cp1610_abi.texi
+@include chapters/backend_f8_abi.texi
+@include chapters/backend_forth_abi.texi
+@include chapters/backend_huc6280_abi.texi
+@include chapters/backend_i286_abi.texi
+@include chapters/backend_m6800_abi.texi
+@include chapters/backend_m68k_abi.texi
+@include chapters/backend_rp2a03_abi.texi
+@include chapters/backend_sm83_abi.texi
+@include chapters/backend_z80_abi.texi
+@include chapters/stack_backend.texi
 @include chapters/abi_formats_and_assembler_syntax.texi
 @include chapters/calling_from_assembly.texi
 @include chapters/language_conformance_exclusions_and_syntax.texi

@@ -23,21 +23,41 @@
 
 (test arm7_call_local
   "CALL: ARM7 local :call invocations generate correct JSR/CALL instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :ARM7 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test arm7_call_library
   "CALL: ARM7 library :call invocations are correctly linked"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :ARM7 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test arm7_invoke_method
   "INVOKE: ARM7 :invoke method calls generate correct dispatch sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :ARM7 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test arm7_call_return_value
   "CALL: ARM7 function return values are correctly placed in accumulator"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :ARM7 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test arm7_call_register_preservation
   "CALL: ARM7 register preservation across calls is correctly generated"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :ARM7 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

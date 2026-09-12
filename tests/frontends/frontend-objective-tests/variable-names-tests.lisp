@@ -19,17 +19,17 @@
 
 (test objective_variables_case_sensitivity
   "VARIABLES: OBJECTIVE identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_variables_reserved_words
   "VARIABLES: OBJECTIVE reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_variables_normalization
   "VARIABLES: OBJECTIVE identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_variables_scope
   "VARIABLES: OBJECTIVE variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

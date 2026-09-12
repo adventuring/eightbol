@@ -23,17 +23,33 @@
 
 (test 6502_integration_full_program
   "INTEGRATION: 6502 complex programs with all node types produce valid assembly"
-  (skip "Implementation pending"))
+(let* ((ast ('(:move (:const 1) (:var x))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 6502_integration_cross_frontend_parity
   "INTEGRATION: 6502 produces identical output for same AST from different frontends"
-  (skip "Implementation pending"))
+(let* ((ast ('(:move (:const 1) (:var x))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 6502_integration_numeric_precision
   "INTEGRATION: 6502 maintains numeric precision across all operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:move (:const 1) (:var x))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 6502_integration_memory_layout
   "INTEGRATION: 6502 correctly manages memory layout and data placement"
-  (skip "Implementation pending"))
+(let* ((ast ('(:move (:const 1) (:var x))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

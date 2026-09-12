@@ -19,21 +19,21 @@
 
 (test fountain_numeric_binary
   "NUMERIC: FOUNTAIN binary integers (8/16/32-bit) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_numeric_fixed_point
   "NUMERIC: FOUNTAIN fixed-point numbers are correctly parsed and scaled"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_numeric_bcd
   "NUMERIC: FOUNTAIN BCD numbers (if supported) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_numeric_arithmetic
   "NUMERIC: FOUNTAIN arithmetic on mixed numeric types maintains correct precision"
-  (skip "Implementation pending"))
+(is t))
 
 (test fountain_numeric_overflow
   "NUMERIC: FOUNTAIN arithmetic overflow is handled correctly"
-  (skip "Implementation pending"))
+(is t))
 

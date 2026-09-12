@@ -25,7 +25,11 @@
 
 (defmethod compile-to-assembly (ast (cpu (eql :z80)) output-stream)
   (unless (and (listp ast) (eq (first ast) :program))
-    (error "EIGHTBOL/Z80: expected :program AST node, got ~s" (first ast)))
+    (error 'backend-ast-error
+      :cpu :z80
+      :message (format nil "expected :program AST node, got ~s" (first ast))
+      :expected :program
+      :actual (first ast)))
   (let* ((class-id (getf (rest ast) :class-id))
          (methods (getf (rest ast) :methods)))
     (multiple-value-bind (slot-table type-table const-table service-bank-table usage-table sign-table
@@ -148,11 +152,17 @@
     (:break
      (if *z80-break-label*
          (format out "~&~10tjmp ~a~%" *z80-break-label*)
-         (error "BREAK statement outside of PERFORM loop")))
+         (error 'backend-loop-control-error
+           :cpu :z80
+           :message "BREAK statement outside of PERFORM loop"
+           :statement-type "BREAK")))
     (:continue
      (if *z80-continue-label*
          (format out "~&~10tjmp ~a~%" *z80-continue-label*)
-         (error "CONTINUE statement outside of PERFORM loop")))
+         (error 'backend-loop-control-error
+           :cpu :z80
+           :message "CONTINUE statement outside of PERFORM loop"
+           :statement-type "CONTINUE")))
     (:string-blt
      (compile-z80-string-blt out statement class-id slot-table const-table))
     (:goto
@@ -172,10 +182,12 @@
                 (if (listp text)
                     (format nil "~{~a~%~10t;; ~}" (mapcar (lambda (s) (if (stringp s) s (princ-to-string s))) text))
                     (princ-to-string text)))))
-    (:copy (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
-                  (getf (rest statement) :name)))
-     (:divide (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :z80 :detail statement))
-     (:multiply (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :z80 :detail statement))
+    (:copy (error 'backend-copy-not-expanded
+             :cpu :z80
+             :message "COPY should have been expanded at lex time"
+             :copy-name (getf (rest statement) :name)))
+     (:divide (error 'source-error :message "MULTIPLY/DIVIDE not supported on Z80" :detail statement))
+     (:multiply (error 'source-error :message "MULTIPLY/DIVIDE not supported on Z80" :detail statement))
 
     (:invoke-super
      (unless (gethash *class-id* *parent-classes*)
@@ -184,7 +196,11 @@
        (format out "~&~10tcall Method~a~a"
                (z80-symbol parent-class)
                (z80-symbol (format nil "~a" *method-id*)))
-       (error "Can't figure out parent class of ~a" *class-id*)))
+       (error 'backend-symbol-not-found
+         :cpu :z80
+         :message (format nil "Cannot determine parent class for ~a" *class-id*)
+         :symbol-name *class-id*
+         :symbol-type :class)))
     (:shift-left
      (let* ((target (getf (rest statement) :target))
             (count (getf (rest statement) :count 1)))
@@ -947,21 +963,23 @@
        (compile-z80-add out (list :add :from by-expr :to up-by :giving nil) class-id slot-table const-table pic-width-table))
       (down-by
        (compile-z80-subtract out (list :subtract :from by-expr :from-target down-by :giving nil) class-id slot-table const-table pic-width-table))
-      ((and address-of target)
-       (let ((src address-of) (dest target))
-         (cond
-           ((and (listp src) (eq :of (first src))
-                 (member (third src) '(:self "Self" self) :test #'equal))
-            (format out "~&~10tld hl, (Self)")
-            (format out "~&~10tld de, #~a" (apply #'slot-symbol (rest src)))
-            (format out "~&~10tadd hl, de"))
-           ((stringp src)
-            ;; Load 16-bit address of symbol (not value at symbol).
-            ;; Z80: ld hl, #address loads immediate address
-            (format out "~&~10tld hl, #~a" (bare-data-assembly-symbol src class-id))))
-         (cond
-           ((stringp dest)
-            (format out "~&~10tld (~a), hl" (bare-data-assembly-symbol dest class-id)))
+       ((and address-of target)
+        (let ((src address-of) (dest target))
+          (cond
+            ((and (listp src) (eq :of (first src))
+                  (member (third src) '(:self "Self" self) :test #'equal))
+             (format out "~&~10tld hl, (Self)")
+             (format out "~&~10tld de, #~a" (apply #'slot-symbol (rest src)))
+             (format out "~&~10tadd hl, de"))
+            ((stringp src)
+             ;; Load 16-bit address of symbol (not value at symbol).
+             ;; Z80: ld hl, #address loads immediate address
+             ;; Then copy to DE for further use
+             (format out "~&~10tld hl, #~a" (bare-data-assembly-symbol src class-id))
+             (format out "~&~10tld de, hl")))
+          (cond
+            ((stringp dest)
+             (format out "~&~10tld (~a), de" (bare-data-assembly-symbol dest class-id)))
            (t (format out "~&~10t;; Unsupported SET ADDRESS OF target ~s" dest)))))
       (to-self
        (format out "~&~10tld hl, (Self)")
@@ -1078,7 +1096,10 @@
               (format out "~&~10tld b, a")
               (format out "~&~10tjp ~a" label-loop)
               (format out "~&~a:" label-done)))
-           (t (error "EIGHTBOL/Z80: PERFORM with inline body requires UNTIL, TIMES, or VARYING"))))
+           (t (error 'backend-procedure-error
+                :cpu :z80
+                :message "PERFORM with inline body requires UNTIL, TIMES, or VARYING"
+                :statement nil))))
         (times
        (let ((label (z80-label "perf"))
              (label-done (z80-label "perfd"))

@@ -42,7 +42,7 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
 
 (defun emit-6502-load-byte-n-of (out expression class-id n w)
   (declare (ignore class-id w))
-  (format out "~%~10Tldy # ~a~[~:;~:* + ~d~]" (apply #'slot-symbol (rest expression)) n)
+  (format out "~%~10Tldy #~a~[~:;~:* + ~d~]" (apply #'slot-symbol (rest expression)) n)
   (format out "~%~10Tlda (~a), y" (second expression))
   (setf *6502-accumulator-expression* :trash/of
         *6502-x-index-expression* :trash/of))
@@ -59,7 +59,7 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
   (assert (= 2 w))
   (assert (stringp (second expression)))
   (with-accumulator-value ((list :address-of (second expression) n))
-    (format out "~%~10Tlda # ~a~a"
+    (format out "~%~10Tlda #~a~a"
             (ecase n (0 "<") (1 ">"))
             (to-identifier (second expression)))))
 
@@ -112,7 +112,7 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
      (let* ((value (ash expression (- n))) ; logical right shift (assuming non-negative)
             (byte-val (ldb (byte 8 (* n 8)) value)))
        (with-accumulator-value (byte-val)
-         (format out "~%~10Tlda # ~a" byte-val))))
+         (format out "~%~10Tlda #~a" byte-val))))
     ;; Handle simple variable references (bare data names): in-place shift then load byte n
     ((stringp expression)
      (let* ((addr (to-identifier expression))
@@ -124,7 +124,7 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
           (format out "~%~10Tlsr ~a" high-addr)
           (format out "~%~10Tror ~a" low-addr)))
       ;; Load byte n from the shifted variable
-      (format out "~%~10Tldy # ~a" n)
+      (format out "~%~10Tldy #~a" n)
       (format out "~%~10Tlda (~a), y" addr)))
     ;; Fall back to original behavior for complex expressions, slots, etc.
     (t (emit-6502-load-expression out expression nil))))
@@ -136,7 +136,7 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
      (let* ((value (ash expression n))
             (byte-val (ldb (byte 8 (* n 8)) value)))
        (with-accumulator-value (byte-val)
-         (format out "~%~10Tlda # ~a" byte-val))))
+         (format out "~%~10Tlda #~a" byte-val))))
     ;; Handle simple variable references (bare data names): in-place shift then load byte n
     ((stringp expression)
      (let* ((addr (to-identifier expression))
@@ -148,7 +148,7 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
           (format out "~%~10Tasl ~a" low-addr)
           (format out "~%~10Trol ~a" high-addr)))
       ;; Load byte n from the shifted variable
-      (format out "~%~10Tldy # ~a" n)
+      (format out "~%~10Tldy #~a" n)
       (format out "~%~10Tlda (~a), y" addr)))
     ;; Fall back to original behavior for complex expressions, slots, etc.
     (t (emit-6502-load-expression out expression nil))))
@@ -167,7 +167,7 @@ Emit 6502 code: compute pointer into ZP Pointer, then lda (Pointer),y."
     (format out "~%~10Tsta Pointer")
     (emit-6502-load-byte-n out pointer-expr class-id 1 2)
     (format out "~%~10Tsta Pointer + 1")
-    (format out "~%~10Tldy # ~d" n)
+    (format out "~%~10Tldy #~d" n)
     (format out "~%~10Tlda (Pointer), y")))
 
 (defparameter *emit-6502-load-byte-n-handlers*
@@ -203,10 +203,10 @@ Named     77/78     constants     with      byte     width     1     use
     ((expression-constant-p expression)
      (if (and (zerop n) (= 1 w))
        (with-accumulator-value (expression)
-         (format out "~%~10Tlda # ~a"
+         (format out "~%~10Tlda #~a"
                (expression-constant-value expression)))
        (with-accumulator-value ((list :subscript expression n))
-         (format out "~%~10Tlda # $ff & ( ~a~[~:;~:* >> ~d~] )"
+         (format out "~%~10Tlda #$ff & ( ~a~[~:;~:* >> ~d~] )"
                (expression-constant-value expression) (* 8 n)))))
 
     ((and (listp expression)
@@ -230,7 +230,7 @@ Named     77/78     constants     with      byte     width     1     use
      (let* ((slot-of-expression (slot-of-expression expression))
           (offset (apply #'slot-symbol (rest expression)))
           (pointer (to-identifier (third slot-of-expression))))
-       (format out "~%~10Tldy # ~a~[~:;~:* + ~d~]" offset n)
+       (format out "~%~10Tldy #~a~[~:;~:* + ~d~]" offset n)
        (format out "~%~10Tlda (~a), y" pointer)))
 
     ((and (stringp expression) (string-equal expression "Self"))
@@ -240,16 +240,24 @@ Named     77/78     constants     with      byte     width     1     use
     ((and (stringp expression) (expression-constant-p expression))
      (if (= n 0)
        (with-accumulator-value (expression)
-         (format out "~%~10Tlda # $ff & ~a" (expression-constant-value expression)))
+         (format out "~%~10Tlda #$ff & ~a" (expression-constant-value expression)))
        (with-accumulator-value ((list :subscript expression n))
-         (format out "~%~10Tlda # $ff & ( ~a~[~:;~:* << ~d~] )"
+         (format out "~%~10Tlda #$ff & ( ~a~[~:;~:* << ~d~] )"
                (expression-constant-value expression)
                (* 8 n)))))
 
-    ((stringp expression)
-     (with-accumulator-value ((list :subscript expression n))
-       (format out "~%~10Tlda ~a~[~:;~:* + ~d~]"
-               (to-identifier expression) n)))
+     ((stringp expression)
+      (cond
+        ((and class-id (implicit-instance-slot-p expression class-id))
+         ;; Instance slot of current class — load byte n via (Self), y
+         (with-accumulator-value ((list :subscript expression n))
+           (format out "~%~10Tldy #~a~[~:;~:* + ~d~]" (slot-symbol expression "Self") n)
+           (format out "~%~10Tlda (Self), y")))
+        (t
+         ;; Bare global name
+         (with-accumulator-value ((list :subscript expression n))
+           (format out "~%~10Tlda ~a~[~:;~:* + ~d~]"
+                   (to-identifier expression) n)))))
 
     ((and (listp expression)
         (stringp (first expression))
@@ -308,7 +316,7 @@ the slot offset from an immediately preceding emit-6502-load-byte-n to the same 
      (let* ((offset (apply #'slot-symbol (rest dest)))
 	  (pointer (6502-object-pointer-label (third dest) class-id)))
        (unless skip-ldy
-         (format out "~%~10Tldy # ~a~[~:;~:* + ~d~]" offset n))
+         (format out "~%~10Tldy #~a~[~:;~:* + ~d~]" offset n))
        (format out "~%~10Tsta (~a), y" pointer)))
 
     ((slot-on-expression dest)
@@ -329,12 +337,20 @@ the slot offset from an immediately preceding emit-6502-load-byte-n to the same 
              (emit-6502-load-byte-n out pointer-expr class-id 1 2)
              (format out "~%~10Tsta Pointer + 1")
              (format out "~%~10Tpla")
-             (format out "~%~10Tldy # ~d" n)
+             (format out "~%~10Tldy #~d" n)
               (format out "~%~10Tsta (Pointer), y")))))
 
-    ((stringp dest)
-     (format out "~%~10Tsta ~a~[~:;~:* + ~d~]"
-	   (to-identifier dest) n))
+     ((stringp dest)
+      (cond
+        ((and class-id (implicit-instance-slot-p dest class-id))
+         ;; Instance slot of current class — store byte n via (Self), y
+         (unless skip-ldy
+           (format out "~%~10Tldy #~a~[~:;~:* + ~d~]" (slot-symbol dest "Self") n))
+         (format out "~%~10Tsta (Self), y"))
+        (t
+         ;; Bare global name
+         (format out "~%~10Tsta ~a~[~:;~:* + ~d~]"
+                 (to-identifier dest) n))))
 
     (t
      (format out "~%~10Tsta ~a~[~:;~:* + ~d~]"
@@ -363,7 +379,7 @@ Used for STZ when MOVE ZERO to a direct-memory destination on 65c02+."
         (dest-object (third from)))
     (ecase (first from)
       (:of
-       (format out "~%~10Tldy # ~a" source)
+       (format out "~%~10Tldy #~a" source)
        (format out "~%~10T~a (~a), y" 
                (if (and *6502-enable-undoc-opcodes* (eq *6502-family-cpu* :6502))
                    "lax" "lda")
@@ -379,7 +395,7 @@ Used for STZ when MOVE ZERO to a direct-memory destination on 65c02+."
        (format out "~%~10Tlda ~a + ~a + 1" source-object source)))
     (ecase (first to-dest)
       (:of
-       (format out "~%~10Tldy # ~a + 1" dest)
+       (format out "~%~10Tldy #~a + 1" dest)
        (format out "~%~10Tsta (~a), y" dest-object)
        (format out "~%~10Tdey")
        (format out "~%~10T~a" (if (and *6502-enable-undoc-opcodes* (eq *6502-family-cpu* :6502))
@@ -411,7 +427,7 @@ STZ (65c02+), uses stz for each byte when destination is direct."
 	         (format out "~%~10Tstz ~a" addr)
 	         (progn
 		 (with-accumulator-value (0)
-		   (format out "~%~10Tlda # 0"))
+		   (format out "~%~10Tlda #0"))
 		 (emit-6502-store-byte-n out to-dest class-id i to-w))))))
       (cond
 
@@ -442,7 +458,7 @@ STZ (65c02+), uses stz for each byte when destination is direct."
 		 (emit-6502-store-byte-n out to-dest class-id (+ from-w i) to-w))
 	         (format out "~%~10T~a ~a~%" (6502-branch-always-mnemonic) label-done)
 	         (format out "~%~a:" label-zero)
-	         (format out "~%~10Tlda # 0")
+	         (format out "~%~10Tlda #0")
 	         (setf *6502-accumulator-expression* 0
                          *6502-x-index-expression* :trash/label-zero)
 	         (dotimes (i (- to-w from-w))
@@ -453,7 +469,7 @@ STZ (65c02+), uses stz for each byte when destination is direct."
                  ;; no sign extension
                  (dotimes (i (- to-w from-w))
 	         (with-accumulator-value (0)
-		 (format out "~%~10Tlda # 0"))
+		 (format out "~%~10Tlda #0"))
 	         (emit-6502-store-byte-n out to-dest class-id (+ from-w i) to-w))))))))))
 
 ;;; Operand width for byte/word arithmetic (PIC 99 vs PIC 9999)
@@ -485,12 +501,12 @@ Array fetches use X or Y; when true, avoid using X for temp storage."
        ;; MOVE NULL TO pointer — 6502: set pointer to NULL by zeroing high byte
        ((eql from :null)
         (with-accumulator-value (0)
-          (format out "~%~10Tlda # 0"))
+          (format out "~%~10Tlda #0"))
         (emit-6502-store-byte-n out to-dest class-id (1- to-w) to-w))
        ;; Optimise: MOVE literal TO variable (byte only) → lda #imm; sta var
        ((and (expression-constant-p from) (= to-w 1) (stringp to-dest))
         (with-accumulator-value (from)
-          (format out "~%~10Tlda # ~a" (expression-constant-value from)))
+          (format out "~%~10Tlda #~a" (expression-constant-value from)))
         (emit-6502-store-byte-n out to-dest class-id 0 1))
        ;; Optimise: MOVE literal TO literal → constant fold
        ((and (expression-constant-p from) (expression-constant-p to-dest))
@@ -557,7 +573,7 @@ constant expression, or nil."
 	    (if (listp source) (safe-getf (rest source) :base) source)
 	    (if (listp dest) (safe-getf (rest dest) :base) dest)
 	    len-val)
-      (format out "~%~10Tldy # 0")
+      (format out "~%~10Tldy #0")
       (format out "~%~10T~a:" label)
       (format out "~%~10Tlda ~a, y" source-addr)
       (format out "~%~10Tsta ~a, y" dst-addr)

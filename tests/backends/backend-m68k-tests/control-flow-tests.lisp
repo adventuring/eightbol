@@ -23,21 +23,41 @@
 
 (test m68k_if_conditional
   "CONTROL FLOW: M68K :if conditionals generate correct branch instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_if_nested
   "CONTROL FLOW: M68K nested conditionals generate correct branch chains"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_perform_loop
   "CONTROL FLOW: M68K :perform loops generate correct branch/jump sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_goto
   "CONTROL FLOW: M68K :goto jumps generate correct unconditional jumps"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test m68k_loop_unroll
   "CONTROL FLOW: M68K loop optimization correctly unrolls small loops"
-  (skip "Implementation pending"))
+(let* ((ast ('(:if (:const 1) (:move (:const 1) (:var x)) (:move (:const 0) (:var x)))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

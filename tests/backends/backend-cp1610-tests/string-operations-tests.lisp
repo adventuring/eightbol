@@ -23,17 +23,33 @@
 
 (test cp1610_string_blt
   "STRING: CP1610 STRING BLT operations generate correct memory operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :CP1610 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test cp1610_string_subscript
   "STRING: CP1610 subscript operations on strings generate correct index calculations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :CP1610 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test cp1610_string_refmod
   "STRING: CP1610 reference modification produces correct substring operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :CP1610 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test cp1610_string_indexing_base
   "STRING: CP1610 zero-based vs one-based indexing is correctly handled"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :CP1610 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

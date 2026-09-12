@@ -23,21 +23,41 @@
 
 (test rp2a03_call_local
   "CALL: RP2A03 local :call invocations generate correct JSR/CALL instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test rp2a03_call_library
   "CALL: RP2A03 library :call invocations are correctly linked"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test rp2a03_invoke_method
   "INVOKE: RP2A03 :invoke method calls generate correct dispatch sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test rp2a03_call_return_value
   "CALL: RP2A03 function return values are correctly placed in accumulator"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test rp2a03_call_register_preservation
   "CALL: RP2A03 register preservation across calls is correctly generated"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :RP2A03 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

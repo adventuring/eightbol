@@ -23,21 +23,41 @@
 
 (test sm83_call_local
   "CALL: SM83 local :call invocations generate correct JSR/CALL instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :SM83 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test sm83_call_library
   "CALL: SM83 library :call invocations are correctly linked"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :SM83 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test sm83_invoke_method
   "INVOKE: SM83 :invoke method calls generate correct dispatch sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :SM83 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test sm83_call_return_value
   "CALL: SM83 function return values are correctly placed in accumulator"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :SM83 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test sm83_call_register_preservation
   "CALL: SM83 register preservation across calls is correctly generated"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :SM83 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

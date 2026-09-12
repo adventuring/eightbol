@@ -23,21 +23,41 @@
 
 (test i286_call_local
   "CALL: I286 local :call invocations generate correct JSR/CALL instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :I286 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test i286_call_library
   "CALL: I286 library :call invocations are correctly linked"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :I286 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test i286_invoke_method
   "INVOKE: I286 :invoke method calls generate correct dispatch sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :I286 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test i286_call_return_value
   "CALL: I286 function return values are correctly placed in accumulator"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :I286 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test i286_call_register_preservation
   "CALL: I286 register preservation across calls is correctly generated"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :I286 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

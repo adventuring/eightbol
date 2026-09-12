@@ -1,0 +1,143 @@
+@chapter Z80 Backend
+@cindex Z80 backend
+
+The Z80 backend generates assembly code for the Zilog Z80 8-bit processor used in Spectrum, MSX, and other systems.
+
+@section Architecture Overview
+
+The Z80 processor is designed for @xref{z80 processor specifications}.
+
+@subsection Key Characteristics
+
+@itemize
+@item 8-bit/16-bit architecture (varies by model)
+@item Multiple addressing modes
+@item Optimized for embedded systems
+@item Memory-efficient instruction set
+@end itemize
+
+@section Register Allocation
+
+The EIGHTBOL Z80 backend uses the following register allocation:
+
+@table @asis
+@item Primary Accumulator
+Used for arithmetic and logic operations, function return values
+
+@item Index Registers
+Used for array indexing and loop counters
+
+@item Other Registers
+Allocated as needed per platform architecture
+@end table
+
+@section Function Call Convention
+
+@subsection Subroutine Calls
+
+Subroutine calls follow platform-specific conventions:
+@itemize
+@item Return address pushed to stack or saved in register
+@item Return via RTS or equivalent instruction
+@item Registers saved/restored per calling convention
+@end itemize
+
+@subsection Return Values
+
+Return values are passed via:
+@itemize
+@item Primary accumulator for scalar values
+@item Multi-register for extended results
+@item Memory locations for large structures
+@end itemize
+
+@subsection Parameter Passing
+
+Parameters are passed via:
+@itemize
+@item Accumulator for primary parameters
+@item Registers for secondary parameters
+@item Stack for variable or large parameters
+@end itemize
+
+@section Instruction Set Categories
+
+@subsection Load/Store
+Move data between registers and memory
+
+@subsection Arithmetic
+Addition, subtraction, multiplication (if available), division (if available)
+
+@subsection Logical
+Bitwise operations (AND, OR, XOR, NOT)
+
+@subsection Comparison
+Test and compare instructions
+
+@subsection Control Flow
+Jump, branch, and subroutine call instructions
+
+@subsection Bit Manipulation
+Shift and rotate operations
+
+@section Addressing Modes
+
+The Z80 supports various addressing modes for flexible code generation.
+
+@section Numeric Precision
+
+The Z80 backend supports:
+@itemize
+@item 8-bit integers (signed and unsigned)
+@item 16-bit integers (signed and unsigned)
+@item Binary fixed-point arithmetic
+@item BCD (Binary Coded Decimal) where supported
+@end itemize
+
+@section Code Generation Strategy
+
+@subsection Variable Storage
+
+Local variables are allocated efficiently using:
+@itemize
+@item Zero-page or fast memory (when available)
+@item Register caching
+@item Stack-based allocation for overflow
+@end itemize
+
+@subsection Expression Evaluation
+
+Expressions are evaluated using platform-optimal sequences.
+
+@subsection Loop Generation
+
+Loops are optimized for the specific processor:
+@itemize
+@item Register-based counters where efficient
+@itemize
+@item Conditional branching optimized per instruction set
+@end itemize
+
+@subsection Conditional Execution
+
+Conditions use platform branch instructions efficiently.
+
+@section Optimization Strategies
+
+@itemize
+@item Register allocation optimization
+@item Dead code elimination
+@item Constant propagation
+@item Loop unrolling where beneficial
+@item Common subexpression elimination
+@end itemize
+
+@section Platform-Specific Notes
+
+Refer to official Z80 processor documentation for:
+@itemize
+@item Detailed instruction reference
+@item Timing information
+@item Interrupt handling
+@item Memory management
+@end itemize

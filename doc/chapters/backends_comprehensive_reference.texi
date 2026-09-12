@@ -1,0 +1,464 @@
+@chapter Comprehensive Backend Reference
+@cindex backend reference
+@cindex all backends
+@cindex supported processors
+
+This chapter provides a comprehensive reference guide to all 15 supported backend
+processors and their code generation characteristics in EIGHTBOL.
+
+@menu
+* Backend Overview::
+* Processor Family Matrix::
+* Selection Guide::
+* Detailed Backend References::
+* Comparative Features::
+* Code Generation Strategy by Backend::
+@end menu
+
+@node Backend Overview
+@section Backend Overview
+
+EIGHTBOL supports compilation to 15 different processor architectures spanning
+8-bit to 32-bit systems. Each backend translates the EIGHTBOL Abstract Syntax
+Tree (AST) to native assembly language optimized for the target processor.
+
+The 15 supported backends are:
+
+@table @asis
+@item 6502 (@code{backend-6502})
+MOS Technology 6502 8-bit processor (Commodore 64, Apple II, NES, etc.)
+
+@item 65c02 (@code{backend-65c02})
+WDC 65c02 8-bit processor (enhanced 6502 with additional instructions)
+
+@item 65c816 (@code{backend-65c816})
+WDC 65c816 16-bit processor (extended addressing, banking support)
+
+@item ARM7 (@code{backend-arm7})
+32-bit ARM7 (Thumb) processor for Game Boy Advance and embedded systems
+
+@item CP1610 (@code{backend-cp1610})
+General Instrument CP1610 16-bit processor (Mattel Intellivision)
+
+@item F8 (@code{backend-f8})
+Fairchild 3850 CPU 8-bit processor (Fairchild Channel F console)
+
+@item FORTH (@code{backend-forth})
+Stack-based FORTH virtual machine for portable code execution
+
+@item HuC6280 (@code{backend-huc6280})
+Hudson Soft HuC6280 8-bit processor (PC Engine/TurboGrafx-16)
+
+@item i286 (@code{backend-i286})
+Intel 80286 16-bit processor (protected mode x86, DOS, OS/2)
+
+@item m6800 (@code{backend-m6800})
+Motorola 6800 8-bit processor (predecessor to 68000 family)
+
+@item m68k (@code{backend-m68k})
+Motorola 68000 16/32-bit processor (Amiga, Atari ST, Mac, etc.)
+
+@item RP2A03 (@code{backend-rp2a03})
+Ricoh 2A03 processor variant of 6502 (Nintendo Entertainment System/NES)
+
+@item SM83 (@code{backend-sm83})
+Sharp SM83 Z80-derived processor (Nintendo Game Boy)
+
+@item Stack (@code{backend-stack})
+Abstract stack machine for virtual execution and portability
+
+@item Z80 (@code{backend-z80})
+Zilog Z80 8-bit processor (ZX Spectrum, MSX, TRS-80, Game Boy, etc.)
+@end table
+
+@node Processor Family Matrix
+@section Processor Family Matrix
+
+Processors can be grouped by architecture family and bit width:
+
+@subsection 6502 Family (8-bit Stack-Based)
+
+@table @asis
+@item 6502
+Original MOS Technology design, single accumulator architecture
+
+@item 65c02
+Enhanced version with additional instructions (BRA, TSB, TRB, etc.)
+
+@item 65c816
+Extended addressing modes and 16-bit capabilities (Processor Direct Page, Bank Registers)
+
+@item RP2A03
+Custom variant for NES console (6502 core with modified audio)
+
+@item HuC6280
+Hudson custom variant (PC Engine/TurboGrafx-16)
+
+@item SM83
+Sharp's Z80-derived for Game Boy (hybrid design)
+@end table
+
+@subsection Z80 Family (8-bit Register-Based)
+
+@table @asis
+@item Z80
+Zilog's enhanced 8080 design with extended instruction set
+
+@item SM83
+Game Boy processor (Z80 core with modifications)
+@end table
+
+@subsection 68000 Family (16/32-bit Register-Based)
+
+@table @asis
+@item m6800
+Motorola's first-generation 8-bit processor
+
+@item m68k
+Motorola's 16/32-bit processor family (MC68000, MC68010, etc.)
+@end table
+
+@subsection Intel x86 Family (16/32-bit Register-Based)
+
+@table @asis
+@item i286
+Intel's 16-bit processor (real and protected modes)
+@end table
+
+@subsection Game Console Processors
+
+@table @asis
+@item 6502 (NES via RP2A03)
+@item RP2A03 (custom 6502 variant)
+@item SM83 (Game Boy)
+@item HuC6280 (PC Engine/TurboGrafx-16)
+@item CP1610 (Intellivision)
+@item ARM7 (Game Boy Advance)
+@end table
+
+@node Selection Guide
+@section Backend Selection Guide
+
+@subsection By Target System
+
+@subsubheading Commodore 64
+@itemize
+@item Primary: @code{backend-6502}
+@item Alternative: @code{backend-65c02} (if extra instructions used)
+@end itemize
+
+@subsubheading Apple II
+@itemize
+@item Primary: @code{backend-6502}
+@item Enhanced: @code{backend-65c02}
+@end itemize
+
+@subsubheading Nintendo NES
+@itemize
+@item Required: @code{backend-rp2a03}
+@end itemize
+
+@subsubheading Nintendo Game Boy
+@itemize
+@item Required: @code{backend-sm83}
+@end itemize
+
+@subsubheading Nintendo Game Boy Advance
+@itemize
+@item Required: @code{backend-arm7}
+@end itemize
+
+@subsubheading PC Engine / TurboGrafx-16
+@itemize
+@item Required: @code{backend-huc6280}
+@end itemize
+
+@subsubheading Mattel Intellivision
+@itemize
+@item Required: @code{backend-cp1610}
+@end itemize
+
+@subsubheading Fairchild Channel F
+@itemize
+@item Required: @code{backend-f8}
+@end itemize
+
+@subsubheading Atari ST / Amiga
+@itemize
+@item Required: @code{backend-m68k}
+@end itemize
+
+@subsubheading ZX Spectrum / MSX / TRS-80
+@itemize
+@item Recommended: @code{backend-z80}
+@end itemize
+
+@subsubheading DOS / OS/2 (real mode)
+@itemize
+@item Required: @code{backend-i286}
+@end itemize
+
+@subsubheading Portable / Virtual Execution
+@itemize
+@item Recommended: @code{backend-stack}
+@end itemize
+
+@node Detailed Backend References
+@section Detailed Backend References
+
+See the individual backend chapters for complete ABI and code generation details:
+
+@itemize
+@item @xref{6502 Backend} — MOS 6502 Architecture and Instruction Set
+@item @xref{65C02 Backend} — WDC 65C02 Enhanced Instructions
+@item @xref{65C816 Backend} — Extended Addressing and Banking
+@item @xref{ARM7 Backend} — Thumb Architecture for GBA
+@item @xref{CP1610 Backend} — Intellivision Processor
+@item @xref{F8 Backend} — Fairchild Channel F CPU
+@item @xref{FORTH Backend} — Virtual Stack Machine
+@item @xref{HuC6280 Backend} — PC Engine Processor
+@item @xref{Intel 80286 Backend} — Protected Mode x86
+@item @xref{Motorola 6800 Backend} — Historic 8-bit Processor
+@item @xref{Motorola 68000 Backend} — 16/32-bit Family
+@item @xref{RP2A03 Backend} — NES Processor Variant
+@item @xref{SM83 Backend} — Game Boy Processor
+@item @xref{Stack Backend} — Abstract Virtual Machine
+@item @xref{Z80 Backend} — Zilog Z80 Processor
+@end itemize
+
+Each backend chapter documents:
+@itemize
+@item Architecture overview and register model
+@item Function call convention (ABI)
+@item Instruction set reference
+@item Addressing modes
+@item Numeric precision support
+@item Code generation strategy
+@item Optimization techniques
+@item Platform-specific considerations
+@end itemize
+
+@node Comparative Features
+@section Comparative Features Matrix
+
+@subsection Bit Width
+
+@multitable @columnfractions .25 .10 .10
+@headitem Processor @tab Bit Width @tab Address Space
+@item 6502 @tab 8 @tab 64KB
+@item 65c02 @tab 8 @tab 64KB
+@item 65c816 @tab 16 @tab 16MB (banking)
+@item ARM7 @tab 32 @tab 4GB
+@item CP1610 @tab 16 @tab 64KB
+@item F8 @tab 8 @tab 64KB
+@item HuC6280 @tab 8 @tab 64KB
+@item i286 @tab 16 @tab 16MB (protected)
+@item m6800 @tab 8 @tab 64KB
+@item m68k @tab 32 @tab 4GB (16/32-bit)
+@item RP2A03 @tab 8 @tab 64KB
+@item SM83 @tab 8 @tab 64KB (64KB ROM + RAM)
+@item Z80 @tab 8 @tab 64KB
+@item FORTH @tab configurable @tab configurable
+@item Stack @tab configurable @tab configurable
+@end multitable
+
+@subsection Accumulator Models
+
+@multitable @columnfractions .25 .35
+@headitem Processor @tab Accumulator Type
+@item 6502 @tab Single 8-bit accumulator (A)
+@item 65c02 @tab Single 8-bit accumulator (A)
+@item 65c816 @tab Dual 16-bit accumulators (C, X/Y pairs)
+@item ARM7 @tab 16 general-purpose 32-bit registers
+@item CP1610 @tab Multiple 16-bit registers
+@item F8 @tab Single 8-bit accumulator + index registers
+@item HuC6280 @tab Single 8-bit accumulator (A)
+@item i286 @tab 4 general-purpose 16-bit registers
+@item m6800 @tab Single 8-bit accumulator (A)
+@item m68k @tab 8 data + 8 address 32-bit registers
+@item RP2A03 @tab Single 8-bit accumulator (A) + audio
+@item SM83 @tab Single 8-bit accumulator (A) with dual regs
+@item Z80 @tab Multiple 8-bit registers, dual set
+@item FORTH @tab Stack-based (no explicit registers)
+@item Stack @tab Stack-based (no explicit registers)
+@end multitable
+
+@subsection Multiplication and Division Support
+
+@multitable @columnfractions .25 .25 .25
+@headitem Processor @tab Multiply @tab Divide
+@item 6502 @tab No (must implement) @tab No (must implement)
+@item 65c02 @tab No @tab No
+@item 65c816 @tab No @tab No
+@item ARM7 @tab Yes (MUL instruction) @tab No
+@item CP1610 @tab No @tab No
+@item F8 @tab No @tab No
+@item HuC6280 @tab No @tab No
+@item i286 @tab Yes (IMUL/MUL) @tab Yes (IDIV/DIV)
+@item m6800 @tab No @tab No
+@item m68k @tab Yes (MULS/MULU) @tab Yes (DIVS/DIVU)
+@item RP2A03 @tab No @tab No
+@item SM83 @tab No @tab No
+@item Z80 @tab No @tab No
+@item FORTH @tab Optional @tab Optional
+@item Stack @tab Optional @tab Optional
+@end multitable
+
+@subsection Special Features
+
+@multitable @columnfractions .25 .50
+@headitem Processor @tab Special Features
+@item 6502 @tab Decimal mode (BCD), Zero-page optimization
+@item 65c02 @tab Decimal mode, Relative long branches
+@item 65c816 @tab Banking/memory mapping, 16-bit accumulator
+@item ARM7 @tab Thumb code density, Conditional execution
+@item CP1610 @tab Cartridge I/O, Special addressing
+@item F8 @tab Program counter in registers, Compact ISA
+@item HuC6280 @tab VDC interface, 8-bit optimized
+@item i286 @tab Protected mode, Segment addressing
+@item m6800 @tab Relative addressing, Index register X
+@item m68k @tab 32-bit arithmetic, Motorola addressing, Coprocessor
+@item RP2A03 @tab Audio synthesis, 6502 compatibility
+@item SM83 @tab Dual register sets, Z80-compatible
+@item Z80 @tab Dual register sets, Bit manipulation
+@item FORTH @tab Portability, Standard compliance
+@item Stack @tab Complete portability, Simulation-friendly
+@end multitable
+
+@node Code Generation Strategy by Backend
+@section Code Generation Strategy by Backend
+
+@subsection Stack-Based Backends (6502 Family, Z80)
+
+Stack-based backends use the hardware stack for:
+@itemize
+@item Function call returns (automatic via JSR/CALL)
+@item Local variable storage
+@item Return value passing
+@end itemize
+
+@subsection Register-Based Backends (68000, ARM7, i286)
+
+Register-based backends prioritize register allocation:
+@itemize
+@item Minimize register spills to memory
+@item Use multiple registers for value passing
+@item Cache frequently-used variables in registers
+@end itemize
+
+@subsection Virtual Machine Backends (FORTH, Stack)
+
+Virtual machine backends generate bytecode:
+@itemize
+@item Processor-independent intermediate code
+@itemize
+@item Executed by runtime interpreter
+@itemize
+@item Optimal for cross-platform deployment
+@end itemize
+
+@section Optimization Techniques by Backend
+
+@subsection All Backends
+
+@itemize
+@item Dead code elimination
+@item Constant propagation
+@item Common subexpression elimination
+@item Loop unrolling
+@item Tail-call optimization
+@end itemize
+
+@subsection 6502 Family
+
+@itemize
+@item Zero-page optimization (fast memory area)
+@item Addressing mode selection
+@item Branch target optimization
+@item Decimal mode usage (BCD arithmetic)
+@end itemize
+
+@subsection 68000 Family
+
+@itemize
+@item Address register optimization
+@item Data register caching
+@item Motorola addressing mode selection
+@item Coprocessor instruction generation
+@end itemize
+
+@subsection ARM7
+
+@itemize
+@item Thumb code density optimization
+@item Conditional execution elimination of branches
+@item Register allocation per ARM calling convention
+@item Literal pool management
+@end itemize
+
+@section Benchmarking and Performance
+
+Different backends provide different performance characteristics:
+
+@subsection Code Size
+
+Most compact: ARM7 (Thumb), Z80
+Most verbose: FORTH (VM overhead)
+
+@subsection Execution Speed
+
+Fastest: m68k, ARM7 (native execution, extended architecture)
+Moderate: 6502, Z80, CP1610 (8-bit single-accumulator)
+Slower: FORTH, Stack (interpretation overhead)
+
+@subsection Register Pressure
+
+Lowest: m68k (16 registers), ARM7 (16 registers)
+Moderate: i286 (4 registers), CP1610 (multiple registers)
+Highest: 6502 (1 accumulator), Z80 (1 accumulator)
+
+@section Cross-Backend Compatibility
+
+@subsection Language Feature Support
+
+All backends support the full EIGHTBOL language feature set:
+@itemize
+@item Variable declarations and scope
+@item Arithmetic and logical operations
+@item Control flow (if/then/else, loops, procedures)
+@item Subroutine calls with return values
+@item Method invocation on objects
+@item String manipulation and I/O
+@item Memory access
+@item Assembly integration
+@end itemize
+
+@subsection ABI Compatibility
+
+Different ABIs (Application Binary Interfaces) are used:
+@itemize
+@item Stack-based: Parameter passing via stack
+@itemize
+@item Register-based: Parameter passing via registers
+@itemize
+@item Hybrid: Parameter passing via registers + stack
+@end itemize
+
+See individual backend chapters for specific ABI details.
+
+@subsection Numeric Precision
+
+All backends support:
+@itemize
+@item 8-bit integers
+@itemize
+@item 16-bit integers
+@itemize
+@item 32-bit integers (where hardware supports)
+@itemize
+@item Binary fixed-point arithmetic
+@itemize
+@item BCD/Decimal arithmetic (where supported)
+@end itemize
+
+Specific precision support varies by backend. See individual chapters for details.

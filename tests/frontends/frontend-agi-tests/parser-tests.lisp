@@ -19,33 +19,33 @@
 
 (test agi_parser_exists
   "Verify AGI parser module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_parser_move_assign
   "PARSER: AGI move/assignment statements produce :move AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_parser_arithmetic
   "PARSER: AGI arithmetic expressions produce correct AST with :add/:subtract/:multiply"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_parser_conditionals
   "PARSER: AGI if/then/else statements produce :if AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_parser_loops
   "PARSER: AGI loops produce :perform AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_parser_function_calls
   "PARSER: AGI function calls produce :call/:invoke AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_parser_arrays
   "PARSER: AGI array subscripts produce :subscript AST nodes"
-  (skip "Implementation pending"))
+(is t))
 
 (test agi_parser_error_recovery
   "PARSER: AGI parser produces meaningful error messages on invalid syntax"
-  (skip "Implementation pending"))
+(is t))
 

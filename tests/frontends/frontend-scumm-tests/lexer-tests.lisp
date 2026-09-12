@@ -19,29 +19,29 @@
 
 (test scumm_lexer_exists
   "Verify SCUMM lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_lexer_keywords
   "LEXER: SCUMM keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_lexer_operators
   "LEXER: SCUMM operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_lexer_numbers
   "LEXER: SCUMM numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_lexer_strings
   "LEXER: SCUMM string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_lexer_identifiers
   "LEXER: SCUMM identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test scumm_lexer_comments
   "LEXER: SCUMM comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

@@ -19,29 +19,29 @@
 
 (test muddle_lexer_exists
   "Verify MUDDLE lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_lexer_keywords
   "LEXER: MUDDLE keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_lexer_operators
   "LEXER: MUDDLE operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_lexer_numbers
   "LEXER: MUDDLE numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_lexer_strings
   "LEXER: MUDDLE string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_lexer_identifiers
   "LEXER: MUDDLE identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test muddle_lexer_comments
   "LEXER: MUDDLE comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

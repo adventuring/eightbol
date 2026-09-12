@@ -279,9 +279,9 @@
 ;;;
 
 (test huc6280/goto
-  "GO TO target emits jmp to label."
+  "GO TO target emits bra to label (HUC6280 has BRA)."
   (let ((asm (huc6280-asm '(:goto :target "Exit"))))
-    (is (search "jmp" asm))))
+    (is (search "bra" asm))))
 
 (test huc6280/paragraph
   "Paragraph emits label."

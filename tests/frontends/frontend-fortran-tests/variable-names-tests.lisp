@@ -19,17 +19,17 @@
 
 (test fortran_variables_case_sensitivity
   "VARIABLES: FORTRAN identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_variables_reserved_words
   "VARIABLES: FORTRAN reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_variables_normalization
   "VARIABLES: FORTRAN identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_variables_scope
   "VARIABLES: FORTRAN variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

@@ -51,7 +51,7 @@
 	     (dotimes (i w)
                  (emit-6502-load-byte-n out minuend class-id i w)
                  (if (expression-constant-p subtrahend)
-		 (format out "~%~10Tsbc # $ff & ( ~a >> ~d )"
+		 (format out "~%~10Tsbc #$ff & ( ~a >> ~d )"
 		         (expression-constant-value subtrahend) (* 8 i))
 		 (emit-6502-sbc-byte-n-of-expression out subtrahend class-id i w))
                  (emit-6502-store-byte-n out result class-id i w
@@ -92,7 +92,7 @@
                      (let* ((slot-of-expression (slot-of-expression subtrahend))
                             (offset (apply #'slot-symbol (rest slot-of-expression)))
                             (pointer (6502-object-pointer-label (third slot-of-expression) class-id)))
-		   (format out "~%~10Tldy # ~a + 1" offset)
+		   (format out "~%~10Tldy #~a + 1" offset)
 		   (format out "~%~10Tsbc (~a), y" pointer)))
                     (t
                      (format out "~%~10Tsbc ~a + 1" (emit-6502-value subtrahend)))))
@@ -100,7 +100,7 @@
 	        (let* ((n (slot-of-expression result))
 		     (offset (apply #'slot-symbol (rest n)))
 		     (pointer (6502-object-pointer-label (third n) class-id)))
-                    (format out "~%~10Tldy # ~a + 1" offset)
+                    (format out "~%~10Tldy #~a + 1" offset)
                     (format out "~%~10Tsta (~a), y" pointer)
                     (format out "~%~10Tdey")
                     (format out "~%~10T~a" (if use-stack "pla" "txa"))
@@ -115,12 +115,12 @@
          (let* ((n (slot-of-expression minuend))
                 (offset (apply #'slot-symbol (rest n)))
                 (pointer (6502-object-pointer-label (third n) class-id)))
-	 (format out "~%~10Tldy # ~a" offset)
+	 (format out "~%~10Tldy #~a" offset)
 	 (with-accumulator-value (minuend)
 	   (format out "~%~10Tlda (~a), y" pointer))
 	 (format out "~%~10Tsec")
 	 (if (expression-constant-p subtrahend)
-	     (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
+	     (format out "~%~10Tsbc #~a" (expression-constant-value subtrahend))
 	     (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))
 	 (format out "~%~10Tsta (~a), y" pointer)))
         #+ () (giving
@@ -128,7 +128,7 @@
                (when bcd-p (format out "~%~10Tsed"))
                (format out "~%~10Tsec")
                (if (expression-constant-p subtrahend)
-	         (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
+	         (format out "~%~10Tsbc #~a" (expression-constant-value subtrahend))
 	         (format out "~%~10Tsbc ~a" (emit-6502-value subtrahend)))
                (format out "~%~10Tsta (~a), y" pointer))
         (giving
@@ -136,11 +136,11 @@
          (when bcd-p (format out "~%~10Tsed"))
          (format out "~%~10Tsec")
          (if (expression-constant-p subtrahend)
-	   (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
+	   (format out "~%~10Tsbc #~a" (expression-constant-value subtrahend))
 	   (cond
 	     ((slot-of-self-p subtrahend)
                 (let ((n (slot-of-expression subtrahend)))
-	        (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest n)))
+	        (format out "~%~10Tldy #~a" (apply #'slot-symbol (rest n)))
 	        (format out "~%~10Tsbc (Self), y")))
 	     ((and (slot-of-expression subtrahend) (not (slot-of-self-p subtrahend)))
                 (emit-6502-alu-with-memory-rhs out "sbc" subtrahend class-id))
@@ -153,11 +153,11 @@
          (when bcd-p (format out "~%~10Tsed"))
          (format out "~%~10Tsec")
          (if (expression-constant-p subtrahend)
-	   (format out "~%~10Tsbc # ~a" (expression-constant-value subtrahend))
+	   (format out "~%~10Tsbc #~a" (expression-constant-value subtrahend))
 	   (cond
 	     ((slot-of-self-p subtrahend)
                 (let ((n (slot-of-expression subtrahend)))
-	        (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest n)))
+	        (format out "~%~10Tldy #~a" (apply #'slot-symbol (rest n)))
 	        (format out "~%~10Tsbc (Self), y")))
 	     ((and (slot-of-expression subtrahend) (not (slot-of-self-p subtrahend)))
                 (emit-6502-alu-with-memory-rhs out "sbc" subtrahend class-id))
@@ -166,7 +166,7 @@
          (cond
  	 ((slot-of-self-p minuend)
  	  (let ((n (slot-of-expression minuend)))
- 	    (format out "~%~10Tldy # ~a" (apply #'slot-symbol (rest n))))
+ 	    (format out "~%~10Tldy #~a" (apply #'slot-symbol (rest n))))
  	  (format out "~%~10Tsta (Self), y"))
            ((and (slot-of-expression minuend) (not (slot-of-self-p minuend)))
 	  (emit-6502-store-byte-n out minuend class-id 0 1))
@@ -212,10 +212,10 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
       ((and address-of target)
        ;; SET target TO ADDRESS OF source: store address of source into target (2-byte pointer).
        (let ((source-id address-of))
-         (format out "~%~10Tlda # <~a" (emit-6502-value source-id))
+         (format out "~%~10Tlda #<~a" (emit-6502-value source-id))
          (emit-6502-store-byte-n out target class-id 0 2)
          (with-accumulator-value ((list :bit-and #xff source-id))
-           (format out "~%~10Tlda # >~a" (emit-6502-value source-id)))
+           (format out "~%~10Tlda #>~a" (emit-6502-value source-id)))
          (emit-6502-store-byte-n out target class-id 1 2)))
        ((and (consp target) (eq (first target) :deref))
         ;; SET [pointer] TO value: store value indirectly via pointer
@@ -240,7 +240,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
          (when (< val-w ptr-w)
            (format out "~%~10T;; Zero higher bytes of pointer destination")
            (with-accumulator-value (0)
-             (format out "~%~10Tlda # 0"))
+             (format out "~%~10Tlda #0"))
            (dotimes (i (- ptr-w val-w))
              (format out "~%~10Tldy #~d" (+ val-w i))
              (format out "~%~10Tsta ($FE),y")))))
@@ -264,7 +264,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
            (emit-6502-store-byte-n out target class-id i w))
          (when (< val-w w)
            (with-accumulator-value (0)
-             (format out "~%~10Tlda # 0"))
+             (format out "~%~10Tlda #0"))
            (dotimes (i (- w val-w))
              (emit-6502-store-byte-n out target class-id (+ val-w i) w))))))))
 
@@ -299,7 +299,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
          (cond
            ;; PERFORM ... TIMES ... VARYING ... WITH inline body
            ((and varying procedure times body)
-            (format out "~%~10Tlda # ~d" (or from 0))
+            (format out "~%~10Tlda #~d" (or from 0))
             (format out "~%~10Tsta ~a" (to-identifier varying))
             (format out "~%~a:" label-loop)
             (setf *6502-accumulator-expression* :trash/perf-loop
@@ -312,14 +312,14 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
                   *6502-x-index-expression* :trash)
             (format out "~%~10Tlda ~a" (to-identifier varying))
             (format out "~%~10Tclc")
-            (format out "~%~10Tadc # ~d" (or by 1))
+            (format out "~%~10Tadc #~d" (or by 1))
             (format out "~%~10Tsta ~a" (to-identifier varying))
             (format out "~%~10Tcmp # ~d" (* by times))
             (format out "~%~10Tbne ~a~%" label-loop)
             (format out "~%~a:" label-end)
             (setf *6502-accumulator-expression* :trash
                   *6502-x-index-expression* :trash)
-            (format out "~%~10Tlda # ~d" (or from 0))
+            (format out "~%~10Tlda #~d" (or from 0))
             (format out "~%~10Tsta ~a" (to-identifier varying))
             (format out "~%~a:" label-loop)
             (setf *6502-accumulator-expression* :trash/perf-loop
@@ -332,7 +332,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
                   *6502-x-index-expression* :trash)
             (format out "~%~10Tlda ~a" (to-identifier varying))
             (format out "~%~10Tclc")
-            (format out "~%~10Tadc # ~d" (or by 1))
+            (format out "~%~10Tadc #~d" (or by 1))
             (format out "~%~10Tsta ~a" (to-identifier varying))
             (emit-6502-condition out until class-id label-end)
             (format out "~%~10T~a ~a~%" (6502-branch-always-mnemonic) label-loop)
@@ -344,7 +344,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
            ((and procedure times body)
             (let ((label-count (new-6502-label "PerfCount"))
                   (label-end (new-6502-label "PerfEnd")))
-              (format out "~%~10Tlda # ~d" times)
+              (format out "~%~10Tlda #~d" times)
               (format out "~%~10Tsta ~a" label-count)
               (format out "~%~a:" label-loop)
               (setf *6502-accumulator-expression* :trash/perf-loop
@@ -357,7 +357,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
                     *6502-x-index-expression* :trash)
               (format out "~%~10Tlda ~a" (to-identifier label-count))
               (format out "~%~10Tclc")
-              (format out "~%~10Tadc # ~d" 1)
+              (format out "~%~10Tadc #~d" 1)
               (format out "~%~10Tsta ~a" (to-identifier label-count))
               (format out "~%~10Tcmp # ~d" times)
               (format out "~%~10Tbne ~a~%" label-loop)
@@ -386,7 +386,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
           ((and varying procedure times)
            (let ((label-loop (new-6502-label "PerfLoop"))
                  (label-end (new-6502-label "PerfEnd")))
-             (format out "~%~10Tlda # ~d" (or from 0))
+             (format out "~%~10Tlda #~d" (or from 0))
              (format out "~%~10Tsta ~a" (to-identifier varying))
              (format out "~%~a:" label-loop)
              (setf *6502-accumulator-expression* :trash/perf-loop
@@ -396,7 +396,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
                    *6502-x-index-expression* :trash)
              (format out "~%~10Tlda ~a" (to-identifier varying))
              (format out "~%~10Tclc")
-             (format out "~%~10Tadc # ~d" (or by 1))
+             (format out "~%~10Tadc #~d" (or by 1))
              (format out "~%~10Tsta ~a" (to-identifier varying))
              (format out "~%~10Tcmp # ~d" (* by times))
              (format out "~%~10Tbne ~a~%" label-loop)
@@ -406,7 +406,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
           ((and varying procedure until)
            (let ((label-loop (new-6502-label "PerfLoop"))
                  (label-end (new-6502-label "PerfEnd")))
-             (format out "~%~10Tlda # ~d" (or from 0))
+             (format out "~%~10Tlda #~d" (or from 0))
              (format out "~%~10Tsta ~a" (to-identifier varying))
              (format out "~%~a:" label-loop)
              (setf *6502-accumulator-expression* :trash/perf-loop
@@ -416,7 +416,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
                    *6502-x-index-expression* :trash)
              (format out "~%~10Tlda ~a" (to-identifier varying))
              (format out "~%~10Tclc")
-             (format out "~%~10Tadc # ~d" (or by 1))
+             (format out "~%~10Tadc #~d" (or by 1))
              (format out "~%~10Tsta ~a" (to-identifier varying))
              (emit-6502-condition out until class-id label-end)
              (format out "~%~10T~a ~a~%" (6502-branch-always-mnemonic) label-loop)
@@ -561,6 +561,9 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
 
 (define-6502-statement :procedure (ast-node-data)
   (compile-6502-paragraph (cons :procedure ast-node-data) cpu *class-id* *method-id*))
+
+(define-6502-statement :paragraph (ast-node-data)
+  (compile-6502-paragraph (cons :paragraph ast-node-data) cpu *class-id* *method-id*))
 
 (define-6502-statement :evaluate (ast-node-data)
   (compile-6502-evaluate *standard-output* (statement :evaluate ast-node-data) cpu))

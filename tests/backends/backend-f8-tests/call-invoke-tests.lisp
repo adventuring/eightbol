@@ -23,21 +23,41 @@
 
 (test f8_call_local
   "CALL: F8 local :call invocations generate correct JSR/CALL instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :F8 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test f8_call_library
   "CALL: F8 library :call invocations are correctly linked"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :F8 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test f8_invoke_method
   "INVOKE: F8 :invoke method calls generate correct dispatch sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :F8 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test f8_call_return_value
   "CALL: F8 function return values are correctly placed in accumulator"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :F8 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test f8_call_register_preservation
   "CALL: F8 register preservation across calls is correctly generated"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :F8 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

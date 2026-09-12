@@ -695,7 +695,14 @@ for origin class."
   (let* ((origin cast-class))
     (when (and (listp slot-name) (eql :subscript (first slot-name)))
       (setf slot-name (second slot-name)))
-    (concatenate 'string (pascal-case origin) (pascal-case slot-name))))
+    ;; Preserve all-uppercase segments (e.g., "HP", "ID")
+    (let ((origin-part (if (string= origin (string-upcase origin))
+                           (string-upcase origin)
+                           (pascal-case origin)))
+          (slot-part (if (string= slot-name (string-upcase slot-name))
+                         (string-upcase slot-name)
+                         (pascal-case slot-name))))
+      (concatenate 'string origin-part slot-part))))
 
 (defun bare-data-assembly-symbol (name class-id)
   "Assembly symbol for bare data NAME in compilation context of CLASS-ID.
@@ -1261,7 +1268,9 @@ statement node @code{(:keyword ...)}."
 
 (defmethod compile-statement (cpu ast-node-symbol ast-node-data)
   (declare (ignore ast-node-data))
-  (error "compile-statement: no method for CPU ~s statement ~s" cpu ast-node-symbol))
+  (error 'backend-error
+         :cpu cpu
+         :message (format nil "Unsupported statement: ~s" ast-node-symbol)))
 
 (defmethod compile-statement (cpu (stmt-type (eql :service-bank)) ast-node-data)
   "Reject @code{:service-bank} if it appears as a procedure statement (copybook metadata only).

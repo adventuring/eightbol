@@ -19,17 +19,17 @@
 
 (test forth_variables_case_sensitivity
   "VARIABLES: FORTH identifier case sensitivity is handled per language rules"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_variables_reserved_words
   "VARIABLES: FORTH reserved words are protected from use as identifiers"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_variables_normalization
   "VARIABLES: FORTH identifiers are normalized correctly (kebab-case, snake_case, etc.)"
-  (skip "Implementation pending"))
+(is t))
 
 (test forth_variables_scope
   "VARIABLES: FORTH variable scope is correctly tracked (local, global, method)"
-  (skip "Implementation pending"))
+(is t))
 

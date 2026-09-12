@@ -1,0 +1,2461 @@
+\chapter{BASIC Statements: Comprehensive Reference}
+
+This chapter provides detailed documentation for all 17 core BASIC statements supported by the EightBol BASIC frontend, including complete syntax, semantics, numeric type handling, and executable examples.
+
+\section{Overview of Numeric Types}
+
+Throughout this chapter, examples demonstrate three numeric types:
+
+\begin{itemize}
+\item \textbf{BINARY}: Signed or unsigned binary integers (16-bit or 32-bit)
+\item \textbf{DECIMAL}: Binary-Coded Decimal (BCD), supporting 4-digit numbers per byte with signed/unsigned variants
+\item \textbf{DISPLAY}: Character-encoded numeric strings (e.g., ``12345'' stored as ASCII digits)
+\end{itemize}
+
+Type conversions are performed implicitly during assignment, with BINARY being the default unless otherwise specified. All examples in this chapter use the EightBol COBOL intermediate representation syntax.
+
+\subsection{BINARY Type Details}
+
+The BINARY type represents integers in the processor's native binary representation. For 16-bit architectures (6502, Z80, etc.), BINARY values occupy 2 bytes in memory:
+
+\begin{itemize}
+\item \textbf{Signed BINARY}: Range -32,768 to 32,767 (using 2's complement representation)
+\item \textbf{Unsigned BINARY}: Range 0 to 65,535 (unsigned magnitude)
+\item \textbf{Storage}: Two bytes in little-endian or big-endian order (depending on backend)
+\item \textbf{Operations}: Addition, subtraction, multiplication, division, bitwise operations
+\item \textbf{Default type}: When no type is specified, variables default to BINARY SIGNED
+\end{itemize}
+
+BINARY type is the most efficient for general-purpose integer arithmetic, especially for loop counters, array indices, and mathematical computations.
+
+\subsection{DECIMAL Type Details}
+
+The DECIMAL type implements Binary-Coded Decimal (BCD), where each decimal digit (0-9) is encoded in a 4-bit nibble:
+
+\begin{itemize}
+\item \textbf{Format}: Two decimal digits per byte; e.g., byte 0x34 represents decimal 34
+\item \textbf{Signed DECIMAL}: Sign nibble (C for +, D or B for -) at the most significant position
+\item \textbf{Unsigned DECIMAL}: All nibbles contain digits 0-9
+\item \textbf{Range}: 0-9999 unsigned, -9999 to +9999 signed (requires 2-4 bytes)
+\item \textbf{Operations}: Add, subtract, multiply, divide via BCD arithmetic
+\item \textbf{Precision}: Exactly 4 decimal digits; values beyond this truncate or error
+\end{itemize}
+
+DECIMAL type is valuable in business applications where decimal precision is critical and where BCD arithmetic hardware instructions are available on the target processor.
+
+\subsection{DISPLAY Type Details}
+
+The DISPLAY type stores numbers as ASCII character strings, where each digit is encoded as its ASCII value (0x30 for '0', 0x31 for '1', etc.):
+
+\begin{itemize}
+\item \textbf{Format}: One ASCII byte per digit; "12345" stored as 5 bytes: 0x31 0x32 0x33 0x34 0x35
+\item \textbf{Signed DISPLAY}: May include leading minus sign ('-')
+\item \textbf{Flexibility}: Supports variable-length numbers within field width
+\item \textbf{Range}: Limited by field width; no inherent numeric limit
+\item \textbf{Operations}: Input/output (printing, parsing), string operations
+\item \textbf{Use case}: User input validation, external data interchange, formatted output
+\end{itemize}
+
+DISPLAY type is often used for reading user input, as it allows direct ASCII parsing without binary conversion overhead.
+
+\section{How BASIC Statements Map to EightBol IR}
+
+Before diving into individual statement documentation, it's important to understand how EightBol BASIC statements map to the underlying intermediate representation (IR) used by the compiler:
+
+\subsection{AST Node Types}
+
+Each BASIC statement produces one or more AST (Abstract Syntax Tree) nodes:
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{BASIC Statement} & \textbf{AST Node Type} & \textbf{IR Purpose} \\
+\hline
+LET & MOVE & Variable assignment \\
+PRINT & PRINT & Output operation \\
+INPUT & INPUT & Input operation \\
+IF/THEN/ELSE & IF & Conditional execution \\
+FOR/NEXT & PERFORM & Loop with counter \\
+WHILE/WEND & IF (loop) & Conditional loop \\
+GOSUB & PERFORM & Subroutine call \\
+RETURN & GOBACK & Subroutine return \\
+GOTO & GOTO & Unconditional jump \\
+STOP & STOP-RUN & Program termination \\
+END & GOBACK (exit) & Program end \\
+REM & (comment) & Documentation \\
+DIM & ALLOCATE & Array allocation \\
+READ & READ-DATA & Read from data block \\
+DATA & DATA-BLOCK & Data definition \\
+RESTORE & RESTORE & Reset read pointer \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Type Coercion and Conversion}
+
+The EightBol compiler automatically inserts type coercion nodes when mixing numeric types:
+
+\begin{itemize}
+\item \textbf{BINARY to DECIMAL}: Packs binary value into BCD using MOD/DIV operations
+\item \textbf{DECIMAL to BINARY}: Unpacks BCD nibbles and accumulates to binary
+\item \textbf{DISPLAY to BINARY}: Parses ASCII string character-by-character
+\item \textbf{BINARY to DISPLAY}: Converts to ASCII using divide-by-10 algorithm
+\end{itemize}
+
+Type coercions are backend-specific; each processor has optimized paths for common conversions.
+
+\subsection{Runtime vs. Compile-Time Behavior}
+
+BASIC statements have both compile-time (static) and runtime (dynamic) behavior:
+
+\begin{itemize}
+\item \textbf{Compile-time}: Parser validates syntax, resolves labels, allocates variables
+\item \textbf{Runtime}: Backend generates CPU-specific code that executes statements
+\item \textbf{Optimization}: Redundant type conversions are eliminated; constants are folded
+\item \textbf{Error handling}: Compile-time errors prevent code generation; runtime errors execute program-defined handlers
+\end{itemize}
+
+
+
+\section{1. LET Statement}
+
+\subsection{Purpose}
+The @code{LET} statement assigns the result of an expression to a variable, making it the fundamental operation for variable initialization and modification.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+LET variable = expression
+LET variable-name = numeric-expression
+LET variable-name = string-expression
+LET array-element = expression
+LET variable = expression1 + expression2 + ... + expressionN
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Keyword/Component} & \textbf{Explanation} \\
+\hline
+LET & Statement keyword (case-insensitive) \\
+variable & Identifier for target variable (auto-normalized to PascalCase) \\
+= & Assignment operator \\
+expression & Arithmetic, string, or logical expression \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+When assigning numeric values, the source type is converted to the target variable's declared type:
+
+\begin{itemize}
+\item \textbf{BINARY source → BINARY target}: Direct copy, no conversion
+\item \textbf{DECIMAL source → DECIMAL target}: BCD-to-BCD transfer, preserving sign
+\item \textbf{DISPLAY source → DISPLAY target}: ASCII string copy
+\item \textbf{Mixed types}: Implicit conversion via intermediate representation
+  \begin{itemize}
+  \item BINARY → DECIMAL: Convert via unpacking BCD digits
+  \item DECIMAL → BINARY: Convert via BCD accumulation
+  \item DISPLAY → BINARY: Parse ASCII digits to binary value
+  \end{itemize}
+\end{itemize}
+
+\subsection{Example 1: Simple Assignment with BINARY}
+
+\begin{verbatim}
+10 REM Program: SIMPLE_ASSIGNMENT
+20 LET X = 42
+30 LET Y = X + 8
+40 PRINT "Result: ", Y
+50 END
+
+Expected Output: Result: 50
+\end{verbatim}
+
+\subsection{Example 2: DECIMAL Type Assignment (BCD Signed)}
+
+\begin{verbatim}
+10 REM Decimal assignment with sign
+20 USAGE X IS DECIMAL SIGNED.
+30 LET X = 1234
+40 LET Y = X
+50 PRINT "BCD Value: ", Y
+55 REM Y now contains BCD-encoded 1234
+60 END
+
+Expected: Y = +1234 in BCD format
+\end{verbatim}
+
+\subsection{Example 3: Type Conversion - BINARY to DECIMAL}
+
+\begin{verbatim}
+10 REM Convert binary to decimal
+20 USAGE BIN IS BINARY SIGNED.
+25 USAGE DEC IS DECIMAL UNSIGNED.
+30 LET BIN = 255
+40 LET DEC = BIN
+50 PRINT "Binary 255 → Decimal: ", DEC
+60 END
+
+Expected: DEC holds BCD representation of 255
+\end{verbatim}
+
+\subsection{Example 4: String Expression to DISPLAY}
+
+\begin{verbatim}
+10 REM String assignment
+20 USAGE NAME IS DISPLAY.
+30 LET NAME = "ALICE"
+40 PRINT NAME
+50 END
+
+Expected Output: ALICE
+\end{verbatim}
+
+\subsection{Example 5: Complex Expression with Overflow Handling}
+
+\begin{verbatim}
+10 REM Complex expression
+20 USAGE A IS BINARY SIGNED.
+25 USAGE B IS BINARY SIGNED.
+30 LET A = 32767
+40 LET B = A + 1
+45 REM B contains -32768 (signed 16-bit overflow)
+50 PRINT "Overflow result: ", B
+60 END
+
+Expected: B = -32768 (wraparound on 16-bit signed)
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{Overflow on signed BINARY}: Wraps to negative boundary
+\item \textbf{Overflow on unsigned BINARY}: Wraps to zero
+\item \textbf{DECIMAL precision loss}: Values > 9999 truncate or error
+\item \textbf{DISPLAY truncation}: Long strings may be truncated to field width
+\item \textbf{Sign preservation}: Signed types maintain sign bit during conversion
+\end{itemize}
+
+\subsection{Implementation Notes for LET}
+
+The LET statement is translated to a MOVE node in the EightBol Abstract Syntax Tree. At compile time:
+
+\begin{enumerate}
+\item The parser recognizes the LET keyword and extracts the target variable and source expression
+\item Variable names are normalized to PascalCase (e.g., `my_var` becomes `MyVar`)
+\item The source expression is evaluated in a temporary if necessary
+\item Type coercion is inserted if source and target types differ
+\item For BINARY types, the move is a direct register-to-register or memory-to-memory transfer
+\item For DECIMAL types, the move may include BCD validation and sign handling
+\item For DISPLAY types, the move includes bounds checking and field width enforcement
+\end{enumerate}
+
+At runtime (code generation phase):
+
+\begin{itemize}
+\item For 6502 backend: Generates LDA/STA or LDX/STX sequences for BINARY; BCD instructions for DECIMAL
+\item For Z80 backend: Generates LD r, (addr) or LD (addr), r sequences; BCD via DAA instruction
+\item For ARM7 backend: Uses MOV and conditional code for type-specific operations
+\item Overflow behavior depends on the backend's instruction set
+\end{itemize}
+
+
+\section{2. PRINT Statement}
+
+\subsection{Purpose}
+The @code{PRINT} statement outputs expressions to standard output, supporting multiple items separated by commas.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+PRINT
+PRINT expression
+PRINT expression1, expression2, ..., expressionN
+PRINT string-literal
+PRINT variable-name
+PRINT numeric-expression
+PRINT "Text", variable, expression
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+PRINT & Statement keyword \\
+expression & Numeric, string, or logical expression to output \\
+, & Separator between multiple output items \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+Output formatting depends on the source numeric type:
+
+\begin{itemize}
+\item \textbf{BINARY signed}: Decimal digits with optional minus sign
+\item \textbf{BINARY unsigned}: Decimal digits only
+\item \textbf{DECIMAL}: BCD digits decoded to ASCII decimal representation
+\item \textbf{DISPLAY}: ASCII string printed as-is
+\end{itemize}
+
+\subsection{Example 1: Simple Value Output}
+
+\begin{verbatim}
+10 LET X = 100
+20 PRINT X
+30 END
+
+Output: 100
+\end{verbatim}
+
+\subsection{Example 2: Multiple Items with Mixed Types}
+
+\begin{verbatim}
+10 LET A = 42
+20 LET B = 17
+30 PRINT "Sum: ", A + B, " Average: ", (A + B) / 2
+40 END
+
+Output: Sum: 59 Average: 29
+\end{verbatim}
+
+\subsection{Example 3: DECIMAL Output (BCD Conversion)}
+
+\begin{verbatim}
+10 USAGE Price IS DECIMAL UNSIGNED.
+20 LET Price = 1995
+30 PRINT "Price: $", Price
+40 END
+
+Output: Price: $1995
+\end{verbatim}
+
+\subsection{Example 4: Empty PRINT (Newline)}
+
+\begin{verbatim}
+10 PRINT "Line 1"
+20 PRINT
+30 PRINT "Line 3"
+40 END
+
+Output:
+Line 1
+
+Line 3
+\end{verbatim}
+
+\subsection{Example 5: Sign Handling in Output}
+
+\begin{verbatim}
+10 USAGE NUM IS BINARY SIGNED.
+20 LET NUM = -456
+30 PRINT "Value: ", NUM
+40 END
+
+Output: Value: -456
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{Newline behavior}: Empty PRINT outputs only newline
+\item \textbf{No space between items}: Commas don't add spacing; use strings for formatting
+\item \textbf{DECIMAL overflow}: Values > 9999 may display as corrupted
+\item \textbf{String truncation}: Very long strings may overflow output buffer
+\end{itemize}
+
+\subsection{Implementation Notes for PRINT}
+
+The PRINT statement is translated to a PRINT node in the EightBol AST. At compile time:
+
+\begin{enumerate}
+\item The parser extracts the list of expressions to output
+\item Each expression is analyzed for type (numeric or string)
+\item Type-appropriate formatting instructions are inserted
+\item String literals are stored in the program's string table and referenced by offset
+\item A sequence of output primitives is generated
+\end{enumerate}
+
+At runtime (backend code generation):
+
+\begin{itemize}
+\item For BINARY signed: Convert to ASCII decimal with optional minus sign
+\item For BINARY unsigned: Convert to ASCII decimal (unsigned)
+\item For DECIMAL: Unpack BCD nibbles to ASCII and output with sign if needed
+\item For DISPLAY: Output string directly with field width enforcement
+\item Newline handling: Empty PRINT generates a carriage-return/line-feed sequence
+\item Buffer management: Output goes to stdout or configured output device
+\item Field width: Padding with spaces or zeros as required by format specification
+\end{itemize}
+
+
+\section{3. INPUT Statement}
+
+\subsection{Purpose}
+The @code{INPUT} statement reads values from standard input into one or more variables, blocking until input is provided.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+INPUT variable
+INPUT variable1, variable2, ..., variableN
+INPUT array-element
+INPUT var1, var2, array-element, var3
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+INPUT & Statement keyword \\
+variable & Target variable identifier (auto-normalized to PascalCase) \\
+, & Separator between multiple targets \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+Input values are parsed and converted to the target variable's numeric type:
+
+\begin{itemize}
+\item \textbf{BINARY target}: Parse ASCII decimal to signed/unsigned binary
+\item \textbf{DECIMAL target}: Parse ASCII to BCD encoding
+\item \textbf{DISPLAY target}: Read as ASCII string directly
+\end{itemize}
+
+\subsection{Example 1: Single Integer Input}
+
+\begin{verbatim}
+10 PRINT "Enter a number: "
+20 INPUT N
+30 PRINT "You entered: ", N
+40 END
+
+User Input: 42
+Output:
+Enter a number: 
+You entered: 42
+\end{verbatim}
+
+\subsection{Example 2: Multiple Variable Input}
+
+\begin{verbatim}
+10 PRINT "Enter three numbers: "
+20 INPUT A, B, C
+30 PRINT "Sum: ", A + B + C
+40 END
+
+User Input: 10
+20
+30
+Output:
+Enter three numbers: 
+Sum: 60
+\end{verbatim}
+
+\subsection{Example 3: DECIMAL Input with Sign}
+
+\begin{verbatim}
+10 USAGE Amount IS DECIMAL SIGNED.
+20 PRINT "Enter amount: "
+30 INPUT Amount
+40 PRINT "Amount in BCD: ", Amount
+50 END
+
+User Input: -1234
+Output shows Amount stored as signed BCD
+\end{verbatim}
+
+\subsection{Example 4: Mixed Type Input}
+
+\begin{verbatim}
+10 USAGE Num IS BINARY SIGNED.
+20 USAGE Text IS DISPLAY.
+30 PRINT "Enter number and text: "
+40 INPUT Num, Text
+50 PRINT "Received: ", Num, " and ", Text
+60 END
+
+User Input:
+99
+HelloWorld
+\end{verbatim}
+
+\subsection{Example 5: Input with Validation Loop}
+
+\begin{verbatim}
+10 USAGE Age IS BINARY UNSIGNED.
+20 LABEL InputLoop
+30 PRINT "Enter age (0-120): "
+40 INPUT Age
+50 IF Age > 120 THEN GOTO ErrorMsg
+60 GOTO InputDone
+70 LABEL ErrorMsg
+80 PRINT "Invalid age, try again"
+90 GOTO InputLoop
+100 LABEL InputDone
+110 PRINT "Age accepted: ", Age
+120 END
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{Non-numeric input}: Conversion may fail or produce zero
+\item \textbf{Overflow}: Input larger than target type wraps or truncates
+\item \textbf{Negative UNSIGNED}: Undefined behavior; typically wraps to positive
+\item \textbf{EOF}: May cause program termination or undefined behavior
+\end{itemize}
+
+\subsection{Implementation Notes for INPUT}
+
+The INPUT statement generates an INPUT node in the AST. At compile time:
+
+\begin{enumerate}
+\item Parser extracts the list of target variables
+\item Type information for each variable is collected
+\item Input handlers are generated for each target type
+\item Error handling code is inserted if overflow is possible
+\end{enumerate}
+
+At runtime (backend code generation):
+
+\begin{itemize}
+\item For BINARY target: Read ASCII decimal string, convert to binary value
+\item For DECIMAL target: Read ASCII decimal string, convert to BCD encoding
+\item For DISPLAY target: Read ASCII string directly into field
+\item Sign handling: Recognizes leading '+' or '-' for signed types
+\item Whitespace: Leading whitespace typically skipped; trailing whitespace stops parsing
+\item Multiple inputs: Each variable reads until whitespace/newline; continues to next variable
+\item Buffer overflow: Long input strings may be truncated or cause runtime error
+\item Non-numeric input: Zero-fill or error depending on backend
+\end{itemize}
+
+
+\section{4. IF...THEN...ELSE Statement}
+
+\subsection{Purpose}
+The @code{IF...THEN...ELSE} statement conditionally executes one of two code paths based on a boolean condition.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+IF condition THEN statement
+IF condition THEN statement ELSE statement
+IF expression1 = expression2 THEN statement
+IF expression1 < expression2 THEN statement ELSE statement
+IF (condition1 AND condition2) THEN statement
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+IF & Conditional statement keyword \\
+condition & Boolean expression (non-zero = true, zero = false) \\
+THEN & Separator between condition and true branch \\
+statement & Single statement to execute (no multi-statement blocks) \\
+ELSE & Separator for false branch \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling in Conditions}
+
+Conditions are evaluated to numeric values:
+
+\begin{itemize}
+\item \textbf{Relational operators} (=, <>, <, <=, >, >=) return 1 (true) or 0 (false)
+\item \textbf{Logical operators} (AND, OR, NOT) combine boolean results
+\item \textbf{BINARY comparisons}: Direct binary arithmetic comparison
+\item \textbf{DECIMAL comparisons}: BCD-to-BCD comparison (unpacking as needed)
+\item \textbf{DISPLAY comparisons}: ASCII lexicographic comparison
+\end{itemize}
+
+\subsection{Example 1: Simple Comparison}
+
+\begin{verbatim}
+10 LET X = 10
+20 IF X > 5 THEN PRINT "X is greater than 5"
+30 END
+
+Output: X is greater than 5
+\end{verbatim}
+
+\subsection{Example 2: IF...THEN...ELSE with Numeric Types}
+
+\begin{verbatim}
+10 USAGE Score IS BINARY UNSIGNED.
+20 LET Score = 75
+30 IF Score >= 60 THEN PRINT "Pass" ELSE PRINT "Fail"
+40 END
+
+Output: Pass
+\end{verbatim}
+
+\subsection{Example 3: Compound Conditions with AND}
+
+\begin{verbatim}
+10 USAGE Age IS BINARY UNSIGNED.
+15 USAGE HasLicense IS BINARY UNSIGNED.
+20 LET Age = 25
+25 LET HasLicense = 1
+30 IF (Age >= 18) AND (HasLicense = 1) THEN PRINT "Can drive"
+40 END
+
+Output: Can drive
+\end{verbatim}
+
+\subsection{Example 4: Nested IF (via repeated THEN statements)}
+
+\begin{verbatim}
+10 USAGE Value IS BINARY SIGNED.
+20 LET Value = -5
+30 IF Value < 0 THEN PRINT "Negative"
+40 IF Value = 0 THEN PRINT "Zero"
+50 IF Value > 0 THEN PRINT "Positive"
+60 END
+
+Output: Negative
+\end{verbatim}
+
+\subsection{Example 5: DECIMAL Comparison}
+
+\begin{verbatim}
+10 USAGE PriceA IS DECIMAL UNSIGNED.
+15 USAGE PriceB IS DECIMAL UNSIGNED.
+20 LET PriceA = 1999
+25 LET PriceB = 2500
+30 IF PriceA < PriceB THEN PRINT "A is cheaper" ELSE PRINT "B is cheaper"
+40 END
+
+Output: A is cheaper
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{Multiple THEN on one line}: Use ELSE or separate lines
+\item \textbf{Non-zero falsy values}: Only zero is false; all non-zero is true
+\item \textbf{Type mismatch in comparison}: Implicit conversion may occur
+\item \textbf{String comparisons}: Lexicographic (ASCII) order, not numeric
+\end{itemize}
+
+\section{5. FOR...TO...STEP / NEXT Statement}
+
+\subsection{Purpose}
+The @code{FOR...TO...STEP} loop iterates a specified number of times, incrementing a loop variable by a step value each iteration. The @code{NEXT} statement marks the end of the loop body.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+FOR variable = start TO end
+  (statements)
+NEXT [variable]
+
+FOR variable = start TO end STEP increment
+  (statements)
+NEXT [variable]
+
+FOR I = 1 TO 10 STEP 2
+  (loop body)
+NEXT I
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+FOR & Loop initiation keyword \\
+variable & Loop counter variable \\
+= & Assignment in FOR context \\
+start & Initial value (numeric expression) \\
+TO & Keyword separating start from end \\
+end & Final value (numeric expression, inclusive) \\
+STEP & Optional keyword for non-unit increment \\
+increment & Step size (default 1 if STEP omitted) \\
+NEXT & Loop footer keyword (variable optional) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling in FOR Loops}
+
+Loop counters and bounds support all numeric types:
+
+\begin{itemize}
+\item \textbf{BINARY loops}: Counter increments as signed/unsigned binary
+\item \textbf{DECIMAL loops}: Counter increments in BCD; step converted to BCD
+\item \textbf{DISPLAY loops}: String-based counters; increment as ASCII digits
+\item \textbf{Type mixing}: start, end, and STEP may be different types; conversions applied
+\end{itemize}
+
+\subsection{Example 1: Simple FOR Loop (BINARY Default)}
+
+\begin{verbatim}
+10 FOR I = 1 TO 5
+20   PRINT I
+30 NEXT I
+40 END
+
+Output:
+1
+2
+3
+4
+5
+\end{verbatim}
+
+\subsection{Example 2: FOR Loop with STEP}
+
+\begin{verbatim}
+10 FOR I = 0 TO 20 STEP 5
+20   PRINT I
+30 NEXT I
+40 END
+
+Output:
+0
+5
+10
+15
+20
+\end{verbatim}
+
+\subsection{Example 3: Descending FOR Loop (Negative STEP)}
+
+\begin{verbatim}
+10 FOR I = 10 TO 1 STEP -1
+20   PRINT I
+30 NEXT I
+40 END
+
+Output:
+10
+9
+8
+...
+2
+1
+\end{verbatim}
+
+\subsection{Example 4: DECIMAL Loop Counter}
+
+\begin{verbatim}
+10 USAGE Counter IS DECIMAL UNSIGNED.
+20 USAGE Result IS DECIMAL UNSIGNED.
+30 FOR Counter = 100 TO 105
+40   LET Result = Counter
+50   PRINT Result
+60 NEXT Counter
+70 END
+
+Output: 100, 101, 102, 103, 104, 105 (in BCD format)
+\end{verbatim}
+
+\subsection{Example 5: Nested FOR Loops}
+
+\begin{verbatim}
+10 FOR I = 1 TO 3
+20   FOR J = 1 TO 2
+30     PRINT I, " ", J
+40   NEXT J
+50 NEXT I
+60 END
+
+Output:
+1 1
+1 2
+2 1
+2 2
+3 1
+3 2
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{Step = 0}: Infinite loop (no exit condition met)
+\item \textbf{start > end with positive STEP}: Loop never executes
+\item \textbf{Counter modification inside loop}: Affects loop iteration count
+\item \textbf{Loop variable type mismatch}: Implicit conversion on entry/exit
+\item \textbf{Float/fractional step}: Truncated to integer
+\end{itemize}
+
+\section{6. WHILE Statement}
+
+\subsection{Purpose}
+The @code{WHILE} statement repeatedly executes code while a condition remains true, evaluating the condition at the top of each iteration.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+WHILE condition
+  statement
+  (more statements)
+WEND
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+WHILE & Loop initiation keyword \\
+condition & Boolean condition (non-zero = continue, zero = exit) \\
+statement & Code to repeat \\
+WEND & Loop termination keyword (end-while) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling in WHILE}
+
+Conditions evaluated using the same rules as @code{IF}:
+
+\begin{itemize}
+\item \textbf{BINARY comparison}: Direct arithmetic evaluation
+\item \textbf{DECIMAL comparison}: BCD decoded for evaluation
+\item \textbf{DISPLAY comparison}: Lexicographic string comparison
+\end{itemize}
+
+\subsection{Example 1: Simple WHILE Loop}
+
+\begin{verbatim}
+10 LET X = 1
+20 WHILE X <= 5
+30   PRINT X
+40   LET X = X + 1
+50 WEND
+60 END
+
+Output:
+1
+2
+3
+4
+5
+\end{verbatim}
+
+\subsection{Example 2: WHILE with Sentinel Value}
+
+\begin{verbatim}
+10 LET N = 0
+20 WHILE N <> -1
+30   PRINT "Enter number (-1 to quit): "
+40   INPUT N
+50   IF N <> -1 THEN PRINT "You entered: ", N
+60 WEND
+70 PRINT "Goodbye"
+80 END
+\end{verbatim}
+
+\subsection{Example 3: WHILE with DECIMAL Counter}
+
+\begin{verbatim}
+10 USAGE Count IS DECIMAL UNSIGNED.
+20 LET Count = 0
+30 WHILE Count < 10
+40   PRINT Count
+50   LET Count = Count + 1
+60 WEND
+70 END
+
+Output: 0-9 in BCD format
+\end{verbatim}
+
+\subsection{Example 4: WHILE with Compound Condition}
+
+\begin{verbatim}
+10 USAGE X IS BINARY SIGNED.
+15 USAGE Y IS BINARY SIGNED.
+20 LET X = 5
+25 LET Y = 10
+30 WHILE (X > 0) AND (Y > 0)
+40   PRINT X, ", ", Y
+50   LET X = X - 1
+60   LET Y = Y - 2
+70 WEND
+80 END
+
+Output:
+5, 10
+4, 8
+3, 6
+2, 4
+1, 2
+\end{verbatim}
+
+\subsection{Example 5: WHILE with Early Exit via GOTO}
+
+\begin{verbatim}
+10 LET X = 0
+20 WHILE X < 100
+30   IF X = 50 THEN GOTO ExitLoop
+40   LET X = X + 1
+50 WEND
+60 LABEL ExitLoop
+70 PRINT "Final X: ", X
+80 END
+
+Output: Final X: 50
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{Condition initially false}: Loop never executes
+\item \textbf{Infinite loop}: Condition always true; requires GOTO or external interrupt
+\item \textbf{Type conversion in condition}: May affect loop termination
+\item \textbf{Counter not modified}: Leads to infinite loop
+\end{itemize}
+
+\section{7. GOSUB Statement}
+
+\subsection{Purpose}
+The @code{GOSUB} statement transfers control to a subroutine at a specified label, with automatic return via @code{RETURN}.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+GOSUB target
+GOSUB PROCEDURE-NAME
+GOSUB line-number
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+GOSUB & Subroutine call keyword \\
+target & Label name or line number where subroutine starts \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+GOSUB itself is control-flow; numeric handling occurs in called code:
+
+\begin{itemize}
+\item \textbf{Parameter passing}: Via global variables (BASIC has no local scoping)
+\item \textbf{Return values}: Similarly via global variables
+\item \textbf{Subroutine modification of types}: Affects caller's variables
+\end{itemize}
+
+\subsection{Example 1: Simple Subroutine Call}
+
+\begin{verbatim}
+10 PRINT "Main program"
+20 GOSUB 100
+30 PRINT "Back in main"
+40 END
+100 REM Subroutine starts here
+110 PRINT "In subroutine"
+120 RETURN
+\end{verbatim}
+
+\subsection{Example 2: Subroutine with Numeric Calculation}
+
+\begin{verbatim}
+10 LET X = 5
+20 LET Y = 3
+30 GOSUB CalcSum
+40 PRINT "Sum: ", Result
+50 END
+100 LABEL CalcSum
+110 LET Result = X + Y
+120 RETURN
+\end{verbatim}
+
+\subsection{Example 3: Nested GOSUB (Subroutine Calling Subroutine)}
+
+\begin{verbatim}
+10 GOSUB Sub1
+20 END
+100 LABEL Sub1
+110 PRINT "In Sub1"
+120 GOSUB Sub2
+130 PRINT "Back in Sub1"
+140 RETURN
+200 LABEL Sub2
+210 PRINT "In Sub2"
+220 RETURN
+\end{verbatim}
+
+\subsection{Example 4: GOSUB with Type Conversion}
+
+\begin{verbatim}
+10 USAGE BinVal IS BINARY UNSIGNED.
+20 USAGE DecVal IS DECIMAL UNSIGNED.
+30 LET BinVal = 255
+40 GOSUB Convert
+50 PRINT "Decimal result: ", DecVal
+60 END
+100 LABEL Convert
+110 LET DecVal = BinVal
+120 RETURN
+\end{verbatim}
+
+\subsection{Example 5: GOSUB with Multiple Return Paths}
+
+\begin{verbatim}
+10 LET N = 5
+20 GOSUB CheckRange
+30 END
+100 LABEL CheckRange
+110 IF N < 0 THEN PRINT "Negative" ELSE PRINT "Non-negative"
+120 RETURN
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{RETURN without GOSUB}: Undefined behavior (may halt or return to OS)
+\item \textbf{Deep nesting}: Stack overflow on small systems
+\item \textbf{GOSUB into THEN branch}: May skip initialization code
+\item \textbf{Line number vs. label}: Line numbers may be dynamically assigned
+\end{itemize}
+
+\section{8. RETURN Statement}
+
+\subsection{Purpose}
+The @code{RETURN} statement terminates the current subroutine and transfers control back to the instruction following the most recent @code{GOSUB}.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+RETURN
+\end{verbatim}
+
+\subsection{Keywords}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Keyword} & \textbf{Explanation} \\
+\hline
+RETURN & Subroutine exit keyword (no parameters) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+@code{RETURN} performs no numeric operations; return values are passed via global variables.
+
+\subsection{Example 1: Basic Subroutine Return}
+
+\begin{verbatim}
+10 GOSUB MySub
+20 PRINT "After subroutine"
+30 END
+100 LABEL MySub
+110 PRINT "Inside subroutine"
+120 RETURN
+\end{verbatim}
+
+\subsection{Example 2: RETURN with Computed Result}
+
+\begin{verbatim}
+10 LET A = 10
+20 GOSUB Double
+30 PRINT "Doubled: ", A
+40 END
+100 LABEL Double
+110 LET A = A * 2
+120 RETURN
+\end{verbatim}
+
+\subsection{Example 3: Conditional RETURN}
+
+\begin{verbatim}
+10 GOSUB Validate
+20 PRINT "Validation passed"
+30 END
+100 LABEL Validate
+110 IF BadCondition THEN RETURN
+120 PRINT "Processing..."
+130 RETURN
+\end{verbatim}
+
+\subsection{Example 4: RETURN from Multiple Code Paths}
+
+\begin{verbatim}
+10 LET Mode = 2
+20 GOSUB ProcessMode
+30 END
+100 LABEL ProcessMode
+110 IF Mode = 1 THEN PRINT "Mode 1" ELSE PRINT "Other"
+120 RETURN
+\end{verbatim}
+
+\subsection{Example 5: RETURN with Type-Converted Result}
+
+\begin{verbatim}
+10 LET Result = 0
+20 GOSUB CalcDecimal
+30 PRINT "Result type: DECIMAL"
+40 END
+100 LABEL CalcDecimal
+110 USAGE TempDec IS DECIMAL UNSIGNED.
+120 LET TempDec = 9999
+130 LET Result = TempDec
+140 RETURN
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{RETURN without GOSUB}: Halts program or returns to OS
+\item \textbf{Multiple RETURN statements}: All valid within subroutine
+\item \textbf{RETURN in main program}: Terminates program
+\end{itemize}
+
+\section{9. GOTO Statement}
+
+\subsection{Purpose}
+The @code{GOTO} statement transfers control unconditionally to a labeled line or line number, creating an unconditional branch.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+GOTO label
+GOTO line-number
+GOTO "quoted-label"
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+GOTO & Unconditional branch keyword \\
+label & Target label name (auto-normalized to PascalCase) \\
+line-number & Target line number (generates BASIC\_Lnnnnnn label) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+@code{GOTO} performs no computation; it's purely control-flow.
+
+\subsection{Example 1: Simple Forward GOTO}
+
+\begin{verbatim}
+10 PRINT "Before jump"
+20 GOTO Skip
+30 PRINT "This is skipped"
+40 LABEL Skip
+50 PRINT "After jump"
+60 END
+
+Output:
+Before jump
+After jump
+\end{verbatim}
+
+\subsection{Example 2: Backward GOTO (Loop)**
+
+\begin{verbatim}
+10 LET X = 1
+20 LABEL Loop
+30 PRINT X
+40 LET X = X + 1
+50 IF X <= 5 THEN GOTO Loop
+60 PRINT "Done"
+70 END
+
+Output:
+1
+2
+3
+4
+5
+Done
+\end{verbatim}
+
+\subsection{Example 3: GOTO to Error Handler}
+
+\begin{verbatim}
+10 LET Value = -5
+20 IF Value < 0 THEN GOTO ErrorHandler
+30 PRINT "Value is valid: ", Value
+40 GOTO End
+50 LABEL ErrorHandler
+60 PRINT "Error: negative value"
+70 LABEL End
+80 END
+\end{verbatim}
+
+\subsection{Example 4: GOTO with Line Number}
+
+\begin{verbatim}
+10 PRINT "Start"
+20 GOTO 50
+30 PRINT "Skipped"
+40 PRINT "Also skipped"
+50 PRINT "End"
+60 END
+
+Output:
+Start
+End
+\end{verbatim}
+
+\subsection{Example 5: Multiple GOTO Targets}
+
+\begin{verbatim}
+10 LET Mode = 2
+20 IF Mode = 1 THEN GOTO ModeOne
+30 IF Mode = 2 THEN GOTO ModeTwo
+40 GOTO ModeDefault
+50 LABEL ModeOne
+60 PRINT "Mode 1 processing"
+70 GOTO Done
+80 LABEL ModeTwo
+90 PRINT "Mode 2 processing"
+100 GOTO Done
+110 LABEL ModeDefault
+120 PRINT "Default mode"
+130 LABEL Done
+140 END
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{GOTO undefined label}: Compiler error or runtime fault
+\item \textbf{Forward GOTO}: All valid; creates label references
+\item \textbf{Infinite loops}: Backward GOTO with no exit condition
+\item \textbf{GOTO into IF branch}: May skip variable initialization
+\end{itemize}
+
+\section{10. STOP Statement}
+
+\subsection{Purpose}
+The @code{STOP} statement terminates program execution with an optional code/message.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+STOP
+STOP "message"
+STOP code-string
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+STOP & Program termination keyword \\
+"message" & Optional string literal (exit code/message) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+@code{STOP} takes a string parameter (no numeric type conversion).
+
+\subsection{Example 1: Simple STOP}
+
+\begin{verbatim}
+10 PRINT "Processing..."
+20 STOP
+30 PRINT "This never executes"
+40 END
+
+Output: Processing...
+Program terminates
+\end{verbatim}
+
+\subsection{Example 2: STOP with Message}
+
+\begin{verbatim}
+10 LET X = 100
+20 PRINT "X = ", X
+30 STOP "NORMAL_EXIT"
+40 END
+
+Output:
+X = 100
+Program terminates with code NORMAL_EXIT
+\end{verbatim}
+
+\subsection{Example 3: Conditional STOP}
+
+\begin{verbatim}
+10 LET N = 0
+20 INPUT "Enter positive number: ", N
+30 IF N <= 0 THEN STOP "ERROR_NEGATIVE_VALUE"
+40 PRINT "Value accepted: ", N
+50 END
+\end{verbatim}
+
+\subsection{Example 4: STOP in Error Handler}
+
+\begin{verbatim}
+10 GOSUB Validate
+20 PRINT "Validation passed"
+30 END
+100 LABEL Validate
+110 IF BadData THEN STOP "VALIDATION_FAILED"
+120 RETURN
+\end{verbatim}
+
+\subsection{Example 5: STOP vs. END}
+
+\begin{verbatim}
+10 PRINT "Line 1"
+20 STOP "EARLY_EXIT"
+30 PRINT "Line 3"
+40 END
+
+Output: Line 1
+Program exits at STOP
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{STOP with no END}: Program terminates at STOP
+\item \textbf{Exit code length}: May be truncated on some systems
+\item \textbf{Cleanup}: No cleanup code runs after STOP
+\end{itemize}
+
+\section{11. END Statement}
+
+\subsection{Purpose}
+The @code{END} statement marks the end of the main program and signals normal termination.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+END
+\end{verbatim}
+
+\subsection{Keywords}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Keyword} & \textbf{Explanation} \\
+\hline
+END & Program termination keyword (no parameters) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+@code{END} performs no computations.
+
+\subsection{Example 1: Simple END**
+
+\begin{verbatim}
+10 PRINT "Hello, World!"
+20 END
+
+Output: Hello, World!
+\end{verbatim}
+
+\subsection{Example 2: END After Main Logic}
+
+\begin{verbatim}
+10 LET X = 5
+20 LET Y = X * 2
+30 PRINT "Result: ", Y
+40 END
+
+Output: Result: 10
+\end{verbatim}
+
+\subsection{Example 3: END vs. STOP}
+
+\begin{verbatim}
+10 PRINT "Before STOP"
+20 STOP "EARLY"
+30 PRINT "After STOP (not reached)"
+40 END
+
+Output: Before STOP
+(Program exits at STOP; END not reached)
+\end{verbatim}
+
+\subsection{Example 4: Multiple Subroutines with END}
+
+\begin{verbatim}
+10 GOSUB Sub1
+20 PRINT "Main continues"
+30 END
+100 LABEL Sub1
+110 PRINT "In Sub1"
+120 RETURN
+\end{verbatim}
+
+\subsection{Example 5: Program Flow to END}
+
+\begin{verbatim}
+10 LABEL Start
+20 PRINT "Line 1"
+30 GOTO End
+40 PRINT "Skipped"
+50 LABEL End
+60 END
+
+Output: Line 1
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{Missing END}: Program may continue past intended end
+\item \textbf{Multiple END statements}: Only first one terminates (subsequent unreachable)
+\item \textbf{Subroutine after END}: Unreachable unless GOSUB skips END
+\end{itemize}
+
+\section{12. REM Statement}
+
+\subsection{Purpose}
+The @code{REM} statement inserts a comment that is ignored during compilation and execution.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+REM This is a comment
+100 REM Comment after line number
+REM Can span to end of line
+\end{verbatim}
+
+\subsection{Keywords}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Keyword} & \textbf{Explanation} \\
+\hline
+REM & Comment keyword (rest of line ignored) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+@code{REM} is pre-processing; no numeric operations occur.
+
+\subsection{Example 1: Simple Comment}
+
+\begin{verbatim}
+10 REM This program calculates factorials
+20 LET X = 5
+30 PRINT X
+40 END
+
+Output: 5
+\end{verbatim}
+
+\subsection{Example 2: Multi-line Comments}
+
+\begin{verbatim}
+10 REM ====================================
+20 REM Program: Calculate Average
+25 REM Input: Three integers
+30 REM Output: Average (integer)
+35 REM ====================================
+40 INPUT A, B, C
+50 PRINT (A + B + C) / 3
+60 END
+\end{verbatim}
+
+\subsection{Example 3: Inline Comments (After Code)**
+
+\begin{verbatim}
+10 LET X = 10 REM Initialize X to 10
+20 LET Y = X * 2 REM Double X
+30 PRINT Y REM Display Y
+40 END
+
+Output: 20
+\end{verbatim}
+
+\subsection{Example 4: Comment Before Assignment}
+
+\begin{verbatim}
+10 REM Set up loop variables
+20 LET I = 1
+30 REM Main loop
+40 LABEL LoopStart
+50 PRINT I
+60 LET I = I + 1
+70 IF I <= 5 THEN GOTO LoopStart
+80 END
+\end{verbatim}
+
+\subsection{Example 5: Documentation Comments}
+
+\begin{verbatim}
+10 REM SUBROUTINE: AddNumbers
+20 REM Input: A, B (global variables)
+25 REM Output: Result (global variable)
+30 REM ---
+40 LET Result = A + B
+50 RETURN
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{REM with no text}: Empty comment (valid)
+\item \textbf{Special characters in REM}: All allowed; not parsed
+\item \textbf{Very long REM}: May exceed line buffer
+\end{itemize}
+
+\section{13. DIM Statement}
+
+\subsection{Purpose}
+The @code{DIM} statement declares arrays and their dimensions, allocating storage for elements.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+DIM array-name(size)
+DIM array-name(rows, cols)
+DIM array-name(d1, d2, ..., dN)
+DIM A(10), B(5, 5), C(3, 4, 5)
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+DIM & Array declaration keyword \\
+array-name & Identifier for array variable \\
+(size) & Single or comma-separated dimensions \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+Arrays store the declared element type; element type inferred from usage or context:
+
+\begin{itemize}
+\item \textbf{BINARY arrays}: Elements are binary integers
+\item \textbf{DECIMAL arrays}: Elements are BCD encoded
+\item \textbf{DISPLAY arrays}: Elements are strings
+\item \textbf{Type of dimensions}: Numeric expressions; typically BINARY
+\end{itemize}
+
+\subsection{Example 1: Single-Dimension Array}
+
+\begin{verbatim}
+10 DIM Numbers(10)
+20 FOR I = 1 TO 10
+30   LET Numbers(I) = I * 10
+40 NEXT I
+50 PRINT Numbers(5)
+60 END
+
+Output: 50
+\end{verbatim}
+
+\subsection{Example 2: Two-Dimensional Array**
+
+\begin{verbatim}
+10 DIM Matrix(3, 3)
+20 FOR I = 1 TO 3
+30   FOR J = 1 TO 3
+40     LET Matrix(I, J) = I + J
+50   NEXT J
+60 NEXT I
+70 PRINT Matrix(2, 2)
+80 END
+
+Output: 4
+\end{verbatim}
+
+\subsection{Example 3: DECIMAL Array**
+
+\begin{verbatim}
+10 USAGE PriceList IS DECIMAL UNSIGNED.
+20 DIM PriceList(5)
+30 LET PriceList(1) = 9999
+40 LET PriceList(2) = 1500
+50 PRINT PriceList(1)
+60 END
+
+Output: 9999 (BCD format)
+\end{verbatim}
+
+\subsection{Example 4: Multiple Array Declarations**
+
+\begin{verbatim}
+10 DIM Names(5), Ages(5), Scores(5)
+20 LET Names(1) = "Alice"
+30 LET Ages(1) = 25
+40 LET Scores(1) = 95
+50 PRINT Names(1), " age ", Ages(1)
+60 END
+
+Output: Alice age 25
+\end{verbatim}
+
+\subsection{Example 5: 3D Array**
+
+\begin{verbatim}
+10 DIM Cube(2, 2, 2)
+20 LET Cube(1, 1, 1) = 100
+30 LET Cube(2, 2, 2) = 999
+40 PRINT Cube(2, 2, 2)
+50 END
+
+Output: 999
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{Array size = 0}: Typically error or creates empty array
+\item \textbf{Dimension overflow}: Accessing beyond array bounds is undefined
+\item \textbf{Negative indices}: Not supported; typically cause error
+\item \textbf{DIM inside loop}: Creates array on each iteration (inefficient)
+\end{itemize}
+
+\section{14. READ Statement}
+
+\subsection{Purpose}
+The @code{READ} statement retrieves values from @code{DATA} statements sequentially, advancing a pointer through declared data.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+READ variable
+READ var1, var2, ..., varN
+READ array-element
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+READ & Data retrieval keyword \\
+variable & Target variable for data value \\
+, & Separator between multiple targets \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+READ converts data values to target variable types:
+
+\begin{itemize}
+\item \textbf{BINARY target}: Parse data value as binary integer
+\item \textbf{DECIMAL target}: Convert/store as BCD
+\item \textbf{DISPLAY target}: Store as ASCII string
+\end{itemize}
+
+\subsection{Example 1: Simple READ from DATA}
+
+\begin{verbatim}
+10 READ X
+20 PRINT "Value: ", X
+30 END
+1000 DATA 42
+\end{verbatim}
+
+\subsection{Example 2: READ Multiple Values}
+
+\begin{verbatim}
+10 READ A, B, C
+20 PRINT "Sum: ", A + B + C
+30 END
+1000 DATA 10, 20, 30
+\end{verbatim}
+
+\subsection{Example 3: READ into Array**
+
+\begin{verbatim}
+10 DIM Numbers(5)
+20 FOR I = 1 TO 5
+30   READ Numbers(I)
+40 NEXT I
+50 FOR I = 1 TO 5
+60   PRINT Numbers(I)
+70 NEXT I
+80 END
+1000 DATA 11, 22, 33, 44, 55
+\end{verbatim}
+
+\subsection{Example 4: READ with Type Conversion**
+
+\begin{verbatim}
+10 USAGE BinVal IS BINARY UNSIGNED.
+20 USAGE DecVal IS DECIMAL UNSIGNED.
+30 READ BinVal
+40 READ DecVal
+50 PRINT "Binary: ", BinVal, " Decimal: ", DecVal
+60 END
+1000 DATA 255, 9999
+\end{verbatim}
+
+\subsection{Example 5: Multiple READ Blocks**
+
+\begin{verbatim}
+10 READ X, Y
+20 PRINT "First pair: ", X, Y
+30 READ X, Y
+40 PRINT "Second pair: ", X, Y
+50 END
+1000 DATA 1, 2, 3, 4
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{READ with no DATA}: May cause error or read from uninitialized memory
+\item \textbf{More READ than DATA}: May read garbage or cause segfault
+\item \textbf{Type mismatch in DATA}: Conversion may fail or produce unexpected values
+\end{itemize}
+
+\section{15. DATA Statement}
+
+\subsection{Purpose}
+The @code{DATA} statement declares constant values that are read sequentially by @code{READ} statements.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+DATA value1, value2, ..., valueN
+DATA 100, 200, 300
+DATA "string1", "string2"
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+DATA & Data declaration keyword \\
+value & Numeric literal or string literal \\
+, & Separator between values \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+DATA values are stored as literals; type determined by format:
+
+\begin{itemize}
+\item \textbf{Numeric literal}: Stored as binary (converted to target type by READ)
+\item \textbf{String literal}: Stored as ASCII string
+\item \textbf{Mixed types}: Allowed within same DATA statement
+\end{itemize}
+
+\subsection{Example 1: Simple DATA**
+
+\begin{verbatim}
+100 DATA 10, 20, 30, 40, 50
+\end{verbatim}
+
+\subsection{Example 2: String DATA**
+
+\begin{verbatim}
+200 DATA "Alice", "Bob", "Charlie"
+\end{verbatim}
+
+\subsection{Example 3: Mixed DATA (Multiple Statements)**
+
+\begin{verbatim}
+10 READ Name
+20 READ Age
+30 PRINT Name, " is ", Age, " years old"
+40 END
+1000 DATA "Alice"
+1010 DATA 25
+\end{verbatim}
+
+\subsection{Example 4: DATA with Numeric Formats**
+
+\begin{verbatim}
+100 DATA 100, 0xFF, 0o77, 0b1010
+\end{verbatim}
+
+\subsection{Example 5: Large DATA Block**
+
+\begin{verbatim}
+10 DIM Scores(10)
+20 FOR I = 1 TO 10
+30   READ Scores(I)
+40 NEXT I
+50 END
+1000 DATA 95, 87, 92, 88, 91
+1010 DATA 85, 90, 89, 93, 96
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{DATA in middle of code}: Execution continues; data read by READ
+\item \textbf{DATA ordering}: Read sequentially from first DATA encountered
+\item \textbf{Duplicate DATA**: All collected; no deduplication
+\end{itemize}
+
+\section{16. RESTORE Statement}
+
+\subsection{Purpose}
+The @code{RESTORE} statement resets the @code{READ} pointer to the beginning of @code{DATA} statements, allowing re-reading of data.
+
+\subsection{Complete Syntax}
+
+\begin{verbatim}
+RESTORE
+RESTORE line-number
+\end{verbatim}
+
+\subsection{Keywords and Operands}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Explanation} \\
+\hline
+RESTORE & Data pointer reset keyword \\
+line-number & Optional; specific DATA line to restore to (if supported) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numeric Type Handling}
+
+@code{RESTORE} is pure control; no numeric operations.
+
+\subsection{Example 1: Simple RESTORE}
+
+\begin{verbatim}
+10 READ X
+20 PRINT "First read: ", X
+30 RESTORE
+40 READ Y
+50 PRINT "Re-read: ", Y
+60 END
+1000 DATA 42
+\end{verbatim}
+
+\subsection{Example 2: RESTORE and Loop**
+
+\begin{verbatim}
+10 FOR Pass = 1 TO 2
+20   RESTORE
+30   FOR I = 1 TO 3
+40     READ Value
+50     PRINT "Pass ", Pass, ": ", Value
+60   NEXT I
+70 NEXT Pass
+80 END
+1000 DATA 10, 20, 30
+\end{verbatim}
+
+\subsection{Example 3: Multiple RESTORE Calls**
+
+\begin{verbatim}
+10 READ A, B
+20 PRINT A, B
+30 RESTORE
+40 READ X, Y, Z
+50 PRINT X, Y
+60 END
+1000 DATA 1, 2, 3
+\end{verbatim}
+
+\subsection{Example 4: RESTORE in Subroutine**
+
+\begin{verbatim}
+10 GOSUB ReadData
+20 GOSUB ReadData
+30 END
+100 LABEL ReadData
+110 RESTORE
+120 READ X
+130 PRINT X
+140 RETURN
+1000 DATA 99
+\end{verbatim}
+
+\subsection{Example 5: RESTORE with Partial Re-read**
+
+\begin{verbatim}
+10 READ A, B, C
+20 PRINT "First: ", A, B, C
+30 RESTORE
+40 READ X
+50 PRINT "After restore: ", X
+60 END
+1000 DATA 10, 20, 30
+\end{verbatim}
+
+\subsection{Edge Cases}
+
+\begin{itemize}
+\item \textbf{RESTORE with no DATA}: No effect (or error)
+\item \textbf{RESTORE line-number}: May not be supported; behavior varies
+\item \textbf{Multiple RESTORE calls}: Each resets to beginning
+\end{itemize}
+
+\section{Numeric Type Reference Summary}
+
+\subsection{BINARY Type}
+
+\begin{itemize}
+\item \textbf{Signed}: 2's complement, range -32768 to 32767 (16-bit)
+\item \textbf{Unsigned}: 0 to 65535 (16-bit)
+\item \textbf{Storage}: Native machine representation
+\item \textbf{Literals}: Decimal, hex (&H), octal (&O), binary (&B)
+\item \textbf{Default type}: Used when no type specified
+\end{itemize}
+
+\subsection{DECIMAL Type (BCD)}
+
+\begin{itemize}
+\item \textbf{Format}: 4 digits per byte (2 nibbles = 1 BCD digit)
+\item \textbf{Signed}: Sign nibble (C=+, D/B=-) at high end
+\item \textbf{Unsigned}: 0-9 in all nibbles
+\item \textbf{Range}: 0-9999 (unsigned), -9999 to +9999 (signed)
+\item \textbf{Conversions}: Automatic between BINARY and DECIMAL
+\end{itemize}
+
+\subsection{DISPLAY Type}
+
+\begin{itemize}
+\item \textbf{Format}: ASCII character string
+\item \textbf{Encoding}: Each digit as ASCII byte (0x30-0x39 for 0-9)
+\item \textbf{Range}: Limited by field width
+\item \textbf{String operations}: Supported for concatenation
+\item \textbf{Input}: Parsed from user input as digits
+\end{itemize}
+
+\section{Type Conversion Reference}
+
+\subsection{Conversion Hierarchy}
+
+\begin{verbatim}
+BINARY ← → DECIMAL ← → DISPLAY
+        ↘        ↙
+           String Operations
+\end{verbatim}
+
+\begin{itemize}
+\item \textbf{BINARY to DECIMAL}: Pack into BCD, handling sign
+\item \textbf{DECIMAL to BINARY}: Unpack BCD to binary, preserving sign
+\item \textbf{BINARY to DISPLAY}: Convert to ASCII digit string
+\item \textbf{DISPLAY to BINARY}: Parse ASCII to binary integer
+\item \textbf{DECIMAL to DISPLAY}: Unpack BCD to ASCII string
+\item \textbf{DISPLAY to DECIMAL}: Parse ASCII to BCD
+\end{itemize}
+
+\section{Statement Interaction Matrix}
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Statement Pair} & \textbf{Interaction} \\
+\hline
+FOR/NEXT & Required pair; NEXT closes FOR \\
+WHILE/WEND & Required pair; WEND closes WHILE \\
+GOSUB/RETURN & Call/return; RETURN to instruction after GOSUB \\
+IF/THEN & THEN executes if condition true \\
+IF/ELSE & ELSE executes if condition false \\
+GOTO/Label & Unconditional jump to label \\
+READ/DATA & Sequential read from DATA block \\
+RESTORE/DATA & Reset read pointer to beginning \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Edge Case Summary}
+
+\subsection{Overflow Handling}
+
+\begin{itemize}
+\item \textbf{BINARY signed}: Wraps to negative (2's complement)
+\item \textbf{BINARY unsigned}: Wraps to zero
+\item \textbf{DECIMAL}: Truncates or errors > 9999
+\item \textbf{Type conversion}: May lose precision
+\end{itemize}
+
+\subsection{Scope and Lifetime}
+
+\begin{itemize}
+\item \textbf{Global variables}: Shared across main program and subroutines
+\item \textbf{Local storage}: Not supported (all variables global)
+\item \textbf{Array persistence}: Retained across subroutine calls
+\item \textbf{Parameter passing}: Via global variable assignment
+\end{itemize}
+
+\subsection{Numeric Precision}
+
+\begin{itemize}
+\item \textbf{Integer-only}: No floating-point types
+\item \textbf{BINARY precision}: 16-bit (65536 distinct values)
+\item \textbf{DECIMAL precision}: 4 digits per 2 bytes
+\item \textbf{DISPLAY precision}: String length limited
+\end{itemize}
+
+\section{Comprehensive Examples: Multi-Statement Programs}
+
+\subsection{Example 1: Complete Factorial Calculator}
+
+This program demonstrates LET, INPUT, FOR/NEXT, PRINT, IF/THEN, and type handling:
+
+\begin{verbatim}
+10 REM FACTORIAL CALCULATOR
+15 REM Calculates N! where N is user input
+20 PRINT "Factorial Calculator"
+30 PRINT "Enter a number (1-20): "
+40 INPUT N
+50 IF N < 1 THEN GOTO ErrorInput
+60 IF N > 20 THEN GOTO ErrorInput
+70 GOSUB CalcFactorial
+80 PRINT "Factorial of ", N, " = ", Result
+90 STOP "SUCCESS"
+100 LABEL ErrorInput
+110 PRINT "Invalid input"
+120 STOP "ERROR_INVALID"
+200 LABEL CalcFactorial
+210 LET Result = 1
+220 FOR I = 2 TO N
+230   LET Result = Result * I
+240 NEXT I
+250 RETURN
+\end{verbatim}
+
+This example showcases:
+\begin{itemize}
+\item REM for documentation
+\item INPUT for user interaction
+\item IF/THEN for validation
+\item GOSUB/RETURN for code reuse
+\item FOR/NEXT for iteration
+\item Numeric computation with type preservation
+\end{itemize}
+
+\subsection{Example 2: Array Processing with Type Conversion}
+
+This program demonstrates DIM, READ, DATA, RESTORE, type conversions, and control flow:
+
+\begin{verbatim}
+10 REM PROCESS SALES DATA
+15 REM Read prices (DECIMAL), calculate total (BINARY)
+20 DIM Prices(5), Quantities(5)
+30 USAGE Total IS BINARY UNSIGNED.
+40 USAGE DecSum IS DECIMAL UNSIGNED.
+50 PRINT "Loading inventory data..."
+60 RESTORE
+70 FOR I = 1 TO 5
+80   READ Prices(I), Quantities(I)
+90 NEXT I
+100 PRINT "Prices loaded"
+110 PRINT
+120 GOSUB CalculateTotal
+130 PRINT "Total inventory value: ", Total
+140 PRINT "In BCD format: ", DecSum
+150 END
+200 LABEL CalculateTotal
+210 LET Total = 0
+220 LET DecSum = 0
+230 FOR I = 1 TO 5
+240   LET LineTotal = Prices(I) * Quantities(I)
+250   LET Total = Total + LineTotal
+260 NEXT I
+270 LET DecSum = Total
+280 REM Convert BINARY total to DECIMAL for display
+290 RETURN
+1000 DATA 1500, 10
+1010 DATA 2000, 5
+1020 DATA 999, 20
+1030 DATA 750, 15
+1040 DATA 3500, 2
+\end{verbatim}
+
+This demonstrates:
+\begin{itemize}
+\item DIM for multi-element storage
+\item READ/DATA for initialization
+\item RESTORE for pointer management
+\item Type conversion (BINARY to DECIMAL)
+\item GOSUB for subroutine organization
+\item Nested loops and accumulation
+\end{itemize}
+
+\subsection{Example 3: Menu-Driven Program with GOTO}
+
+This example uses GOTO for menu navigation and conditional branching:
+
+\begin{verbatim}
+10 REM MENU-DRIVEN PROGRAM
+20 LABEL MainMenu
+30 PRINT "=== MAIN MENU ==="
+40 PRINT "1. Add Numbers"
+50 PRINT "2. Multiply Numbers"
+60 PRINT "3. Exit"
+70 PRINT "Choose (1-3): "
+80 INPUT Choice
+90 IF Choice = 1 THEN GOTO AddMenu
+100 IF Choice = 2 THEN GOTO MultiplyMenu
+110 IF Choice = 3 THEN GOTO Exit
+120 PRINT "Invalid choice"
+130 GOTO MainMenu
+140 LABEL AddMenu
+150 PRINT "Enter two numbers: "
+160 INPUT X, Y
+170 PRINT "Sum: ", X + Y
+180 GOTO MainMenu
+190 LABEL MultiplyMenu
+200 PRINT "Enter two numbers: "
+210 INPUT X, Y
+220 PRINT "Product: ", X * Y
+230 GOTO MainMenu
+240 LABEL Exit
+250 PRINT "Goodbye"
+260 END
+\end{verbatim}
+
+This demonstrates:
+\begin{itemize}
+\item GOTO for loop-back control
+\item Conditional GOTO for branching
+\item IF/THEN with GOTO target
+\item Menu structure design
+\item Multiple code paths
+\end{itemize}
+
+\subsection{Example 4: Data Validation with WHILE Loop}
+
+This example uses WHILE/WEND for input validation:
+
+\begin{verbatim}
+10 REM DATA VALIDATION LOOP
+20 USAGE InputValue IS BINARY SIGNED.
+30 USAGE IsValid IS BINARY UNSIGNED.
+40 PRINT "Enter values between -100 and 100"
+50 LABEL EntryLoop
+60 LET IsValid = 0
+70 WHILE IsValid = 0
+80   PRINT "Enter a number: "
+90   INPUT InputValue
+100  IF InputValue < -100 THEN GOTO CheckHigh
+110  IF InputValue > 100 THEN GOTO CheckFail
+120  LET IsValid = 1
+130  GOTO LoopEnd
+140  LABEL CheckHigh
+150  IF InputValue >= -100 THEN LET IsValid = 1
+160  LABEL CheckFail
+170  IF IsValid = 0 THEN PRINT "Out of range, try again"
+180  LABEL LoopEnd
+190 WEND
+200 PRINT "Accepted: ", InputValue
+210 END
+\end{verbatim}
+
+This demonstrates:
+\begin{itemize}
+\item WHILE/WEND for conditional looping
+\item Compound validation conditions
+\item Control variable management
+\item Type declarations (SIGNED, UNSIGNED)
+\item Multiple exit paths
+\end{itemize}
+
+\subsection{Example 5: Matrix Operations (2D Arrays)}
+
+This example uses DIM for 2D arrays and nested FOR loops:
+
+\begin{verbatim}
+10 REM MATRIX ADDITION
+20 DIM MatrixA(3, 3), MatrixB(3, 3), Result(3, 3)
+30 PRINT "Initialize matrices..."
+40 GOSUB InitMatrices
+50 GOSUB AddMatrices
+60 GOSUB PrintResult
+70 END
+100 LABEL InitMatrices
+110 FOR I = 1 TO 3
+120   FOR J = 1 TO 3
+130     LET MatrixA(I, J) = I + J
+140     LET MatrixB(I, J) = I * J
+150   NEXT J
+160 NEXT I
+170 RETURN
+200 LABEL AddMatrices
+210 FOR I = 1 TO 3
+220   FOR J = 1 TO 3
+230     LET Result(I, J) = MatrixA(I, J) + MatrixB(I, J)
+240   NEXT J
+250 NEXT I
+260 RETURN
+300 LABEL PrintResult
+310 PRINT "Result Matrix:"
+320 FOR I = 1 TO 3
+330   FOR J = 1 TO 3
+340     PRINT Result(I, J), " "
+350   NEXT J
+360   PRINT
+370 NEXT I
+380 RETURN
+\end{verbatim}
+
+This demonstrates:
+\begin{itemize}
+\item Multi-dimensional arrays (3D structure)
+\item Nested FOR/NEXT loops (up to 3 levels)
+\item Subroutine organization with GOSUB/RETURN
+\item Matrix-style indexing and operations
+\item Iterative display of results
+\end{itemize}
+
+\section{Common Patterns and Best Practices}
+
+\subsection{Loop Structure Pattern}
+
+BASIC programs typically use one of two loop patterns:
+
+\textbf{FOR/NEXT (count-based)}:
+\begin{verbatim}
+FOR I = Start TO End STEP S
+  (process I)
+NEXT I
+\end{verbatim}
+
+\textbf{WHILE/WEND (condition-based)}:
+\begin{verbatim}
+WHILE Condition
+  (process)
+  (update condition variable)
+WEND
+\end{verbatim}
+
+The FOR/NEXT loop is preferred when the iteration count is known; WHILE/WEND for event-driven or sentinel-based loops.
+
+\subsection{Subroutine Organization Pattern}
+
+Subroutines are organized with clear entry and exit:
+
+\begin{verbatim}
+LABEL SubroutineName
+REM input parameters in global vars (InVar1, InVar2, ...)
+REM output results in global vars (OutVar1, OutVar2, ...)
+(process)
+RETURN
+\end{verbatim}
+
+\subsection{Type Safety Pattern}
+
+Declare all variables and their types explicitly:
+
+\begin{verbatim}
+USAGE VarName IS NUMERIC-TYPE QUALIFIER.
+USAGE ArrayName(Size) IS NUMERIC-TYPE.
+\end{verbatim}
+
+\subsection{Error Handling Pattern}
+
+Use IF/THEN and GOTO for error conditions:
+
+\begin{verbatim}
+IF ErrorCondition THEN GOTO ErrorHandler
+(normal processing)
+GOTO Done
+LABEL ErrorHandler
+PRINT "Error message"
+STOP "ERROR_CODE"
+LABEL Done
+\end{verbatim}
+
+\subsection{Data Initialization Pattern}
+
+Use READ/DATA for static initialization:
+
+\begin{verbatim}
+RESTORE
+FOR I = 1 TO Count
+  READ Array(I)
+NEXT I
+LABEL DataStart
+DATA value1, value2, ...
+\end{verbatim}
+
+\section{Numeric Type Decision Tree}
+
+When choosing a numeric type for variables:
+
+\begin{verbatim}
+Does your value need decimals?
+  ├─ No, all integers?
+  │  ├─ Can it be negative? (e.g., balance, temperature)
+  │  │  ├─ Yes → BINARY SIGNED (recommended for most)
+  │  │  └─ No → BINARY UNSIGNED (for counts, indices)
+  │  └─ Can it have exactly 4 digits? (e.g., price, BCD sensor)
+  │     ├─ Yes → DECIMAL UNSIGNED (or SIGNED for +/-)
+  │     └─ No → BINARY (convert to/from DECIMAL as needed)
+  └─ Yes, need decimals?
+     └─ Use DISPLAY as workaround (store "12.34" as string)
+\end{verbatim}
+
+\section{Migration Guide: From Other BASIC Dialects}
+
+\subsection{From Microsoft BASIC}
+
+EightBol BASIC differs from classic Microsoft BASIC in:
+
+\begin{itemize}
+\item \textbf{PRINT formatting}: No PRINT@, TAB, or SPC; use string concatenation
+\item \textbf{REDim}: Not supported; declare all arrays with DIM upfront
+\item \textbf{Floating-point}: Not supported; use BINARY for integer arithmetic
+\item \textbf{Built-in functions}: Limited set; see separate functions reference
+\item \textbf{Modules}: Not supported; organize code with subroutines
+\end{itemize}
+
+\subsection{From Commodore BASIC}
+
+Migration from Commodore BASIC requires:
+
+\begin{itemize}
+\item \textbf{POKE/PEEK}: No direct memory access; use data structures
+\item \textbf{Graphics}: No built-in graphics; use backend-specific extensions
+\item \textbf{Color}: DISPLAY type for ANSI sequences; not native support
+\item \textbf{Floating-point}: Convert algorithms to use BINARY integers
+\end{itemize}
+
+\subsection{From Dartmouth BASIC}
+
+EightBol implements a Dartmouth-compatible subset:
+
+\begin{itemize}
+\item \textbf{Supported}: LET, IF/THEN/ELSE, FOR/NEXT, GOSUB/RETURN, PRINT, INPUT, READ/DATA, RESTORE
+\item \textbf{Not supported}: String functions (beyond literals), DEF FN, END SUB
+\item \textbf{Extensions}: DECIMAL, BINARY, DISPLAY types; WHILE/WEND; GOTO line-number
+\end{itemize}
+
+\section{Performance Considerations}
+
+\subsection{Numeric Type Performance}
+
+\begin{itemize}
+\item \textbf{BINARY}: Fastest (native CPU operations)
+\item \textbf{DECIMAL}: Slower (BCD arithmetic instructions)
+\item \textbf{DISPLAY}: Slowest (string parsing and conversion)
+\end{itemize}
+
+\subsection{Loop Performance}
+
+\begin{itemize}
+\item \textbf{FOR/NEXT}: Pre-allocated iteration count (fast)
+\item \textbf{WHILE/WEND}: Condition evaluated each iteration (slightly slower)
+\item \textbf{GOTO loops}: No optimization; same speed as WHILE
+\end{itemize}
+
+\subsection{Array Access Performance}
+
+\begin{itemize}
+\item \textbf{1D arrays}: O(1) direct indexing
+\item \textbf{2D arrays}: O(1) with row-major indexing
+\item \textbf{3D+ arrays}: O(1) with flat storage calculation
+\end{itemize}
+
+\section{Debugging Hints}
+
+\subsection{Common Errors}
+
+\begin{itemize}
+\item \textbf{Infinite loops}: Missing counter increment in WHILE, or bad exit condition
+\item \textbf{Array out of bounds}: Forgetting array declaration or off-by-one errors
+\item \textbf{Type overflow}: Assigning values > 9999 to DECIMAL types
+\item \textbf{Undefined variable}: Using variable before LET assignment
+\item \textbf{Missing RETURN}: Subroutine doesn't return, halts program
+\end{itemize}
+
+\subsection{Debugging Strategies}
+
+\begin{itemize}
+\item Add PRINT statements before/after key operations
+\item Use REM for checkpoints: ``REM DEBUG: At line X, Z = ?''
+\item Test loops with PRINT X to verify counter behavior
+\item Verify array bounds with explicit range checks
+\item Use GOSUB organization to isolate problem areas
+\end{itemize}
+
+\section{Conclusion}
+
+The 17 core BASIC statements provide sufficient capability to write educational, business logic, and game programming applications. By understanding numeric type handling, control flow patterns, and subroutine organization, programmers can create robust, portable BASIC programs that compile efficiently to EightBol intermediate representation and execute across multiple backend architectures (6502, Z80, ARM7, etc.).
+
+Key takeaways:
+
+\begin{itemize}
+\item Choose numeric types carefully (BINARY for general use, DECIMAL for BCD, DISPLAY for strings)
+\item Structure code with GOSUB/RETURN for readability and reuse
+\item Use FOR/NEXT for iteration counts, WHILE/WEND for conditions
+\item Initialize data with READ/DATA/RESTORE
+\item Handle errors with IF/THEN/GOTO patterns
+\item Test early and often with diagnostic PRINT statements
+\end{itemize}
+
+For further reference, consult the EightBol BASIC Frontend Language chapter for syntax details and the Backend-specific documentation for CPU-level behavior of compiled code.
+
+\end{document}

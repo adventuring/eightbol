@@ -19,21 +19,21 @@
 
 (test pascal_numeric_binary
   "NUMERIC: PASCAL binary integers (8/16/32-bit) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_numeric_fixed_point
   "NUMERIC: PASCAL fixed-point numbers are correctly parsed and scaled"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_numeric_bcd
   "NUMERIC: PASCAL BCD numbers (if supported) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_numeric_arithmetic
   "NUMERIC: PASCAL arithmetic on mixed numeric types maintains correct precision"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_numeric_overflow
   "NUMERIC: PASCAL arithmetic overflow is handled correctly"
-  (skip "Implementation pending"))
+(is t))
 

@@ -1,0 +1,2348 @@
+@node FORTRAN Comprehensive Statements Reference
+@chapter FORTRAN Comprehensive Statements Reference
+
+This chapter provides comprehensive documentation of FORTRAN statements, including complete syntax, numeric type handling, practical examples, and edge cases. The examples demonstrate BINARY, DECIMAL, and DISPLAY numeric representations throughout.
+
+@menu
+* FORTRAN READ Statement::
+* FORTRAN WRITE Statement::
+* FORTRAN PRINT Statement::
+* FORTRAN ASSIGNMENT Statement::
+* FORTRAN IF Single-Line::
+* FORTRAN IF Block::
+* FORTRAN IF-THEN-ELSE::
+* FORTRAN DO Counted Loops::
+* FORTRAN DO WHILE::
+* FORTRAN DO EXIT::
+* FORTRAN CALL Statement::
+* FORTRAN FUNCTION Statement::
+* FORTRAN SUBROUTINE Statement::
+* FORTRAN RETURN Statement::
+* FORTRAN CONTINUE Statement::
+* FORTRAN GOTO Statement::
+* FORTRAN STOP Statement::
+* FORTRAN PAUSE Statement::
+* FORTRAN IMPLICIT Statement::
+* FORTRAN DIMENSION Statement::
+* FORTRAN PARAMETER Statement::
+* FORTRAN COMMON Statement::
+* FORTRAN EQUIVALENCE Statement::
+@end menu
+
+@node FORTRAN READ Statement
+@section READ Statement
+
+The READ statement is used to input data from standard input, files, or formatted I/O streams. It can read numeric values, character strings, and structured records with precise format specifications.
+
+@subsection Syntax
+
+@smallexample
+READ(unit, format, advance='NO' | 'YES', iostat=iostat-var, size=size-var) &
+     [input-list]
+
+READ *, input-list
+READ(unit, *, iostat=iostat-var) input-list
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{unit}: Logical unit number (*, keyboard=5, file=20+)
+@item @var{format}: Format specification (FORMATted label or parenthesized spec)
+@item @var{advance}: 'NO' for non-advancing, 'YES' for advancing (default)
+@item @var{iostat}: Error status variable (integer)
+@item @var{size}: Number of characters read (non-advancing only)
+@item @var{input-list}: Variables to receive data
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM ReadBinary
+    IMPLICIT NONE
+    INTEGER*4 binary_int
+    REAL*8 binary_real
+    
+    ! Example 1: Simple integer input
+    READ *, binary_int
+    PRINT *, 'Read integer:', binary_int
+    
+    ! Example 2: Formatted binary reading with iostat
+    INTEGER*4 iostat
+    READ(5, '(B32)', IOSTAT=iostat) binary_int
+    IF (iostat == 0) THEN
+        PRINT *, 'Binary value:', binary_int
+    END IF
+    
+    ! Example 3: Double precision with binary specification
+    READ(5, '(Z16)') binary_real
+    PRINT *, 'Real binary:', binary_real
+    
+END PROGRAM ReadBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM ReadDecimal
+    IMPLICIT NONE
+    INTEGER*4 dec_int
+    REAL*8 dec_real
+    CHARACTER*20 dec_string
+    
+    ! Example 1: Decimal integer reading
+    READ *, dec_int
+    PRINT *, 'Integer:', dec_int
+    
+    ! Example 2: Decimal real with format specification
+    READ(5, '(F10.2)') dec_real
+    PRINT *, 'Decimal real:', dec_real
+    
+    ! Example 3: String and integer combination
+    READ(5, '(A20, I5)') dec_string, dec_int
+    PRINT *, TRIM(dec_string), dec_int
+    
+END PROGRAM ReadDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM ReadDisplay
+    IMPLICIT NONE
+    CHARACTER*40 display_string
+    INTEGER*4 display_int
+    REAL*8 display_real
+    
+    ! Example 1: Display formatted string
+    READ(5, '(A40)') display_string
+    PRINT *, 'Display string:', TRIM(display_string)
+    
+    ! Example 2: Non-advancing read with display format
+    READ(5, '(I5)', ADVANCE='NO', SIZE=display_int) display_int
+    
+    ! Example 3: Mixed display format
+    READ(5, '(G15.8)') display_real
+    PRINT *, 'G-format real:', display_real
+    
+END PROGRAM ReadDisplay
+@end smallexample
+
+@subsection Edge Cases and Advanced Features
+
+@itemize @bullet
+@item @strong{EOF handling}: iostat returns -1 on end-of-file, critical for proper I/O loops
+@item @strong{Numeric overflow}: Reading values exceeding type limits causes runtime error or unpredictable truncation
+@item @strong{Format mismatch}: Non-conforming input data causes runtime error unless iostat present for error handling
+@item @strong{Precision loss}: Reading high-precision decimals into REAL*4 causes silent truncation of significant digits
+@item @strong{String overflow}: String input exceeding declared length is truncated silently in fixed-format mode
+@item @strong{Non-advancing I/O}: SIZE parameter captures actual characters read when ADVANCE='NO'
+@item @strong{Record boundaries}: Non-advancing operations may span multiple records in unformatted mode
+@item @strong{List-directed format}: Asterisk (*) format follows processor-dependent formatting rules
+@item @strong{Assumed-size arrays}: READ with arrays requires proper index specifications
+@item @strong{INQUIRE integration}: Can check unit status before READ to prevent errors
+@end itemize
+
+@subsection Advanced Usage Patterns
+
+The READ statement with IOSTAT provides robust error handling essential for production code. Combining iostat with conditional blocks enables graceful degradation and meaningful error messages to users. For high-performance I/O operations, consider buffering strategies and appropriate format specifications to minimize conversion overhead.
+
+When reading BINARY data, ensure format specifiers (B, Z) match machine precision and endianness. DECIMAL formats (F, E, G) require careful specification of decimal places to avoid both information loss and excessive precision requests that waste memory and CPU cycles. DISPLAY formats (A) work with any character data but require explicit length specification for reliable output.
+
+@node FORTRAN WRITE Statement
+@section WRITE Statement
+
+The WRITE statement outputs data to standard output, files, or formatted streams. It provides complete control over numeric representation and formatting with configurable precision and width.
+
+@subsection Syntax
+
+@smallexample
+WRITE(unit, format, advance='NO' | 'YES', iostat=iostat-var) &
+      [output-list]
+
+WRITE(*, format) output-list
+WRITE(unit, '(...)') output-list
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{unit}: Logical unit number (6=stdout, 20+=files)
+@item @var{format}: Format label or parenthesized specification
+@item @var{advance}: Controls record advancement
+@item @var{iostat}: Error status variable
+@item @var{output-list}: Expressions to output
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM WriteBinary
+    IMPLICIT NONE
+    INTEGER*4 bin_val = 42
+    REAL*8 bin_real = 3.141592653589793D0
+    
+    ! Example 1: Binary integer output
+    WRITE(*, '(B32)') bin_val
+    
+    ! Example 2: Hexadecimal representation (binary format)
+    WRITE(6, '(Z16)') bin_val
+    
+    ! Example 3: Multiple binary values
+    WRITE(*, '(B8, 1X, B16)') IAND(bin_val, 15), bin_val
+    
+END PROGRAM WriteBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM WriteDecimal
+    IMPLICIT NONE
+    INTEGER*4 dec_val = 12345
+    REAL*8 dec_real = 987.654321D0
+    CHARACTER*10 dec_str = "DecimalOut"
+    
+    ! Example 1: Fixed decimal format
+    WRITE(*, '(I10, F12.2)') dec_val, dec_real
+    
+    ! Example 2: Exponential decimal notation
+    WRITE(6, '(E15.7)') dec_real
+    
+    ! Example 3: General format (selects F or E automatically)
+    WRITE(*, '(G20.10)') dec_real
+    
+END PROGRAM WriteDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM WriteDisplay
+    IMPLICIT NONE
+    CHARACTER*30 display_msg = "Display Output Message"
+    INTEGER*4 display_count = 5
+    REAL*8 display_val = 99.9999D0
+    
+    ! Example 1: Display formatted character string
+    WRITE(*, '(A30)') display_msg
+    
+    ! Example 2: Right-justified display output
+    WRITE(6, '(I10, 2X, F10.3)') display_count, display_val
+    
+    ! Example 3: Non-advancing display output
+    WRITE(*, '(A)', ADVANCE='NO') 'Status: '
+    WRITE(*, '(I5)') display_count
+    
+END PROGRAM WriteDisplay
+@end smallexample
+
+@subsection Edge Cases and Output Management
+
+@itemize @bullet
+@item @strong{Format overflow}: Output exceeding field width causes asterisks (*) to display instead of value
+@item @strong{Precision loss}: High-precision REAL*8 values truncated by format specification like F6.2
+@item @strong{Numeric conversion}: Implicit type conversions from REAL to INTEGER may lose fractional parts
+@item @strong{Record length}: Maximum output line length is implementation-dependent (often 132 or 80 characters)
+@item @strong{Non-advancing I/O}: Requires careful management of cursor position and newline handling
+@item @strong{Format reusability}: Same format can be used for multiple WRITE statements efficiently
+@item @strong{Scale factors}: Format specification with P allows adjustment of decimal point position
+@item @strong{Blank interpretation}: Leading zeros can be suppressed or forced with format modifiers
+@item @strong{Binary to display}: Z format shows hexadecimal representation, useful for low-level debugging
+@item @strong{Array output}: Multi-dimensional arrays output in Fortran order (first index varies fastest)
+@end itemize
+
+@subsection Performance and Format Optimization
+
+The WRITE statement's performance depends heavily on format specification complexity and I/O buffering. Fixed-format writes (F, I) generally perform better than dynamic formats (G, E). For large output operations, batch multiple WRITE statements to reduce context switches. Non-advancing output (ADVANCE='NO') is useful for creating columnar output or progress indicators without newlines.
+
+@node FORTRAN PRINT Statement
+@section PRINT Statement
+
+The PRINT statement is a simplified output statement that writes to standard output (unit 6). It cannot specify file units but provides simpler syntax for screen output with optional format specifications.
+
+@subsection Syntax
+
+@smallexample
+PRINT format, output-list
+PRINT *, output-list
+PRINT '(...)', output-list
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{format}: Format label, parenthesized spec, or * for list-directed
+@item @var{output-list}: Values to print
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM PrintBinary
+    IMPLICIT NONE
+    INTEGER*4 b1 = 255, b2 = 128
+    
+    ! Example 1: Simple binary print
+    PRINT '(B16)', b1
+    
+    ! Example 2: Multiple binary values with spacing
+    PRINT '(B8, 1X, B8)', b1, b2
+    
+    ! Example 3: Binary labels
+    PRINT *, 'Binary values:', b1, b2
+    
+END PROGRAM PrintBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM PrintDecimal
+    IMPLICIT NONE
+    INTEGER*4 d1 = 1000
+    REAL*8 d2 = 3.14159D0
+    
+    ! Example 1: Simple decimal print
+    PRINT *, d1, d2
+    
+    ! Example 2: Formatted decimal output
+    PRINT '(I5, F8.4)', d1, d2
+    
+    ! Example 3: Decimal with labels
+    PRINT *, 'Integer:', d1, 'Real:', d2
+    
+END PROGRAM PrintDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM PrintDisplay
+    IMPLICIT NONE
+    CHARACTER*25 msg = "Program Output Display"
+    INTEGER*4 count = 42
+    
+    ! Example 1: Display string with formatting
+    PRINT '(A)', msg
+    
+    ! Example 2: Display with numeric value
+    PRINT '(A, I3)', 'Count: ', count
+    
+    ! Example 3: List-directed display output
+    PRINT *, msg, count
+    
+END PROGRAM PrintDisplay
+@end smallexample
+
+@subsection Limitations and Best Practices
+
+@itemize @bullet
+@item @strong{No unit specification}: PRINT always writes to stdout (unit 6), cannot redirect
+@item @strong{Format errors}: Invalid format specifications cause runtime errors
+@item @strong{Output field width}: Exceeding width displays asterisks instead of values
+@item @strong{Newline automatic}: PRINT always terminates with newline, use WRITE for control
+@item @strong{Performance}: PRINT is generally slightly slower than WRITE due to implicit unit lookup
+@item @strong{Debugging}: PRINT is convenient for quick diagnostics and temporary debugging output
+@item @strong{Portability}: PRINT behavior is more portable than unit-based WRITE operations
+@end itemize
+
+@subsection Common Usage Scenarios
+
+PRINT is ideal for debugging output, status messages, and interactive programs where simplicity matters more than performance. For serious I/O operations requiring file output or error handling, use WRITE instead. PRINT with list-directed format (PRINT *, values) provides quick output without format specification overhead.
+
+@node FORTRAN ASSIGNMENT Statement
+@section ASSIGNMENT Statement
+
+The ASSIGNMENT statement assigns values to variables, with automatic type conversion. It supports complex expressions, array element assignment, and substring operations with full numeric type support.
+
+@subsection Syntax
+
+@smallexample
+variable = expression
+array-element = expression
+substring = expression
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{variable}: Scalar or array element target
+@item @var{expression}: Any valid FORTRAN expression
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM AssignmentBinary
+    IMPLICIT NONE
+    INTEGER*4 b1, b2, b3
+    INTEGER*2 b4
+    
+    ! Example 1: Simple binary assignment
+    b1 = 42
+    
+    ! Example 2: Binary arithmetic operations
+    b2 = b1 + 8
+    b3 = IBITS(b1, 2, 4)
+    
+    ! Example 3: Type conversion in assignment
+    b4 = INT2(b1 / 2)
+    
+    PRINT *, b1, b2, b3, b4
+END PROGRAM AssignmentBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM AssignmentDecimal
+    IMPLICIT NONE
+    REAL*8 d1, d2, d3
+    INTEGER*4 d4
+    
+    ! Example 1: Decimal assignment
+    d1 = 3.14159265359D0
+    
+    ! Example 2: Decimal expression
+    d2 = d1 * 2.0D0 + 1.5D0
+    
+    ! Example 3: Mixed type assignment
+    d3 = DBLE(42) / 3.0D0
+    d4 = INT(d3)
+    
+    PRINT *, d1, d2, d3, d4
+END PROGRAM AssignmentDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM AssignmentDisplay
+    IMPLICIT NONE
+    CHARACTER*30 str1, str2, str3
+    CHARACTER*10 substring
+    
+    ! Example 1: Character string assignment
+    str1 = "Display Assignment Example"
+    
+    ! Example 2: String concatenation
+    str2 = TRIM(str1) // " - Continued"
+    
+    ! Example 3: Substring assignment
+    substring = str1(1:10)
+    
+    PRINT *, TRIM(str1)
+    PRINT *, TRIM(str2)
+    PRINT *, TRIM(substring)
+END PROGRAM AssignmentDisplay
+@end smallexample
+
+@subsection Type Safety and Conversion Behavior
+
+@itemize @bullet
+@item @strong{Type mismatch}: Automatic conversion may lose precision (REAL to INTEGER truncates fractional part)
+@item @strong{Array bounds}: Assignment outside array bounds causes memory corruption and undefined behavior
+@item @strong{String truncation}: Right-hand side truncated if longer than target (silent with no warning)
+@item @strong{String extension}: Right-hand side padded with spaces if shorter than target
+@item @strong{Numeric overflow}: Exceeding type range causes undefined behavior or wrapped values
+@item @strong{Logical to numeric}: Converting LOGICAL to numeric produces -1 for .TRUE., 0 for .FALSE.
+@item @strong{Complex to real}: Imaginary component silently discarded in conversion
+@item @strong{Array assignment}: Entire array can be assigned if types and shapes match
+@item @strong{Derived types}: Custom-defined types may have assignment rules via operator overloading
+@item @strong{Expression evaluation}: Right-hand side fully evaluated before assignment starts
+@item @strong{Side effects}: Functions in expressions have side effects evaluated during assignment
+@end itemize
+
+@subsection Optimization Considerations
+
+Assignment operations are fundamental to performance. Repeated assignments in loops create pressure on memory subsystems and cache. Vectorization opportunities arise when assigning array sections. Modern Fortran compilers optimize simple scalar assignments to negligible overhead. Avoid assignments in inner loop conditions where possible, performing computation outside loops instead.
+
+@node FORTRAN IF Single-Line
+@section IF Single-Line Statement
+
+The single-line IF statement conditionally executes one statement without THEN keyword. Ideal for simple conditional operations with minimal overhead and clear intent.
+
+@subsection Syntax
+
+@smallexample
+IF (logical-expression) statement
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{logical-expression}: Boolean condition evaluation
+@item @var{statement}: Single executable statement
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM IfBinarySingle
+    IMPLICIT NONE
+    INTEGER*4 b1 = 15, b2 = 7
+    
+    ! Example 1: Simple bit test
+    IF (IAND(b1, 8) /= 0) PRINT *, 'Bit 3 set'
+    
+    ! Example 2: Bitwise comparison
+    IF (b1 > b2) b1 = b1 - b2
+    
+    ! Example 3: Conditional assignment
+    IF (b1 == 0) b2 = 1
+    
+    PRINT *, b1, b2
+END PROGRAM IfBinarySingle
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM IfDecimalSingle
+    IMPLICIT NONE
+    REAL*8 d1 = 5.5D0, d2 = 2.0D0
+    INTEGER*4 d3 = 0
+    
+    ! Example 1: Simple comparison
+    IF (d1 > d2) PRINT *, 'd1 is larger'
+    
+    ! Example 2: Floating-point equality (dangerous)
+    IF (ABS(d1 - 5.5D0) < 1.0D-10) d3 = 1
+    
+    ! Example 3: Conditional expression
+    IF (d1 / d2 > 2.0D0) PRINT *, 'Ratio exceeds 2'
+    
+END PROGRAM IfDecimalSingle
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM IfDisplaySingle
+    IMPLICIT NONE
+    CHARACTER*20 status = "COMPLETE"
+    INTEGER*4 result = 0
+    
+    ! Example 1: String comparison
+    IF (status == "COMPLETE") result = 1
+    
+    ! Example 2: String length check
+    IF (LEN_TRIM(status) > 5) PRINT *, 'Long status'
+    
+    ! Example 3: Conditional output
+    IF (result == 1) PRINT *, 'Status is complete'
+    
+END PROGRAM IfDisplaySingle
+@end smallexample
+
+@subsection Semantic and Readability Concerns
+
+@itemize @bullet
+@item @strong{Complex conditions}: Not easily readable with single-line IF, difficult to debug
+@item @strong{Type coercion}: Numeric comparisons with implicit conversions may produce unexpected results
+@item @strong{Floating-point precision}: Equality tests problematic with REAL values due to rounding
+@item @strong{Single statement only}: Cannot have multiple statements without explicit continuation
+@item @strong{No else clause}: Cannot provide alternative action for false condition
+@item @strong{Logical operators}: Mixing AND, OR, NOT requires careful precedence understanding
+@item @strong{String comparisons}: Case-sensitive, lexicographic comparison may surprise users
+@item @strong{Bitwise operations}: IAND, IOR, IEOR results depend on machine integer representation
+@end itemize
+
+@subsection When to Use Single-Line IF
+
+Single-line IF suits simple, obvious conditions: range checks, validity tests, and assignment conditionals. Avoid for complex logic where readability suffers. Consider block IF when conditions span multiple lines or require multiple actions. Document non-obvious conditions with comments.
+
+@node FORTRAN IF Block
+@section IF/THEN/ENDIF Statement
+
+The IF/THEN/ENDIF block structure conditionally executes multiple statements. More readable than single-line IF for complex logic, with support for nested blocks and clear control flow.
+
+@subsection Syntax
+
+@smallexample
+IF (logical-expression) THEN
+    statements
+END IF
+
+[LABEL:] IF (condition) THEN
+    statements
+END IF [LABEL]
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{logical-expression}: Boolean condition
+@item @var{statements}: Multiple executable statements
+@item @var{LABEL}: Optional construct label (optional)
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM IfBlockBinary
+    IMPLICIT NONE
+    INTEGER*4 flags = 12, mode = 3, result = 0
+    
+    ! Example 1: Multiple statements in block
+    IF (IAND(flags, 4) /= 0) THEN
+        result = result + 1
+        PRINT *, 'Bit 2 detected'
+    END IF
+    
+    ! Example 2: Nested IF blocks
+    binary_check: IF (flags > 0) THEN
+        IF (IAND(flags, 1) /= 0) THEN
+            result = 10
+        END IF
+    END IF binary_check
+    
+    ! Example 3: Complex bitwise condition
+    IF (IOR(flags, mode) == 15) THEN
+        result = result * 2
+        PRINT *, 'Combined bits match'
+    END IF
+    
+    PRINT *, 'Result:', result
+END PROGRAM IfBlockBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM IfBlockDecimal
+    IMPLICIT NONE
+    REAL*8 value = 25.5D0, threshold = 20.0D0
+    INTEGER*4 category = 0
+    
+    ! Example 1: Range checking block
+    IF (value >= threshold) THEN
+        category = 1
+        PRINT *, 'Value meets threshold'
+    END IF
+    
+    ! Example 2: Mathematical property checks
+    IF (MOD(INT(value), 2) == 0) THEN
+        PRINT *, 'Integer part is even'
+        category = category + 10
+    END IF
+    
+    ! Example 3: Precision-aware comparison
+    numeric_block: IF (ABS(value - 25.5D0) < 1.0D-6) THEN
+        PRINT *, 'Value approximately 25.5'
+    END IF numeric_block
+    
+    PRINT *, 'Category:', category
+END PROGRAM IfBlockDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM IfBlockDisplay
+    IMPLICIT NONE
+    CHARACTER*15 status = "PROCESSING"
+    CHARACTER*30 message = ""
+    INTEGER*4 code = 0
+    
+    ! Example 1: String-based conditional block
+    IF (status == "PROCESSING") THEN
+        message = "Operation in progress"
+        code = 1
+    END IF
+    
+    ! Example 2: Multiple display operations
+    string_check: IF (LEN_TRIM(status) > 8) THEN
+        PRINT *, 'Status has good length'
+        message = TRIM(message) // " - status OK"
+    END IF string_check
+    
+    ! Example 3: Nested string conditions
+    IF (INDEX(status, "ING") > 0) THEN
+        PRINT *, 'Status contains ING'
+    END IF
+    
+    PRINT *, TRIM(message), code
+END PROGRAM IfBlockDisplay
+@end smallexample
+
+@subsection Control Flow and Nesting Complexity
+
+@itemize @bullet
+@item @strong{Deep nesting}: Multiple nested blocks reduce readability and increase bug potential
+@item @strong{Label scoping}: Labels must be unique within entire program scope in fixed-form Fortran
+@item @strong{Unreachable code}: Dead code after unconditional statements never executes
+@item @strong{Construct nesting}: Named constructs simplify multi-level EXIT statements
+@item @strong{Block end labels}: Optional but highly recommended for clarity in deeply nested code
+@item @strong{Condition evaluation}: Conditions fully evaluated at block entry, not re-evaluated
+@item @strong{Statement scope}: Variables declared in block are visible only within that block
+@item @strong{Performance impact}: Deeply nested conditions may affect branch prediction in modern CPUs
+@end itemize
+
+@subsection Structured Programming with IF Blocks
+
+IF/THEN/ENDIF blocks enforce structured programming discipline avoiding spaghetti code. Clear block boundaries with labels improve maintainability. Each block should have single entry point (at IF) and single exit point (at ENDIF). Avoid jumping into or out of blocks with GOTO statements.
+
+@node FORTRAN IF-THEN-ELSE
+@section IF/THEN/ELSE/ENDIF Statement
+
+The IF/THEN/ELSE/ENDIF construct provides two-way branching, with optional ELSE IF chains for multi-way decisions. Enables clear program logic with explicit alternative execution paths.
+
+@subsection Syntax
+
+@smallexample
+IF (condition) THEN
+    statements
+[ELSE IF (condition) THEN
+    statements]
+[ELSE
+    statements]
+END IF
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{condition}: Logical expression evaluated in sequence
+@item @var{statements}: Executable statements for each branch
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM IfElseBinary
+    IMPLICIT NONE
+    INTEGER*4 flags = 5, status = 0
+    
+    ! Example 1: Two-way binary branch
+    IF (IAND(flags, 1) /= 0) THEN
+        status = 1
+        PRINT *, 'Bit 0 set'
+    ELSE
+        status = 0
+        PRINT *, 'Bit 0 clear'
+    END IF
+    
+    ! Example 2: Multi-way binary decision
+    select_mode: IF (flags == 3) THEN
+        status = 100
+        PRINT *, 'Mode A: flags=3'
+    ELSE IF (flags == 5) THEN
+        status = 200
+        PRINT *, 'Mode B: flags=5'
+    ELSE
+        status = 0
+        PRINT *, 'Unknown mode'
+    END IF select_mode
+    
+    PRINT *, 'Status:', status
+END PROGRAM IfElseBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM IfElseDecimal
+    IMPLICIT NONE
+    REAL*8 score = 75.5D0
+    CHARACTER*20 grade = ""
+    
+    ! Example 1: Grade assignment with ranges
+    IF (score >= 90.0D0) THEN
+        grade = "A"
+    ELSE IF (score >= 80.0D0) THEN
+        grade = "B"
+    ELSE IF (score >= 70.0D0) THEN
+        grade = "C"
+    ELSE IF (score >= 60.0D0) THEN
+        grade = "D"
+    ELSE
+        grade = "F"
+    END IF
+    
+    PRINT *, 'Score:', score, 'Grade:', TRIM(grade)
+END PROGRAM IfElseDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM IfElseDisplay
+    IMPLICIT NONE
+    CHARACTER*10 command = "QUIT"
+    CHARACTER*40 output = ""
+    
+    ! Example 1: Command dispatcher
+    IF (command == "START") THEN
+        output = "System starting"
+    ELSE IF (command == "STOP") THEN
+        output = "System stopping"
+    ELSE IF (command == "QUIT") THEN
+        output = "System terminating"
+    ELSE
+        output = "Unknown command"
+    END IF
+    
+    PRINT *, TRIM(output)
+END PROGRAM IfElseDisplay
+@end smallexample
+
+@subsection Multi-Way Decision Logic
+
+@itemize @bullet
+@item @strong{Condition ordering}: Multiple ELSE IF clauses evaluated sequentially, first true executes
+@item @strong{String comparison}: Case-sensitive, lexicographic comparison follows ASCII/Unicode ordering
+@item @strong{Floating-point ranges}: Use tolerance for range checks with REAL values, never exact equality
+@item @strong{Logical operators}: AND, OR in conditions follow short-circuit evaluation rules
+@item @strong{Performance}: Early true conditions avoid evaluating remaining branches
+@item @strong{Default fallback}: ELSE clause catches all conditions not matched by earlier clauses
+@item @strong{Mutation during branch}: Variable modifications in one branch affect subsequent tests
+@item @strong{Nested branches}: ELSE IF chains can be deeply nested but reduce code clarity
+@item @strong{State changes}: ELSE IF order matters when branch actions have side effects
+@end itemize
+
+@subsection Chaining Conditions Effectively
+
+Arrange ELSE IF clauses with most probable conditions first to minimize average branch depth. Keep conditions simple and avoid complex boolean expressions that obscure intent. Use meaningful variable names for conditions rather than buried calculations. Consider extracting complex conditions into boolean functions for reusability.
+
+@node FORTRAN DO Counted Loops
+@section DO Counted Loops
+
+The counted DO loop iterates a fixed number of times, controlled by initial, final, and optional step values. Essential for array processing and fixed repetitions with guaranteed termination.
+
+@subsection Syntax
+
+@smallexample
+[LABEL:] DO var = init, limit [, step]
+    statements
+    [CYCLE]
+    [EXIT]
+END DO [LABEL]
+
+DO i = 1, 100, 2
+    statements
+END DO
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{LABEL}: Optional construct label
+@item @var{var}: Integer loop variable
+@item @var{init}: Starting value (integer)
+@item @var{limit}: Ending value (integer)
+@item @var{step}: Increment (default 1, nonzero integer)
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM DoBinary
+    IMPLICIT NONE
+    INTEGER*4 i, result = 0, bits = 255
+    
+    ! Example 1: Simple bit counting loop
+    DO i = 0, 7
+        IF (IAND(bits, ISHFT(1, i)) /= 0) result = result + 1
+    END DO
+    
+    ! Example 2: Backward counting with negative step
+    count_loop: DO i = 31, 0, -1
+        IF (IAND(bits, ISHFT(1, i)) /= 0) THEN
+            PRINT *, 'Highest bit at position:', i
+            EXIT count_loop
+        END IF
+    END DO count_loop
+    
+    ! Example 3: Binary pattern generation
+    DO i = 1, 8, 2
+        PRINT *, 'Odd:', i
+    END DO
+    
+    PRINT *, 'Bit count:', result
+END PROGRAM DoBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM DoDecimal
+    IMPLICIT NONE
+    INTEGER*4 i, sum_val = 0
+    REAL*8 avg = 0.0D0
+    
+    ! Example 1: Sum calculation loop
+    DO i = 1, 100
+        sum_val = sum_val + i
+    END DO
+    
+    ! Example 2: Average calculation with REAL
+    DO i = 1, 10
+        avg = avg + DBLE(i) / 10.0D0
+    END DO
+    
+    ! Example 3: Loop with condition inside
+    DO i = 1, 50
+        IF (MOD(i, 3) == 0) THEN
+            PRINT *, 'Multiple of 3:', i
+        END IF
+    END DO
+    
+    PRINT *, 'Sum:', sum_val, 'Average:', avg
+END PROGRAM DoDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM DoDisplay
+    IMPLICIT NONE
+    INTEGER*4 i
+    CHARACTER*30 message
+    
+    ! Example 1: String repetition loop
+    DO i = 1, 5
+        PRINT *, 'Iteration', i, 'of 5'
+    END DO
+    
+    ! Example 2: Character generation loop
+    DO i = 1, 26
+        message = CHAR(64 + i)
+        PRINT '(A, I2, A)', message, i, ' - Letter'
+    END DO
+    
+END PROGRAM DoDisplay
+@end smallexample
+
+@subsection Loop Mechanics and Guarantees
+
+@itemize @bullet
+@item @strong{Step must be nonzero}: Zero step causes infinite loop and caught by most modern compilers
+@item @strong{Loop variable modification}: Changing loop variable inside loop has undefined behavior
+@item @strong{Iteration count}: Calculated once before loop execution: MAX(0, (limit - init + step) / step)
+@item @strong{Negative steps}: Loop executes if init >= limit with negative step
+@item @strong{Backward iteration}: Negative step enables reverse loops without recalculating indices
+@item @strong{Float indices}: Loop variable must be INTEGER, never REAL or other types
+@item @strong{Array access}: Loop variable commonly used for array indexing and element processing
+@item @strong{Loop exit}: Loop variable retains last value after normal loop completion
+@item @strong{Performance}: DO loops typically compile to minimal efficient machine code
+@item @strong{Parallelization}: Some DO loops can be parallelized by compilers with appropriate directives
+@end itemize
+
+@subsection Loop Optimization Techniques
+
+Modern Fortran compilers aggressively optimize counted loops. Strip-mining and loop unrolling increase register utilization. Array accesses in loops benefit from vectorization on SIMD architectures. Keeping loop bodies small and avoiding function calls improves cache behavior and instruction-level parallelism.
+
+@node FORTRAN DO WHILE
+@section DO WHILE Conditional Loop
+
+The DO WHILE construct iterates while a condition remains true. Ideal for input validation, stream processing, and conditions evaluated at loop entry.
+
+@subsection Syntax
+
+@smallexample
+[LABEL:] DO WHILE (logical-condition)
+    statements
+    [CYCLE]
+    [EXIT]
+END DO [LABEL]
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{LABEL}: Optional construct label
+@item @var{logical-condition}: Evaluated before each iteration
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM DoWhileBinary
+    IMPLICIT NONE
+    INTEGER*4 value = 256, count = 0
+    
+    ! Example 1: Bit shift loop
+    DO WHILE (value > 1)
+        value = ISHFT(value, -1)
+        count = count + 1
+    END DO
+    
+    ! Example 2: Bit extraction with condition
+    value = 511
+    binary_loop: DO WHILE (IAND(value, 255) /= 0)
+        PRINT *, 'Remaining:', IAND(value, 255)
+        value = ISHFT(value, -8)
+    END DO binary_loop
+    
+    PRINT *, 'Bit shifts:', count
+END PROGRAM DoWhileBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM DoWhileDecimal
+    IMPLICIT NONE
+    REAL*8 value = 100.0D0
+    INTEGER*4 iterations = 0
+    
+    ! Example 1: Convergence loop
+    DO WHILE (value > 1.0D-6)
+        value = value / 2.0D0
+        iterations = iterations + 1
+    END DO
+    
+    ! Example 2: Running sum with limit
+    REAL*8 sum_val = 0.0D0, increment = 0.1D0
+    DO WHILE (sum_val < 10.0D0)
+        sum_val = sum_val + increment
+    END DO
+    
+    PRINT *, 'Iterations:', iterations, 'Sum:', sum_val
+END PROGRAM DoWhileDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM DoWhileDisplay
+    IMPLICIT NONE
+    CHARACTER*10 status = "RUNNING"
+    INTEGER*4 count = 0
+    
+    ! Example 1: Status-based loop
+    DO WHILE (status == "RUNNING")
+        count = count + 1
+        PRINT *, 'Processing iteration:', count
+        IF (count >= 5) status = "STOPPED"
+    END DO
+    
+    PRINT *, 'Final count:', count
+END PROGRAM DoWhileDisplay
+@end smallexample
+
+@subsection Conditional Loop Behavior
+
+@itemize @bullet
+@item @strong{Infinite loops}: Condition never becomes false causes infinite loop (programmer must prevent)
+@item @strong{Never executes}: If condition false on entry, loop body never runs
+@item @strong{Late termination}: Condition checked at loop top only, not during iteration
+@item @strong{State-dependent}: Loop execution depends on mutable state, difficult to analyze
+@item @strong{Efficiency}: Cannot parallelize due to data-dependent termination condition
+@item @strong{Debug complexity}: Infinite loops require debugger or output inspection
+@item @strong{Condition evaluation}: Full condition evaluated each iteration, performance depends on complexity
+@item @strong{Exit criteria}: Must ensure loop body advances toward exit condition
+@item @strong{Resource loops}: Common for I/O operations, resource cleanup, and stream processing
+@end itemize
+
+@subsection Using DO WHILE Safely
+
+Ensure loop body modifies state toward exit condition or provides explicit EXIT. Use meaningful variable names for loop conditions. Avoid complex boolean expressions; extract into helper functions for clarity. Add timeout mechanisms for interactive loops to prevent indefinite blocking.
+
+@node FORTRAN DO EXIT
+@section DO/EXIT Statement
+
+The EXIT statement terminates loop execution immediately, regardless of loop type or condition. Used for break conditions, error handling, and early termination with clean control flow.
+
+@subsection Syntax
+
+@smallexample
+[LABEL:] DO [WHILE | condition]
+    IF (exit-condition) EXIT [label]
+    statements
+END DO [LABEL]
+
+DO
+    IF (condition) EXIT loop_name
+    statements
+END DO loop_name
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{label}: Loop label for multi-level exit
+@item @var{exit-condition}: Boolean triggering exit
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM DoExitBinary
+    IMPLICIT NONE
+    INTEGER*4 i, target = 0, pattern = 15
+    
+    ! Example 1: Search with exit
+    DO i = 0, 31
+        IF (IAND(ISHFT(1, i), pattern) /= 0) THEN
+            target = i
+            EXIT
+        END IF
+    END DO
+    
+    ! Example 2: Nested loops with multi-level exit
+    outer_loop: DO i = 1, 10
+        inner: DO WHILE (i < 20)
+            IF (IAND(i, 3) == 0) EXIT outer_loop
+            i = i + 1
+        END DO inner
+    END DO outer_loop
+    
+    PRINT *, 'Target position:', target
+END PROGRAM DoExitBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM DoExitDecimal
+    IMPLICIT NONE
+    REAL*8 value = 0.0D0, limit = 100.0D0
+    INTEGER*4 count = 0
+    
+    ! Example 1: Loop with limit check
+    DO
+        value = value + 10.0D0
+        count = count + 1
+        IF (value > limit) EXIT
+    END DO
+    
+    ! Example 2: Multiple exit conditions
+    value = 50.0D0
+    search: DO WHILE (value < 1000.0D0)
+        IF (value > limit .AND. MOD(INT(value), 7) == 0) EXIT search
+        value = value * 1.1D0
+    END DO search
+    
+    PRINT *, 'Final value:', value, 'Count:', count
+END PROGRAM DoExitDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM DoExitDisplay
+    IMPLICIT NONE
+    CHARACTER*20 input_line
+    CHARACTER*10 command = ""
+    INTEGER*4 lines_read = 0
+    
+    ! Example 1: Input reading loop with termination
+    process: DO
+        ! Simulated input
+        IF (lines_read >= 3) EXIT process
+        lines_read = lines_read + 1
+        PRINT *, 'Processing line', lines_read
+    END DO process
+    
+    PRINT *, 'Total lines:', lines_read
+END PROGRAM DoExitDisplay
+@end smallexample
+
+@subsection Multi-Level Loop Control
+
+@itemize @bullet
+@item @strong{Labeled exit}: Exits to specified loop label, enabling multi-level breaks
+@item @strong{Unlabeled exit}: Without label, exits innermost loop only
+@item @strong{Late exit}: Processing continues until EXIT statement reached in execution flow
+@item @strong{Loop cleanup}: Code after EXIT in same iteration never executes
+@item @strong{Nested context}: Each loop level has its own EXIT target
+@item @strong{Search termination}: Common for finding elements and early termination
+@item @strong{Error recovery}: EXIT enables clean recovery from exceptional conditions
+@item @strong{State consistency}: Ensure state remains consistent when exiting early
+@item @strong{Performance}: EXIT enables avoiding unnecessary iterations once goal achieved
+@item @strong{Debugging}: Label-based exit clarifies which loop terminates in complex nesting
+@end itemize
+
+@subsection EXIT with Complex Nesting
+
+Label your loops when nesting multiple levels. This clarifies which loop EXIT targets. Test exit conditions thoroughly to prevent premature or missed exits. Document why early exits occur for code maintainers. Consider extracting multi-level logic into subroutines for clarity.
+
+@node FORTRAN CALL Statement
+@section CALL Statement
+
+The CALL statement invokes a subroutine with arguments passed by reference. Enables code reuse, modularization, and side-effect operations on subroutine parameters.
+
+@subsection Syntax
+
+@smallexample
+CALL subroutine-name [([actual-arguments])]
+
+CALL subroutine_name(arg1, arg2, keyword=value, ...)
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{subroutine-name}: Defined subroutine identifier
+@item @var{actual-arguments}: Values or variables (passed by reference)
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM CallBinary
+    IMPLICIT NONE
+    INTEGER*4 a = 12, b = 8
+    
+    CALL swap_binary(a, b)
+    PRINT *, 'After swap:', a, b
+    
+CONTAINS
+    SUBROUTINE swap_binary(x, y)
+        INTEGER*4, INTENT(INOUT) :: x, y
+        INTEGER*4 temp
+        temp = x
+        x = y
+        y = temp
+    END SUBROUTINE swap_binary
+END PROGRAM CallBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM CallDecimal
+    IMPLICIT NONE
+    REAL*8 radius = 5.0D0, area = 0.0D0, circumference = 0.0D0
+    
+    CALL circle_calc(radius, area, circumference)
+    PRINT *, 'Area:', area, 'Circumference:', circumference
+    
+CONTAINS
+    SUBROUTINE circle_calc(r, a, c)
+        REAL*8, INTENT(IN) :: r
+        REAL*8, INTENT(OUT) :: a, c
+        REAL*8, PARAMETER :: PI = 3.141592653589793D0
+        a = PI * r * r
+        c = 2.0D0 * PI * r
+    END SUBROUTINE circle_calc
+END PROGRAM CallDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM CallDisplay
+    IMPLICIT NONE
+    CHARACTER*30 message = "Initial Message"
+    
+    CALL modify_string(message)
+    PRINT *, TRIM(message)
+    
+CONTAINS
+    SUBROUTINE modify_string(msg)
+        CHARACTER*30, INTENT(INOUT) :: msg
+        msg = TRIM(msg) // " - Modified"
+    END SUBROUTINE modify_string
+END PROGRAM CallDisplay
+@end smallexample
+
+@subsection Argument Passing and Type Safety
+
+@itemize @bullet
+@item @strong{Arguments by reference}: Changes in subroutine affect caller's variables permanently
+@item @strong{Argument count mismatch}: Causes runtime error or undefined behavior
+@item @strong{Intent violations}: Modifying INTENT(IN) parameter causes error at runtime
+@item @strong{Array shape mismatch}: Passing incompatible array shapes causes corruption
+@item @strong{Type conversion}: Implicit type conversions between argument and parameter
+@item @strong{Pointer arguments}: INTENT specification affects aliasing and optimization opportunities
+@item @strong{Assumed-shape arrays}: Caller dimension information passed implicitly
+@item @strong{Optional arguments}: PRESENT() checks availability before access
+@item @strong{Keyword arguments}: Can be passed by name in any order if declared optional
+@item @strong{Performance}: Argument passing typically zero-cost due to reference semantics
+@end itemize
+
+@subsection Best Practices for CALL Statements
+
+Always specify INTENT(IN), INTENT(OUT), or INTENT(INOUT) for all arguments. This enables compiler optimizations and prevents accidental modifications. Use meaningful subroutine names describing operations. Document complex argument interactions. Consider using derived types to group related arguments, reducing parameter count.
+
+@node FORTRAN FUNCTION Statement
+@section FUNCTION Statement
+
+The FUNCTION statement defines a function returning a single value. Functions accept parameters and return results, enabling expression evaluation and computation with clean semantics.
+
+@subsection Syntax
+
+@smallexample
+[type] FUNCTION function-name([parameters]) [RESULT(var)]
+    statements
+    [function-name = result-value]
+    [RETURN]
+END FUNCTION [function-name]
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{type}: Return type (REAL, INTEGER, CHARACTER, etc.)
+@item @var{function-name}: Function identifier
+@item @var{parameters}: Formal parameter list
+@item @var{RESULT}: Alternate return variable name
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM FunctionBinary
+    IMPLICIT NONE
+    INTEGER*4 value = 15
+    INTEGER*4 bit_count
+    
+    bit_count = count_set_bits(value)
+    PRINT *, 'Set bits:', bit_count
+    
+CONTAINS
+    INTEGER*4 FUNCTION count_set_bits(n)
+        INTEGER*4, INTENT(IN) :: n
+        INTEGER*4 i, count
+        count = 0
+        DO i = 0, 31
+            IF (IAND(n, ISHFT(1, i)) /= 0) count = count + 1
+        END DO
+        count_set_bits = count
+    END FUNCTION count_set_bits
+END PROGRAM FunctionBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM FunctionDecimal
+    IMPLICIT NONE
+    REAL*8 x = 2.5D0, factorial_result
+    
+    factorial_result = factorial(INT(x))
+    PRINT *, 'Factorial:', factorial_result
+    
+CONTAINS
+    REAL*8 FUNCTION factorial(n)
+        INTEGER*4, INTENT(IN) :: n
+        INTEGER*4 i
+        REAL*8 result
+        result = 1.0D0
+        DO i = 2, n
+            result = result * DBLE(i)
+        END DO
+        factorial = result
+    END FUNCTION factorial
+END PROGRAM FunctionDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM FunctionDisplay
+    IMPLICIT NONE
+    CHARACTER*30 str1 = "Hello", str2 = "World"
+    CHARACTER*20 combined
+    
+    combined = concat_strings(str1, str2)
+    PRINT *, TRIM(combined)
+    
+CONTAINS
+    CHARACTER*20 FUNCTION concat_strings(s1, s2)
+        CHARACTER*20, INTENT(IN) :: s1, s2
+        concat_strings = TRIM(s1) // " " // TRIM(s2)
+    END FUNCTION concat_strings
+END PROGRAM FunctionDisplay
+@end smallexample
+
+@subsection Function Definition and Return Semantics
+
+@itemize @bullet
+@item @strong{RESULT variable}: Alternate name for return value, cleaner than function name reuse
+@item @strong{Function value assignment}: Must assign result before RETURN or END FUNCTION
+@item @strong{Type mismatch}: Return value must match declared type or be automatically converted
+@item @strong{Early returns}: Multiple RETURN statements allow conditional early exit
+@item @strong{No return statement}: Implicit return at END FUNCTION if value assigned
+@item @strong{Pure functions}: Functions with no side effects enable aggressive compiler optimizations
+@item @strong{Recursive functions}: Functions can call themselves with proper termination conditions
+@item @strong{Array returns}: Functions can return arrays of fixed or assumed-shape dimensions
+@item @strong{Character return}: STRING functions require length specification in declaration
+@item @strong{Performance}: Function call overhead typically negligible on modern CPUs
+@end itemize
+
+@subsection Function Design Patterns
+
+Use RESULT variable for clarity, separating input parameters from output variable. Pure functions facilitate parallelization and caching optimizations. Keep function bodies focused on single computations. Return immediately upon completion rather than using intermediate variables. Document expected preconditions and postconditions for function contracts.
+
+@node FORTRAN SUBROUTINE Statement
+@section SUBROUTINE Statement
+
+The SUBROUTINE statement defines a subroutine with no inherent return value. Subroutines modify parameters and perform side effects, with explicit control flow handling.
+
+@subsection Syntax
+
+@smallexample
+SUBROUTINE subroutine-name([parameters])
+    [IMPLICIT NONE]
+    [type declarations]
+    statements
+    [RETURN]
+END SUBROUTINE [subroutine-name]
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{subroutine-name}: Subroutine identifier
+@item @var{parameters}: Optional formal parameter list
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM SubroutineBinary
+    IMPLICIT NONE
+    INTEGER*4 flags = 0
+    
+    CALL set_bits(flags, 3)
+    PRINT *, 'Flags after set:', flags
+    
+CONTAINS
+    SUBROUTINE set_bits(f, count)
+        INTEGER*4, INTENT(INOUT) :: f
+        INTEGER*4, INTENT(IN) :: count
+        INTEGER*4 i
+        DO i = 0, count-1
+            f = IOR(f, ISHFT(1, i))
+        END DO
+    END SUBROUTINE set_bits
+END PROGRAM SubroutineBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM SubroutineDecimal
+    IMPLICIT NONE
+    REAL*8 arr(3) = [1.0D0, 2.0D0, 3.0D0]
+    
+    CALL scale_array(arr, 2.5D0)
+    PRINT *, arr
+    
+CONTAINS
+    SUBROUTINE scale_array(a, factor)
+        REAL*8, INTENT(INOUT) :: a(:)
+        REAL*8, INTENT(IN) :: factor
+        INTEGER*4 i
+        DO i = 1, SIZE(a)
+            a(i) = a(i) * factor
+        END DO
+    END SUBROUTINE scale_array
+END PROGRAM SubroutineDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM SubroutineDisplay
+    IMPLICIT NONE
+    CHARACTER*30 message = "Test"
+    
+    CALL print_bordered(message)
+    
+CONTAINS
+    SUBROUTINE print_bordered(msg)
+        CHARACTER*30, INTENT(IN) :: msg
+        PRINT *, '=============================='
+        PRINT *, TRIM(msg)
+        PRINT *, '=============================='
+    END SUBROUTINE print_bordered
+END PROGRAM SubroutineDisplay
+@end smallexample
+
+@subsection Subroutine Design and Execution
+
+@itemize @bullet
+@item @strong{No return value}: Subroutines use INTENT(OUT) for results or modify INTENT(INOUT) parameters
+@item @strong{Parameter modification}: INTENT(INOUT) for in-place changes, INTENT(OUT) for pure output
+@item @strong{Array parameters}: May use assumed-size or assumed-shape for flexible dimensions
+@item @strong{Performance}: Subroutine call overhead minimal compared to computation benefits
+@item @strong{Side effects}: Subroutines specifically enable side effects and modifications
+@item @strong{Implicit execution}: Returns at END SUBROUTINE if no explicit RETURN
+@item @strong{Multiple outputs}: INTENT(OUT) parameters accumulate results for caller
+@item @strong{State modification}: Can modify COMMON blocks and module variables
+@item @strong{Recursion}: Subroutines can call themselves recursively with proper termination
+@item @strong{Local variables}: Storage allocated fresh per call, deallocated upon return
+@end itemize
+
+@subsection Subroutine Design Methodology
+
+Document parameter roles with INTENT specification. Keep subroutines focused on specific tasks. Limit parameter count through derived types or modules. Test subroutine behavior with various input combinations. Consider error codes or status returns for error handling.
+
+@node FORTRAN RETURN Statement
+@section RETURN Statement
+
+The RETURN statement exits a function or subroutine immediately, returning control to the caller. Optional in modern FORTRAN but provides explicit exit points and clarity.
+
+@subsection Syntax
+
+@smallexample
+RETURN [int-label]
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{int-label}: Alternate return label (deprecated, for compatibility)
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM ReturnBinary
+    IMPLICIT NONE
+    INTEGER*4 result
+    
+    result = binary_search(5)
+    PRINT *, 'Result:', result
+    
+CONTAINS
+    INTEGER*4 FUNCTION binary_search(target)
+        INTEGER*4, INTENT(IN) :: target
+        INTEGER*4 i
+        DO i = 0, 31
+            IF (IAND(ISHFT(1, i), target) /= 0) THEN
+                binary_search = i
+                RETURN
+            END IF
+        END DO
+        binary_search = -1
+        RETURN
+    END FUNCTION binary_search
+END PROGRAM ReturnBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM ReturnDecimal
+    IMPLICIT NONE
+    REAL*8 value
+    
+    value = safe_divide(10.0D0, 2.0D0)
+    PRINT *, 'Result:', value
+    
+CONTAINS
+    REAL*8 FUNCTION safe_divide(a, b)
+        REAL*8, INTENT(IN) :: a, b
+        IF (ABS(b) < 1.0D-10) THEN
+            safe_divide = 0.0D0
+            RETURN
+        END IF
+        safe_divide = a / b
+    END FUNCTION safe_divide
+END PROGRAM ReturnDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM ReturnDisplay
+    IMPLICIT NONE
+    CHARACTER*20 str = "test"
+    
+    CALL process_string(str)
+    
+CONTAINS
+    SUBROUTINE process_string(s)
+        CHARACTER*20, INTENT(IN) :: s
+        IF (LEN_TRIM(s) == 0) THEN
+            PRINT *, 'Empty string'
+            RETURN
+        END IF
+        PRINT *, 'String:', TRIM(s)
+    END SUBROUTINE process_string
+END PROGRAM ReturnDisplay
+@end smallexample
+
+@subsection Control Flow and Return Mechanics
+
+@itemize @bullet
+@item @strong{Early exit}: RETURN before END terminates immediately, any remaining code skipped
+@item @strong{Alternate returns}: Deprecated syntax for branch control to numbered labels (RETURN int-label)
+@item @strong{Multiple exits}: Code organization with early returns simplifies conditional logic
+@item @strong{Stack cleanup}: Automatic cleanup of local variables upon return
+@item @strong{State preservation}: Global state and COMMON blocks unchanged by RETURN
+@item @strong{Implicit return}: Functions/subroutines return automatically at END if no explicit RETURN
+@item @strong{Resource leaks}: Must ensure resource cleanup before RETURN statements
+@item @strong{Error codes}: Can assign error codes before RETURN for caller error handling
+@item @strong{Debug stepping}: Each RETURN statement represents potential exit point in debugger
+@item @strong{Inlining}: Modern compilers may inline RETURN points to eliminate call overhead
+@end itemize
+
+@subsection Structured RETURN Usage
+
+Modern programming favors single exit point per function, but early returns improve readability for error conditions. Always clean up resources (files, memory) before any RETURN. Test all return paths through code coverage tools. Use meaningful error codes distinguishing different failure modes.
+
+@node FORTRAN CONTINUE Statement
+@section CONTINUE Statement
+
+The CONTINUE statement is a no-operation placeholder, used historically for loop targets and control flow marks. Largely obsolete in modern FORTRAN but present in legacy code.
+
+@subsection Syntax
+
+@smallexample
+CONTINUE
+
+[LABEL:] CONTINUE
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{LABEL}: Optional target label for GOTO statements
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM ContinueBinary
+    IMPLICIT NONE
+    INTEGER*4 i, flags = 0
+    
+    ! Example 1: Loop with continue marker
+    DO i = 0, 3
+        IF (IAND(flags, 1) == 0) CYCLE
+        CONTINUE
+    END DO
+    
+    ! Example 2: Labeled continue for goto target
+    continue_here: CONTINUE
+    flags = IOR(flags, 1)
+    PRINT *, 'Continued'
+    
+END PROGRAM ContinueBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM ContinueDecimal
+    IMPLICIT NONE
+    REAL*8 value = 0.0D0
+    INTEGER*4 i
+    
+    ! Example 1: Continue in loop
+    DO i = 1, 5
+        IF (MOD(i, 2) == 0) CYCLE
+        value = value + DBLE(i)
+        CONTINUE
+    END DO
+    
+    PRINT *, 'Sum:', value
+END PROGRAM ContinueDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM ContinueDisplay
+    IMPLICIT NONE
+    CHARACTER*20 status = "OK"
+    
+    ! Example 1: Continue marker
+    start: CONTINUE
+    PRINT *, 'Status:', TRIM(status)
+    
+END PROGRAM ContinueDisplay
+@end smallexample
+
+@subsection Edge Cases
+
+@itemize @bullet
+@item @strong{No-op statement}: Performs no action
+@item @strong{Legacy code}: Common in older FORTRAN 77 programs
+@item @strong{Control flow}: Often replaced by DO/EXIT in modern code
+@end itemize
+
+@node FORTRAN GOTO Statement
+@section GOTO Statement
+
+The GOTO statement performs unconditional jump to labeled statement. Discouraged in modern programming but present for legacy code compatibility and specific use cases.
+
+@subsection Syntax
+
+@smallexample
+GOTO label
+
+[LABEL:] statement
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{label}: Target statement label (numeric, rarely used)
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM GotoBinary
+    IMPLICIT NONE
+    INTEGER*4 i = 5
+    
+    ! Example 1: Simple goto
+    IF (i == 5) GOTO 100
+    PRINT *, 'Skipped'
+    
+100 CONTINUE
+    PRINT *, 'Target reached'
+    
+    ! Example 2: Loop with goto (not recommended)
+    i = 0
+200 CONTINUE
+    IF (i > 3) GOTO 300
+    i = i + 1
+    GOTO 200
+    
+300 CONTINUE
+    PRINT *, 'Loop completed'
+END PROGRAM GotoBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM GotoDecimal
+    IMPLICIT NONE
+    REAL*8 value = 0.0D0
+    
+    ! Example 1: Goto for error handling
+    value = 5.0D0
+    IF (value < 0.0D0) GOTO 400
+    PRINT *, 'Valid value:', value
+    GOTO 500
+    
+400 CONTINUE
+    PRINT *, 'Error: negative value'
+    
+500 CONTINUE
+    PRINT *, 'Processing complete'
+END PROGRAM GotoDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM GotoDisplay
+    IMPLICIT NONE
+    CHARACTER*15 state = "START"
+    
+    ! Example 1: Simple state transition
+    IF (state == "START") GOTO 600
+    PRINT *, 'Not started'
+    GOTO 700
+    
+600 CONTINUE
+    PRINT *, 'Program started'
+    
+700 CONTINUE
+END PROGRAM GotoDisplay
+@end smallexample
+
+@subsection Edge Cases
+
+@itemize @bullet
+@item @strong{Unstructured code}: GOTO creates hard-to-follow control flow
+@item @strong{Spaghetti code}: Multiple GOTOs create debugging difficulties
+@item @strong{Modern alternatives}: Use IF/THEN, loops, or functions instead
+@end itemize
+
+@node FORTRAN STOP Statement
+@section STOP Statement
+
+The STOP statement terminates program execution immediately with optional exit code. Essential for abnormal termination, error handling, and explicit program completion.
+
+@subsection Syntax
+
+@smallexample
+STOP [stop-code]
+STOP [character-literal]
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{stop-code}: Optional integer (0-255) or character string
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM StopBinary
+    IMPLICIT NONE
+    INTEGER*4 flags = 0
+    
+    ! Example 1: Simple stop
+    IF (flags == 0) THEN
+        PRINT *, 'Flags not initialized'
+        STOP 1
+    END IF
+    
+    ! Example 2: Normal completion
+    flags = 1
+    PRINT *, 'Processing complete'
+    STOP 0
+    
+END PROGRAM StopBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM StopDecimal
+    IMPLICIT NONE
+    REAL*8 value = -5.0D0
+    
+    ! Example 1: Stop on error
+    IF (value < 0.0D0) THEN
+        PRINT *, 'Error: negative input'
+        STOP 'INPUT_ERROR'
+    END IF
+    
+    PRINT *, 'Value:', value
+    STOP 0
+    
+END PROGRAM StopDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM StopDisplay
+    IMPLICIT NONE
+    CHARACTER*30 filename = "input.dat"
+    LOGICAL file_exists
+    
+    ! Example 1: Stop if file missing
+    INQUIRE(FILE=filename, EXIST=file_exists)
+    IF (.NOT. file_exists) THEN
+        PRINT *, 'File not found:', TRIM(filename)
+        STOP 'FILE_NOT_FOUND'
+    END IF
+    
+    PRINT *, 'File found'
+    STOP 0
+    
+END PROGRAM StopDisplay
+@end smallexample
+
+@subsection Edge Cases
+
+@itemize @bullet
+@item @strong{Exit code}: Returned to operating system
+@item @strong{No cleanup}: Resources may not flush properly
+@item @strong{Character message}: Displayed on termination in some environments
+@end itemize
+
+@node FORTRAN PAUSE Statement
+@section PAUSE Statement
+
+The PAUSE statement suspends program execution awaiting user input to continue. Useful for interactive programs requiring manual intervention between steps.
+
+@subsection Syntax
+
+@smallexample
+PAUSE [pause-message]
+PAUSE [numeric-literal]
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{pause-message}: Optional character literal displayed
+@item @var{numeric-literal}: Optional numeric pause code
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM PauseBinary
+    IMPLICIT NONE
+    INTEGER*4 count = 0
+    
+    ! Example 1: Pause between operations
+    count = count + 1
+    PRINT *, 'Operation 1 complete. Count:', count
+    PAUSE 'Press ENTER to continue...'
+    
+    count = count + 1
+    PRINT *, 'Operation 2 complete. Count:', count
+    PAUSE
+    
+END PROGRAM PauseBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM PauseDecimal
+    IMPLICIT NONE
+    REAL*8 value = 0.0D0
+    
+    ! Example 1: Pause for data entry
+    PRINT *, 'Enter processing parameters'
+    PAUSE 'Ready to process'
+    
+    value = 42.0D0
+    PRINT *, 'Processing value:', value
+    
+END PROGRAM PauseDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM PauseDisplay
+    IMPLICIT NONE
+    CHARACTER*40 msg = "Calculation Phase 1"
+    
+    ! Example 1: Display message before pause
+    PRINT *, TRIM(msg)
+    PAUSE 'Press ENTER for next phase'
+    
+    msg = "Calculation Phase 2"
+    PRINT *, TRIM(msg)
+    
+END PROGRAM PauseDisplay
+@end smallexample
+
+@subsection Edge Cases
+
+@itemize @bullet
+@item @strong{Interactive only}: Not suitable for batch processing
+@item @strong{Message display}: Some systems ignore PAUSE messages
+@item @strong{Deprecated}: Rarely used in modern FORTRAN
+@end itemize
+
+@node FORTRAN IMPLICIT Statement
+@section IMPLICIT Statement
+
+The IMPLICIT statement sets default type for variables based on initial letter. Controls automatic type assignment and affects entire program scope or named ranges.
+
+@subsection Syntax
+
+@smallexample
+IMPLICIT type [(letter-range [, letter-range]...)]
+IMPLICIT NONE
+
+IMPLICIT INTEGER (A-M), REAL (N-Z)
+IMPLICIT CHARACTER*20 (A)
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{type}: Default type specification
+@item @var{letter-range}: A-Z single letter or A-C range
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM ImplicitBinary
+    IMPLICIT NONE
+    ! Forces explicit declaration of all variables
+    
+    INTEGER*4 ivalue = 42
+    REAL*8 dvalue = 3.14D0
+    
+    PRINT *, ivalue, dvalue
+END PROGRAM ImplicitBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM ImplicitDecimal
+    IMPLICIT INTEGER (I-N)
+    IMPLICIT REAL*8 (A-H, O-Z)
+    ! Variables starting with I-N default to INTEGER
+    ! Variables starting with A-H, O-Z default to REAL*8
+    
+    icount = 10
+    value = 3.14D0
+    result = icount + value
+    
+    PRINT *, result
+END PROGRAM ImplicitDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM ImplicitDisplay
+    IMPLICIT CHARACTER*20 (A-Z)
+    ! All variables default to CHARACTER*20
+    
+    message = "Default to character"
+    status = "COMPLETE"
+    
+    PRINT *, TRIM(message)
+    PRINT *, TRIM(status)
+END PROGRAM ImplicitDisplay
+@end smallexample
+
+@subsection Edge Cases
+
+@itemize @bullet
+@item @strong{IMPLICIT NONE}: Best practice, requires explicit declarations
+@item @strong{Type scope}: Applies only to following declarations
+@item @strong{Default behavior}: Without IMPLICIT, I-N=INTEGER, rest=REAL
+@end itemize
+
+@node FORTRAN DIMENSION Statement
+@section DIMENSION Statement
+
+The DIMENSION statement declares array variables with specified bounds. Allocates fixed-size arrays and defines array structure at declaration time.
+
+@subsection Syntax
+
+@smallexample
+DIMENSION array(size [, size...]) [, array2...]
+
+DIMENSION iarray(100)
+DIMENSION matrix(10, 10), vector(100)
+DIMENSION arr1(1:50), arr2(0:99)
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{array}: Array variable name
+@item @var{size}: Upper bound (default lower=1) or lower:upper
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM DimensionBinary
+    IMPLICIT NONE
+    INTEGER*4 bits(0:31)
+    INTEGER*4 i
+    
+    ! Example 1: Initialize array
+    DO i = 0, 31
+        bits(i) = ISHFT(1, i)
+    END DO
+    
+    ! Example 2: Multi-dimensional array
+    INTEGER*4 matrix(8, 8)
+    matrix(1, 1) = 255
+    
+    PRINT *, 'Array operations complete'
+END PROGRAM DimensionBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM DimensionDecimal
+    IMPLICIT NONE
+    REAL*8 values(1:1000)
+    REAL*8 matrix(10, 10)
+    INTEGER*4 i, j
+    
+    ! Example 1: 1D array initialization
+    DO i = 1, 1000
+        values(i) = DBLE(i) * 0.1D0
+    END DO
+    
+    ! Example 2: 2D array operations
+    DO i = 1, 10
+        DO j = 1, 10
+            matrix(i, j) = DBLE(i) + DBLE(j)
+        END DO
+    END DO
+    
+    PRINT *, 'Dimension operations complete'
+END PROGRAM DimensionDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM DimensionDisplay
+    IMPLICIT NONE
+    CHARACTER*30 names(10)
+    CHARACTER*50 descriptions(1:5, 1:4)
+    
+    ! Example 1: String array
+    names(1) = "First String"
+    
+    ! Example 2: 2D string array
+    descriptions(1, 1) = "Description 1"
+    
+    PRINT *, TRIM(names(1))
+END PROGRAM DimensionDisplay
+@end smallexample
+
+@subsection Edge Cases
+
+@itemize @bullet
+@item @strong{Fixed bounds}: Allocated at compile time
+@item @strong{Lower bound}: Optional (default 1)
+@item @strong{Multi-dimensional}: Stored in row-major order (C-style)
+@end itemize
+
+@node FORTRAN PARAMETER Statement
+@section PARAMETER Statement
+
+The PARAMETER statement declares compile-time constants with fixed values. Enables named constants with type-safe initialization and prevents accidental modification.
+
+@subsection Syntax
+
+@smallexample
+PARAMETER (name = value [, name = value...])
+
+PARAMETER (PI = 3.141592653589793D0)
+PARAMETER (MAX_SIZE = 1000, MIN_SIZE = 1)
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{name}: Constant identifier
+@item @var{value}: Compile-time constant expression
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM ParameterBinary
+    IMPLICIT NONE
+    INTEGER*4, PARAMETER :: MASK = Z'FFFFFFFF'
+    INTEGER*4, PARAMETER :: SHIFT = 4
+    INTEGER*4 value = 255
+    
+    ! Example 1: Use binary parameters
+    value = IAND(value, MASK)
+    value = ISHFT(value, SHIFT)
+    
+    PRINT *, 'Result:', value
+END PROGRAM ParameterBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM ParameterDecimal
+    IMPLICIT NONE
+    REAL*8, PARAMETER :: PI = 3.141592653589793D0
+    REAL*8, PARAMETER :: E = 2.718281828459045D0
+    REAL*8, PARAMETER :: RADIUS = 5.0D0
+    
+    ! Example 1: Calculate area using constant
+    REAL*8 area
+    area = PI * RADIUS * RADIUS
+    
+    PRINT *, 'Area:', area
+END PROGRAM ParameterDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM ParameterDisplay
+    IMPLICIT NONE
+    CHARACTER*20, PARAMETER :: TITLE = "Program Title"
+    CHARACTER*40, PARAMETER :: VERSION = "Version 1.0"
+    
+    ! Example 1: Display constants
+    PRINT *, TRIM(TITLE)
+    PRINT *, TRIM(VERSION)
+    
+END PROGRAM ParameterDisplay
+@end smallexample
+
+@subsection Edge Cases
+
+@itemize @bullet
+@item @strong{Compile-time only}: Values determined at compilation
+@item @strong{Immutable}: Cannot be modified after declaration
+@item @strong{Type inference}: Type determined from value if not specified
+@end itemize
+
+@node FORTRAN COMMON Statement
+@section COMMON Statement
+
+The COMMON statement declares variables in shared global memory blocks. Enables communication between program units and subroutines without explicit parameter passing.
+
+@subsection Syntax
+
+@smallexample
+COMMON [/block-name/] variable [, variable...] &
+       [/block-name/] variable [, variable...]
+
+COMMON /GLOBALS/ x, y, z
+COMMON x, y, z
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{block-name}: Named COMMON block (optional)
+@item @var{variable}: Variables in shared storage
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM CommonBinary
+    IMPLICIT NONE
+    INTEGER*4 flags
+    COMMON /FLAGS/ flags
+    
+    flags = 15
+    CALL modify_flags()
+    PRINT *, 'Modified flags:', flags
+    
+CONTAINS
+    SUBROUTINE modify_flags()
+        IMPLICIT NONE
+        INTEGER*4 flags
+        COMMON /FLAGS/ flags
+        flags = IOR(flags, 128)
+    END SUBROUTINE modify_flags
+END PROGRAM CommonBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM CommonDecimal
+    IMPLICIT NONE
+    REAL*8 shared_value
+    INTEGER*4 shared_count
+    COMMON /DATA/ shared_value, shared_count
+    
+    shared_value = 42.0D0
+    shared_count = 1
+    
+    CALL process_shared()
+    PRINT *, 'Shared:', shared_value, shared_count
+    
+CONTAINS
+    SUBROUTINE process_shared()
+        IMPLICIT NONE
+        REAL*8 shared_value
+        INTEGER*4 shared_count
+        COMMON /DATA/ shared_value, shared_count
+        shared_value = shared_value * 2.0D0
+        shared_count = shared_count + 1
+    END SUBROUTINE process_shared
+END PROGRAM CommonDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM CommonDisplay
+    IMPLICIT NONE
+    CHARACTER*30 message
+    COMMON /OUTPUT/ message
+    
+    message = "Shared message"
+    CALL print_common_message()
+    
+CONTAINS
+    SUBROUTINE print_common_message()
+        IMPLICIT NONE
+        CHARACTER*30 message
+        COMMON /OUTPUT/ message
+        PRINT *, TRIM(message)
+    END SUBROUTINE print_common_message
+END PROGRAM CommonDisplay
+@end smallexample
+
+@subsection Edge Cases
+
+@itemize @bullet
+@item @strong{Global scope}: Visible to all program units
+@item @strong{Memory layout}: Order matters for block compatibility
+@item @strong{Deprecated}: Modern code uses modules instead
+@end itemize
+
+@node FORTRAN EQUIVALENCE Statement
+@section EQUIVALENCE Statement
+
+The EQUIVALENCE statement creates aliases for storage locations, allowing variables to share memory. Enables space-efficient representations and type reinterpretation at runtime.
+
+@subsection Syntax
+
+@smallexample
+EQUIVALENCE (name1, name2 [, name3...]) &
+           [(name4, name5...)]
+
+EQUIVALENCE (real_val, int_val), (x, y)
+@end smallexample
+
+@subsection Parameters
+
+@itemize @bullet
+@item @var{name1, name2}: Variables sharing same storage location
+@end itemize
+
+@subsection BINARY Examples
+
+@smallexample
+PROGRAM EquivalenceBinary
+    IMPLICIT NONE
+    INTEGER*4 binary_int
+    REAL*4 binary_float
+    EQUIVALENCE (binary_int, binary_float)
+    
+    ! Example 1: Binary reinterpretation
+    binary_int = 1065353216  ! IEEE 754 for 1.0
+    PRINT *, 'Float representation:', binary_float
+    
+END PROGRAM EquivalenceBinary
+@end smallexample
+
+@subsection DECIMAL Examples
+
+@smallexample
+PROGRAM EquivalenceDecimal
+    IMPLICIT NONE
+    REAL*8 value1, value2
+    REAL*8 array1(2)
+    EQUIVALENCE (value1, array1(1)), (value2, array1(2))
+    
+    ! Example 1: Array as multiple scalars
+    value1 = 10.0D0
+    value2 = 20.0D0
+    PRINT *, array1
+    
+END PROGRAM EquivalenceDecimal
+@end smallexample
+
+@subsection DISPLAY Examples
+
+@smallexample
+PROGRAM EquivalenceDisplay
+    IMPLICIT NONE
+    CHARACTER*40 full_string
+    CHARACTER*10 parts(4)
+    EQUIVALENCE (full_string, parts(1))
+    
+    ! Example 1: String as components
+    full_string = "Part1Part2Part3Part4"
+    PRINT *, parts(1)
+    
+END PROGRAM EquivalenceDisplay
+@end smallexample
+
+@subsection Edge Cases
+
+@itemize @bullet
+@item @strong{Unsafe}: Can cause undefined behavior if types mismatch
+@item @strong{Deprecated}: Modern code uses TRANSFER or ASSOCIATE
+@item @strong{Implementation-dependent}: Memory layout varies by system
+@end itemize
+
+@c End of FORTRAN comprehensive statements documentation

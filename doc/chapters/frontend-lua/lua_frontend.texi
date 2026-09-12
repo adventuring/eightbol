@@ -1,0 +1,617 @@
+@node Lua Frontend
+@chapter Lua Frontend Language
+
+Lua is a lightweight, dynamically-typed scripting language widely used for
+game scripting and embedded systems programming. The EIGHTBOL Lua frontend
+compiles Lua source to EIGHTBOL's canonical AST, enabling Lua programs to
+target 8-bit and 16-bit retro platforms. This chapter documents the complete
+Lua language as supported by EIGHTBOL, with comprehensive syntax, semantics,
+and AST mappings.
+
+@menu
+* Lua Lexical Elements::
+* Lua Grammar Overview::
+* Lua Statements::
+* Lua Expressions::
+* Lua Type System::
+* Lua Examples::
+@end menu
+
+@node Lua Lexical Elements
+@section Lexical Elements
+
+@subsection Keywords
+
+Lua reserves the following keywords (case-sensitive):
+
+@table @code
+@item and, or, not
+Logical operations
+@item break
+Loop exit
+@item do, end
+Block delimiters
+@item else, elseif, if, then
+Conditional constructs
+@item false, nil, true
+Literal values
+@item for, in, while, repeat, until
+Iteration constructs
+@item function
+Function definition
+@item goto
+Unconditional jump
+@item local
+Local variable declaration
+@item return
+Function return
+@item self
+Implicit method parameter
+@end table
+
+@subsection Identifiers
+
+Identifiers are alphanumeric sequences starting with a letter or underscore:
+
+@itemize
+@item Case-sensitive
+@item May contain letters, digits, underscores
+@item Cannot start with a digit
+@item Examples: @code{player}, @code{_private}, @code{health2}
+@end itemize
+
+@subsection Literals
+
+@subsubsection Numbers
+
+Lua supports decimal and hexadecimal integers, and floating-point:
+
+@example
+42
+3.14
+1e10
+0xFF
+0b1010
+@end example
+
+@subsubsection Strings
+
+Strings use single or double quotes, or long bracket notation:
+
+@example
+"Hello"
+'World'
+[=[Multi-line
+string]=]
+@end example
+
+Escape sequences: @code{\n}, @code{\t}, @code{\\}, @code{\"}, @code{\'}
+
+@subsection Comments
+
+@table @asis
+@item Line comments
+Begin with @code{--} and extend to end of line
+@item Block comments
+Delimited by @code{--[[} and @code{]]}
+@end table
+
+@example
+-- This is a comment
+--[[ Block comment
+     spanning lines ]]--
+@end example
+
+@subsection Operators
+
+@subsubsection Arithmetic
+
+@table @code
+@item +
+Addition
+@item -
+Subtraction
+@item *
+Multiplication
+@item /
+Division
+@item %
+Modulo
+@item ^
+Exponentiation
+@item //
+Floor division (Lua 5.3+)
+@end table
+
+@subsubsection Comparison
+
+@table @code
+@item ==
+Equality
+@item ~=
+Inequality
+@item <
+Less than
+@item >
+Greater than
+@item <=
+Less than or equal
+@item >=
+Greater than or equal
+@end table
+
+@subsubsection Logical
+
+@table @code
+@item and
+Logical AND (short-circuit)
+@item or
+Logical OR (short-circuit)
+@item not
+Logical NOT
+@end table
+
+@subsubsection Bitwise (Lua 5.3+)
+
+@table @code
+@item &
+AND
+@item |
+OR
+@item ^^
+XOR
+@item ~
+NOT (unary)
+@item <<
+Left shift
+@item >>
+Right shift
+@end table
+
+@subsubsection Other
+
+@table @code
+@item ..
+String concatenation
+@item #
+Length operator
+@item .
+Table member access
+@item [
+Array indexing
+@item :
+Method call
+@end table
+
+@node Lua Grammar Overview
+@section Grammar Overview
+
+@subsection Program Structure
+
+A Lua program consists of a sequence of statements:
+
+@example
+-- Global variable
+local score = 0
+
+-- Function definition
+function add(a, b)
+  return a + b
+end
+
+-- Main execution
+score = add(10, 20)
+print(score)
+@end example
+
+@subsection Blocks
+
+Statements are grouped into blocks with @code{do...end}:
+
+@example
+do
+  local x = 10
+  print(x)
+end
+@end example
+
+@subsection Chunks
+
+A chunk is a sequence of statements, optionally ending with a return:
+
+@example
+if x > 0 then
+  return x
+end
+return 0
+@end example
+
+@node Lua Statements
+@section Statements
+
+@subsection Local Variable Declaration
+
+@strong{Syntax}:
+@example
+local name [= value]
+local name1, name2 [= expr1, expr2]
+@end example
+
+@strong{Semantics}: Declares a variable with lexical scope. Optionally initializes to value(s).
+
+@strong{Examples}:
+
+@example
+local x = 10
+local y, z = 20, 30
+local health = 100
+@end example
+
+@strong{AST}: @code{(:move :target name :source value)}
+
+@subsection Assignment
+
+@strong{Syntax}:
+@example
+variable = expression
+var1, var2 = expr1, expr2
+@end example
+
+@strong{Semantics}: Assigns expression value(s) to variable(s). Multiple assignment evaluates all RHS expressions before assignment.
+
+@strong{Examples}:
+
+@example
+x = 100
+player.x, player.y = 50, 75
+@end example
+
+@strong{AST}: @code{(:move :target variable :source expression)}
+
+@subsection Arithmetic
+
+@strong{Syntax}:
+@example
+x = x + 1
+x = x - y
+total = total * factor
+@end example
+
+@strong{Semantics}: Shorthand available as @code{+=}, @code{-=}, @code{*=}, @code{/=}, @code{%=}, @code{^=}, @code{//=} (Lua 5.3+)
+
+@strong{Examples}:
+
+@example
+x = x + 1
+health = health - damage
+mana = mana * 2
+@end example
+
+@strong{AST}: @code{(:compute :op :+ :operands (x 1))}
+
+@subsection Conditional
+
+@strong{Syntax}:
+@example
+if condition then
+  statements
+elseif condition2 then
+  statements
+else
+  statements
+end
+@end example
+
+@strong{Semantics}: Executes matching branch. Only first true condition executes.
+
+@strong{Examples}:
+
+@example
+if score > 1000 then
+  print("Excellent!")
+elseif score > 500 then
+  print("Good!")
+else
+  print("Try again!")
+end
+@end example
+
+@strong{AST}: @code{(:if :condition cond :then then-block :else else-block)}
+
+@subsection Loops
+
+@strong{For Loop (Numeric)}:
+@example
+for i = 1, 10 [, step] do
+  -- body
+end
+@end example
+
+@strong{For Loop (Iterator)}:
+@example
+for k, v in pairs(table) do
+  -- body
+end
+@end example
+
+@strong{While Loop}:
+@example
+while condition do
+  -- body
+end
+@end example
+
+@strong{Repeat-Until Loop}:
+@example
+repeat
+  -- body
+until condition
+@end example
+
+@strong{Examples}:
+
+@example
+for i = 1, 10, 2 do
+  print(i)
+end
+
+while health > 0 do
+  process_turn()
+end
+
+repeat
+  input = read()
+until input ~= ""
+@end example
+
+@strong{AST}: @code{(:perform :target loop-label)}
+
+@subsection Function Definition
+
+@strong{Syntax}:
+@example
+function name(param1, param2, ...)
+  -- body
+  return value
+end
+@end example
+
+@strong{Semantics}: Defines a named function with parameters and optional return value(s).
+
+@strong{Examples}:
+
+@example
+function factorial(n)
+  if n <= 1 then
+    return 1
+  else
+    return n * factorial(n - 1)
+  end
+end
+
+function greet(name)
+  print("Hello, " .. name)
+end
+@end example
+
+@strong{AST}: @code{(:invoke :method "name" :using params)}
+
+@subsection Return Statement
+
+@strong{Syntax}:
+@example
+return [value1, value2, ...]
+@end example
+
+@strong{Semantics}: Exits function, returning value(s) to caller. Default return is @code{nil}.
+
+@strong{Examples}:
+
+@example
+function get-position()
+  return x, y
+end
+
+function error-case()
+  return nil
+end
+@end example
+
+@strong{AST}: @code{(:invoke :method "return" :using value)}
+
+@subsection Table Operations
+
+@strong{Syntax}:
+@example
+table[key] = value
+value = table[key]
+table.field = value
+value = table.field
+@end example
+
+@strong{Semantics}: Accesses table (associative array / map) elements.
+
+@strong{Examples}:
+
+@example
+player = {}
+player["name"] = "Hero"
+player.health = 100
+print(player.name)
+@end example
+
+@strong{AST}: @code{(:move :target (:aref table key) :source value)}
+
+@node Lua Expressions
+@section Expressions
+
+@subsection Function Calls
+
+@example
+print("Hello")
+add(5, 10)
+player:take-damage(20)  -- Method call
+@end example
+
+@subsection Arithmetic Expressions
+
+@example
+x = 10 + 20 - 5
+y = x * 2 / 3
+z = 2 ^ 10
+@end example
+
+@subsection Comparison Expressions
+
+@example
+if x == 5 and y > 10 then
+  -- ...
+end
+
+if not (x == 0) then
+  -- ...
+end
+@end example
+
+@subsection String Operations
+
+@example
+str = "Hello" .. " " .. "World"
+len = #str
+substr = string.sub(str, 1, 5)
+@end example
+
+@subsection Table Constructors
+
+@example
+t = {1, 2, 3}
+dict = {x = 10, y = 20}
+mixed = {1, name = "test", 2}
+@end example
+
+@subsection Lambda Functions
+
+@example
+square = function(x) return x * x end
+add = function(a, b) return a + b end
+@end example
+
+@node Lua Type System
+@section Type System
+
+@subsection Primitive Types
+
+@table @code
+@item nil
+Null/absence value
+@item boolean
+@code{true} or @code{false}
+@item number
+Integer or floating-point
+@item string
+Character sequence
+@item function
+Callable value
+@end table
+
+@subsection Composite Types
+
+@table @code
+@item table
+Associative array / hashtable / object
+@item thread
+Coroutine (rarely used in EIGHTBOL context)
+@item userdata
+External C type (platform-specific)
+@end table
+
+@subsection Type Coercion
+
+@itemize
+@item Strings coerce to numbers in arithmetic contexts
+@item Numbers coerce to strings in concatenation
+@item @code{nil} and @code{false} are falsy; all else is truthy
+@end itemize
+
+@node Lua Examples
+@section Examples
+
+@subsection Complete Program Example
+
+@example
+function Particle(x, y)
+  return {
+    x = x, y = y,
+    vx = 0, vy = 0,
+    life = 30,
+    update = function(self)
+      self.x = self.x + self.vx
+      self.y = self.y + self.vy
+      self.vy = self.vy + 0.5  -- gravity
+      self.life = self.life - 1
+    end,
+    is_alive = function(self)
+      return self.life > 0
+    end
+  }
+end
+
+local particles = {}
+
+function spawn_particle(x, y)
+  table.insert(particles, Particle(x, y))
+end
+
+function update_particles()
+  for i = #particles, 1, -1 do
+    local p = particles[i]
+    p:update()
+    if not p:is_alive() then
+      table.remove(particles, i)
+    end
+  end
+end
+
+-- Main loop
+for frame = 1, 100 do
+  if frame % 5 == 0 then
+    spawn_particle(50, 50)
+  end
+  update_particles()
+end
+@end example
+
+@subsection Canonical Use Cases
+
+@strong{Game State Management}:
+@example
+local game = {
+  score = 0,
+  level = 1,
+  add_score = function(self, points)
+    self.score = self.score + points
+  end
+}
+@end example
+
+@strong{Event Handling}:
+@example
+function handle_input(key)
+  if key == "up" then
+    player.y = player.y - 1
+  elseif key == "down" then
+    player.y = player.y + 1
+  end
+end
+@end example
+
+@subsection Best Practices
+
+@itemize
+@item Use @code{local} for all variables unless global scope is intentional
+@item Encapsulate related data and functions in tables
+@item Use table methods with colon notation for OOP patterns
+@item Avoid deep nesting; break complex functions into smaller ones
+@item Use meaningful variable and function names
+@item Document functions with comments explaining parameters and return values
+@end itemize

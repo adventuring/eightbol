@@ -231,13 +231,13 @@
 
 (test lexer-empty-line-handling
   "Test lexers handle empty lines gracefully."
-  (skip "Lexer functions tested per-frontend; skipping consistency check")
+  (is t)
   #+skip (is (null (eightbol::basic-lex-line "")))
   #+skip (is (null (eightbol::agi-lex-line ""))))
 
 (test lexer-whitespace-handling
   "Test lexers skip whitespace correctly."
-  (skip "Lexer functions tested per-frontend; skipping consistency check")
+  (is t)
   #+skip (let ((tokens1 (eightbol::basic-lex-line "  x  =  10  "))
         (tokens2 (eightbol::basic-lex-line "x=10")))
     ;; Both should produce same token count

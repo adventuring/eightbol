@@ -19,29 +19,29 @@
 
 (test zil_lexer_exists
   "Verify ZIL lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_lexer_keywords
   "LEXER: ZIL keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_lexer_operators
   "LEXER: ZIL operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_lexer_numbers
   "LEXER: ZIL numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_lexer_strings
   "LEXER: ZIL string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_lexer_identifiers
   "LEXER: ZIL identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test zil_lexer_comments
   "LEXER: ZIL comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

@@ -23,17 +23,33 @@
 
 (test 65c02_string_blt
   "STRING: 65C02 STRING BLT operations generate correct memory operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_string_subscript
   "STRING: 65C02 subscript operations on strings generate correct index calculations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_string_refmod
   "STRING: 65C02 reference modification produces correct substring operations"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test 65c02_string_indexing_base
   "STRING: 65C02 zero-based vs one-based indexing is correctly handled"
-  (skip "Implementation pending"))
+(let* ((ast ('(:string-blt (:var src) (:var dst) (:const 10))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :65C02 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

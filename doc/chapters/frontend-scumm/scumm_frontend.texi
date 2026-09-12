@@ -1,0 +1,650 @@
+@node SCUMM Frontend
+@chapter SCUMM Frontend Language
+
+SCUMM (Script Creation Utility for Maniac Mansion) is a scripting language
+designed for adventure game development, originally used in LucasArts games.
+The EIGHTBOL SCUMM frontend enables SCUMM scripts to be compiled for 8-bit and
+16-bit retro platforms. This chapter documents the complete SCUMM language,
+including lexical elements, grammar, statements, expressions, type system,
+and comprehensive AST mappings.
+
+@menu
+* SCUMM Lexical Elements::
+* SCUMM Grammar Overview::
+* SCUMM Statements::
+* SCUMM Expressions::
+* SCUMM Type System::
+* SCUMM Examples::
+@end menu
+
+@node SCUMM Lexical Elements
+@section Lexical Elements
+
+@subsection Keywords
+
+SCUMM reserves the following keywords (case-insensitive):
+
+@table @code
+@item action, actor
+Actor and action declaration
+@item breakhere
+Debugger breakpoint
+@item class
+Class definition
+@item const
+Constant definition
+@item do, end
+Block delimiters
+@item else, elseif
+Conditional constructs
+@item enum
+Enumeration type
+@item fadeIn, fadeOut
+Visual effects
+@item for, in, to
+Iteration construct
+@item function
+Function definition
+@item if, then
+Conditional
+@item invariant
+Class invariant assertion
+@item local
+Local variable declaration
+@item method
+Method definition
+@item object
+Game object declaration
+@item override
+Method override
+@item private, public, protected
+Access modifiers
+@item property
+Property declaration
+@item return
+Function return
+@item script
+Script/routine definition
+@item self
+Self reference
+@item sound
+Sound resource
+@item variable
+Global variable
+@item verb
+Verb definition
+@item while, repeat, until
+Loop constructs
+@end table
+
+@subsection Identifiers
+
+Identifiers follow these rules:
+
+@itemize
+@item Case-insensitive
+@item Start with letter or underscore
+@item Contain letters, digits, underscores
+@item Examples: @code{MainChar}, @code{room_10}, @code{_temp}
+@end itemize
+
+@subsection Literals
+
+@subsubsection Numbers
+
+@example
+0
+42
+-100
+0xFF
+0xDEADBEEF
+@end example
+
+@subsubsection Strings
+
+@example
+"Hello World"
+"Room description"
+""
+@end example
+
+@subsubsection Characters
+
+@example
+'A'
+'*'
+@end example
+
+@subsection Comments
+
+@example
+// Line comment to end of line
+/* Block comment
+   spanning multiple lines */
+@end example
+
+@subsection Operators
+
+@subsubsection Arithmetic
+
+@table @code
+@item +
+Addition
+@item -
+Subtraction
+@item *
+Multiplication
+@item /
+Division
+@item %
+Modulo
+@end table
+
+@subsubsection Comparison
+
+@table @code
+@item ==
+Equality
+@item !=
+Inequality
+@item <
+Less than
+@item >
+Greater than
+@item <=
+Less than or equal
+@item >=
+Greater than or equal
+@end table
+
+@subsubsection Logical
+
+@table @code
+@item &&
+AND
+@item ||
+OR
+@item !
+NOT
+@end table
+
+@subsubsection Bitwise
+
+@table @code
+@item &
+AND
+@item |
+OR
+@item ^
+XOR
+@item ~
+NOT
+@item <<
+Left shift
+@item >>
+Right shift
+@end table
+
+@subsubsection Other
+
+@table @code
+@item =
+Assignment
+@item .
+Member access
+@item []
+Array indexing
+@item ->
+Pointer dereference
+@item &
+Address-of
+@end table
+
+@node SCUMM Grammar Overview
+@section Grammar Overview
+
+@subsection Script Structure
+
+A SCUMM script consists of:
+
+@enumerate
+@item Variable declarations
+@item Object definitions
+@item Function definitions
+@item Script/routine implementations
+@end enumerate
+
+@example
+variable global_counter = 0;
+
+object Treasure
+  name "Golden Statue";
+  pos 100 100;
+  class Movable;
+  method take() { ... }
+end;
+
+function greet(actor_id) {
+  return "Hello " + get_actor_name(actor_id);
+}
+
+script main {
+  // main execution
+}
+@end example
+
+@subsection Execution Model
+
+Scripts execute in the context of:
+
+@itemize
+@item Global variable state
+@item Active actors and objects
+@item Current room/location
+@item Event queue for deferred actions
+@end itemize
+
+@node SCUMM Statements
+@section Statements
+
+@subsection Variable Declaration
+
+@strong{Syntax}:
+@example
+variable name [= initial_value];
+local name = value;
+@end example
+
+@strong{Semantics}: Declares variable with optional initialization. @code{variable} for globals, @code{local} for function scope.
+
+@strong{Examples}:
+
+@example
+variable score = 0;
+variable inventory_size = 0;
+local temp_x = 100;
+@end example
+
+@strong{AST}: @code{(:move :target name :source init-value)}
+
+@subsection Assignment
+
+@strong{Syntax}:
+@example
+variable = expression;
+object.property = value;
+array[index] = value;
+@end example
+
+@strong{Semantics}: Assigns value to variable, property, or array element.
+
+@strong{Examples}:
+
+@example
+score = score + 100;
+actor.health = 50;
+inventory[0] = sword;
+@end example
+
+@strong{AST}: @code{(:move :target variable :source expression)}
+
+@subsection Arithmetic Operations
+
+@strong{Syntax}:
+@example
+variable = operand1 + operand2;
+variable = operand1 - operand2;
+variable = operand1 * operand2;
+variable = operand1 / operand2;
+@end example
+
+@strong{Examples}:
+
+@example
+total = price + tax;
+damage = attack * weakness_multiplier;
+health = max_health / 2;
+@end example
+
+@strong{AST}: @code{(:compute :op :+ :operands (operand1 operand2))}
+
+@subsection Conditional Statement
+
+@strong{Syntax}:
+@example
+if condition then
+  statements;
+else if condition2 then
+  statements;
+else
+  statements;
+end;
+@end example
+
+@strong{Semantics}: Conditional execution with multiple branches.
+
+@strong{Examples}:
+
+@example
+if health <= 0 then
+  game_over = 1;
+else if health < 25 then
+  play_warning_sound();
+else
+  continue_game();
+end;
+@end example
+
+@strong{AST}: @code{(:if :condition cond :then then-block :else else-block)}
+
+@subsection Loop Statements
+
+@strong{For Loop}:
+@example
+for i = 0 to 10 do
+  process_item(i);
+end;
+@end example
+
+@strong{While Loop}:
+@example
+while condition do
+  process();
+end;
+@end example
+
+@strong{Repeat-Until Loop}:
+@example
+repeat
+  process()
+until condition;
+@end example
+
+@strong{Examples}:
+
+@example
+for i = 0 to actor_count do
+  if actors[i].alive then
+    update_actor(actors[i]);
+  end;
+end;
+
+while inventory.count > 0 do
+  item = inventory.pop();
+  use_item(item);
+end;
+@end example
+
+@strong{AST}: @code{(:perform :target loop-label)}
+
+@subsection Function Definition
+
+@strong{Syntax}:
+@example
+function name(param1, param2, ...) {
+  local vars;
+  statements;
+  return value;
+}
+@end example
+
+@strong{Semantics}: Defines function with parameters and local variables.
+
+@strong{Examples}:
+
+@example
+function distance(x1, y1, x2, y2) {
+  local dx = x2 - x1;
+  local dy = y2 - y1;
+  return sqrt(dx * dx + dy * dy);
+}
+
+function check_collision(actor1, actor2) {
+  if distance(actor1.x, actor1.y, actor2.x, actor2.y) < 10 then
+    return 1;
+  else
+    return 0;
+  end;
+}
+@end example
+
+@strong{AST}: @code{(:invoke :method "name" :using params)}
+
+@subsection Method Definition
+
+@strong{Syntax}:
+@example
+method name(param1, param2, ...) {
+  statements;
+  return value;
+}
+@end example
+
+@strong{Semantics}: Defines method on object instance.
+
+@strong{Examples}:
+
+@example
+object Actor {
+  x = 0; y = 0;
+  health = 100;
+  
+  method take_damage(amount) {
+    health = health - amount;
+    if health <= 0 then
+      call_death_sequence();
+    end;
+  }
+  
+  method move_to(new_x, new_y) {
+    x = new_x;
+    y = new_y;
+  }
+}
+@end example
+
+@subsection Return Statement
+
+@strong{Syntax}:
+@example
+return [value];
+@end example
+
+@strong{Semantics}: Exits function/method, optionally returning value.
+
+@strong{Examples}:
+
+@example
+function get_score() {
+  return global_score;
+}
+
+function validate_move(x, y) {
+  if x < 0 then return 0; end;
+  if y < 0 then return 0; end;
+  return 1;
+}
+@end example
+
+@strong{AST}: @code{(:invoke :method "return" :using value)}
+
+@node SCUMM Expressions
+@section Expressions
+
+@subsection Arithmetic Expressions
+
+@example
+10 + 20
+x - y
+x * y
+x / y
+x % 10
+@end example
+
+@subsection Comparison Expressions
+
+@example
+x == y
+x != y
+x < y
+x > y
+x <= y
+x >= y
+@end example
+
+@subsection Logical Expressions
+
+@example
+(condition1) && (condition2)
+(condition1) || (condition2)
+!(condition)
+(a > 0) && (b < 100)
+@end example
+
+@subsection Bitwise Expressions
+
+@example
+flags & MASK
+value | FLAG
+value ^ 0xFF
+value << 2
+value >> 3
+@end example
+
+@subsection Function Calls
+
+@example
+greet("Player")
+get_actor_name(actor_id)
+distance(x1, y1, x2, y2)
+object.method(arg1, arg2)
+@end example
+
+@subsection Array and Property Access
+
+@example
+array[index]
+object.property
+object[field_id]
+get_actor(id).position
+@end example
+
+@node SCUMM Type System
+@section Type System
+
+@subsection Primitive Types
+
+@table @code
+@item int
+Integer (16 or 32 bits)
+@item string
+Text string
+@item float
+Floating-point (if supported)
+@item boolean
+True/false
+@item void
+No return value
+@end table
+
+@subsection Composite Types
+
+@table @code
+@item array
+Collection of values
+@item object
+Named collection of properties
+@item actor
+Special object for animated characters
+@item room
+Special object for location data
+@end table
+
+@subsection Type System Semantics
+
+@itemize
+@item Implicit type coercion in most contexts
+@item Strings and integers may be converted automatically
+@item Arrays support indexed and named access
+@item Objects support method dispatch
+@end itemize
+
+@node SCUMM Examples
+@section Examples
+
+@subsection Complete Program Example
+
+@example
+variable score = 0;
+variable inventory_count = 0;
+variable current_room = 1;
+
+object Sword {
+  name "Sword";
+  damage = 10;
+  method use(target) {
+    inflict_damage(target, damage);
+    score = score + 5;
+  }
+}
+
+function inflict_damage(target, amount) {
+  target.health = target.health - amount;
+  if target.health <= 0 then
+    call_death_sequence(target);
+  end;
+}
+
+function main_game_loop() {
+  local running = 1;
+  while running do
+    process_input();
+    update_actors();
+    check_collisions();
+    render_scene();
+  end;
+}
+
+script main {
+  load_room(current_room);
+  main_game_loop();
+  shutdown();
+}
+@end example
+
+@subsection Canonical Use Cases
+
+@strong{Actor Movement}:
+@example
+function move_actor(actor_id, x, y) {
+  local actor = get_actor(actor_id);
+  actor.x = x;
+  actor.y = y;
+  play_walk_animation(actor_id);
+}
+@end example
+
+@strong{Inventory Management}:
+@example
+function add_to_inventory(item) {
+  if inventory_count < MAX_INVENTORY then
+    inventory[inventory_count] = item;
+    inventory_count = inventory_count + 1;
+    display_message("Item acquired: " + item.name);
+  else
+    display_message("Inventory full!");
+  end;
+}
+@end example
+
+@subsection Best Practices
+
+@itemize
+@item Use descriptive names for all entities
+@item Keep functions small and focused
+@item Use local variables in functions to avoid global state pollution
+@item Document complex logic with comments
+@item Use objects to group related properties and methods
+@item Validate inputs to public functions
+@item Use constants for magic numbers (room IDs, item types, etc.)
+@end itemize

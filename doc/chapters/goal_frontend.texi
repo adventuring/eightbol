@@ -1,24 +1,87 @@
+@node GOAL Frontend
 @chapter GOAL Frontend Language
+
+GOAL is a Lisp-like functional language designed for game scripting and
+system programming on 8-bit and 16-bit platforms. This chapter documents
+the complete GOAL frontend, covering all lexical elements, grammar, statements,
+expressions, and the type system, with comprehensive examples and AST mappings.
+
 @menu
-* Overview::
-* Number Formats::
-* Identifiers::
-* Operators::
-* Expressions::
-* Special Forms::
+* GOAL Lexical Elements::
+* GOAL Grammar Overview::
+* GOAL Statements::
+* GOAL Expressions::
+* GOAL Type System::
+* GOAL Examples::
 @end menu
 
-@node Overview
-@section Overview
-The GOAL frontend language is a Lisp-like language for the Eightbol compiler targeting 8-bit and 16-bit retro platforms. This chapter documents the lexical and syntactic features of GOAL, including number literals, identifier normalization, operators, and expressions.
+@node GOAL Lexical Elements
+@section Lexical Elements
 
-@node Number Formats
-@section Number Formats
+@subsection Keywords
 
-GOAL supports multiple number literal formats for convenient expression of values across different bases:
+GOAL recognizes the following reserved keywords (case-insensitive):
 
-@subsection Decimal Literals
-Plain sequences of digits represent decimal (base-10) numbers.
+@table @code
+@item defun
+Defines a named function
+@item defmethod
+Defines a method within a type
+@item deftype
+Defines a new type structure
+@item let, let*
+Local variable bindings (let* for sequential binding)
+@item if
+Conditional branching
+@item when, unless
+One-branch conditionals
+@item cond
+Multi-branch conditional (similar to switch)
+@item case
+Case expression dispatch
+@item loop, do, while, until
+Iteration constructs
+@item quote, quasiquote, unquote
+Quotation and meta-programming
+@item lambda
+Anonymous function definition
+@item and, or, not
+Logical operations
+@item nil, true, false
+Boolean and null values
+@item set!, setq
+Variable mutation
+@item return, break, continue
+Control flow within loops
+@end table
+
+@subsection Identifiers
+
+Identifiers in GOAL follow these rules:
+
+@itemize
+@item Start with a letter, underscore, or hyphen
+@item Contain letters, digits, hyphens, underscores, and exclamation marks
+@item Case-insensitive in source but normalized to lowercase kebab-case
+@item Examples: @code{player-health}, @code{enemy_count}, @code{MAX_SCORE!}
+@end itemize
+
+The lexer normalizes all identifiers to @strong{kebab-case} for consistent AST representation:
+
+@table @asis
+@item @code{PlayerName} @tab @result{} @code{player-name}
+@item @code{player_score} @tab @result{} @code{player-score}
+@item @code{MAX_HEALTH!} @tab @result{} @code{max-health!}
+@item @code{get-value} @tab @result{} @code{get-value}
+@end table
+
+@subsection Literals
+
+GOAL supports multiple literal formats for numeric and string values:
+
+@subsubsection Decimal Literals
+
+Plain sequences of digits represent base-10 integers:
 
 @example
 42
@@ -26,8 +89,9 @@ Plain sequences of digits represent decimal (base-10) numbers.
 0
 @end example
 
-@subsection Hexadecimal Literals
-Hexadecimal numbers are prefixed with @code{#x} and may contain digits 0–9 and letters A–F (case-insensitive).
+@subsubsection Hexadecimal Literals
+
+Hexadecimal numbers use the prefix @code{#x}:
 
 @example
 #xFF
@@ -36,8 +100,9 @@ Hexadecimal numbers are prefixed with @code{#x} and may contain digits 0–9 and
 #x0
 @end example
 
-@subsection Octal Literals
-Octal numbers are prefixed with @code{#o} and may contain digits 0–7.
+@subsubsection Octal Literals
+
+Octal numbers use the prefix @code{#o}:
 
 @example
 #o777
@@ -45,8 +110,9 @@ Octal numbers are prefixed with @code{#o} and may contain digits 0–7.
 #o0
 @end example
 
-@subsection Binary Literals
-Binary numbers are prefixed with @code{#b} and may contain digits 0–1.
+@subsubsection Binary Literals
+
+Binary numbers use the prefix @code{#b}:
 
 @example
 #b1111
@@ -54,126 +120,633 @@ Binary numbers are prefixed with @code{#b} and may contain digits 0–1.
 #b0
 @end example
 
-@subsection Dword (String) Literals
-Dword or string literals for memory access are prefixed with @code{#d} followed by a quoted string. These are intended for low-level memory operations and platform-specific constant values.
+@subsubsection Dword (Constant String) Literals
+
+Memory or constant strings use the @code{#d} prefix:
 
 @example
 #d"WORD"
 #d"DATA"
 @end example
 
-@node Identifiers
-@section Identifiers
+@subsubsection String Literals
 
-Identifiers in GOAL are sequences of alphanumeric characters, hyphens, underscores, and exclamation marks. The lexer normalizes all identifiers to kebab-case (lowercase with hyphens replacing spaces and underscores) in AST nodes. This normalization ensures consistent representation regardless of input style.
+Double-quoted strings represent character sequences:
 
-@subsection Identifier Normalization
+@example
+"Hello, World!"
+"Game Over"
+""
+@end example
 
-The front-end converts identifiers to kebab-case form before AST production. This allows flexibility in source code while maintaining consistency in internal representation.
+@subsection Comments
 
-@table @asis
-@item @code{PlayerName}
-Normalized to @code{player-name}
-
-@item @code{player_score}
-Normalized to @code{player-score}
-
-@item @code{PLAYER_HEALTH}
-Normalized to @code{player-health}
-
-@item @code{playerId}
-Normalized to @code{player-id}
-@end table
-
-@node Operators
-@section Operators
-
-GOAL supports standard arithmetic, comparison, and bitwise operators:
+GOAL uses semicolon-based comments:
 
 @table @asis
-@item Arithmetic
-@code{+} (addition), @code{-} (subtraction), @code{*} (multiplication), @code{/} (division), @code{%} (modulo)
-
-@item Comparison
-@code{=} (numeric equal), @code{==} (identity equal), @code{!=} (not equal), @code{<} (less than), @code{>} (greater than), @code{<=} (less than or equal), @code{>=} (greater than or equal)
-
-@item Bitwise
-@code{&} (bitwise and), @code{|} (bitwise or), @code{^} (bitwise xor), @code{~} (bitwise not), @code{<<} (left shift), @code{>>} (right shift)
-
-@item Logical
-@code{and}, @code{or}, @code{not}
-
-@item Access
-@code{.} (member access), @code{->} (pointer dereference)
+@item Line comments
+Begin with @code{;} and extend to end of line
+@item Block comments
+Enclosed in @code{#|} and @code{|#}
 @end table
 
-@node Expressions
+@example
+;; This is a line comment
+#| This is a
+   block comment
+   spanning multiple lines |#
+@end example
+
+@subsection Operators
+
+@subsubsection Arithmetic Operators
+
+@table @code
+@item +
+Addition (variadic: @code{(+ 1 2 3)} = 6)
+@item -
+Subtraction or negation (@code{(- 5 3)} = 2, @code{(- 5)} = -5)
+@item *
+Multiplication (variadic)
+@item /
+Integer division
+@item %
+Modulo (remainder)
+@end table
+
+@subsubsection Comparison Operators
+
+@table @code
+@item =
+Numeric equality
+@item ==
+Identity/reference equality
+@item !=
+Numeric inequality
+@item <
+Less than
+@item >
+Greater than
+@item <=
+Less than or equal
+@item >=
+Greater than or equal
+@end table
+
+@subsubsection Bitwise Operators
+
+@table @code
+@item &
+Bitwise AND
+@item |
+Bitwise OR
+@item ^
+Bitwise XOR
+@item ~
+Bitwise NOT
+@item <<
+Left shift
+@item >>
+Right shift (arithmetic)
+@end table
+
+@subsubsection Logical Operators
+
+@table @code
+@item and
+Logical AND (short-circuit)
+@item or
+Logical OR (short-circuit)
+@item not
+Logical NOT
+@end table
+
+@subsubsection Access Operators
+
+@table @code
+@item .
+Member/slot access
+@item ->
+Pointer dereference
+@item @
+Array/vector indexing (alternative: @code{aref})
+@end table
+
+@subsubsection Special Operators
+
+@table @code
+@item '
+Quote (prevent evaluation)
+@item `
+Quasiquote (selective evaluation)
+@item ,
+Unquote (within quasiquote)
+@item ,@@
+Unquote-splice
+@end table
+
+@node GOAL Grammar Overview
+@section Grammar Overview
+
+@subsection Top-Level Constructs
+
+A GOAL program consists of top-level forms:
+
+@example
+(deftype player
+  ((x int)
+   (y int)
+   (health int)))
+
+(defun move (p dx dy)
+  (set! (. p x) (+ (. p x) dx))
+  (set! (. p y) (+ (. p y) dy)))
+
+(defun main ()
+  (let ((hero (new player)))
+    (move hero 10 5)
+    (print (. hero health))))
+@end example
+
+@subsection Statement and Expression Forms
+
+GOAL is expression-oriented; all forms return values. Major categories:
+
+@itemize
+@item @strong{Definitions}: defun, defmethod, deftype
+@item @strong{Bindings}: let, let*, lambda
+@item @strong{Conditionals}: if, when, unless, cond, case
+@item @strong{Loops}: loop, do, while, until, for
+@item @strong{Assignments}: set!, setq
+@item @strong{Calls}: function application via parentheses
+@item @strong{Quoting}: quote, quasiquote, unquote
+@item @strong{Control}: return, break, continue
+@end itemize
+
+@subsection AST Mapping
+
+GOAL source maps to EIGHTBOL canonical AST as follows:
+
+@table @asis
+@item @code{(+ a b)}
+@result{} @code{(:compute :op :+ :operands (a b))}
+@item @code{(set! x 5)}
+@result{} @code{(:move :target x :source 5)}
+@item @code{(if cond (then-form) (else-form))}
+@result{} @code{(:if :condition cond :then then-form :else else-form)}
+@item @code{(loop (form1) (form2))}
+@result{} @code{(:perform :target loop-label)}
+@end table
+
+@node GOAL Statements
+@section Statements
+
+@subsection Function Definition
+
+@strong{Syntax}:
+@example
+(defun name (param1 param2 ...) [docstring]
+  form1
+  form2
+  ...)
+@end example
+
+@strong{Semantics}: Defines a named function. Parameters are bound for the duration of the function. The final form's value is returned. Optional docstring documents behavior.
+
+@strong{Examples}:
+
+@example
+(defun square (x)
+  "Return the square of x"
+  (* x x))
+
+(defun add-3 (a b c)
+  (+ a b c))
+
+(defun greet (name)
+  (print "Hello, ")
+  (print name)
+  (print "!"))
+@end example
+
+@strong{AST}: @code{(:invoke :method "name" :using (param1 param2 ...))}
+
+@subsection Type Definition
+
+@strong{Syntax}:
+@example
+(deftype name
+  ((field1 type1 [initval])
+   (field2 type2 [initval])
+   ...))
+@end example
+
+@strong{Semantics}: Defines a structured data type with named fields. Fields have types and optional initial values.
+
+@strong{Examples}:
+
+@example
+(deftype point
+  ((x int 0)
+   (y int 0)))
+
+(deftype actor
+  ((position point)
+   (velocity point)
+   (health int 100)
+   (name string "Actor")))
+@end example
+
+@strong{AST}: Maps to record type definition in EIGHTBOL intermediate representation
+
+@subsection Local Binding
+
+@strong{Syntax}:
+@example
+(let ((var1 expr1)
+      (var2 expr2)
+      ...)
+  body)
+
+(let* ((var1 expr1)
+       (var2 (+ var1 10))
+       ...)
+  body)
+@end example
+
+@strong{Semantics}: @code{let} binds all variables to their initial expressions in parallel (all RHS evaluated before binding). @code{let*} binds sequentially (earlier bindings visible in later expressions).
+
+@strong{Examples}:
+
+@example
+(let ((x 10)
+      (y 20))
+  (+ x y))
+;; Result: 30
+
+(let* ((x 10)
+       (y (+ x 5)))
+  (list x y))
+;; Result: (10 15)
+
+(let ((a (read-input))
+      (b (+ a 100)))
+  (print "Values: " a ", " b))
+@end example
+
+@strong{AST}: @code{(:invoke :method "let" :using ((var1 expr1) ...))}
+
+@subsection Conditional Expression
+
+@strong{Syntax}:
+@example
+(if test-form then-form else-form)
+(if test-form then-form)
+
+(when test-form form1 form2 ...)
+(unless test-form form1 form2 ...)
+
+(cond (test1 result1)
+      (test2 result2)
+      (else result3))
+
+(case selector
+  (value1 result1)
+  (value2 result2)
+  (else result3))
+@end example
+
+@strong{Semantics}:
+@itemize
+@item @code{if}: Evaluates condition; if true, evaluates then-form, otherwise else-form
+@item @code{when}: Executes body only if test is true
+@item @code{unless}: Executes body only if test is false
+@item @code{cond}: Evaluates test clauses in order; executes first matching clause
+@item @code{case}: Dispatches on selector value
+@end itemize
+
+@strong{Examples}:
+
+@example
+(if (> health 0)
+    (print "Still alive!")
+    (print "Game Over"))
+
+(when (< x 10)
+  (set! x (+ x 1))
+  (print "Moved"))
+
+(cond ((> score 1000) (print "Excellent!"))
+      ((> score 500)  (print "Good!"))
+      (else           (print "Try again!")))
+
+(case player-class
+  (WARRIOR (add-strength 10))
+  (MAGE    (add-mana 20))
+  (else    (print "Unknown class")))
+@end example
+
+@strong{AST}: @code{(:if :condition test :then then-form :else else-form)}
+
+@subsection Iteration
+
+@strong{Syntax}:
+@example
+(loop form1 form2 ...)
+(do (steps) (until-condition) body)
+(while condition body)
+(until condition body)
+(for (var start end [step]) body)
+@end example
+
+@strong{Semantics}: Execute body repeatedly. @code{break} exits loop; @code{continue} starts next iteration. @code{loop} is infinite; @code{while}/@code{until} are conditional.
+
+@strong{Examples}:
+
+@example
+(let ((i 0))
+  (while (< i 10)
+    (print i)
+    (set! i (+ i 1))))
+
+(for (x 0 100 2)
+  (print x))  ;; Prints: 0, 2, 4, ..., 98
+
+(loop
+  (let ((input (read-line)))
+    (when (string=? input "quit") (break))
+    (process input)))
+@end example
+
+@strong{AST}: @code{(:perform :target loop-label)}
+
+@subsection Variable Assignment
+
+@strong{Syntax}:
+@example
+(set! variable value)
+(setq variable value)
+@end example
+
+@strong{Semantics}: Assigns value to variable (destructive update). @code{set!} is standard Scheme-style assignment; @code{setq} is an alias for compatibility.
+
+@strong{Examples}:
+
+@example
+(let ((x 10))
+  (set! x 20)
+  x)
+;; Result: 20
+
+(set! (. player x) 100)  ;; Slot access
+(set! (aref array i) value)  ;; Array access
+@end example
+
+@strong{AST}: @code{(:move :target variable :source value)}
+
+@subsection Return and Exit
+
+@strong{Syntax}:
+@example
+(return value)
+(break)
+(continue)
+@end example
+
+@strong{Semantics}:
+@itemize
+@item @code{return}: Exit current function with value
+@item @code{break}: Exit current loop
+@item @code{continue}: Jump to next loop iteration
+@end itemize
+
+@strong{Examples}:
+
+@example
+(defun first-positive (lst)
+  (dolist (item lst)
+    (when (> item 0)
+      (return item))))
+
+(loop
+  (when (condition?) (break))
+  (process-item)
+  (continue))
+@end example
+
+@strong{AST}: @code{(:invoke :method "return" :using value)}
+
+@node GOAL Expressions
 @section Expressions
 
-GOAL supports several forms of expressions:
+@subsection Function Calls
 
-@subsection S-Expressions (Lists)
-
-S-expressions are enclosed in parentheses and represent function calls or special forms:
+GOAL uses prefix notation for function calls:
 
 @example
+(function-name arg1 arg2 ...)
 (+ 1 2 3)
-(defun add (x y) (+ x y))
+(print "Hello")
+(max a b c)
 @end example
 
-@subsection Quoted Expressions
-
-Expressions prefixed with a single quote @code{'} are not evaluated:
+Nested calls:
 
 @example
-'(a b c)
-'symbol
+(+ (* 2 3) (- 5 1))
+;; = (+ 6 4) = 10
 @end example
 
-@subsection Conditionals
-
-The @code{if} special form evaluates a test expression and executes one of two branches:
+@subsection Arithmetic Expressions
 
 @example
-(if (> x 10) (large-operation) (small-operation))
+(+ 10 20 30)        ;; = 60
+(- 100 25)          ;; = 75
+(* 2 3 4)           ;; = 24
+(/ 100 4)           ;; = 25
+(% 17 5)            ;; = 2
+(- 10)              ;; = -10 (negation)
 @end example
 
-@node Special Forms
-@section Special Forms
+@subsection Comparison Expressions
 
-GOAL provides the following special forms for control flow and binding:
+@example
+(= 5 5)             ;; true
+(< 3 5)             ;; true
+(> 10 5)            ;; true
+(<= 10 10)          ;; true
+@end example
 
-@table @asis
-@item @code{defun}
-Defines a named function
+@subsection Logical Expressions
 
-@item @code{defmethod}
-Defines a method on a class
+@example
+(and (> x 0) (< x 100))
+(or (= state IDLE) (= state WAITING))
+(not (null? item))
+@end example
 
-@item @code{deftype}
-Defines a type
+@subsection Bitwise Expressions
 
-@item @code{let}, @code{let*}
-Local variable binding
+@example
+(& #xFF #x0F)       ;; Bitwise AND
+(| #x80 #x01)       ;; Bitwise OR
+(^ #xAA #x55)       ;; Bitwise XOR
+(<< 1 4)            ;; Left shift (1 << 4 = 16)
+(>> #x80 2)         ;; Right shift
+@end example
 
-@item @code{if}
-Conditional evaluation
+@subsection Lambda (Anonymous Functions)
 
-@item @code{when}, @code{unless}
-One-branch conditionals
+@example
+(lambda (x) (* x x))
+(lambda (a b) (+ a b))
+((lambda (x) (* x 2)) 5)  ;; Direct invocation = 10
+@end example
 
-@item @code{cond}
-Multi-branch conditional
+@subsection Operator Precedence
 
-@item @code{case}
-Case expression dispatch
+In GOAL's prefix notation, parentheses explicitly control evaluation order. There is no implicit precedence; the leftmost form is the function, followed by arguments.
 
-@item @code{loop}
-Iterative loop
+@example
+(+ 1 2)             ;; 1 is the function +, args are 2
+(max 5 10 3)        ;; 5 is the function max, args are 10, 3
+@end example
 
-@item @code{quote}
-Quote expression (prevent evaluation)
+@node GOAL Type System
+@section Type System
 
-@item @code{lambda}
-Anonymous function
+@subsection Primitive Types
+
+@table @code
+@item int
+Machine integer (typically 16 or 32 bits)
+@item float
+Floating-point number
+@item string
+Character sequence
+@item symbol
+Interned symbol (immutable name)
+@item boolean
+True or false value
+@item null
+Absence of value
 @end table
+
+@subsection Compound Types
+
+@table @code
+@item list
+Linked list of values
+@item vector
+Fixed-size array
+@item record
+Structure with named fields
+@item function
+Callable object
+@end table
+
+@subsection User-Defined Types
+
+User-defined types are created with @code{deftype}:
+
+@example
+(deftype rect
+  ((x int)
+   (y int)
+   (width int)
+   (height int)))
+@end example
+
+Access fields with dot notation:
+
+@example
+(. my-rect x)
+(set! (. my-rect width) 100)
+@end example
+
+@subsection Type Compatibility
+
+GOAL performs implicit conversion between types where reasonable:
+
+@itemize
+@item Numeric types coerce to broader ranges (int @result{} float)
+@item Strings convert to symbols for compatibility
+@item Lists may coerce to vectors in array contexts
+@end itemize
+
+@node GOAL Examples
+@section Examples
+
+@subsection Complete Program Example
+
+@example
+(deftype entity
+  ((x int 0)
+   (y int 0)
+   (vx int 0)
+   (vy int 0)
+   (active boolean true)))
+
+(defun update-entity (e)
+  "Update entity position by velocity"
+  (set! (. e x) (+ (. e x) (. e vx)))
+  (set! (. e y) (+ (. e y) (. e vy))))
+
+(defun collides? (e1 e2 radius)
+  "Check if two entities collide within radius"
+  (let ((dx (- (. e1 x) (. e2 x)))
+        (dy (- (. e1 y) (. e2 y))))
+    (< (+ (* dx dx) (* dy dy))
+       (* radius radius))))
+
+(defun main ()
+  "Game loop"
+  (let ((player (new entity))
+        (enemy (new entity))
+        (running true))
+    (set! (. player x) 50)
+    (set! (. player vx) 2)
+    (set! (. enemy x) 200)
+    (set! (. enemy vy) -1)
+    (loop
+      (update-entity player)
+      (update-entity enemy)
+      (when (collides? player enemy 10)
+        (print "Collision detected!")
+        (set! running false))
+      (when (not running)
+        (break)))))
+@end example
+
+@subsection Canonical Use Cases
+
+@strong{Pattern: Processing a List}:
+@example
+(defun sum-list (lst)
+  (let ((total 0))
+    (dolist (item lst)
+      (set! total (+ total item)))
+    total))
+@end example
+
+@strong{Pattern: Conditional Update}:
+@example
+(defun apply-bonus (player bonus-type)
+  (cond ((= bonus-type HEALTH) 
+         (set! (. player health) (+ (. player health) 25)))
+        ((= bonus-type SPEED) 
+         (set! (. player speed) (+ (. player speed) 5)))
+        (else 
+         (print "Unknown bonus type"))))
+@end example
+
+@subsection Best Practices
+
+@itemize
+@item Use @code{deftype} to define all structured data types early
+@item Prefer @code{let} and @code{let*} for local scoping over global mutations
+@item Use @code{when} and @code{unless} for single-branch conditionals; @code{cond} for multi-branch
+@item Document functions with docstrings describing parameters and return value
+@item Use meaningful kebab-case names; avoid abbreviations
+@item Keep functions small and focused; compose larger operations from smaller ones
+@end itemize

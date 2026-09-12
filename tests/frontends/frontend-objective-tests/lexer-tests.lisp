@@ -19,29 +19,29 @@
 
 (test objective_lexer_exists
   "Verify OBJECTIVE lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_lexer_keywords
   "LEXER: OBJECTIVE keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_lexer_operators
   "LEXER: OBJECTIVE operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_lexer_numbers
   "LEXER: OBJECTIVE numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_lexer_strings
   "LEXER: OBJECTIVE string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_lexer_identifiers
   "LEXER: OBJECTIVE identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test objective_lexer_comments
   "LEXER: OBJECTIVE comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

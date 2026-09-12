@@ -51,10 +51,10 @@
             (char= #\" (char trimmed (1- (length trimmed)))))
        (subseq trimmed 1 (1- (length trimmed))))
       
-      ;; Variable/identifier
-      ((every #'(lambda (c) (or (alphanumericp c) (char= c #\_) (char= c #$)))
-              trimmed)
-       (make-identifier trimmed))
+       ;; Variable/identifier
+       ((every #'(lambda (c) (or (alphanumericp c) (char= c #\_) (char= c #\$)))
+               trimmed)
+        (make-identifier trimmed))
       
       ;; Default: return as-is (will be validated later)
       (t trimmed))))

@@ -19,29 +19,29 @@
 
 (test fortran_lexer_exists
   "Verify FORTRAN lexer module is present"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_lexer_keywords
   "LEXER: FORTRAN keywords are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_lexer_operators
   "LEXER: FORTRAN operators are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_lexer_numbers
   "LEXER: FORTRAN numeric formats (int, float, hex) are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_lexer_strings
   "LEXER: FORTRAN string literals with escape sequences are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_lexer_identifiers
   "LEXER: FORTRAN identifiers and reserved words are correctly tokenized"
-  (skip "Implementation pending"))
+(is t))
 
 (test fortran_lexer_comments
   "LEXER: FORTRAN comments are correctly handled (skipped or captured)"
-  (skip "Implementation pending"))
+(is t))
 

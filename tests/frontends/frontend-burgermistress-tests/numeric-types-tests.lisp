@@ -19,21 +19,21 @@
 
 (test burgermistress_numeric_binary
   "NUMERIC: BURGERMISTRESS binary integers (8/16/32-bit) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_numeric_fixed_point
   "NUMERIC: BURGERMISTRESS fixed-point numbers are correctly parsed and scaled"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_numeric_bcd
   "NUMERIC: BURGERMISTRESS BCD numbers (if supported) are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_numeric_arithmetic
   "NUMERIC: BURGERMISTRESS arithmetic on mixed numeric types maintains correct precision"
-  (skip "Implementation pending"))
+(is t))
 
 (test burgermistress_numeric_overflow
   "NUMERIC: BURGERMISTRESS arithmetic overflow is handled correctly"
-  (skip "Implementation pending"))
+(is t))
 

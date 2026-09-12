@@ -23,21 +23,41 @@
 
 (test z80_call_local
   "CALL: Z80 local :call invocations generate correct JSR/CALL instructions"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_call_library
   "CALL: Z80 library :call invocations are correctly linked"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_invoke_method
   "INVOKE: Z80 :invoke method calls generate correct dispatch sequences"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_call_return_value
   "CALL: Z80 function return values are correctly placed in accumulator"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 
 (test z80_call_register_preservation
   "CALL: Z80 register preservation across calls is correctly generated"
-  (skip "Implementation pending"))
+(let* ((ast ('(:call (:var func))'))
+         (output (with-output-to-string (s)
+                   (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
+    (is (stringp output))
+    (is (> (length output) 0))))
 

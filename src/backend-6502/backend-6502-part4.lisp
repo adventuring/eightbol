@@ -110,7 +110,7 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
 		  ;; subject - high: if >= 1 then subject > high, skip
 		  (format out "~%~10Tsec")
 		  (if (expression-constant-p high)
-		      (format out "~%~10Tsbc # ~a" (expression-constant-value high))
+		      (format out "~%~10Tsbc #~a" (expression-constant-value high))
 		      (format out "~%~10Tsbc ~a" (emit-6502-value high)))
 		  (setf *6502-accumulator-expression* :trash/sbc)
 		  (format out "~%~10Tcmp # 1")))
@@ -182,7 +182,7 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
          ;; INSPECT id TALLYING tally FOR CHARACTERS — add 1 to tally per character
          (let ((tally-sym (to-identifier tally)))
 	 (format out "~%~10T;; INSPECT ~a TALLYING ~a FOR CHARACTERS" target tally)
-	 (format out "~%~10Tldy # 0")
+	 (format out "~%~10Tldy #0")
 	 (let ((label (new-6502-label "TallyLoop"))
                  (label-done (new-6502-label "TallyDone"))
                  (label-skip (new-6502-label "TallySkip")))
@@ -193,7 +193,7 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
 	   (format out "~%~10Tbeq ~a~%" label-done)
 	   (format out "~%~10Tlda ~a" tally-sym)
 	   (format out "~%~10Tclc")
-	   (format out "~%~10Tadc # 1")
+	   (format out "~%~10Tadc #1")
 	   (format out "~%~10Tsta ~a" tally-sym)
 	   (format out "~%~10Tblt ~a~%" label-skip)
 	   (format out "~%~10Tinc ~a + 1" tally-sym)
@@ -208,7 +208,7 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
         (conv-from
          ;; INSPECT id CONVERTING from TO to — replace chars in string
          (format out "~%~10T;; INSPECT ~a CONVERTING" target)
-         (format out "~%~10Tldy # 0")
+         (format out "~%~10Tldy #0")
          (let ((label (new-6502-label "InspLoop"))
 	     (label-next (new-6502-label "InspNext"))
 	     (label-done (new-6502-label "InspDone")))
@@ -225,7 +225,7 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
 	 (format out "~%~10Tbne ~a~%" label-next)
 	 (with-accumulator-value (conv-to)
 	   (if (expression-constant-p conv-to)
-                 (format out "~%~10Tlda # ~a" (expression-constant-value conv-to))
+                 (format out "~%~10Tlda #~a" (expression-constant-value conv-to))
                  (format out "~%~10Tlda ~a" (emit-6502-value conv-to))))
 	 (format out "~%~10Tsta ~a, y" target-sym)
 	 (format out "~%~a:" label-next)
@@ -241,7 +241,7 @@ TARGETS is list of paragraph names (1-based indices). LOW, HIGH are 1-based incl
          (let ((len (operand-width target)))
 	 (format out "~%~10T;; INSPECT ~a REPLACING CHARACTERS BY ~a" target repl-by)
 	 (emit-6502-load-expression out repl-by class-id)
-	 (format out "~%~10Tldy # 0")
+	 (format out "~%~10Tldy #0")
 	 (let ((label (new-6502-label "InspLoop")))
 	   (format out "~%~a:" label)
 	   (setf *6502-accumulator-expression* :trash/inspect-replacing

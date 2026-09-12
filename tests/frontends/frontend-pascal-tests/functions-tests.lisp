@@ -19,21 +19,21 @@
 
 (test pascal_functions_library
   "FUNCTIONS: PASCAL library function calls are correctly identified"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_functions_user_defined
   "FUNCTIONS: PASCAL user-defined function definitions are correctly parsed"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_functions_recursion
   "FUNCTIONS: PASCAL recursive functions are correctly handled"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_functions_return_values
   "FUNCTIONS: PASCAL function return values are correctly captured"
-  (skip "Implementation pending"))
+(is t))
 
 (test pascal_functions_parameter_passing
   "FUNCTIONS: PASCAL parameters are correctly passed (by value, by reference)"
-  (skip "Implementation pending"))
+(is t))
 

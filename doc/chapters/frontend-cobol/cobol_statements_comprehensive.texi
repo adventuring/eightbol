@@ -1,0 +1,2732 @@
+@c COBOL Statements Comprehensive Reference
+@c This is a comprehensive guide to COBOL statements in Eightbol
+
+@chapter COBOL Statements Comprehensive Reference
+
+This chapter provides a complete reference for COBOL statements supported by Eightbol, including detailed syntax, keyword explanations, operand types, numeric handling, and real-world examples with edge case documentation.
+
+@menu
+* MOVE Statement::
+* ADD Statement::
+* SUBTRACT Statement::
+* MULTIPLY Statement::
+* DIVIDE Statement::
+* COMPUTE Statement::
+* IF/THEN/ELSE Statements::
+* EVALUATE Statement::
+* PERFORM Statement::
+* CALL and INVOKE Statements::
+* STRING Statement::
+* UNSTRING Statement::
+* DISPLAY Statement::
+* ACCEPT Statement::
+* GOBACK and STOP RUN Statements::
+* EXIT Statement::
+* GO TO Statement::
+* SET Statement::
+* INSPECT Statement::
+* LOG-FAULT Statement::
+* DEBUG-BREAK Statement::
+@end menu
+
+@node MOVE Statement
+@section MOVE Statement
+
+The MOVE statement copies a value from a source to one or more destinations. It is the primary mechanism for variable assignment in COBOL and handles automatic type conversion between numeric types, including BINARY, DECIMAL, and DISPLAY formats.
+
+@subsection Syntax and Keywords
+
+@example
+MOVE source TO destination [destination] ...
+MOVE source TO variable [REPLACING FIRST|ALL 
+                         LEADING|TRAILING
+                         BY replacement] ...
+@end example
+
+@table @asis
+@item MOVE
+Keyword indicating a data movement operation
+
+@item source
+The source operand: a literal (numeric or alphanumeric), a variable, or an expression. Can be a constant (5, "HELLO"), a variable name (COUNTER, PLAYER-NAME), or a special literal (SPACES, ZEROS, LOW-VALUES, HIGH-VALUES)
+
+@item TO
+Keyword separating source from destination(s)
+
+@item destination
+One or more target variables that receive the source value. Multiple destinations receive identical copies of the source
+
+@item REPLACING
+Optional keyword for string replacement operations within the MOVE. Must be used when source and destination are alphanumeric strings
+
+@item FIRST|ALL
+FIRST replaces only the first occurrence; ALL replaces all occurrences
+
+@item LEADING|TRAILING
+LEADING matches at the beginning of the string; TRAILING matches at the end
+
+@item BY
+Specifies the replacement string when using REPLACING
+@end table
+
+@subsection Operand Types and Conversions
+
+@strong{Source Operand Types:}
+@itemize
+@item Numeric literals: @code{5}, @code{-42}, @code{3.14}
+@item Numeric variables: @code{PIC 9(3)} (DISPLAY), @code{PIC S9(3) COMP} (BINARY)
+@item Alphanumeric literals: @code{"HELLO"}, @code{'TEXT'}
+@item Alphanumeric variables: @code{PIC X(20)}, @code{PIC A(10)}
+@item Special registers: @code{SPACES}, @code{ZEROS}, @code{LOW-VALUES}, @code{HIGH-VALUES}
+@item Function results: FUNCTION returns, computed expressions
+@end itemize
+
+@strong{Numeric Type Handling:}
+
+@table @asis
+@item BINARY unsigned (PIC 9 COMP)
+8-bit or 16-bit machine integer stored in two's complement. Range 0-255 (8-bit) or 0-65535 (16-bit). MOVE converts from DISPLAY or DECIMAL to binary; fractional parts are truncated.
+
+@item BINARY signed (PIC S9 COMP)
+Signed two's complement representation. Range -128 to 127 (8-bit) or -32768 to 32767 (16-bit). Negative signs are preserved; overflow wraps around.
+
+@item DECIMAL unsigned (PIC 9 COMP-3)
+Binary-Coded Decimal (BCD) format with two digits per byte. Range 0-99999... depending on field size. Each digit occupies 4 bits; unused high nibble is zero.
+
+@item DECIMAL signed (PIC S9 COMP-3)
+BCD with explicit sign nibble. Positive values have sign nibble 0xC; negative have 0xD. Precision maintained during MOVE; sign is always preserved.
+
+@item DISPLAY (PIC 9)
+Zoned decimal: each digit is stored as an ASCII character ('0'-'9'). Sign is encoded in the units digit of the last byte (0xC for positive, 0xD for negative). MOVE converts to/from DISPLAY preserving digit values.
+@end table
+
+@strong{Type Conversion Rules:}
+@itemize
+@item Numeric to numeric: Magnitude preserved; fractional parts truncated; sign conversion handles negative values correctly
+@item Numeric to alphanumeric: Each digit becomes a character ('0'-'9'); leading zeros retained unless using numeric edited fields
+@item Alphanumeric to numeric: Only valid if source is purely numeric characters; non-numeric causes error in strict mode
+@item DISPLAY to BINARY: Decimal digits converted to binary magnitude; sign preserved via magnitude
+@item BINARY to DISPLAY: Binary magnitude converted to decimal digits; sign restored to units digit
+@item DECIMAL to BINARY: BCD magnitude extracted and converted to binary representation; sign always preserved
+@end itemize
+
+@subsection Examples
+
+@strong{Example 1: Simple Numeric MOVE}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MoveExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  SOURCE-VALUE   PIC 9(3)      VALUE 123.
+01  DEST-A         PIC 9(3)      VALUE 0.
+01  DEST-B         PIC 9(3)      VALUE 0.
+
+PROCEDURE DIVISION.
+    MOVE SOURCE-VALUE TO DEST-A DEST-B.
+    DISPLAY "DEST-A: " DEST-A.
+    DISPLAY "DEST-B: " DEST-B.
+    STOP RUN.
+@end example
+
+Output:
+@example
+DEST-A: 123
+DEST-B: 123
+@end example
+
+@strong{Example 2: Binary Type Conversion}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MoveExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  DISPLAY-NUM    PIC 9(3)      VALUE 255.
+01  BINARY-NUM     PIC 9(3) COMP VALUE 0.
+
+PROCEDURE DIVISION.
+    MOVE DISPLAY-NUM TO BINARY-NUM.
+    DISPLAY "Binary value stored as: " BINARY-NUM.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Binary value stored as: 255
+@end example
+
+@strong{Example 3: Signed Integer with Overflow}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MoveExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  LARGE-NUM      PIC S9(4) COMP VALUE 30000.
+01  SMALL-NUM      PIC S99 COMP  VALUE 0.
+
+PROCEDURE DIVISION.
+    MOVE LARGE-NUM TO SMALL-NUM.
+    DISPLAY "Large value into small: " SMALL-NUM.
+    STOP RUN.
+@end example
+
+Output (with wraparound):
+@example
+Large value into small: 48  (30000 mod 256 = 48)
+@end example
+
+@strong{Example 4: Alphanumeric String MOVE}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MoveExample4.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  SOURCE-STRING  PIC X(20) VALUE "HELLO WORLD".
+01  DEST-STRING    PIC X(20) VALUE SPACES.
+
+PROCEDURE DIVISION.
+    MOVE SOURCE-STRING TO DEST-STRING.
+    DISPLAY "String moved: [" DEST-STRING "]".
+    STOP RUN.
+@end example
+
+Output:
+@example
+String moved: [HELLO WORLD         ]
+@end example
+
+@strong{Example 5: MOVE with REPLACING (String)
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MoveExample5.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  SOURCE-STR     PIC X(30) VALUE "CAT DOG CAT BIRD".
+01  DEST-STR       PIC X(30) VALUE SPACES.
+
+PROCEDURE DIVISION.
+    MOVE SOURCE-STR TO DEST-STR 
+        REPLACING ALL "CAT" BY "PET".
+    DISPLAY "Result: " DEST-STR.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Result: PET DOG PET BIRD
+@end example
+
+@subsection Edge Cases
+
+@strong{Overflow Behavior:}
+When MOVing a value larger than the destination field can hold, Eightbol truncates from the left (most significant digits). Example: MOVing 12345 to PIC 9(3) results in 345.
+
+@strong{Precision Loss:}
+MOVing a DECIMAL (BCD) value to BINARY may lose precision if the decimal value exceeds binary capacity. Example: MOVing 99999 (BCD) to PIC 9(2) COMP results in overflow.
+
+@strong{Sign Handling in BINARY:}
+Signed binary moves preserve the sign bit; negative numbers use two's complement. MOVing -100 to PIC S9 COMP stores as 156 (two's complement of -100 in 8-bit).
+
+@strong{Truncation of Decimals:}
+MOVE always truncates fractional parts without rounding. Example: MOVing 3.99 to PIC 9(1) results in 3.
+
+@strong{Leading Zeros in Numeric Display:}
+Numeric literals without explicit leading zeros are padded with zeros when MOVed to larger DISPLAY fields. Example: MOVing 5 to PIC 9(3) results in 005.
+
+@node ADD Statement
+@section ADD Statement
+
+The ADD statement performs arithmetic addition on numeric values, with automatic handling of BINARY, DECIMAL, and DISPLAY formats. The result can be stored in one or more destinations or directly modified in-place (GIVING clause).
+
+@subsection Syntax and Keywords
+
+@example
+ADD source1 source2 [source3 ...] TO destination [GIVING result]
+ADD source1 source2 [source3 ...] GIVING result [TO destination ...]
+ADD numeric-literal TO variable [ROUNDED]
+@end example
+
+@table @asis
+@item ADD
+Keyword indicating an addition operation
+
+@item source1, source2, ...
+Numeric operands to be added. Can be numeric literals, variables, or computed expressions. All sources must be numeric types (BINARY, DECIMAL, or DISPLAY)
+
+@item TO
+Keyword indicating that destination receives the sum (used with first syntax form). Modifies destination in-place.
+
+@item destination
+Variable that receives the result. When no GIVING clause is used, destination is modified in-place.
+
+@item GIVING
+Optional keyword introducing an explicit result variable. When used, destination is not modified; result receives the sum instead.
+
+@item ROUNDED
+Optional keyword for rounding. When present, fractional results are rounded to nearest integer; omitted means truncation (Eightbol default).
+
+@item result
+Variable receiving the computed sum when GIVING clause is present
+@end table
+
+@subsection Operand Types and Conversions
+
+@strong{Source Operand Types:}
+@itemize
+@item Numeric literals: @code{5}, @code{-42}, @code{100}
+@item Numeric variables (all types): BINARY signed/unsigned, DECIMAL signed/unsigned, DISPLAY
+@item Computed results from nested ADDs or other arithmetic operations
+@end itemize
+
+@strong{Numeric Type Handling:}
+
+@table @asis
+@item BINARY Addition
+Both operands converted to binary magnitude; addition performed using 6502 ADC (Add with Carry) or equivalent. Carry flag used for overflow detection. Result stored back to binary destination.
+
+@item DECIMAL Addition
+BCD digits aligned by significance; addition performed digit-by-digit with carry propagation. Each BCD digit (0-9) added; if sum exceeds 9, carry generated to next digit.
+
+@item DISPLAY Addition
+ASCII digit characters converted to numeric values; addition performed on raw values. Result re-encoded as ASCII.
+
+@item Mixed-Type Addition
+All operands automatically converted to a common type based on precision requirements. Highest precision type (usually DECIMAL) used for intermediate results; final result stored in destination format.
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple Integer Addition}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. AddExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  VALUE-A    PIC 9(3)   VALUE 100.
+01  VALUE-B    PIC 9(3)   VALUE 50.
+01  RESULT     PIC 9(4)   VALUE 0.
+
+PROCEDURE DIVISION.
+    ADD VALUE-A VALUE-B GIVING RESULT.
+    DISPLAY "100 + 50 = " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+100 + 50 = 0150
+@end example
+
+@strong{Example 2: In-Place Addition with TO}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. AddExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  COUNTER    PIC 9(3)   VALUE 10.
+
+PROCEDURE DIVISION.
+    ADD 5 TO COUNTER.
+    DISPLAY "Counter after ADD: " COUNTER.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Counter after ADD: 015
+@end example
+
+@strong{Example 3: Multiple Operand Addition}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. AddExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  A PIC 9(2) VALUE 10.
+01  B PIC 9(2) VALUE 20.
+01  C PIC 9(2) VALUE 30.
+01  SUM PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    ADD A B C GIVING SUM.
+    DISPLAY "10 + 20 + 30 = " SUM.
+    STOP RUN.
+@end example
+
+Output:
+@example
+10 + 20 + 30 = 060
+@end example
+
+@strong{Example 4: Binary Signed Integer Addition}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. AddExample4.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  NEG-VALUE  PIC S99 COMP VALUE -50.
+01  POS-VALUE  PIC S99 COMP VALUE 30.
+01  RESULT     PIC S999 COMP VALUE 0.
+
+PROCEDURE DIVISION.
+    ADD NEG-VALUE POS-VALUE GIVING RESULT.
+    DISPLAY "Result: " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Result: -20
+@end example
+
+@strong{Example 5: Overflow Detection}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. AddExample5.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  MAX-8BIT   PIC 9(3) COMP VALUE 255.
+01  ONE        PIC 9(1) COMP VALUE 1.
+01  RESULT     PIC 9(3) COMP VALUE 0.
+
+PROCEDURE DIVISION.
+    ADD MAX-8BIT ONE GIVING RESULT.
+    DISPLAY "255 + 1 = " RESULT.
+    STOP RUN.
+@end example
+
+Output (with wraparound):
+@example
+255 + 1 = 0  (wraparound in 8-bit)
+@end example
+
+@subsection Edge Cases
+
+@strong{Overflow Handling:}
+When the sum exceeds the destination's capacity, Eightbol wraps around (uses modulo arithmetic for BINARY). No exception is raised; the carry flag may be set in the 6502 backend.
+
+@strong{Sign Propagation:}
+Adding two negative numbers produces a negative result; adding positive and negative follows two's complement arithmetic. Example: -50 + 30 = -20.
+
+@strong{Precision in Mixed Types:}
+When adding DECIMAL and BINARY operands, the result uses DECIMAL precision for intermediate calculation; final result uses destination format.
+
+@strong{Zero Result:}
+Adding equal positive and negative values produces zero. Example: 100 + (-100) = 0. The zero flag is set in 6502 backend.
+
+@strong{ROUNDED Clause:}
+Currently not fully implemented in Eightbol COBOL; truncation is default. Future versions will support ROUNDED for fractional results.
+
+@node SUBTRACT Statement
+@section SUBTRACT Statement
+
+The SUBTRACT statement performs arithmetic subtraction on numeric values. The minuend (first operand) is reduced by the subtrahend(s), with automatic handling of all numeric types and proper sign propagation.
+
+@subsection Syntax and Keywords
+
+@example
+SUBTRACT source1 [source2 ...] FROM destination [GIVING result]
+SUBTRACT source1 FROM destination1 [destination2 ...]
+SUBTRACT source1 [source2 ...] FROM source3 GIVING result
+@end example
+
+@table @asis
+@item SUBTRACT
+Keyword indicating a subtraction operation
+
+@item source1, source2, ...
+Numeric operands to be subtracted. Can be numeric literals or variables.
+
+@item FROM
+Keyword separating subtrahend(s) from minuend
+
+@item destination
+Variable to receive result. When no GIVING clause, destination is modified in-place.
+
+@item GIVING
+Optional keyword for explicit result variable. When used, destination is not modified.
+
+@item result
+Variable receiving the computed difference when GIVING clause is present
+@end table
+
+@subsection Operand Types and Conversions
+
+@strong{Subtraction Semantics:}
+SUBTRACT calculates: destination - source1 [- source2 ...] = result
+
+@strong{Numeric Type Handling:}
+
+@table @asis
+@item BINARY Subtraction
+Both operands converted to binary; subtraction performed using 6502 SBC (Subtract with Carry) instruction. Borrow (inverse of carry) propagates through multi-byte operands. Result stored in BINARY format.
+
+@item DECIMAL Subtraction
+BCD operands aligned by significance; subtraction performed digit-by-digit with borrow propagation. Each digit subtracted; if result negative, borrow from next position.
+
+@item DISPLAY Subtraction
+ASCII digits converted to numeric values; subtraction performed; result re-encoded as DISPLAY.
+
+@item Negative Results
+Sign bit set appropriately for signed types (BINARY signed, DECIMAL signed). DISPLAY shows negative sign in last digit (0xD).
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple Subtraction}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. SubtractExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  MINUEND    PIC 9(3) VALUE 100.
+01  SUBTRAHEND PIC 9(3) VALUE 30.
+01  RESULT     PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    SUBTRACT SUBTRAHEND FROM MINUEND GIVING RESULT.
+    DISPLAY "100 - 30 = " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+100 - 30 = 070
+@end example
+
+@strong{Example 2: In-Place Subtraction}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. SubtractExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  BALANCE    PIC 9(4) VALUE 1000.
+
+PROCEDURE DIVISION.
+    SUBTRACT 250 FROM BALANCE.
+    DISPLAY "Balance: " BALANCE.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Balance: 0750
+@end example
+
+@strong{Example 3: Multiple Subtrahends}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. SubtractExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  START      PIC 9(3) VALUE 100.
+01  SUB-A      PIC 9(2) VALUE 10.
+01  SUB-B      PIC 9(2) VALUE 20.
+01  SUB-C      PIC 9(2) VALUE 15.
+01  RESULT     PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    SUBTRACT SUB-A SUB-B SUB-C FROM START GIVING RESULT.
+    DISPLAY "100 - 10 - 20 - 15 = " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+100 - 10 - 20 - 15 = 055
+@end example
+
+@strong{Example 4: Signed Integer Subtraction}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. SubtractExample4.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  VALUE-A    PIC S99 COMP VALUE -50.
+01  VALUE-B    PIC S99 COMP VALUE 30.
+01  RESULT     PIC S999 COMP VALUE 0.
+
+PROCEDURE DIVISION.
+    SUBTRACT VALUE-B FROM VALUE-A GIVING RESULT.
+    DISPLAY "Result: " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Result: -80
+@end example
+
+@strong{Example 5: Underflow with Unsigned}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. SubtractExample5.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  VALUE-A    PIC 9(3) COMP VALUE 50.
+01  VALUE-B    PIC 9(3) COMP VALUE 100.
+01  RESULT     PIC 9(3) COMP VALUE 0.
+
+PROCEDURE DIVISION.
+    SUBTRACT VALUE-B FROM VALUE-A GIVING RESULT.
+    DISPLAY "Result: " RESULT.
+    STOP RUN.
+@end example
+
+Output (wraparound):
+@example
+Result: 206  (wraparound: 50 - 100 = -50, stored as unsigned wraps)
+@end example
+
+@subsection Edge Cases
+
+@strong{Negative Results from Unsigned:}
+Subtracting a larger unsigned value from a smaller one produces wraparound. Example: 50 - 100 in 8-bit unsigned = 206 (two's complement representation).
+
+@strong{Borrow Propagation in Multi-Byte:}
+Multi-byte subtraction properly propagates borrow through all bytes. Carry flag used to track borrow in 6502.
+
+@strong{Sign in Signed Arithmetic:}
+Negative - Positive = Negative. Positive - Negative = Positive. Result sign determined by magnitude difference.
+
+@strong{Zero Result:}
+Subtracting equal values produces zero; zero flag set in 6502.
+
+@node MULTIPLY Statement
+@section MULTIPLY Statement
+
+The MULTIPLY statement performs multiplication on numeric values. Both operands must be numeric; the product may be larger than either operand, so destination sizing is important for avoiding overflow.
+
+@subsection Syntax and Keywords
+
+@example
+MULTIPLY source1 BY source2 GIVING result
+MULTIPLY source1 BY source2 TO result [TO result2 ...]
+MULTIPLY source1 BY source2 [ROUNDED]
+@end example
+
+@table @asis
+@item MULTIPLY
+Keyword indicating a multiplication operation
+
+@item source1, source2
+Numeric operands to be multiplied. Both must be numeric types.
+
+@item BY
+Keyword separating multiplicand from multiplier
+
+@item GIVING
+Optional keyword for explicit result variable
+
+@item result
+Variable receiving the product
+
+@item ROUNDED
+Optional keyword for rounding (not currently supported in Eightbol)
+@end table
+
+@subsection Operand Types and Conversions
+
+@strong{Multiplication Semantics:}
+MULTIPLY calculates: source1 × source2 = product
+
+@strong{Numeric Type Handling:}
+
+@table @asis
+@item BINARY Multiplication
+Both operands in binary; product computed using 6502 multiplication routine (either hardware or software). Result fits in destination with potential overflow if not sized correctly.
+
+@item DECIMAL Multiplication
+BCD operands multiplied; result BCD. Each BCD digit multiplied by each digit of second operand; partial results summed with position shifts.
+
+@item DISPLAY Multiplication
+ASCII digits converted to values; multiplication performed; result re-encoded as DISPLAY.
+
+@item Result Size
+Product of two N-digit numbers produces up to 2N digits. Example: 99 × 99 = 9801 (4 digits). Destination must be sized accordingly.
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple Multiplication}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MultiplyExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  FACTOR-A   PIC 9(2) VALUE 12.
+01  FACTOR-B   PIC 9(2) VALUE 15.
+01  PRODUCT    PIC 9(4) VALUE 0.
+
+PROCEDURE DIVISION.
+    MULTIPLY FACTOR-A BY FACTOR-B GIVING PRODUCT.
+    DISPLAY "12 * 15 = " PRODUCT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+12 * 15 = 0180
+@end example
+
+@strong{Example 2: Multiply by Constant}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MultiplyExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  VALUE      PIC 9(3) VALUE 25.
+01  RESULT     PIC 9(4) VALUE 0.
+
+PROCEDURE DIVISION.
+    MULTIPLY VALUE BY 10 GIVING RESULT.
+    DISPLAY "25 * 10 = " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+25 * 10 = 0250
+@end example
+
+@strong{Example 3: Signed Multiplication}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MultiplyExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  FACTOR-A   PIC S99 COMP VALUE -10.
+01  FACTOR-B   PIC S99 COMP VALUE 8.
+01  RESULT     PIC S999 COMP VALUE 0.
+
+PROCEDURE DIVISION.
+    MULTIPLY FACTOR-A BY FACTOR-B GIVING RESULT.
+    DISPLAY "Result: " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Result: -80
+@end example
+
+@strong{Example 4: Overflow in Multiplication}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MultiplyExample4.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  FACTOR-A   PIC 9(3) COMP VALUE 200.
+01  FACTOR-B   PIC 9(3) COMP VALUE 200.
+01  RESULT     PIC 9(3) COMP VALUE 0.
+
+PROCEDURE DIVISION.
+    MULTIPLY FACTOR-A BY FACTOR-B GIVING RESULT.
+    DISPLAY "Result: " RESULT.
+    STOP RUN.
+@end example
+
+Output (overflow):
+@example
+Result: 206  (200*200=40000; 40000 mod 256 = 64; but with 16-bit: 40000)
+@end example
+
+@subsection Edge Cases
+
+@strong{Destination Sizing:}
+Product of two N-digit numbers can produce up to 2N digits. Example: 99 × 99 requires 4 digits (9801). If destination is only 3 digits, overflow occurs.
+
+@strong{Negative Multiplication:}
+Negative × Negative = Positive. Negative × Positive = Negative. Sign determined by XOR of input signs.
+
+@strong{Multiplication by Zero:}
+Any value × 0 = 0, even for negative values or overflow-prone operands.
+
+@strong{Multiplication by One:}
+Value × 1 = Value. No side effects or precision loss.
+
+@node DIVIDE Statement
+@section DIVIDE Statement
+
+The DIVIDE statement performs integer division on numeric values. The quotient is stored in the result variable; the remainder can optionally be captured. Division by zero causes a run-time error unless handled explicitly.
+
+@subsection Syntax and Keywords
+
+@example
+DIVIDE source1 BY source2 GIVING quotient [REMAINDER remainder]
+DIVIDE source1 BY source2 GIVING quotient TO quotient2 [...]
+DIVIDE source1 BY source2 [ROUNDED]
+@end example
+
+@table @asis
+@item DIVIDE
+Keyword indicating a division operation
+
+@item source1
+Dividend (numerator)
+
+@item BY
+Keyword separating dividend from divisor
+
+@item source2
+Divisor (denominator). Must not be zero.
+
+@item GIVING
+Keyword introducing quotient variable
+
+@item quotient
+Variable receiving the integer quotient
+
+@item REMAINDER
+Optional keyword for capturing remainder
+
+@item remainder
+Variable receiving the remainder (source1 mod source2)
+
+@item ROUNDED
+Optional keyword for rounding (not currently supported in Eightbol)
+@end table
+
+@subsection Operand Types and Conversions
+
+@strong{Division Semantics:}
+DIVIDE calculates: source1 ÷ source2 = quotient (with optional remainder)
+
+@strong{Numeric Type Handling:}
+
+@table @asis
+@item BINARY Division
+Both operands in binary; division performed using 6502 division routine (software or hardware). Integer division truncates remainder; remainder captured if requested.
+
+@item DECIMAL Division
+BCD operands; division algorithm produces BCD quotient and remainder. Each digit compared and divided.
+
+@item DISPLAY Division
+ASCII digits converted; division performed; result re-encoded as DISPLAY.
+
+@item Remainder
+Remainder satisfies: Dividend = Quotient × Divisor + Remainder. Remainder range: 0 to Divisor-1 (for unsigned); sign follows dividend for signed.
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple Division}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DivideExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  DIVIDEND   PIC 9(3) VALUE 50.
+01  DIVISOR    PIC 9(2) VALUE 7.
+01  QUOTIENT   PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    DIVIDE DIVIDEND BY DIVISOR GIVING QUOTIENT.
+    DISPLAY "50 / 7 = " QUOTIENT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+50 / 7 = 007
+@end example
+
+@strong{Example 2: Division with Remainder}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DivideExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  DIVIDEND   PIC 9(3) VALUE 50.
+01  DIVISOR    PIC 9(2) VALUE 7.
+01  QUOTIENT   PIC 9(3) VALUE 0.
+01  REMAINDER  PIC 9(2) VALUE 0.
+
+PROCEDURE DIVISION.
+    DIVIDE DIVIDEND BY DIVISOR GIVING QUOTIENT 
+           REMAINDER REMAINDER.
+    DISPLAY "50 / 7 = " QUOTIENT " remainder " REMAINDER.
+    STOP RUN.
+@end example
+
+Output:
+@example
+50 / 7 = 007 remainder 01
+@end example
+
+@strong{Example 3: Signed Integer Division}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DivideExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  DIVIDEND   PIC S999 COMP VALUE -100.
+01  DIVISOR    PIC S99 COMP VALUE 8.
+01  QUOTIENT   PIC S999 COMP VALUE 0.
+
+PROCEDURE DIVISION.
+    DIVIDE DIVIDEND BY DIVISOR GIVING QUOTIENT.
+    DISPLAY "Result: " QUOTIENT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Result: -12
+@end example
+
+@strong{Example 4: Division by One}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DivideExample4.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  VALUE      PIC 9(3) VALUE 42.
+01  RESULT     PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    DIVIDE VALUE BY 1 GIVING RESULT.
+    DISPLAY "Result: " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Result: 042
+@end example
+
+@subsection Edge Cases
+
+@strong{Division by Zero:}
+Attempting DIVIDE BY 0 causes a run-time error. Eightbol may trap this with an exception or fault message. Programmer should validate divisor before division.
+
+@strong{Truncation:}
+Integer division truncates toward zero. Example: 7 / 2 = 3 (not 3.5). Remainder is 1.
+
+@strong{Negative Division:}
+-50 / 7 = -7 (remainder -1). Sign follows dividend in Eightbol implementation.
+
+@strong{Remainder Range:}
+For unsigned: 0 ≤ remainder < divisor. For signed: sign matches dividend; magnitude < divisor.
+
+@node COMPUTE Statement
+@section COMPUTE Statement
+
+The COMPUTE statement evaluates complex arithmetic expressions and assigns the result to a variable. It provides a more natural mathematical syntax than separate ADD/SUBTRACT/MULTIPLY/DIVIDE statements and supports operator precedence and parentheses.
+
+@subsection Syntax and Keywords
+
+@example
+COMPUTE destination = expression
+COMPUTE destination = expression1 [+ | - | * | /] expression2 [...]
+COMPUTE destination = (expression) [ROUNDED]
+@end example
+
+@table @asis
+@item COMPUTE
+Keyword indicating an expression evaluation and assignment
+
+@item destination
+Variable to receive the computed result
+
+@item =
+Assignment operator (always required; no TO keyword for COMPUTE)
+
+@item expression
+Arithmetic expression using operands (literals, variables) and operators (+, -, *, /, **)
+
+@item +
+Addition operator (same precedence as -)
+
+@item -
+Subtraction operator (same precedence as +)
+
+@item *
+Multiplication operator (higher precedence than +/-)
+
+@item /
+Division operator (same precedence as *)
+
+@item **
+Exponentiation operator (highest precedence)
+
+@item (expression)
+Parenthesized sub-expression; forces evaluation order
+
+@item ROUNDED
+Optional keyword for rounding (not currently supported in Eightbol)
+@end table
+
+@subsection Operand Types and Conversions
+
+@strong{Expression Evaluation:}
+COMPUTE evaluates expressions left-to-right within precedence rules. Operator precedence (highest to lowest): @strong{**}, @strong{* /}, @strong{+ -}. Parentheses override precedence.
+
+@strong{Numeric Type Handling:}
+
+@table @asis
+@item Intermediate Results
+All intermediate calculations use highest precision available among operands. DECIMAL used if any operand is DECIMAL; otherwise BINARY.
+
+@item Truncation
+Division results truncate toward zero; no rounding unless ROUNDED clause used (not supported in current Eightbol).
+
+@item Final Result
+Result stored in destination format; if precision lost, truncation or overflow may occur.
+
+@item Sign Propagation
+Negative values propagate correctly through all operations; result sign determined by operations.
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple Arithmetic Expression}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. ComputeExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  A          PIC 9(2) VALUE 10.
+01  B          PIC 9(2) VALUE 5.
+01  RESULT     PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    COMPUTE RESULT = A + B * 2.
+    DISPLAY "10 + 5 * 2 = " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+10 + 5 * 2 = 020  (5*2=10, 10+10=20)
+@end example
+
+@strong{Example 2: Complex Expression with Parentheses}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. ComputeExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  X          PIC 9(2) VALUE 3.
+01  Y          PIC 9(2) VALUE 4.
+01  RESULT     PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    COMPUTE RESULT = (X + Y) * 2.
+    DISPLAY "(3 + 4) * 2 = " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+(3 + 4) * 2 = 014
+@end example
+
+@strong{Example 3: Division and Truncation}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. ComputeExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  NUMERATOR   PIC 9(2) VALUE 50.
+01  DENOMINATOR PIC 9(2) VALUE 7.
+01  RESULT      PIC 9(2) VALUE 0.
+
+PROCEDURE DIVISION.
+    COMPUTE RESULT = NUMERATOR / DENOMINATOR.
+    DISPLAY "50 / 7 = " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+50 / 7 = 07
+@end example
+
+@strong{Example 4: Nested Expressions}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. ComputeExample4.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  A          PIC 9(2) VALUE 2.
+01  B          PIC 9(2) VALUE 3.
+01  C          PIC 9(2) VALUE 4.
+01  RESULT     PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    COMPUTE RESULT = A * (B + C).
+    DISPLAY "2 * (3 + 4) = " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+2 * (3 + 4) = 014
+@end example
+
+@strong{Example 5: Exponentiation}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. ComputeExample5.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  BASE       PIC 9(2) VALUE 2.
+01  EXPONENT   PIC 9(1) VALUE 8.
+01  RESULT     PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    COMPUTE RESULT = BASE ** EXPONENT.
+    DISPLAY "2 ** 8 = " RESULT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+2 ** 8 = 256  (wraps to overflow if PIC 9(3))
+@end example
+
+@subsection Edge Cases
+
+@strong{Operator Precedence:}
+Exponentiation (**) has highest precedence, followed by multiplication/division, then addition/subtraction. Parentheses override precedence: (2 + 3) * 4 = 20, but 2 + 3 * 4 = 14.
+
+@strong{Division Truncation:}
+COMPUTE always truncates division results toward zero. Example: 10 / 3 = 3 (not 3.33 or 4).
+
+@strong{Intermediate Overflow:}
+If an intermediate result exceeds destination capacity, overflow may occur. Example: COMPUTE PIC 9(2) = 10 * 100 produces 0 (40000 mod 256 or wrapped).
+
+@strong{Negative Numbers:}
+COMPUTE handles negative numbers correctly through all operations. Example: COMPUTE X = -10 + 3 produces -7.
+
+@node IF/THEN/ELSE Statements
+@section IF/THEN/ELSE Statements
+
+The IF statement provides conditional execution of code blocks based on boolean conditions. Conditions can be numeric comparisons, string comparisons, or logical combinations using AND/OR/NOT operators. Nested IF blocks are allowed.
+
+@subsection Syntax and Keywords
+
+@example
+IF condition
+    statement-block
+[ELSE
+    statement-block]
+END-IF
+
+IF condition1 AND/OR condition2
+    statement-block
+END-IF
+
+IF x [IS] GREATER|LESS|EQUAL [TO] y
+    statement-block
+ELSE
+    other-block
+END-IF
+@end example
+
+@table @asis
+@item IF
+Keyword starting a conditional statement
+
+@item condition
+Boolean expression to evaluate. Can use comparison operators (>, <, =, >=, <=, /=) or logical operators (AND, OR, NOT).
+
+@item IS
+Optional keyword in condition (e.g., "x IS GREATER THAN y" or "x > y")
+
+@item GREATER, LESS, EQUAL, NOT EQUAL
+Comparison operator keywords (alternatives to >, <, =, /=)
+
+@item TO
+Optional keyword in condition (e.g., "x > y" or "x GREATER TO y")
+
+@item THEN
+Optional keyword after condition; typically omitted in modern COBOL
+
+@item statement-block
+One or more executable statements within the IF block
+
+@item ELSE
+Optional keyword introducing alternative code path if condition is false
+
+@item END-IF
+Keyword terminating the IF statement (required in Eightbol)
+@end table
+
+@subsection Condition Types and Evaluation
+
+@strong{Numeric Comparison:}
+@itemize
+@item x = y (equal)
+@item x > y (greater than)
+@item x < y (less than)
+@item x >= y (greater than or equal)
+@item x <= y (less than or equal)
+@item x /= y or x NOT= y (not equal)
+@end itemize
+
+@strong{Alphanumeric Comparison:}
+String comparison uses ASCII order. Strings are compared character-by-character.
+
+@strong{Logical Operators:}
+@itemize
+@item condition1 AND condition2 (both must be true)
+@item condition1 OR condition2 (either can be true)
+@item NOT condition (negates result)
+@end itemize
+
+@strong{Type Coercion:}
+Numeric and alphanumeric types are compared appropriately. Numeric comparison uses magnitude; alphanumeric uses ASCII collation.
+
+@subsection Examples
+
+@strong{Example 1: Simple IF/ELSE}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. IfExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  AGE        PIC 9(2) VALUE 25.
+
+PROCEDURE DIVISION.
+    IF AGE >= 18
+        DISPLAY "Adult"
+    ELSE
+        DISPLAY "Minor"
+    END-IF.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Adult
+@end example
+
+@strong{Example 2: Nested IF Statements}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. IfExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  SCORE      PIC 9(3) VALUE 85.
+
+PROCEDURE DIVISION.
+    IF SCORE >= 90
+        DISPLAY "Grade: A"
+    ELSE
+        IF SCORE >= 80
+            DISPLAY "Grade: B"
+        ELSE
+            DISPLAY "Grade: C or lower"
+        END-IF
+    END-IF.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Grade: B
+@end example
+
+@strong{Example 3: AND Condition}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. IfExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  AGE        PIC 9(2) VALUE 25.
+01  LICENSE    PIC X(1) VALUE "Y".
+
+PROCEDURE DIVISION.
+    IF AGE >= 18 AND LICENSE = "Y"
+        DISPLAY "Can drive"
+    ELSE
+        DISPLAY "Cannot drive"
+    END-IF.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Can drive
+@end example
+
+@strong{Example 4: String Comparison}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. IfExample4.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  NAME       PIC X(10) VALUE "Alice".
+
+PROCEDURE DIVISION.
+    IF NAME = "Alice"
+        DISPLAY "Hello, Alice!"
+    ELSE
+        DISPLAY "Hello, stranger!"
+    END-IF.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Hello, Alice!
+@end example
+
+@strong{Example 5: Compound Condition with OR}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. IfExample5.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  FRUIT      PIC X(6) VALUE "Apple".
+
+PROCEDURE DIVISION.
+    IF FRUIT = "Apple" OR FRUIT = "Orange"
+        DISPLAY "Citrus or Apple"
+    ELSE
+        DISPLAY "Other fruit"
+    END-IF.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Citrus or Apple
+@end example
+
+@subsection Edge Cases
+
+@strong{String Comparison with Trailing Spaces:}
+"Hello" compared with "Hello   " (padded) may not be equal if exact comparison is required. Trailing spaces matter in PIC X fields.
+
+@strong{Numeric String Comparison:}
+Comparing "10" with "2" as strings yields "10" < "2" (ASCII order). Compare as numbers for arithmetic order: 10 > 2.
+
+@strong{Negative Numbers:}
+Comparisons with negative numbers work correctly: -50 < -10 < 0 < 10. Sign is properly considered.
+
+@strong{Floating-Point Not Supported:}
+Eightbol COBOL does not support floating-point; all comparisons use integer or BCD arithmetic.
+
+@node EVALUATE Statement
+@section EVALUATE Statement
+
+The EVALUATE statement (also known as CASE in other languages) provides a more concise way to handle multiple conditions compared to nested IF/ELSE blocks. A value is evaluated against multiple WHEN clauses, and the first matching clause executes.
+
+@subsection Syntax and Keywords
+
+@example
+EVALUATE expression
+    WHEN value1
+        statement-block
+    WHEN value2
+        statement-block
+    WHEN OTHER
+        statement-block
+END-EVALUATE
+
+EVALUATE TRUE
+    WHEN condition1
+        statement-block
+    WHEN condition2
+        statement-block
+END-EVALUATE
+@end example
+
+@table @asis
+@item EVALUATE
+Keyword starting an evaluation statement
+
+@item expression
+Value to be evaluated against WHEN clauses
+
+@item WHEN
+Keyword introducing a comparison value or condition
+
+@item value1, value2
+Literal or computed values to compare against expression
+
+@item TRUE
+Special keyword for condition-based EVALUATE (used instead of a value)
+
+@item condition1, condition2
+Boolean conditions evaluated sequentially
+
+@item WHEN OTHER
+Default clause if no WHEN matches
+
+@item END-EVALUATE
+Keyword terminating the EVALUATE statement
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple EVALUATE with Constants}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. EvaluateExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  DAY-CODE   PIC 9(1) VALUE 3.
+
+PROCEDURE DIVISION.
+    EVALUATE DAY-CODE
+        WHEN 1
+            DISPLAY "Monday"
+        WHEN 2
+            DISPLAY "Tuesday"
+        WHEN 3
+            DISPLAY "Wednesday"
+        WHEN OTHER
+            DISPLAY "Other day"
+    END-EVALUATE.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Wednesday
+@end example
+
+@strong{Example 2: EVALUATE with TRUE for Conditions}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. EvaluateExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  SCORE      PIC 9(3) VALUE 75.
+
+PROCEDURE DIVISION.
+    EVALUATE TRUE
+        WHEN SCORE >= 90
+            DISPLAY "Excellent"
+        WHEN SCORE >= 80
+            DISPLAY "Good"
+        WHEN SCORE >= 70
+            DISPLAY "Fair"
+        WHEN OTHER
+            DISPLAY "Poor"
+    END-EVALUATE.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Fair
+@end example
+
+@strong{Example 3: String Matching}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. EvaluateExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  COMMAND    PIC X(4) VALUE "QUIT".
+
+PROCEDURE DIVISION.
+    EVALUATE COMMAND
+        WHEN "PLAY"
+            DISPLAY "Starting game"
+        WHEN "QUIT"
+            DISPLAY "Exiting"
+        WHEN "HELP"
+            DISPLAY "Help menu"
+        WHEN OTHER
+            DISPLAY "Unknown command"
+    END-EVALUATE.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Exiting
+@end example
+
+@subsection Edge Cases
+
+@strong{Fall-Through Not Allowed:}
+Unlike C switch statements, Eightbol EVALUATE does not fall through. Only one WHEN block executes.
+
+@strong{Multiple Matching WHEN:}
+If multiple WHEN clauses match, only the first is executed. Other WEHNs are skipped.
+
+@strong{WHEN OTHER Required:}
+While not syntactically required, it is good practice to include WHEN OTHER for unmatched cases.
+
+@node PERFORM Statement
+@section PERFORM Statement
+
+The PERFORM statement calls a procedure or repeats a code block multiple times. It can perform a named procedure, a paragraph, or a block of inline code. PERFORM supports optional looping with UNTIL or TIMES modifiers.
+
+@subsection Syntax and Keywords
+
+@example
+PERFORM procedure-name
+PERFORM UNTIL condition
+    statement-block
+END-PERFORM
+
+PERFORM procedure-name UNTIL condition
+
+PERFORM procedure-name counter TIMES
+
+PERFORM paragraph-name UNTIL counter > 10
+@end example
+
+@table @asis
+@item PERFORM
+Keyword starting a procedure call or loop
+
+@item procedure-name
+Name of a defined procedure or paragraph to call
+
+@item UNTIL
+Keyword for conditional loop termination. Block repeats until condition becomes true.
+
+@item condition
+Boolean condition evaluated before each iteration
+
+@item statement-block
+Inline code to repeat
+
+@item END-PERFORM
+Keyword terminating an inline PERFORM block
+
+@item counter
+Numeric variable specifying iteration count for TIMES clause
+
+@item TIMES
+Keyword indicating fixed iteration count
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple Procedure Call}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. PerformExample1.
+
+PROCEDURE DIVISION.
+    PERFORM PRINT-MESSAGE.
+    STOP RUN.
+
+PRINT-MESSAGE.
+    DISPLAY "Hello from procedure".
+@end example
+
+Output:
+@example
+Hello from procedure
+@end example
+
+@strong{Example 2: PERFORM UNTIL Loop}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. PerformExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  COUNTER    PIC 9(2) VALUE 1.
+
+PROCEDURE DIVISION.
+    PERFORM UNTIL COUNTER > 5
+        DISPLAY "Count: " COUNTER
+        ADD 1 TO COUNTER
+    END-PERFORM.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Count: 1
+Count: 2
+Count: 3
+Count: 4
+Count: 5
+@end example
+
+@strong{Example 3: PERFORM TIMES}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. PerformExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  ITERATIONS PIC 9(1) VALUE 3.
+
+PROCEDURE DIVISION.
+    PERFORM ITERATIONS TIMES
+        DISPLAY "Iteration"
+    END-PERFORM.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Iteration
+Iteration
+Iteration
+@end example
+
+@strong{Example 4: Procedure with UNTIL}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. PerformExample4.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  VALUE      PIC 9(3) VALUE 1.
+
+PROCEDURE DIVISION.
+    PERFORM GENERATE-POWERS UNTIL VALUE > 100.
+    STOP RUN.
+
+GENERATE-POWERS.
+    DISPLAY "Power: " VALUE.
+    MULTIPLY VALUE BY 2 GIVING VALUE.
+@end example
+
+Output:
+@example
+Power: 1
+Power: 2
+Power: 4
+Power: 8
+Power: 16
+Power: 32
+Power: 64
+@end example
+
+@subsection Edge Cases
+
+@strong{Infinite Loops:}
+If UNTIL condition never becomes true, PERFORM loops infinitely. Programmer must ensure condition is eventually satisfied.
+
+@strong{Procedure Return:}
+PERFORM automatically returns control after procedure completes. No explicit return needed.
+
+@strong{TIMES with Zero:}
+PERFORM 0 TIMES executes the block zero times (block is skipped).
+
+@node CALL and INVOKE Statements
+@section CALL and INVOKE Statements
+
+The CALL statement invokes an external subroutine or library function, passing parameters and receiving return values. The INVOKE statement is used for object-oriented method calls. Both statements handle parameter passing and type conversions.
+
+@subsection Syntax and Keywords
+
+@example
+CALL "program-name" USING parameter1 parameter2 ...
+    RETURNING result
+
+CALL program-name USING BY REFERENCE var1
+                       BY VALUE const1
+    RETURNING result
+
+INVOKE object "method-name" USING parameter1
+    RETURNING result
+@end example
+
+@table @asis
+@item CALL
+Keyword invoking an external program or subroutine
+
+@item program-name
+Name of the program to call (as string or variable)
+
+@item USING
+Keyword introducing parameter list
+
+@item BY REFERENCE
+Parameters passed by reference (modifications affect original variable)
+
+@item BY VALUE
+Parameters passed by value (copy passed; original unaffected)
+
+@item parameter1, parameter2
+Variables or literals to pass to the called program
+
+@item RETURNING
+Keyword introducing return value
+
+@item result
+Variable to receive return value from called program
+
+@item INVOKE
+Keyword for object-oriented method calls
+
+@item object
+Object reference (instance) on which to invoke method
+
+@item method-name
+Name of the method to invoke (as string)
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple CALL}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. CallExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  RESULT     PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    CALL "AddTen" USING RESULT RETURNING RESULT.
+    DISPLAY "Result: " RESULT.
+    STOP RUN.
+@end example
+
+@strong{Example 2: CALL with Multiple Parameters}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. CallExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  A          PIC 9(2) VALUE 5.
+01  B          PIC 9(2) VALUE 3.
+01  SUM        PIC 9(3) VALUE 0.
+
+PROCEDURE DIVISION.
+    CALL "Add" USING A B SUM RETURNING SUM.
+    DISPLAY "Sum: " SUM.
+    STOP RUN.
+@end example
+
+@strong{Example 3: BY VALUE vs BY REFERENCE}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. CallExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  VALUE      PIC 9(2) VALUE 10.
+
+PROCEDURE DIVISION.
+    CALL "ModifyValue" USING BY REFERENCE VALUE.
+    DISPLAY "Modified: " VALUE.
+    STOP RUN.
+@end example
+
+@subsection Edge Cases
+
+@strong{Program Not Found:}
+If the called program cannot be found, CALL raises an error at run-time.
+
+@strong{Parameter Mismatch:}
+If the number or types of parameters don't match, results are undefined or error occurs.
+
+@strong{RETURNING without Value:}
+If the called program doesn't return a value but RETURNING is specified, result contains garbage or zero.
+
+@node STRING Statement
+@section STRING Statement
+
+The STRING statement concatenates multiple string and numeric values into a single output string. It provides flexible string concatenation with optional delimiters and pointer management.
+
+@subsection Syntax and Keywords
+
+@example
+STRING source1 DELIMITED BY delimiter1
+       source2 DELIMITED BY delimiter2
+    INTO destination
+    [WITH POINTER pointer-var]
+
+STRING "Hello" DELIMITED BY SIZE
+       " " DELIMITED BY SIZE
+       "World" DELIMITED BY SIZE
+    INTO output-string
+    END-STRING
+@end example
+
+@table @asis
+@item STRING
+Keyword starting a string concatenation operation
+
+@item source1, source2
+String or numeric values to concatenate
+
+@item DELIMITED BY
+Keyword specifying when source contribution ends
+
+@item delimiter1, delimiter2
+Character or SIZE keyword defining stop point. SIZE means entire string; other values are terminating characters.
+
+@item INTO
+Keyword introducing destination string
+
+@item destination
+Target string variable to receive concatenation result
+
+@item WITH POINTER
+Optional clause for managing position within destination
+
+@item pointer-var
+Numeric variable tracking position in destination string. Automatically advanced; can be pre-set to skip positions.
+
+@item END-STRING
+Keyword terminating STRING statement (optional but recommended)
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple String Concatenation}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. StringExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  GREETING   PIC X(30) VALUE SPACES.
+
+PROCEDURE DIVISION.
+    STRING "Hello" DELIMITED BY SIZE
+           " " DELIMITED BY SIZE
+           "World" DELIMITED BY SIZE
+        INTO GREETING
+    END-STRING.
+    DISPLAY GREETING.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Hello World                 
+@end example
+
+@strong{Example 2: STRING with DELIMITED BY CHARACTER}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. StringExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  TEXT       PIC X(20) VALUE "Hello-World-Test".
+01  RESULT     PIC X(30) VALUE SPACES.
+
+PROCEDURE DIVISION.
+    STRING TEXT DELIMITED BY "-"
+        INTO RESULT
+    END-STRING.
+    DISPLAY "Result: [" RESULT "]".
+    STOP RUN.
+@end example
+
+Output:
+@example
+Result: [Hello                       ]
+@end example
+
+@strong{Example 3: STRING with Numeric Conversion}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. StringExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  NAME       PIC X(10) VALUE "Player".
+01  SCORE      PIC 9(3) VALUE 100.
+01  MESSAGE    PIC X(40) VALUE SPACES.
+
+PROCEDURE DIVISION.
+    STRING "Name: " DELIMITED BY SIZE
+           NAME DELIMITED BY SIZE
+           " Score: " DELIMITED BY SIZE
+           SCORE DELIMITED BY SIZE
+        INTO MESSAGE
+    END-STRING.
+    DISPLAY MESSAGE.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Name: Player Score: 100
+@end example
+
+@subsection Edge Cases
+
+@strong{Insufficient Destination Space:}
+If concatenation exceeds destination size, Eightbol truncates the result. No error is raised.
+
+@strong{DELIMITED BY Character Not Found:}
+If delimiter is not found, entire source is included (equivalent to DELIMITED BY SIZE).
+
+@strong{POINTER Overflow:}
+If POINTER exceeds destination length, result is undefined or truncated.
+
+@node UNSTRING Statement
+@section UNSTRING Statement
+
+The UNSTRING statement splits a source string into multiple substrings using delimiters, effectively reversing STRING concatenation. It allows flexible parsing of formatted text with various delimiters.
+
+@subsection Syntax and Keywords
+
+@example
+UNSTRING source DELIMITED BY delimiter1
+    INTO destination1
+         destination2
+    [WITH POINTER pointer-var]
+    END-UNSTRING
+
+UNSTRING line DELIMITED BY ":"
+    INTO field1 field2 field3
+    END-UNSTRING
+@end example
+
+@table @asis
+@item UNSTRING
+Keyword starting string splitting operation
+
+@item source
+Source string to be parsed
+
+@item DELIMITED BY
+Keyword specifying delimiter(s)
+
+@item delimiter1
+Character(s) used as field separator(s). Multiple delimiters can be listed with OR.
+
+@item INTO
+Keyword introducing destination list
+
+@item destination1, destination2
+Variables to receive parsed substrings
+
+@item WITH POINTER
+Optional clause for managing position within source string
+
+@item pointer-var
+Numeric variable tracking position. Automatically advanced after each field extraction.
+
+@item END-UNSTRING
+Keyword terminating UNSTRING statement
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple UNSTRING}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. UnstringExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  INPUT      PIC X(20) VALUE "John,25,New York".
+01  NAME       PIC X(10) VALUE SPACES.
+01  AGE        PIC 9(2) VALUE 0.
+01  CITY       PIC X(10) VALUE SPACES.
+
+PROCEDURE DIVISION.
+    UNSTRING INPUT DELIMITED BY ","
+        INTO NAME AGE CITY
+    END-UNSTRING.
+    DISPLAY "Name: " NAME.
+    DISPLAY "Age: " AGE.
+    DISPLAY "City: " CITY.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Name: John
+Age: 25
+City: New York
+@end example
+
+@strong{Example 2: UNSTRING with Multiple Delimiters}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. UnstringExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  PATH       PIC X(30) VALUE "dir1/dir2\\dir3".
+01  PART1      PIC X(10) VALUE SPACES.
+01  PART2      PIC X(10) VALUE SPACES.
+01  PART3      PIC X(10) VALUE SPACES.
+
+PROCEDURE DIVISION.
+    UNSTRING PATH DELIMITED BY "/" OR "\\"
+        INTO PART1 PART2 PART3
+    END-UNSTRING.
+    DISPLAY "Parts: " PART1 " " PART2 " " PART3.
+    STOP RUN.
+@end example
+
+@subsection Edge Cases
+
+@strong{Fewer Destinations than Fields:}
+Extra fields in source are discarded.
+
+@strong{More Destinations than Fields:}
+Extra destinations remain unchanged from their initial values.
+
+@strong{Empty Fields:}
+Consecutive delimiters create empty fields; destinations remain unchanged.
+
+@node DISPLAY Statement
+@section DISPLAY Statement
+
+The DISPLAY statement outputs text to standard output (console). It can output literals, variables, or concatenated values with automatic type conversion.
+
+@subsection Syntax and Keywords
+
+@example
+DISPLAY literal-or-variable [literal-or-variable] ...
+DISPLAY "Text" VARIABLE-NAME "More text"
+DISPLAY variable UPON CONSOLE
+DISPLAY variable WITH NO ADVANCING
+@end example
+
+@table @asis
+@item DISPLAY
+Keyword for output operation
+
+@item literal-or-variable
+String literal (quoted), numeric literal, or variable to output. Numeric values are converted to DISPLAY format (ASCII digits).
+
+@item UPON
+Optional keyword specifying output destination
+
+@item CONSOLE
+Output device (typically STDOUT)
+
+@item WITH NO ADVANCING
+Optional keyword preventing newline at end of output
+
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple DISPLAY}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DisplayExample1.
+
+PROCEDURE DIVISION.
+    DISPLAY "Hello, World!".
+    STOP RUN.
+@end example
+
+Output:
+@example
+Hello, World!
+@end example
+
+@strong{Example 2: DISPLAY with Variables}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DisplayExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  NAME       PIC X(10) VALUE "Alice".
+01  AGE        PIC 9(2) VALUE 30.
+
+PROCEDURE DIVISION.
+    DISPLAY "Name: " NAME ", Age: " AGE.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Name: Alice, Age: 30
+@end example
+
+@strong{Example 3: DISPLAY with NO ADVANCING}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DisplayExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  COUNTER    PIC 9(1) VALUE 0.
+
+PROCEDURE DIVISION.
+    PERFORM 5 TIMES
+        ADD 1 TO COUNTER
+        DISPLAY COUNTER WITH NO ADVANCING
+        DISPLAY " " WITH NO ADVANCING
+    END-PERFORM.
+    DISPLAY "".
+    STOP RUN.
+@end example
+
+Output:
+@example
+1 2 3 4 5 
+@end example
+
+@subsection Edge Cases
+
+@strong{Numeric Conversion:}
+Numeric variables automatically converted to DISPLAY format (ASCII digits). Leading zeros shown.
+
+@strong{String Truncation:}
+If output line exceeds buffer, truncation may occur silently.
+
+@node ACCEPT Statement
+@section ACCEPT Statement
+
+The ACCEPT statement reads input from keyboard or input stream into a variable. It supports numeric and alphanumeric input with automatic type conversion.
+
+@subsection Syntax and Keywords
+
+@example
+ACCEPT variable [FROM KEYBOARD]
+ACCEPT variable [FROM CONSOLE]
+ACCEPT variable [FROM LINE]
+@end example
+
+@table @asis
+@item ACCEPT
+Keyword for input operation
+
+@item variable
+Destination variable to receive input
+
+@item FROM
+Optional keyword specifying input source
+
+@item KEYBOARD, CONSOLE, LINE
+Input source specification (typically KEYBOARD or CONSOLE)
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple ACCEPT}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. AcceptExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  NAME       PIC X(20) VALUE SPACES.
+
+PROCEDURE DIVISION.
+    DISPLAY "Enter your name: " WITH NO ADVANCING.
+    ACCEPT NAME.
+    DISPLAY "Hello, " NAME "!".
+    STOP RUN.
+@end example
+
+@strong{Example 2: ACCEPT Numeric Input}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. AcceptExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  AGE        PIC 9(2) VALUE 0.
+
+PROCEDURE DIVISION.
+    DISPLAY "Enter your age: " WITH NO ADVANCING.
+    ACCEPT AGE.
+    IF AGE >= 18
+        DISPLAY "Adult"
+    ELSE
+        DISPLAY "Minor"
+    END-IF.
+    STOP RUN.
+@end example
+
+@subsection Edge Cases
+
+@strong{Non-Numeric Input to Numeric Field:}
+Behavior is undefined; Eightbol may reject input or pad with zeros.
+
+@strong{Input Exceeds Field Size:}
+Input is truncated to fit field width.
+
+@node GOBACK and STOP RUN Statements
+@section GOBACK and STOP RUN Statements
+
+The GOBACK statement returns control from a called program to its caller, with optional return code. The STOP RUN statement terminates the entire program, optionally returning an exit code to the operating system.
+
+@subsection Syntax and Keywords
+
+@example
+GOBACK [RETURNING return-code]
+STOP RUN [RETURNING return-code]
+STOP RUN [WITH ERROR]
+@end example
+
+@table @asis
+@item GOBACK
+Keyword returning control to calling program
+
+@item STOP RUN
+Keyword terminating entire program execution
+
+@item RETURNING
+Optional keyword for return code
+
+@item return-code
+Numeric value (typically 0-255) returned to caller or OS
+
+@item WITH ERROR
+Optional specification indicating error status
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple GOBACK}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. SubroutineExample.
+
+PROCEDURE DIVISION.
+    DISPLAY "Subroutine executing".
+    GOBACK.
+@end example
+
+@strong{Example 2: GOBACK with Return Code}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. SubroutineExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  STATUS     PIC 9(1) VALUE 0.
+
+PROCEDURE DIVISION.
+    IF success
+        MOVE 0 TO STATUS
+    ELSE
+        MOVE 1 TO STATUS
+    END-IF.
+    GOBACK RETURNING STATUS.
+@end example
+
+@strong{Example 3: STOP RUN}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. MainProgram.
+
+PROCEDURE DIVISION.
+    DISPLAY "Program complete".
+    STOP RUN.
+@end example
+
+@subsection Edge Cases
+
+@strong{GOBACK Without Caller:}
+If GOBACK is called from main program (not a subroutine), behavior is equivalent to STOP RUN.
+
+@strong{STOP RUN Abruptness:}
+STOP RUN terminates immediately; no cleanup of open files or resources occurs automatically.
+
+@node EXIT Statement
+@section EXIT Statement
+
+The EXIT statement immediately terminates a procedure or loop, transferring control to the next statement after the enclosing block.
+
+@subsection Syntax and Keywords
+
+@example
+EXIT
+EXIT PERFORM
+EXIT PARAGRAPH
+EXIT METHOD
+@end example
+
+@table @asis
+@item EXIT
+Keyword for early termination
+
+@item PERFORM
+Exits enclosing PERFORM loop
+
+@item PARAGRAPH
+Exits current paragraph (not common in modern COBOL)
+
+@item METHOD
+Exits current method (object-oriented COBOL)
+@end table
+
+@subsection Examples
+
+@strong{Example 1: EXIT PERFORM}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. ExitExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  I          PIC 9(2) VALUE 0.
+
+PROCEDURE DIVISION.
+    PERFORM UNTIL I > 10
+        ADD 1 TO I
+        IF I = 5
+            EXIT PERFORM
+        END-IF
+        DISPLAY I
+    END-PERFORM.
+    STOP RUN.
+@end example
+
+Output:
+@example
+1
+2
+3
+4
+@end example
+
+@subsection Edge Cases
+
+@strong{EXIT Without Context:}
+EXIT outside PERFORM or METHOD is an error.
+
+@strong{Nested EXIT:}
+EXIT PERFORM exits only the immediately enclosing PERFORM, not outer loops.
+
+@node GO TO Statement
+@section GO TO Statement
+
+The GO TO statement (GOTO) transfers control unconditionally to a labeled paragraph or section. It should be used sparingly as it can make code flow difficult to follow (considered harmful in most modern programming).
+
+@subsection Syntax and Keywords
+
+@example
+GO TO paragraph-name
+GOTO section-name
+GO TO paragraph-name DEPENDING ON variable
+@end example
+
+@table @asis
+@item GO TO, GOTO
+Keywords for unconditional branch
+
+@item paragraph-name
+Target paragraph to branch to
+
+@item section-name
+Target section to branch to
+
+@item DEPENDING ON
+Conditional GO TO based on variable value
+
+@item variable
+Integer variable determining which paragraph to jump to (first value jumps to first paragraph, etc.)
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple GO TO}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. GotoExample1.
+
+PROCEDURE DIVISION.
+    GO TO SKIP-SECTION.
+    DISPLAY "This is skipped".
+SKIP-SECTION.
+    DISPLAY "Jumped here".
+    STOP RUN.
+@end example
+
+Output:
+@example
+Jumped here
+@end example
+
+@subsection Edge Cases
+
+@strong{Unstructured Jumps:}
+GO TO can create tangled code flow and infinite loops. Avoid using; use IF/PERFORM/EVALUATE instead.
+
+@strong{DEPENDING ON:}
+GO TO DEPENDING ON is similar to C switch statement with fall-through. Index exceeding paragraph count may cause error.
+
+@node SET Statement
+@section SET Statement
+
+The SET statement assigns values to variables, particularly useful for setting flags, boolean values, or copy register data. It is the primary method for assigning boolean TRUE/FALSE values.
+
+@subsection Syntax and Keywords
+
+@example
+SET variable TO value
+SET variable1 variable2 TO value
+SET variable TO TRUE | FALSE
+SET index-variable TO 1 | 2 | 3
+@end example
+
+@table @asis
+@item SET
+Keyword for variable assignment (especially boolean/index values)
+
+@item variable, variable1, variable2
+Target variables (can be multiple to same value)
+
+@item TO
+Keyword separating variable from value
+
+@item value
+Value to assign (numeric, TRUE/FALSE, or variable)
+
+@item TRUE, FALSE
+Boolean literal keywords
+@end table
+
+@subsection Examples
+
+@strong{Example 1: SET Boolean Flag}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. SetExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  FLAG       PIC 9(1) VALUE 0.
+
+PROCEDURE DIVISION.
+    SET FLAG TO TRUE.
+    IF FLAG = TRUE
+        DISPLAY "Flag is set"
+    END-IF.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Flag is set
+@end example
+
+@strong{Example 2: SET Multiple Variables}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. SetExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  A          PIC 9(2) VALUE 0.
+01  B          PIC 9(2) VALUE 0.
+01  C          PIC 9(2) VALUE 0.
+
+PROCEDURE DIVISION.
+    SET A B C TO 10.
+    DISPLAY "A=" A ", B=" B ", C=" C.
+    STOP RUN.
+@end example
+
+Output:
+@example
+A=10, B=10, C=10
+@end example
+
+@subsection Edge Cases
+
+@strong{Boolean Interpretation:}
+SET FLAG TO TRUE sets FLAG to 1; FALSE sets to 0. Any non-zero value is logically TRUE; 0 is FALSE.
+
+@node INSPECT Statement
+@section INSPECT Statement
+
+The INSPECT statement analyzes and modifies strings by counting occurrences of characters or replacing characters. It provides string scanning and replacement without full string reconstruction.
+
+@subsection Syntax and Keywords
+
+@example
+INSPECT string TALLYING counter FOR ALL character
+INSPECT string TALLYING counter FOR LEADING character
+INSPECT string REPLACING ALL char1 BY char2
+INSPECT string REPLACING LEADING char1 BY char2
+INSPECT string REPLACING FIRST char1 BY char2
+@end example
+
+@table @asis
+@item INSPECT
+Keyword for string analysis
+
+@item string
+Source string to inspect
+
+@item TALLYING
+Keyword indicating counting operation
+
+@item counter
+Numeric variable to receive count
+
+@item FOR
+Keyword preceding search specifier
+
+@item ALL, LEADING, TRAILING, FIRST
+Scope of inspection: ALL matches all occurrences, LEADING matches from start, TRAILING matches from end, FIRST matches only first occurrence
+
+@item character, char1, char2
+Characters to match and (optionally) replace
+
+@item REPLACING
+Keyword indicating replacement operation
+
+@item BY
+Keyword preceding replacement character
+@end table
+
+@subsection Examples
+
+@strong{Example 1: TALLYING ALL Occurrences}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. InspectExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  TEXT       PIC X(30) VALUE "HELLO WORLD HELLO AGAIN".
+01  COUNT      PIC 9(2) VALUE 0.
+
+PROCEDURE DIVISION.
+    INSPECT TEXT TALLYING COUNT FOR ALL "L".
+    DISPLAY "Count of L: " COUNT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Count of L: 3
+@end example
+
+@strong{Example 2: REPLACING ALL Occurrences}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. InspectExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  TEXT       PIC X(30) VALUE "CAT DOG CAT BIRD".
+
+PROCEDURE DIVISION.
+    INSPECT TEXT REPLACING ALL "CAT" BY "PET".
+    DISPLAY TEXT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+PET DOG PET BIRD         
+@end example
+
+@strong{Example 3: TALLYING LEADING Spaces}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. InspectExample3.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  TEXT       PIC X(20) VALUE "    HELLO".
+01  COUNT      PIC 9(2) VALUE 0.
+
+PROCEDURE DIVISION.
+    INSPECT TEXT TALLYING COUNT FOR LEADING SPACE.
+    DISPLAY "Leading spaces: " COUNT.
+    STOP RUN.
+@end example
+
+Output:
+@example
+Leading spaces: 4
+@end example
+
+@subsection Edge Cases
+
+@strong{Character Not Found:}
+If character doesn't exist, count remains 0 or no replacement occurs.
+
+@strong{Overlapping Matches:}
+INSPECT treats matches as non-overlapping. For example, tallying "AA" in "AAA" counts as 1 (not 2).
+
+@strong{Single Character Limitation:}
+Traditional INSPECT works with single characters; substring matching may not be supported in Eightbol.
+
+@node LOG-FAULT Statement
+@section LOG-FAULT Statement
+
+The LOG-FAULT statement writes diagnostic fault information to the system log or debug output. It is used for run-time error reporting and diagnostics.
+
+@subsection Syntax and Keywords
+
+@example
+LOG-FAULT "fault message" [WITH variable1 variable2 ...]
+LOG-FAULT code severity message-string
+@end example
+
+@table @asis
+@item LOG-FAULT
+Keyword for logging fault/error information
+
+@item fault message
+String literal describing the fault
+
+@item WITH
+Optional keyword for additional context variables
+
+@item variable1, variable2
+Variables to include in fault log for debugging
+
+@item code
+Numeric fault code
+
+@item severity
+Severity level (INFORMATIONAL, WARNING, ERROR, FATAL, etc.)
+
+@item message-string
+Descriptive fault message
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple Fault Log}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. LogFaultExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  VALUE      PIC 9(2) VALUE 150.
+
+PROCEDURE DIVISION.
+    IF VALUE > 100
+        LOG-FAULT "Value exceeds threshold"
+    END-IF.
+    STOP RUN.
+@end example
+
+@strong{Example 2: Fault with Context}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. LogFaultExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  DIVISOR    PIC 9(2) VALUE 0.
+01  DIVIDEND   PIC 9(3) VALUE 100.
+
+PROCEDURE DIVISION.
+    IF DIVISOR = 0
+        LOG-FAULT "Division by zero" WITH DIVIDEND DIVISOR
+    END-IF.
+    STOP RUN.
+@end example
+
+@subsection Edge Cases
+
+@strong{Log Destination:}
+LOG-FAULT output may go to STDERR, system log, or debug console depending on Eightbol environment.
+
+@strong{Performance Impact:}
+Excessive LOG-FAULT calls may slow program execution; use judiciously in loops.
+
+@node DEBUG-BREAK Statement
+@section DEBUG-BREAK Statement
+
+The DEBUG-BREAK statement triggers a debugger breakpoint or halts execution for debugging purposes. It is useful during development for inspecting program state.
+
+@subsection Syntax and Keywords
+
+@example
+DEBUG-BREAK
+DEBUG-BREAK "breakpoint label"
+DEBUG-BREAK WITH variable1 variable2
+@end example
+
+@table @asis
+@item DEBUG-BREAK
+Keyword triggering a breakpoint
+
+@item breakpoint label
+Optional string label for the breakpoint
+
+@item WITH
+Optional keyword for context variables
+@end table
+
+@subsection Examples
+
+@strong{Example 1: Simple Breakpoint}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DebugExample1.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  VALUE      PIC 9(3) VALUE 50.
+
+PROCEDURE DIVISION.
+    DEBUG-BREAK.
+    DISPLAY "After breakpoint".
+    STOP RUN.
+@end example
+
+@strong{Example 2: Conditional Breakpoint}
+@example
+IDENTIFICATION DIVISION.
+PROGRAM-ID. DebugExample2.
+
+DATA DIVISION.
+WORKING-STORAGE SECTION.
+01  I          PIC 9(2) VALUE 0.
+
+PROCEDURE DIVISION.
+    PERFORM 10 TIMES
+        ADD 1 TO I
+        IF I = 5
+            DEBUG-BREAK "Middle of loop"
+        END-IF
+    END-PERFORM.
+    STOP RUN.
+@end example
+
+@subsection Edge Cases
+
+@strong{No Debugger Attached:}
+If no debugger is attached, DEBUG-BREAK may be a no-op or cause program halt with error.
+
+@strong{Production Builds:}
+DEBUG-BREAK statements should be removed or disabled in production code.
+
+@c End of COBOL Statements Comprehensive Reference
