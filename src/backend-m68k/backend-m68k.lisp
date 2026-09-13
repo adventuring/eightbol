@@ -474,7 +474,7 @@
 
 (defun compile-m68k-condition (condition branch-label)
   (cond
-    ((and (listp condition) (member (first condition) '(= equal < less > greater) :test #'eq))
+    ((and (listp condition) (member (first condition) '(= equal < less > greater :≠ :≤ :≥) :test #'eq))
      (let* ((lhs (second condition)) (rhs (third condition)) (op (first condition))
             (suffix (m68k-size-suffix (max (or (operand-width lhs) 1)
                                            (or (operand-width rhs) 1)))))
@@ -485,7 +485,10 @@
        (ecase op
          ((= equal) (format *output-stream* "~&~10tbne     ~a" branch-label))
          ((< less)  (format *output-stream* "~&~10tbge     ~a" branch-label))
-         ((> greater) (format *output-stream* "~&~10tble     ~a" branch-label)))))
+         ((> greater) (format *output-stream* "~&~10tble     ~a" branch-label))
+         ((:≠)      (format *output-stream* "~&~10tbeq     ~a" branch-label))
+         ((:≤)      (format *output-stream* "~&~10tbgt     ~a" branch-label))
+         ((:≥)      (format *output-stream* "~&~10tblt     ~a" branch-label)))))
     ((and (listp condition) (eq (first condition) :is-zero))
      (let ((ex (second condition))
            (suffix (m68k-size-suffix (operand-width ex))))
