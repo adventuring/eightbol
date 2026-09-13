@@ -87,14 +87,14 @@
      (format *output-stream*  "~&~8tLDAA    #~d" (constant-value expression)))
     ((stringp expression)
      (format *output-stream*  "~&~8tLDAA    ~a" (bare-data-assembly-symbol expression *class-id*)))
-((and (listp expression) (eq (first expression) :of))
+    ((and (listp expression) (eq (first expression) :of))
       (let ((slot (second expression)) (obj (third expression)))
         (if (member obj '(:self "Self" self) :test #'equal)
             (progn
               (format *output-stream*  "~&~8tLDX     Self")
               (format *output-stream*  "~&~8tLDAA    ~a,X" (slot-symbol slot *class-id*)))
             (format *output-stream*  "~&~8t; Unsupported OF target ~s for m6800 load" obj)))
-       ((and (listp expression) (eq (first expression) :on))
+    ((and (listp expression) (eq (first expression) :on))
         (let ((slot (second expression)) (obj (third expression)))
           (if (member obj '(:self "Self" self) :test #'equal)
               (progn
