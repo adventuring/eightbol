@@ -6,6 +6,7 @@
 (in-package :eightbol)
 
 (defvar *output-stream* nil)
+(defvar *m6800-break-label* nil)
 
 (defun m6800-symbol (name)
   "Convert EIGHTBOL identifier to m6800 assembly symbol (PascalCase)."
@@ -88,12 +89,12 @@
     ((stringp expression)
      (format *output-stream*  "~&~8tLDAA    ~a" (bare-data-assembly-symbol expression *class-id*)))
     ((and (listp expression) (eq (first expression) :of))
-      (let ((slot (second expression)) (obj (third expression)))
-        (if (member obj '(:self "Self" self) :test #'equal)
-            (progn
-              (format *output-stream*  "~&~8tLDX     Self")
-              (format *output-stream*  "~&~8tLDAA    ~a,X" (slot-symbol slot *class-id*)))
-            (format *output-stream*  "~&~8t; Unsupported OF target ~s for m6800 load" obj)))
+     (let ((slot (second expression)) (obj (third expression)))
+       (if (member obj '(:self "Self" self) :test #'equal)
+           (progn
+             (format *output-stream*  "~&~8tLDX     Self")
+             (format *output-stream*  "~&~8tLDAA    ~a,X" (slot-symbol slot *class-id*)))
+           (format *output-stream*  "~&~8t; Unsupported OF target ~s for m6800 load" obj))))
     ((and (listp expression) (eq (first expression) :on))
      (let ((slot (second expression)) (obj (third expression)))
        (if (member obj '(:self "Self" self) :test #'equal)
@@ -103,7 +104,7 @@
            (format *output-stream*  "~&~8t; Unsupported ON target ~s for m6800 load" obj))))
     (t
      (format *output-stream*  "~&~8t; Unsupported load ~s for m6800" expression)
-     (format *output-stream*  "~&~8tLDAA    #0")))))
+     (format *output-stream*  "~&~8tLDAA    #0"))))
 
 (defun compile-m6800-store-a (destination)
   (cond
