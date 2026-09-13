@@ -176,6 +176,8 @@
      (format *output-stream* "  (literal \"~a\")~%" expression))
     ((and (listp expression) (eq (first expression) :of))
      (format *output-stream* "  (load-slot ~a)~%" (second expression)))
+     ((and (listp expression) (eq (first expression) :on))
+      (format *output-stream* "  (load-field ~a)~%" (second expression)))
     (t
      (format *output-stream* "  (literal 0)~%"))))
 
@@ -198,6 +200,23 @@
     ((and (listp condition) (eq (first condition) :is-not-zero))
      (compile-zork-load (second condition))
      (format *output-stream* "  (branch<>~a)~%" false-label))
+    ((and (listp condition) (member (first condition) '(< less > greater) :test #'eq))
+     (let ((lhs (second condition)) (rhs (third condition)) (op (first condition)))
+       (compile-zork-load lhs)
+       (compile-zork-load rhs)
+       (format *output-stream* "  (subtract)~%")
+       (ecase op
+         ((< less) (format *output-stream* "  (branch>=~a)~%" false-label))
+         ((> greater) (format *output-stream* "  (branch<=~a)~%" false-label)))))
+    ((and (listp condition) (member (first condition) '(:≠ :≤ :≥) :test #'eq))
+     (let ((lhs (second condition)) (rhs (third condition)) (op (first condition)))
+       (compile-zork-load lhs)
+       (compile-zork-load rhs)
+       (format *output-stream* "  (subtract)~%")
+       (ecase op
+         ((:≠) (format *output-stream* "  (branch<>~a)~%" false-label))
+         ((:≤) (format *output-stream* "  (branch>~a)~%" false-label))
+         ((:≥) (format *output-stream* "  (branch<~a)~%" false-label)))))
     (t
      (format *output-stream* "; Unsupported condition ~s for Zork" condition)
      (format *output-stream* "  (branch ~a)~%" false-label))))
