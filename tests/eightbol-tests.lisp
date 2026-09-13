@@ -576,12 +576,12 @@ statements, not the method wrapper boilerplate."
       (is (= 1 (eightbol::operand-width "Not-A-Ref"))))))
 
 (test backend/expression-operand-width-maxes-add-expr-leaves
-  "expression-operand-width returns max leaf width for :add-expr (MOVE/COMPUTE width)."
+  "expression-operand-width returns max leaf width for :+expr (MOVE/COMPUTE width)."
   (let ((pic (make-hash-table :test 'equalp)))
     (setf (gethash "A" pic) 1)
     (setf (gethash "B" pic) 2)
     (is (= 2 (eightbol::expression-operand-width
-               (list :add-expr "A" "B") pic)))
+               (list :+expr "A" "B") pic)))
     (is (= 1 (eightbol::expression-operand-width "A" pic)))))
 
 (test backend/pic-nybble-semantics-pic-9-vs-99
@@ -930,7 +930,7 @@ AST is a :method plist (not full :program)."
     (setf (gethash "HP" pic-width) 2)
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "M"
-                  :statements ((:add :from "Hurt-H-P" :to (:of "HP" :self))))
+                  :statements ((:+ :from "Hurt-H-P" :to (:of "HP" :self))))
                 "Character" :6502
                 :slot-table slots :pic-width-table pic-width)))
       (is (search "HurtHP" asm) "global from should use bare HurtHP label")
@@ -957,7 +957,7 @@ AST is a :method plist (not full :program)."
     (setf (gethash "A" picw) 3 (gethash "B" picw) 3 (gethash "C" picw) 6)
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "M"
-                  :statements ((:add :from (:of "A" :self)
+                  :statements ((:+ :from (:of "A" :self)
                                      :to (:of "B" :self)
                                      :giving (:of "C" :self))))
                 "PicScale" :6502
@@ -976,7 +976,7 @@ AST is a :method plist (not full :program)."
     (setf (gethash "HP" pic-width) 2)
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "M"
-                  :statements ((:subtract :from "Hurt-H-P" :from-target (:of "HP" :self))))
+                  :statements ((:- :from "Hurt-H-P" :from-target (:of "HP" :self))))
                 "Character" :6502
                 :slot-table slots :pic-width-table pic-width)))
       (is (search "iny" asm) "advance Y to high byte after low sta")
@@ -1011,7 +1011,7 @@ AST is a :method plist (not full :program)."
   (signals eightbol::backend-error
     (compile-method-ast-with-tables
      '(:method :method-id "M"
-       :statements ((:add :from "Hurt-H-P")))
+       :statements ((:+ :from "Hurt-H-P")))
      "Character" :6502)))
 
 (test backend-6502/emit-6502-value-nil-signals-backend-error
@@ -1069,25 +1069,25 @@ AST is a :method plist (not full :program)."
 ;;;; Unsupported statements — compile-time error
 
 (test parser/divide-parses
-  "DIVIDE … INTO … parses to :divide (power-of-two divisor enforced at codegen)."
+  "DIVIDE … INTO … parses to :÷ (power-of-two divisor enforced at codegen)."
   (let* ((ast (eightbol::parse-eightbol-string
                 (minimal-class-with-stmt "DIVIDE 2 INTO HP.")))
          (think (find "Think" (eightbol::ast-methods ast)
                       :key #'eightbol::ast-method-name :test #'string=))
          (stmts (eightbol::ast-method-statements think))
-         (div (find :divide stmts :key #'first)))
+         (div (find :÷ stmts :key #'first)))
     (is (not (null div)))
     (is (eql 2 (getf (rest div) :divisor)))
     (is (string= "HP" (getf (rest div) :into)))))
 
 (test parser/multiply-parses
-  "MULTIPLY … BY … parses to :multiply (power-of-two multiplier enforced at codegen)."
+  "MULTIPLY … BY … parses to :× (power-of-two multiplier enforced at codegen)."
   (let* ((ast (eightbol::parse-eightbol-string
                 (minimal-class-with-stmt "MULTIPLY 2 BY HP.")))
          (think (find "Think" (eightbol::ast-methods ast)
                       :key #'eightbol::ast-method-name :test #'string=))
          (stmts (eightbol::ast-method-statements think))
-         (mul (find :multiply stmts :key #'first)))
+         (mul (find :× stmts :key #'first)))
     (is (not (null mul)))
     (is (eql 2 (getf (rest mul) :multiplier)))
     (is (string= "HP" (getf (rest mul) :by)))))
@@ -1248,7 +1248,7 @@ AST is a :method plist (not full :program)."
          (think (find "Think" (eightbol::ast-methods ast)
                      :key #'eightbol::ast-method-name :test #'string=))
          (stmts (eightbol::ast-method-statements think))
-         (sub (find :subtract stmts :key #'first)))
+         (sub (find :- stmts :key #'first)))
     (is (not (null sub)))
     (is (eql 1 (getf (rest sub) :from)))
     (is (string= "HP" (getf (rest sub) :from-target)))))
@@ -1501,20 +1501,20 @@ AST is a :method plist (not full :program)."
     (is (string= "HP" (getf (rest move) :to)))))
 
 (test ast/add-structure
-  "ADD x TO y produces (:add :from expr :to identifier)."
+  "ADD x TO y produces (:+ :from expr :to identifier)."
   (let* ((ast (eightbol::parse-eightbol-string
                (minimal-class-with-stmt "ADD 1 TO HP.")))
          (stmts (eightbol::ast-method-statements
                  (find "Think" (eightbol::ast-methods ast)
                        :key #'eightbol::ast-method-name :test #'string=)))
-         (add (find :add stmts :key #'first)))
+         (add (find :+ stmts :key #'first)))
     (is (not (null add)))
     (is (eql 1 (getf (rest add) :from)))
     (is (string= "HP" (getf (rest add) :to)))
     (is (null (getf (rest add) :giving)))))
 
 (test ast/add-giving-structure
-  "ADD x TO y GIVING z produces (:add :from :to :giving)."
+  "ADD x TO y GIVING z produces (:+ :from :to :giving)."
   (let* ((src "000010 IDENTIFICATION DIVISION.
 000020 CLASS-ID. Character.
 000030 ENVIRONMENT DIVISION.
@@ -1537,20 +1537,20 @@ AST is a :method plist (not full :program)."
          (stmts (eightbol::ast-method-statements
                  (find "Test" (eightbol::ast-methods ast)
                        :key #'eightbol::ast-method-name :test #'string=)))
-         (add (find :add stmts :key #'first)))
+         (add (find :+ stmts :key #'first)))
     (is (not (null add)))
     (is (eql 1 (getf (rest add) :from)))
     (is (string= "A" (getf (rest add) :to)))
     (is (string= "C" (getf (rest add) :giving)))))
 
 (test ast/subtract-structure
-  "SUBTRACT x FROM y produces (:subtract :from expr :from-target identifier)."
+  "SUBTRACT x FROM y produces (:- :from expr :from-target identifier)."
   (let* ((ast (eightbol::parse-eightbol-string
                (minimal-class-with-stmt "SUBTRACT 1 FROM HP.")))
          (stmts (eightbol::ast-method-statements
                  (find "Think" (eightbol::ast-methods ast)
                        :key #'eightbol::ast-method-name :test #'string=)))
-         (sub (find :subtract stmts :key #'first)))
+         (sub (find :- stmts :key #'first)))
     (is (not (null sub)))
     (is (eql 1 (getf (rest sub) :from)))
     (is (string= "HP" (getf (rest sub) :from-target)))
@@ -3176,7 +3176,7 @@ AST is a :method plist (not full :program)."
     (setf (gethash "Frames-Per-Second" pic) 1)
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "Moved"
-                  :statements ((:add :from "Frames-Per-Second"
+                  :statements ((:+ :from "Frames-Per-Second"
                                :to (:of "Course-Last-Frame" :self))))
                 "MummyCourse" :6502
                 :slot-table slots :pic-width-table pic)))
@@ -3209,7 +3209,7 @@ AST is a :method plist (not full :program)."
   "ADD 1 TO variable emits inc, not adc."
   (let ((asm (asm-from-ast
               '(:method :method-id "Inc"
-                        :statements ((:add :from 1 :to "Counter"))))))
+                        :statements ((:+ :from 1 :to "Counter"))))))
     (is (search "inc TestClassCounter" asm))
     (is (not (search "adc" asm)))))
 
@@ -3217,7 +3217,7 @@ AST is a :method plist (not full :program)."
   "ADD 1 TO x GIVING y does NOT use inc (result goes to a different variable)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Inc"
-                        :statements ((:add :from 1 :to "Counter" :giving "Result"))))))
+                        :statements ((:+ :from 1 :to "Counter" :giving "Result"))))))
     ;; should still use adc, not inc
     (is (search "adc" asm))
     (is (not (search "inc TestClassCounter" asm)))))
@@ -3226,7 +3226,7 @@ AST is a :method plist (not full :program)."
   "SUBTRACT 1 FROM variable emits dec, not sbc."
   (let ((asm (asm-from-ast
               '(:method :method-id "Dec"
-                        :statements ((:subtract :from 1 :from-target "Counter"))))))
+                        :statements ((:- :from 1 :from-target "Counter"))))))
     (is (search "dec TestClassCounter" asm))
     (is (not (search "sbc" asm)))))
 
@@ -3234,7 +3234,7 @@ AST is a :method plist (not full :program)."
   "ADD 2 TO variable does NOT use inc — falls back to lda/clc/adc/sta."
   (let ((asm (asm-from-ast
               '(:method :method-id "Add2"
-                        :statements ((:add :from 2 :to "Counter"))))))
+                        :statements ((:+ :from 2 :to "Counter"))))))
     (is (search "adc" asm))
     (is (not (search "inc TestClassCounter" asm)))))
 
@@ -3244,7 +3244,7 @@ AST is a :method plist (not full :program)."
   "ADD x TO y GIVING z emits lda/adc/sta sequence for byte operands."
   (let ((asm (asm-from-ast
               '(:method :method-id "Add"
-                        :statements ((:add :from "ByteA" :to "ByteB" :giving "ByteC"))))))
+                        :statements ((:+ :from "ByteA" :to "ByteB" :giving "ByteC"))))))
     (is (search "TestClassByteA" asm))
     (is (search "adc" asm))
     (is (search "sta (Self), y" asm))
@@ -3254,7 +3254,7 @@ AST is a :method plist (not full :program)."
   "SUBTRACT x FROM y GIVING z emits lda/sec/sbc/sta sequence."
   (let ((asm (asm-from-ast
               '(:method :method-id "Sub"
-                        :statements ((:subtract :from "ByteB" :from-target "ByteA" :giving "ByteC"))))))
+                        :statements ((:- :from "ByteB" :from-target "ByteA" :giving "ByteC"))))))
     (is (search "TestClassByteA" asm))
     (is (search "sbc" asm))
     (is (search "sta (Self), y" asm))
@@ -3267,7 +3267,7 @@ AST is a :method plist (not full :program)."
     (setf (gethash "WordB" pw) 2)
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "W"
-                  :statements ((:add :from "WordA" :to "WordB")))
+                  :statements ((:+ :from "WordA" :to "WordB")))
                 "Character" :6502
                 :pic-width-table pw)))
       (is (search "clc" asm))
@@ -3282,7 +3282,7 @@ AST is a :method plist (not full :program)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Shift"
                         :statements ((:compute :target "X"
-                                               :expression (:shift-left "Y" 3)))))))
+                                               :expression (:ash "Y" 3)))))))
     (is (= 3 (let ((count 0) (pos 0))
                (loop while (setf pos (search "asl a" asm :start2 pos))
                      do (incf count) (incf pos))
@@ -3293,7 +3293,7 @@ AST is a :method plist (not full :program)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Shift"
                         :statements ((:compute :target "X"
-                                               :expression (:shift-right "Y" 2)))))))
+                                               :expression (:ash "Y" 2)))))))
     (is (= 2 (let ((count 0) (pos 0))
                (loop while (setf pos (search "lsr a" asm :start2 pos))
                      do (incf count) (incf pos))
@@ -3306,7 +3306,7 @@ AST is a :method plist (not full :program)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Mask"
                         :statements ((:compute :target "X"
-                                               :expression (:bit-and "Y" 128)))))))
+                                               :expression (:∧ "Y" 128)))))))
     (is (or (search "and #$80" asm)
             (search "and #128" asm)))
     (is (search "TestClassX" asm))))
@@ -3316,7 +3316,7 @@ AST is a :method plist (not full :program)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Flag"
                         :statements ((:compute :target "X"
-                                               :expression (:bit-or "Y" "Z-Flag")))))))
+                                               :expression (:∨ "Y" "Z-Flag")))))))
     (is (search "ora (Self), y" asm))))
 
 (test backend-6502/bit-xor-emits-eor
@@ -3324,7 +3324,7 @@ AST is a :method plist (not full :program)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Flip"
                         :statements ((:compute :target "X"
-                                               :expression (:bit-xor "Y" 255)))))))
+                                               :expression (:⊻ "Y" 255)))))))
     (is (search "#$ff" (string-downcase asm)))))
 
 (test backend-6502/bit-not-emits-eor-ff
@@ -3332,7 +3332,7 @@ AST is a :method plist (not full :program)."
   (let ((asm (asm-from-ast
               '(:method :method-id "Inv"
                         :statements ((:compute :target "X"
-                                               :expression (:bit-not "Y")))))))
+                                               :expression (:¬ "Y")))))))
     (is (search "eor #$ff" asm))))
 
 ;;; --- Subscript (indexed array access) ---
@@ -3607,58 +3607,58 @@ AST is a :method plist (not full :program)."
     (is (eq t (getf (rest call) :library)))))
 
 (test parser/shift-left-expression-in-compute
-  "COMPUTE X = Y SHIFT-LEFT 2 produces :shift-left AST node."
+  "COMPUTE X = Y SHIFT-LEFT 2 produces :ash AST node."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = Y SHIFT-LEFT 2."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :shift-left (first expr)))))))
+      (is (and (listp expr) (eq :ash (first expr)))))))
 
 (test parser/shift-right-expression-in-compute
-  "COMPUTE X = Y SHIFT-RIGHT 1 produces :shift-right AST node."
+  "COMPUTE X = Y SHIFT-RIGHT 1 produces :ash AST node."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = Y SHIFT-RIGHT 1."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :shift-right (first expr)))))))
+      (is (and (listp expr) (eq :ash (first expr)))))))
 
 (test parser/bit-and-expression-in-compute
-  "COMPUTE X = Y BIT-AND Z produces :bit-and AST node."
+  "COMPUTE X = Y BIT-AND Z produces :∧ AST node."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = Y BIT-AND Z."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :bit-and (first expr)))))))
+      (is (and (listp expr) (eq :∧ (first expr)))))))
 
 (test parser/bit-or-expression-in-compute
-  "COMPUTE X = Y BIT-OR Z produces :bit-or AST node."
+  "COMPUTE X = Y BIT-OR Z produces :∨ AST node."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = Y BIT-OR Z."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :bit-or (first expr)))))))
+      (is (and (listp expr) (eq :∨ (first expr)))))))
 
 (test parser/bit-xor-expression-in-compute
-  "COMPUTE X = Y BIT-XOR Z produces :bit-xor AST node."
+  "COMPUTE X = Y BIT-XOR Z produces :⊻ AST node."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = Y BIT-XOR Z."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :bit-xor (first expr)))))))
+      (is (and (listp expr) (eq :⊻ (first expr)))))))
 
 (test parser/bit-not-expression-in-compute
-  "COMPUTE X = BIT-NOT Y produces :bit-not AST node."
+  "COMPUTE X = BIT-NOT Y produces :¬ AST node."
   (let* ((stmts (parse-procedure-stmts
                  "000200             COMPUTE X = BIT-NOT Y."))
          (compute (find :compute stmts :key #'first)))
     (is (not (null compute)))
     (let ((expr (getf (rest compute) :expression)))
-      (is (and (listp expr) (eq :bit-not (first expr)))))))
+      (is (and (listp expr) (eq :¬ (first expr)))))))
 
 ;;;; Argument parsing tests
 
@@ -3874,16 +3874,16 @@ AST is a :method plist (not full :program)."
 ;;;; ARITHMETIC STATEMENTS (3 forms)
 
 (test basic/add-statement
-  "ADD value TO var emits :add node."
+  "ADD value TO var emits :+ node."
   (let ((ast (eightbol::basic-ast-from-source "10 ADD 5 TO HP")))
     (let ((stmts (eightbol::ast-method-statements (first (eightbol::ast-methods ast)))))
-      (is (some (lambda (s) (eq :add (eightbol::ast-node-type s))) stmts)))))
+      (is (some (lambda (s) (eq :+ (eightbol::ast-node-type s))) stmts)))))
 
 (test basic/subtract-statement
-  "SUBTRACT value FROM var emits :subtract node."
+  "SUBTRACT value FROM var emits :- node."
   (let ((ast (eightbol::basic-ast-from-source "10 SUBTRACT 3 FROM MP")))
     (let ((stmts (eightbol::ast-method-statements (first (eightbol::ast-methods ast)))))
-      (is (some (lambda (s) (eq :subtract (eightbol::ast-node-type s))) stmts)))))
+      (is (some (lambda (s) (eq :- (eightbol::ast-node-type s))) stmts)))))
 
 (test basic/compute-statement
   "COMPUTE var = expr emits :compute node."

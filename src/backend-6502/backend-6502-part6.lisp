@@ -205,16 +205,16 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
     (cond
       (up-by
        ;; SET id UP BY expression => ADD expression TO id
-       (compile-6502-add out (list :add :from by-expression :to up-by :giving nil) class-id))
+       (compile-6502-add out (list :+ :from by-expression :to up-by :giving nil) class-id))
       (down-by
        ;; SET id DOWN BY expression => SUBTRACT expression FROM id
-       (compile-6502-subtract out (list :subtract :from by-expression :from-target down-by :giving nil) class-id))
+       (compile-6502-subtract out (list :- :from by-expression :from-target down-by :giving nil) class-id))
       ((and address-of target)
        ;; SET target TO ADDRESS OF source: store address of source into target (2-byte pointer).
        (let ((source-id address-of))
          (format out "~%~10Tlda #<~a" (emit-6502-value source-id))
          (emit-6502-store-byte-n out target class-id 0 2)
-         (with-accumulator-value ((list :bit-and #xff source-id))
+         (with-accumulator-value ((list :∧ #xff source-id))
            (format out "~%~10Tlda #>~a" (emit-6502-value source-id)))
          (emit-6502-store-byte-n out target class-id 1 2)))
        ((and (consp target) (eq (first target) :deref))
@@ -504,11 +504,11 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
 (define-6502-statement :if (ast-node-data)
   (compile-6502-if *standard-output* (statement :if ast-node-data) cpu))
 
-(define-6502-statement :add (ast-node-data)
-  (compile-6502-add *standard-output* (statement :add ast-node-data) *class-id*))
+(define-6502-statement :+ (ast-node-data)
+  (compile-6502-add *standard-output* (statement :+ ast-node-data) *class-id*))
 
-(define-6502-statement :subtract (ast-node-data)
-  (compile-6502-subtract *standard-output* (statement :subtract ast-node-data) *class-id*))
+(define-6502-statement :- (ast-node-data)
+  (compile-6502-subtract *standard-output* (statement :- ast-node-data) *class-id*))
 
 (define-6502-statement :compute (ast-node-data)
   (compile-6502-compute *standard-output* (statement :compute ast-node-data) *class-id*))

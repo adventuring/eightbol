@@ -134,8 +134,8 @@
   (list :input :variables (list var)))
 
 (defun make-get-node (obj prop)
-  "Create a GET (property access) AST node. Converts to :compute expression."
-  (list :compute :target prop :expression (list :of prop obj)))
+  "Create a GET (property access) AST node. Converts to :move."
+  (list :move :from (list :of prop obj) :to prop))
 
 (defun make-put-node (obj prop val)
   "Create a PUT (property set) AST node. Converts to :move."
@@ -150,18 +150,16 @@
   (list :assembly-entry :label name))
 
 (defun make-exit-node (code)
-  "Create an EXIT AST node. Converts to :exit-program or :exit."
-  (if (zerop code)
-      (list :exit-program)
-      (list :exit)))
+  "Create an EXIT AST node. Converts to :goback."
+  (list :goback))
 
 (defun make-wait-node (time)
   "Create a WAIT/DELAY AST node. Converts to :perform with body."
   (list :perform :name "WAIT" :body (list (list :call :target 'delay :bank nil))))
 
 (defun make-assert-node (cond msg)
-  "Create an ASSERT AST node. Converts to :compute with debug-break."
-  (list :compute :target 'assert-result :expression (list :assert cond msg)))
+  "Create an ASSERT AST node. Converts to :move with debug-break."
+  (list :move :from (list :assert cond msg) :to 'assert-result))
 
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)

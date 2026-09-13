@@ -23,7 +23,7 @@
 
 (test 65c02_add_8bit
   "ARITHMETIC: 65C02 8-bit ADD produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65c02 :output s))))
     (is (stringp output))
@@ -31,7 +31,7 @@
 
 (test 65c02_add_16bit
   "ARITHMETIC: 65C02 16-bit ADD produces correct opcodes"
-  (let* ((ast '(:add (:const 1000) (:var x)))
+  (let* ((ast '(:+ (:const 1000) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65c02 :output s))))
     (is (stringp output))
@@ -39,7 +39,7 @@
 
 (test 65c02_subtract_8bit
   "ARITHMETIC: 65C02 8-bit SUBTRACT produces correct opcodes"
-  (let* ((ast '(:subtract (:var x) (:const 1)))
+  (let* ((ast '(:- (:var x) (:const 1)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65c02 :output s))))
     (is (stringp output))
@@ -47,7 +47,7 @@
 
 (test 65c02_multiply
   "ARITHMETIC: 65C02 MULTIPLY produces correct sequence (multiply/divide if available)"
-  (let* ((ast '(:multiply (:var x) (:const 2)))
+  (let* ((ast '(:× (:var x) (:const 2)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65c02 :output s))))
     (is (stringp output))
@@ -55,7 +55,7 @@
 
 (test 65c02_divide
   "ARITHMETIC: 65C02 DIVIDE produces correct sequence"
-  (let* ((ast '(:divide (:var x) (:const 2)))
+  (let* ((ast '(:÷ (:var x) (:const 2)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65c02 :output s))))
     (is (stringp output))
@@ -63,7 +63,7 @@
 
 (test 65c02_fixed_point_arithmetic
   "ARITHMETIC: 65C02 fixed-point arithmetic maintains correct scale"
-  (let* ((ast '(:add (:fixed-point (:var x) 8 8) (:fixed-point (:var y) 8 8)))
+  (let* ((ast '(:+ (:fixed-point (:var x) 8 8) (:fixed-point (:var y) 8 8)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65c02 :output s))))
     (is (stringp output))

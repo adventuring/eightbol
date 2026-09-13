@@ -103,28 +103,28 @@
 (test 65c02/add-literal-to-var
   "ADD literal TO var emits clc and adc."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (65c02-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (65c02-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "clc" asm))
       (is (search "adc" asm)))))
 
 (test 65c02/add-16-bit
   "ADD of 2-byte values emits multibyte add sequence."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (65c02-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (65c02-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "adc" asm))
       (is (search "sta" asm)))))
 
 (test 65c02/subtract
   "SUBTRACT emits sec and sbc."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (65c02-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (65c02-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sec" asm))
       (is (search "sbc" asm)))))
 
 (test 65c02/subtract-16-bit
   "SUBTRACT of 2-byte values emits multibyte subtract sequence."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (65c02-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (65c02-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sbc" asm))
       (is (search "sta" asm)))))
 
@@ -344,9 +344,9 @@
 (test 65c02/divide-signals-error
   "DIVIDE on 65C02 signals backend-error."
   (signals eightbol::backend-error
-    (65c02-asm '(:divide :from "A" :into "B"))))
+    (65c02-asm '(:÷ :from "A" :into "B"))))
 
 (test 65c02/multiply-signals-error
   "MULTIPLY on 65C02 signals backend-error."
   (signals eightbol::backend-error
-    (65c02-asm '(:multiply :by "A" :on "B"))))
+    (65c02-asm '(:× :by "A" :on "B"))))

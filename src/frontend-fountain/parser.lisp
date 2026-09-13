@@ -375,7 +375,7 @@ Returns expression AST node or value."
     (:plus :plus)
     (:minus :minus)
     (:star :times)
-    (:slash :divide)
+    (:slash :÷)
     (:and :and)
     (:or :or)
     (t token-type)))

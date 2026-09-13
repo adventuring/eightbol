@@ -13,21 +13,18 @@
 ;; Statement nodes:
 ;;   (:move       :from expr :to identifier)
 ;;   (:invoke     :object expr :method "Kill" [:returning identifier] [:using expr])
-;;   (:call-acc :target name :bank bank-or-nil)
+;;   (:call       :target name [:bank bank-or-nil] [:library t])
+;;   (:call-acc   :target name [:bank bank-or-nil] [:library t] [:using expr])
 ;;   (:if         :condition cond :then stmts :else stmts)
-;;   (:goto       :target identifier)          ; GOTO/GO TO; GOBACK equivalent
-;;   (:goback)
-;;   (:exit-method)
-;;   (:exit-program)
-;;   (:exit)
-;;   (:stop-run)
-;;   (:add        :from expr :to identifier)
-;;   (:add        :from expr :to expr :giving identifier)
-;;   (:subtract   :minuend expr :subtrahend expr [:giving identifier])
-;;   (:subtract   :minuend expr :subtrahend expr :giving identifier)
-;;   (:compute    :target identifier :expression expr)
+;;   (:goto       :target identifier)          ; GOTO/GO TO
+;;   (:goback)                                 ; only return node (GOBACK, EXIT,
+;;                                             ;  EXIT METHOD, EXIT PROGRAM, STOP RUN)
+;;   (:+        :from expr :to identifier)
+;;   (:+        :from expr :to expr :giving identifier)
+;;   (:-   :minuend expr :subtrahend expr [:giving identifier])
+;;   (:×   :by expr :multiplier expr [:giving identifier])
+;;   (:÷   :numerator expr :denominator expr [:giving identifier])
 ;;   (:perform    :procedure name [:times expr] [:until cond] [:varying ...] [:body stmts])
-;;   (:set        :target identifier :value expr)
 ;;   (:log-fault  :code dword-expr)
 ;;   (:debug-break :code expr)
 ;;   (:copy       :name "CopybookName")   ; residual after failed expansion
@@ -37,17 +34,21 @@
 ;; Expression/operand values:
 ;;   literal number or string
 ;;   symbol (identifier reference)
- ;;   (:of slot obj)       — qualified identifier (slot OF obj)
- ;;   (:address-of id)     — ADDRESS OF id
- ;;   (:refmod :base name :start expr :length expr)  — reference modification name(start:length)
- ;;   (:subscript name index)  — subscripted identifier name(index)
- ;;   :self / :null        — SELF / NULL
+;;   (:on slot obj)       — direct slot access from an absolute-positioned
+;;                          object (slot ON obj); C "." — e.g. lda slot + obj
+;;   (:of slot obj)       — pointer dereference then slot access (slot OF obj);
+;;                          C "->" — e.g. lda (obj), y
+;;   (:address-of id)     — ADDRESS OF id
+;;   (:refmod :base name :start expr :length expr)  — reference modification name(start:length)
+;;   (:subscript name index)  — subscripted identifier name(index)
+;;   :self / :null        — SELF / NULL
 ;;
 ;; OPERATOR CANONICALIZATION (ALL OPERATORS AS KEYWORDS):
 ;;   Inequalities: := :≠ :< :≤ :> :≥
 ;;   Arithmetic:   :+ :- :× :÷
-;;   Bitwise:      :¬ :∧ :∨ :⊻ :⊼ :⊽
-;;   Shift:        :ash (or :asl/:asr for left/right)
+;;   Bitwise:      :¬ :∧ :∨ :⊻
+;;   Shift:        :ash — (list :ash value n) with n >= 0 = left, n < 0 = right.
+;;                  Statement form: (:ash :target t :count n), same convention.
 ;;
 ;; All operators are represented as KEYWORDS (not symbols) in canonical AST.
 ;; Frontends MUST emit keyword operators; backends MUST accept keyword operators.
@@ -198,7 +199,6 @@ Used by termination validation: @code{:assembly-entry} is not executable code."
       (:65c02 . "65c02")
       (:65c816 . "65c816")
       (:cp1610 . "cp1610")
-      (:forth . "Forth")
       (:huc6280 . "HuC6280")
       (:rp2a03 . "RP2A03")
       (:z80 . "Z80")
@@ -207,7 +207,11 @@ Used by termination validation: @code{:assembly-entry} is not executable code."
       (:m68k . "m68k")
       (:i286 . "i286")
       (:arm7 . "ARM7")
-      (:f8 . "F8"))
+      (:f8 . "F8")
+      (:jvm . "JVM")
+      (:stack . "Stack")
+      (:wasm . "WASM")
+      (:zork . "Zork"))
   :test 'equalp
   :documentation
   "Alist of CPU keyword to case-preserving directory / UI label string.")

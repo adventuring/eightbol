@@ -17,7 +17,7 @@
   (let* ((ast '(:program :class-id "Character"
                       :methods ((:method :method-id "Think"
                                   :statements ((:move :from 1 :to "X")
-                                               (:add :from "X" :to "Y")
+                                               (:+ :from "X" :to "Y")
                                                (:if (= "X" 0)
                                                     (:move :from 1 :to "Z")
                                                     (:move :from 2 :to "Z"))
@@ -38,8 +38,8 @@
                                   :statements ((:move :from 255 :to "A")
                                                (:move :from 65535 :to "B")
                                                (:move :from -1 :to "C")
-                                               (:add :from "A" :to "B")
-                                               (:subtract :from "B" :to "C")
+                                               (:+ :from "A" :to "B")
+                                               (:- :from "B" :to "C")
                                                (:goback)))))))
     (let* ((output (with-output-to-string (s)
                      (eightbol:compile-to-assembly ast :wasm s))))

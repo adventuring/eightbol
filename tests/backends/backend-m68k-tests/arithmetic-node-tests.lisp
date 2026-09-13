@@ -23,7 +23,7 @@
 
 (test m68k_add_8bit
   "ARITHMETIC: M68K 8-bit ADD produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
     (is (stringp output))
@@ -31,7 +31,7 @@
 
 (test m68k_add_16bit
   "ARITHMETIC: M68K 16-bit ADD produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
     (is (stringp output))
@@ -39,7 +39,7 @@
 
 (test m68k_subtract_8bit
   "ARITHMETIC: M68K 8-bit SUBTRACT produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
     (is (stringp output))
@@ -47,7 +47,7 @@
 
 (test m68k_multiply
   "ARITHMETIC: M68K MULTIPLY produces correct sequence (multiply/divide if available)"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
     (is (stringp output))
@@ -55,7 +55,7 @@
 
 (test m68k_divide
   "ARITHMETIC: M68K DIVIDE produces correct sequence"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
     (is (stringp output))
@@ -63,7 +63,7 @@
 
 (test m68k_fixed_point_arithmetic
   "ARITHMETIC: M68K fixed-point arithmetic maintains correct scale"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :M68K :output s))))
     (is (stringp output))

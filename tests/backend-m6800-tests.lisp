@@ -91,13 +91,13 @@
 (test m6800/add-literal-to-var
   "ADD literal TO var emits ABA (add accumulator)."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (m6800-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (m6800-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "ABA" asm)))))
 
 (test m6800/subtract
   "SUBTRACT emits CBA or SBA."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (m6800-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (m6800-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (or (search "CBA" asm) (search "SBA" asm))))))
 
 ;;;

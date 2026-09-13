@@ -68,7 +68,7 @@
   '(("+" . :plus)
     ("-" . :minus)
     ("*" . :times)
-    ("/" . :divide)
+    ("/" . :÷)
     ("=" . :equals)
     ("<" . :lt)
     (">" . :gt)
@@ -196,10 +196,10 @@ Keywords are mapped to their symbol forms matching terminal declarations."
              :exit :goback :log :fault :stop :copy :as :returning
              :print :input :read :write :dialogue :case :of :endcase
              :colon :semicolon :comma :lparen :rparen :dot :lbracket :rbracket
-             :plus :minus :times :divide :equals :lt :gt :le :ge :ne))
+             :plus :minus :times :÷ :equals :lt :gt :le :ge :ne))
 
   (:precedence ((:left :plus :minus)
-                (:left :times :divide)
+                (:left :times :÷)
                 (:left :equals :lt :gt :le :ge :ne)
                 (:left :or)
                 (:left :and)
@@ -376,7 +376,7 @@ Keywords are mapped to their symbol forms matching terminal declarations."
    (STOP expression
          (lambda (_ code)
            (declare (ignore _))
-           (list :stop-run :code code))))
+           (list :goback :code code))))
   
     (copy-statement
      (COPY STRING SEMICOLON
@@ -455,7 +455,7 @@ Keywords are mapped to their symbol forms matching terminal declarations."
    (TIMES
     (constantly :times))
    (DIVIDE
-    (constantly :divide))
+    (constantly :÷))
    (EQUALS
     (constantly :equals))
    (LT
@@ -485,7 +485,7 @@ Keywords are mapped to their symbol forms matching terminal declarations."
     (:plus (make-expression-add left right))
     (:minus (make-expression-subtract left right))
     (:times (make-expression-multiply left right))
-    (:divide (make-expression-divide left right))
+    (:÷ (make-expression-divide left right))
     (:equals (make-conditional-eq left right))
     (:ne (make-conditional-ne left right))
     (:lt (make-conditional-lt left right))
@@ -502,8 +502,8 @@ Keywords are mapped to their symbol forms matching terminal declarations."
     (:unary-minus (make-expression-subtract 0 operand))))
 
 (defun make-debug-break-node (code)
-  "Create a :stop-run AST node (canonical)."
-  (list :stop-run :code code))
+  "Create a :goback AST node (canonical)."
+  (list :goback :code code))
 
 (defun pascal-make-print-node (expr)
   "Create a :print AST node for output statements (PRINT or WRITE)."

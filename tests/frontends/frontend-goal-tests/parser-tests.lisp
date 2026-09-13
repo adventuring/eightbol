@@ -26,7 +26,7 @@
 (is t))
 
 (test goal_parser_arithmetic
-  "PARSER: GOAL arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: GOAL arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test goal_parser_conditionals

@@ -96,14 +96,14 @@
 (test 65c816/add-literal-to-var
   "ADD literal TO var emits clc and adc."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (65c816-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (65c816-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "clc" asm))
       (is (search "adc" asm)))))
 
 (test 65c816/subtract
   "SUBTRACT emits sec and sbc."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (65c816-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (65c816-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sec" asm))
       (is (search "sbc" asm)))))
 
@@ -272,9 +272,9 @@
 (test 65c816/divide-signals-error
   "DIVIDE on 65C816 signals backend-error."
   (signals eightbol::backend-error
-    (65c816-asm '(:divide :from "A" :into "B"))))
+    (65c816-asm '(:÷ :from "A" :into "B"))))
 
 (test 65c816/multiply-signals-error
   "MULTIPLY on 65C816 signals backend-error."
   (signals eightbol::backend-error
-    (65c816-asm '(:multiply :by "A" :on "B"))))
+    (65c816-asm '(:× :by "A" :on "B"))))

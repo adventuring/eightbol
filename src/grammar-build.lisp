@@ -226,14 +226,15 @@
   (list :goback))
 
 (defun make-exit-method-node ()
-  "Build an :exit-method AST node."
-  (list :exit-method))
+  "Build a return node. :exit-method is desugared to the canonical :goback."
+  (list :goback))
 
 (defun make-stop-run-node (&optional code)
-  "Build a :stop-run AST node. CODE is a string literal per BASIC STOP \"CODE\"."
+  "Build a return node. :stop-run is desugared to canonical :goback;
+CODE is a string literal per BASIC STOP \"CODE\"."
   (if code
-      (list :stop-run :code code)
-      (list :stop-run)))
+      (list :goback :code code)
+      (list :goback)))
 
 (defun make-log-fault-node (code)
   "Build a :log-fault AST node. CODE is a string literal per BASIC LOG FAULT \"CODE\"."
@@ -251,8 +252,8 @@ alongside."
             (when inline-body `(:body ,inline-body)))))
 
 (defun make-set-node (target value)
-  "Build a :set AST node."
-  (list :set :target target :value value))
+  "Build an assignment node. :set is desugared to canonical (:move :from value :to target)."
+  (list :move :from value :to target))
 
 (defun make-assembly-entry-node (label)
   "Build an :assembly-entry AST node."
@@ -292,62 +293,65 @@ alongside."
   (list :refmod :base base :start start :length length))
 
 (defun make-add-node (from to &optional giving)
-  "Build an :add AST node."
+  "Build an :+ AST node."
   (if giving
-      (list :add :from from :to to :giving giving)
-      (list :add :from from :to to)))
+      (list :+ :from from :to to :giving giving)
+      (list :+ :from from :to to)))
 
 (defun make-subtract-node (subtrahend from &optional giving)
-  "Build a :subtract AST node."
+  "Build an :- AST node."
   (if giving
-      (list :subtract :subtrahend subtrahend :from from :giving giving)
-      (list :subtract :subtrahend subtrahend :from from)))
+      (list :- :subtrahend subtrahend :from from :giving giving)
+      (list :- :subtrahend subtrahend :from from)))
 
 (defun make-multiply-node (by multiplier &optional giving)
-  "Build a :multiply AST node."
+  "Build a :× AST node."
   (if giving
-      (list :multiply :by by :multiplier multiplier :giving giving)
-      (list :multiply :by by :multiplier multiplier)))
+      (list :× :by by :multiplier multiplier :giving giving)
+      (list :× :by by :multiplier multiplier)))
 
 (defun make-divide-node (numerator denominator &optional giving)
-  "Build a :divide AST node."
+  "Build a :÷ AST node."
   (if giving
-      (list :divide :numerator numerator :denominator denominator :giving giving)
-      (list :divide :numerator numerator :denominator denominator)))
+      (list :÷ :numerator numerator :denominator denominator :giving giving)
+      (list :÷ :numerator numerator :denominator denominator)))
 
 (defun make-compute-node (target expression)
-  "Build a :compute AST node."
-  (list :compute :target target :expression expression))
+  "COMPUTE TARGET = EXPRESSION — desugared to canonical (:move :from expr :to target)."
+  (list :move :from expression :to target))
 
 (defun make-expression-add (e1 e2)
-  (list :add :from e1 :to e2 :giving nil))
+  (list :+ :from e1 :to e2 :giving nil))
 
 (defun make-expression-subtract (e1 e2)
-  (list :subtract :subtrahend e2 :from e1 :giving nil))
+  (list :- :subtrahend e2 :from e1 :giving nil))
 
 (defun make-expression-multiply (e1 e2)
-  (list :multiply :by e1 :multiplier e2 :giving nil))
+  (list :× :by e1 :multiplier e2 :giving nil))
 
 (defun make-expression-divide (e1 e2)
-  (list :divide :numerator e1 :denominator e2 :giving nil))
+  (list :÷ :numerator e1 :denominator e2 :giving nil))
 
 (defun make-expression-shift-left (expr n)
-  (list :shift-left expr n))
+  "Arithmetic shift LEFT by N: (list :ash expr n) for n >= 0."
+  (list :ash expr n))
 
 (defun make-expression-shift-right (expr n)
-  (list :shift-right expr n))
+  "Arithmetic shift RIGHT by N: canonical :ash uses a signed amount,
+so right shift by N becomes (list :ash expr (- n))."
+  (list :ash expr (- n)))
 
 (defun make-expression-bit-and (e1 e2)
-  (list :bit-and e1 e2))
+  (list :∧ e1 e2))
 
 (defun make-expression-bit-or (e1 e2)
-  (list :bit-or e1 e2))
+  (list :∨ e1 e2))
 
 (defun make-expression-bit-xor (e1 e2)
-  (list :bit-xor e1 e2))
+  (list :⊻ e1 e2))
 
 (defun make-expression-bit-not (expr)
-  (list :bit-not expr))
+  (list :¬ expr))
 
 (defun make-conditional-eq (e1 e2)
   (list := e1 e2))
@@ -559,7 +563,7 @@ FUNCTOR is the goal predicate name; ARGS are arguments."
 (defun allocate-temp-for-intermediate (expression-type bit-width)
   "Allocate appropriate reserved temporary for intermediate value.
    
-   EXPRESSION-TYPE: :arithmetic, :multiply, :divide, etc.
+   EXPRESSION-TYPE: :arithmetic, :×, :÷, etc.
    BIT-WIDTH: required bit width (1 for byte, 16 for word, etc.)
    
    Returns: temporary variable name (MathTemp or MultiplyTemp)
@@ -641,16 +645,16 @@ FUNCTOR is the goal predicate name; ARGS are arguments."
                          (eightbol::ensure-list (eightbol::safe-getf (rest ast) :then)))
            :else (mapcar (lambda (s) (erase-locals s copybook-slot-table :object object))
                          (eightbol::ensure-list (eightbol::safe-getf (rest ast) :else)))))
-    ((and (listp ast) (eq (first ast) :add))
-     ;; (:add :from expr :to id [:giving id])
-     (list* :add
+    ((and (listp ast) (eq (first ast) :+))
+     ;; (:+ :from expr :to id [:giving id])
+     (list* :+
             :from (resolve-expression (eightbol::safe-getf (rest ast) :from) copybook-slot-table :object object)
             :to (resolve-expression (eightbol::safe-getf (rest ast) :to) copybook-slot-table :object object)
             (when (eightbol::safe-getf (rest ast) :giving)
               (list :giving (resolve-expression (eightbol::safe-getf (rest ast) :giving) copybook-slot-table :object object)))))
-    ((and (listp ast) (eq (first ast) :subtract))
-     ;; (:subtract :subtrahend expr :from expr [:giving id])
-     (list* :subtract
+    ((and (listp ast) (eq (first ast) :-))
+     ;; (:- :subtrahend expr :from expr [:giving id])
+     (list* :-
             :subtrahend (resolve-expression (eightbol::safe-getf (rest ast) :subtrahend) copybook-slot-table :object object)
             :from (resolve-expression (eightbol::safe-getf (rest ast) :from) copybook-slot-table :object object)
             (when (eightbol::safe-getf (rest ast) :giving)

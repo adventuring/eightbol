@@ -216,18 +216,16 @@
                           :components ((:file "backend-arm7")))
                          (:module "backend-i286"
                           :components ((:file "backend-i286")))
-                          (:module "backend-f8"
-                           :components ((:file "backend-f8")))
-                          (:module "backend-forth"
-                           :components ((:file "backend-forth-part1")
-                                        (:file "backend-forth-statement"
-                                         :depends-on ("backend-forth-part1"))
-                                        (:file "backend-forth-emit"
-                                         :depends-on ("backend-forth-part1"))
-                                        (:file "backend-forth-tables"
-                                         :depends-on ("backend-forth-part1"))))
-                          (:module "backend-stack"
-                           :components ((:file "backend-stack")))
+(:module "backend-f8"
+                            :components ((:file "backend-f8")))
+                           (:module "backend-jvm"
+                            :components ((:file "backend-jvm")))
+                           (:module "backend-wasm"
+                            :components ((:file "backend-wasm")))
+                           (:module "backend-zork"
+                            :components ((:file "backend-zork")))
+                           (:module "backend-stack"
+                            :components ((:file "backend-stack")))
 
                           ;; Main entry point
                           (:file "main"
@@ -238,5 +236,5 @@
                                                   "frontend-pascal" "frontend-sci"
                                                   "frontend-scumm" "frontend-smalltalk"
                                                   "frontend-zil" "eightbol-compile"
-                                                  "backend-forth" "backend-stack")))))
+                                                  "backend-stack")))))
   :in-order-to ((test-op (test-op :eightbol-test))))

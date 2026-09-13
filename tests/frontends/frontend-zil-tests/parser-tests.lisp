@@ -26,7 +26,7 @@
 (is t))
 
 (test zil_parser_arithmetic
-  "PARSER: ZIL arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: ZIL arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test zil_parser_conditionals

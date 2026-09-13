@@ -353,23 +353,23 @@ Extract statements from PROCEDURE DIVISION and build a :program AST node."
 
 (defun parse/add-to (_add expression _to identifier)
   (declare (ignore _add _to))
-  (list :add :from expression :to identifier))
+  (list :+ :from expression :to identifier))
 
 (defun parse/add-giving (_add expression1 _to expression2 _giving identifier)
   (declare (ignore _add _to _giving))
-  (list :add :from expression1 :to expression2 :giving identifier))
+  (list :+ :from expression1 :to expression2 :giving identifier))
 
 (defun parse/subtract-from (_sub expression _from identifier)
   (declare (ignore _sub _from))
-  (list :subtract :subtrahend expression :from identifier))
+  (list :- :subtrahend expression :from identifier))
 
 (defun parse/subtract-giving (_sub expression1 _from expression2 _giving identifier)
   (declare (ignore _sub _from _giving))
-  (list :subtract :subtrahend expression1 :from expression2 :giving identifier))
+  (list :- :subtrahend expression1 :from expression2 :giving identifier))
 
 (defun parse/compute-eq (_compute identifier _eq expression)
   (declare (ignore _compute _eq))
-  (list :compute :target identifier :expression expression))
+  (list :move :from expression :to identifier))
 
 (defun parse/parenthesized-expression (_lp expression _rp)
   "Return EXPRESSION unchanged - parentheses are for grouping only."
@@ -378,31 +378,31 @@ Extract statements from PROCEDURE DIVISION and build a :program AST node."
 
 (defun parse/expression-add (e1 _op e2)
   (declare (ignore _op))
-  (list :add :from e1 :to e2 :giving nil))
+  (list :+ :from e1 :to e2 :giving nil))
 
 (defun parse/expression-subtract (e1 _op e2)
   (declare (ignore _op))
-  (list :subtract :subtrahend e2 :from e1 :giving nil))
+  (list :- :subtrahend e2 :from e1 :giving nil))
 
 (defun parse/expression-multiply (e1 _op e2)
   (declare (ignore _op))
-  (list :multiply :by e1 :multiplier e2 :giving nil))
+  (list :× :by e1 :multiplier e2 :giving nil))
 
 (defun parse/expression-divide (e1 _op e2)
   (declare (ignore _op))
-  (list :divide :numerator e1 :denominator e2 :giving nil))
+  (list :÷ :numerator e1 :denominator e2 :giving nil))
 
 (defun parse/shift-left (expression _op n)
   (declare (ignore _op))
-  (list :shift-left expression n))
+  (list :ash expression n))
 
 (defun parse/shift-right (expression _op n)
   (declare (ignore _op))
-  (list :shift-right expression n))
+  (list :ash expression (- n)))
 
 (defun parse/bit-and (e1 _op e2)
   (declare (ignore _op))
-  (list :bit-and e1 e2))
+  (list :∧ e1 e2))
 
 (defun parse/cond-and (cond1 _op cond2)
   (declare (ignore _op))
@@ -464,15 +464,15 @@ Extract statements from PROCEDURE DIVISION and build a :program AST node."
 
 (defun parse/bit-or (e1 _op e2)
   (declare (ignore _op))
-  (list :bit-or e1 e2))
+  (list :∨ e1 e2))
 
 (defun parse/bit-xor (e1 _op e2)
   (declare (ignore _op))
-  (list :bit-xor e1 e2))
+  (list :⊻ e1 e2))
 
 (defun parse/bit-not (_bit_not expression)
   (declare (ignore _bit_not))
-  (list :bit-not expression))
+  (list :¬ expression))
 
 (defun parse/expression-zero (_zero)
   "ZERO as expression (78-level constant) — yields literal 0."
@@ -531,8 +531,8 @@ Extract statements from PROCEDURE DIVISION and build a :program AST node."
             :else else-statements))
 
 (defun parse/goback () (list :goback))
-(defun parse/exit-method (_exit _method) (declare (ignore _exit _method)) (list :exit-method))
-(defun parse/exit-program (_exit _program) (declare (ignore _exit _program)) (list :exit-program))
+(defun parse/exit-method (_exit _method) (declare (ignore _exit _method)) (list :goback))
+(defun parse/exit-program (_exit _program) (declare (ignore _exit _program)) (list :goback))
 
 (defun parse/log-fault (_log _fault code)
   (declare (ignore _log _fault))
@@ -583,12 +583,12 @@ OUTPUT: perform AST plist."
 (defun parse/set-to (_set identifier _to expression)
   (declare (ignore _set _to))
   (if (and (stringp expression) (string-equal expression "SELF"))
-      (list :set :to-self identifier)
-      (list :set :target identifier :value expression)))
+      (list :move :from :self :to identifier)
+      (list :move :from expression :to identifier)))
 
 (defun parse/stop-run (_stop _run)
   (declare (ignore _stop _run))
-  (list :stop-run))
+  (list :goback))
 
 ;;; Unsupported-statement: signal compile-time error
 ;;;
@@ -617,15 +617,15 @@ OUTPUT: perform AST plist."
 ;;; INTO id, INTO expression GIVING id, BY expression GIVING id. Remainder forms unsupported.
 (defun parse/divide-into-id (_div expression _into id)
   (declare (ignore _div _into))
-  (list :divide :numerator id :denominator expression))
+  (list :÷ :numerator id :denominator expression))
 
 (defun parse/divide-into-giving (_div divisor _into dividend _giving id)
   (declare (ignore _div _into _giving))
-  (list :divide :numerator dividend :denominator divisor :giving id))
+  (list :÷ :numerator dividend :denominator divisor :giving id))
 
 (defun parse/divide-by-giving (_div divisor _by dividend _giving id)
   (declare (ignore _div _by _giving))
-  (list :divide :numerator dividend :denominator divisor :giving id))
+  (list :÷ :numerator dividend :denominator divisor :giving id))
 
 (defun parse/divide-into-remainder-unsupported (&rest _) (declare (ignore _))
   (unsupported-statement "DIVIDE ... REMAINDER ... is not supported"))
@@ -633,11 +633,11 @@ OUTPUT: perform AST plist."
 ;;; MULTIPLY — supported only when multiplier is constant power-of-two.
 (defun parse/multiply-by-id (_mul expression _by id)
   (declare (ignore _mul _by))
-  (list :multiply :by id :multiplier expression))
+  (list :× :by id :multiplier expression))
 
 (defun parse/multiply-by-giving (_mul mult _by op _giving id)
   (declare (ignore _mul _by _giving))
-  (list :multiply :by op :giving id :multiplier mult))
+  (list :× :by op :giving id :multiplier mult))
 
 ;;; STRING — BLT form (DELIMITED BY SIZE) supported; character delimiter unsupported
 (defun parse/string-blt (_str source _del _by _size _into dest)
@@ -812,29 +812,29 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
 ;;; SET — UP BY, DOWN BY, TO ADDRESS OF, TO SELF (TO expression and TO NULL implemented above)
 (defun parse/set-up-by (_set identifier _up _by expression)
   (declare (ignore _set _up _by))
-  (list :set :up-by identifier :by expression))
+  (list :+ :from identifier :to expression :giving identifier))
 
 (defun parse/set-down-by (_set identifier _down _by expression)
   (declare (ignore _set _down _by))
-  (list :set :down-by identifier :by expression))
+  (list :- :minuend identifier :subtrahend expression :giving identifier))
 
 (defun parse/set-condition-unsupported (&rest _) (declare (ignore _))
   (unsupported-statement "SET condition-name TO TRUE is not supported"))
 
 (defun parse/set-address-of (_set target-id _to _address _of source-id)
   (declare (ignore _set _to _address _of))
-  (list :set :target target-id :address-of source-id))
+  (list :move :from (list :address-of source-id) :to target-id))
 
 (defun parse/set-null (_set id _to _null)
   (declare (ignore _set _to _null))
-  (list :set :target id :value :null))
+  (list :move :from :null :to id))
 
 (defun parse/set-nulls-unsupported (&rest _) (declare (ignore _))
   (unsupported-statement "SET ... TO NULLS is not supported"))
 
 (defun parse/set-self (_set identifier _to _self)
   (declare (ignore _set _to _self))
-  (list :set :to-self identifier))
+  (list :move :from :self :to identifier))
 
 (defvar *external* nil)
 
@@ -1534,7 +1534,7 @@ YACC passes four values (EVALUATE token, subject, clauses, end)."
           (imperative-statements statement-item #'parse/statement-sequence-append)
           (statement-item (lambda (item) (list item))))
 
-         (exit-statement (exit (constantly (list :exit))))
+         (exit-statement (exit (constantly (list :goback))))
          (exit-method-statement (exit method #'parse/exit-method))
          (exit-program-statement (exit program #'parse/exit-program))
          (goback-statement (goback (constantly (list :goback))))

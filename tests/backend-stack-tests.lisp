@@ -105,25 +105,25 @@
 (test stack/add-literal-to-var
   "ADD literal TO var emits add instruction."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (stack-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (stack-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "add" asm)))))
 
 (test stack/add-16-bit
   "ADD of 2-byte values emits add instruction."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (stack-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (stack-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "add" asm)))))
 
 (test stack/subtract
   "SUBTRACT emits sub instruction."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (stack-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (stack-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sub" asm)))))
 
 (test stack/subtract-16-bit
   "SUBTRACT of 2-byte values emits sub instruction."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (stack-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (stack-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sub" asm)))))
 
 ;;;

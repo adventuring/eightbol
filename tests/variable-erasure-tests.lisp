@@ -215,7 +215,7 @@
 
 (test variable-erasure/allocate-temp-word
   "Allocate word temporary for 16-bit operations."
-  (let ((result (eightbol::allocate-temp-for-intermediate :multiply 16)))
+  (let ((result (eightbol::allocate-temp-for-intermediate :× 16)))
     (is (string-equal "MultiplyTemp" result))))
 
 (test variable-erasure/allocate-temp-too-large-errors

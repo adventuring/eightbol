@@ -14,7 +14,7 @@
 
 (test wasm/add-integer-literals
   "WASM ADD: integer literal operands produce i32.add"
-  (let* ((ast '(:add :from 5 :to 3))
+  (let* ((ast '(:+ :from 5 :to 3))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :wasm s))))
     (is (stringp output))
@@ -23,7 +23,7 @@
 
 (test wasm/add-variable-to-constant
   "WASM ADD: variable + constant produces correct bytecode"
-  (let* ((ast '(:add :from "X" :to 10))
+  (let* ((ast '(:+ :from "X" :to 10))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :wasm s))))
     (is (stringp output))
@@ -32,7 +32,7 @@
 
 (test wasm/subtract-variable-from-constant
   "WASM SUBTRACT: constant - variable produces i32.sub"
-  (let* ((ast '(:subtract :from 100 :to "X"))
+  (let* ((ast '(:- :from 100 :to "X"))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :wasm s))))
     (is (stringp output))
@@ -41,7 +41,7 @@
 
 (test wasm/multiply-by-power-of-two
   "WASM MULTIPLY: multiplication by power of two uses i32.mul"
-  (let* ((ast '(:multiply :from "X" :to 8))  ; 2^3
+  (let* ((ast '(:× :from "X" :to 8))  ; 2^3
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :wasm s))))
     (is (stringp output))
@@ -50,7 +50,7 @@
 
 (test wasm/divide-by-power-of-two
   "WASM DIVIDE: division by power of two uses i32.div_s"
-  (let* ((ast '(:divide :from "X" :by 4))  ; 2^2
+  (let* ((ast '(:÷ :from "X" :by 4))  ; 2^2
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :wasm s))))
     (is (stringp output))
@@ -59,7 +59,7 @@
 
 (test wasm/arithmetic-overflow-handling
   "WASM arithmetic: handles overflow cases appropriately"
-  (let* ((ast '(:add :from 2147483647 :to 1))  ; int32 overflow
+  (let* ((ast '(:+ :from 2147483647 :to 1))  ; int32 overflow
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :wasm s))))
     (is (stringp output))
@@ -67,7 +67,7 @@
 
 (test wasm/fixed-point-arithmetic
   "WASM fixed-point: maintains scale through arithmetic"
-  (let* ((ast '(:add :from (:fixed-point (:var "A") 8 8)
+  (let* ((ast '(:+ :from (:fixed-point (:var "A") 8 8)
                   :to (:fixed-point (:var "B") 8 8)))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :wasm s))))
@@ -76,7 +76,7 @@
 
 (test wasm/bcd-arithmetic
   "WASM BCD: handles binary-coded decimal operations"
-  (let* ((ast '(:add :from 9 :to 9))  ; 9+9=18 in BCD
+  (let* ((ast '(:+ :from 9 :to 9))  ; 9+9=18 in BCD
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :wasm s))))
     (is (stringp output))

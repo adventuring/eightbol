@@ -173,7 +173,7 @@
        (ident = expr
               (lambda (lhs _e rhs)
                 (declare (ignore _e))
-                (list :set lhs rhs))))
+                (list :move :from rhs :to lhs))))
       
        (return-statement
         (keyword-return expr?
@@ -236,7 +236,7 @@
        (expr :plus expr)
        (expr :minus expr)
        (expr :times expr)
-       (expr :divide expr)
+       (expr :÷ expr)
        (expr :eq expr)
        (expr :neq expr)
        (expr :lt expr)
@@ -274,16 +274,16 @@
      (list :invoke :object obj :method method)))
 
 (defun parse/obj-set (stmt)
-   "Convert Objective-C assignment to EightBol :set node."
+   "Convert Objective-C assignment to EightBol :move node."
    (destructuring-bind (lhs rhs) stmt
-     (list :set lhs rhs)))
+     (list :move :from rhs :to lhs)))
 
 (defun parse/obj-return (stmt)
-  "Convert Objective-C return to EightBol :exit-method node."
+  "Convert Objective-C return to EightBol :goback node."
   (destructuring-bind (expr) stmt
     (if expr
-        (list :compute :target 'return-register :expression expr)
-        '(:exit-method))))
+        (list :move :from expr :to 'return-register)
+        '(:goback))))
 
 (defun parse/obj-display (stmt)
   "Parse DISPLAY statement to :print AST node."

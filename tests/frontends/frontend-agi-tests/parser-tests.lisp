@@ -26,7 +26,7 @@
 (is t))
 
 (test agi_parser_arithmetic
-  "PARSER: AGI arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: AGI arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test agi_parser_conditionals

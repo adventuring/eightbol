@@ -119,7 +119,7 @@
 ;;     (is (null (search "CallDisconnectMethod" asm)))))
 
 (test ast-optimize/divide-multiply-power-of-two-to-compute
-  "DIVIDE/MULTIPLY by constant power-of-two become :compute with shift."
+  "DIVIDE/MULTIPLY by constant power-of-two rewrite to :move with :ash shift."
   (let* ((cob "000010 IDENTIFICATION DIVISION.
 000020 CLASS-ID. DivMul-Test.
 000030 ENVIRONMENT DIVISION.
@@ -142,10 +142,10 @@
          (stmts (ast-first-method-statements opt))
          (c1 (first stmts))
          (c2 (second stmts)))
-    (is (eq :compute (first c1)))
-    (is (equal (list :shift-right "X" 2) (getf (rest c1) :expression)))
-    (is (eq :compute (first c2)))
-    (is (equal (list :shift-left "X" 1) (getf (rest c2) :expression)))))
+    (is (eq :move (first c1)))
+    (is (equal (list :ash "X" -2) (getf (rest c1) :from)))
+    (is (eq :move (first c2)))
+    (is (equal (list :ash "X" 1) (getf (rest c2) :from)))))
 
 (test ast-optimize/algebraic-add-negative-to-subtract
   "ADD with negative integer constant rewrites to SUBTRACT (canonical form)."
@@ -156,11 +156,11 @@
                      "T"
                      :statements
                      (list (list :compute :target "X"
-                                 :expression (list :add-expr "Y" -4))))))))
+                                 :expression (list :+expr "Y" -4))))))))
     (let* ((opt (eightbol::optimize-ast ast))
            (stmt (first (ast-first-method-statements opt))))
       (is (eq :compute (first stmt)))
-      (is (equal (list :subtract-expr "Y" 4) (getf (rest stmt) :expression))))))
+      (is (equal (list :-expr "Y" 4) (getf (rest stmt) :expression))))))
 
 (test ast-optimize/algebraic-subtract-negative-to-add
   "SUBTRACT with negative constant rewrites to ADD."
@@ -171,11 +171,11 @@
                      "T"
                      :statements
                      (list (list :compute :target "X"
-                                 :expression (list :subtract-expr "Y" -2))))))))
+                                 :expression (list :-expr "Y" -2))))))))
     (let* ((opt (eightbol::optimize-ast ast))
            (stmt (first (ast-first-method-statements opt))))
       (is (eq :compute (first stmt)))
-      (is (equal (list :add-expr "Y" 2) (getf (rest stmt) :expression))))))
+      (is (equal (list :+expr "Y" 2) (getf (rest stmt) :expression))))))
 
 (test ast-optimize/algebraic-multiply-zero-one-identities
   "MULTIPLY folds *0 and *1 when the constant side is an integer."
@@ -186,9 +186,9 @@
                      "T"
                      :statements
                      (list (list :compute :target "A"
-                                 :expression (list :multiply-expr 0 42))
+                                 :expression (list :×-expr 0 42))
                            (list :compute :target "B"
-                                 :expression (list :multiply-expr 1 9))))))))
+                                 :expression (list :×-expr 1 9))))))))
     (let* ((opt (eightbol::optimize-ast ast))
            (stmts (ast-first-method-statements opt)))
       (is (eq :move (first (first stmts))))
@@ -205,7 +205,7 @@
                      "T"
                      :statements
                      (list (list :compute :target "X"
-                                 :expression (list :divide-expr "Counter" 1))))))))
+                                 :expression (list :÷-expr "Counter" 1))))))))
     (let* ((opt (eightbol::optimize-ast ast))
            (stmt (first (ast-first-method-statements opt))))
       (is (eq :compute (first stmt)))

@@ -920,14 +920,14 @@ is absent).
         (/= ds dm))))
 
 (defun subtract-statement-minuend-and-subtrahend (stmt)
-  "Return @code{(values MINUEND SUBTRAHEND)} for a @code{:subtract} statement plist.
+  "Return @code{(values MINUEND SUBTRAHEND)} for a @code{:-} statement plist.
 
 Supports parser output (@code{:subtrahend} and @code{:from}) and legacy tests that use only
 @code{:from} (subtrahend) and @code{:from-target} (minuend).
 
 @table @asis
 @item STMT
-@code{(:subtract @dots{})} plist.
+@code{(:- @dots{})} plist.
 @end table"
   (let* ((plist (rest stmt))
          (s (getf plist :subtrahend))
@@ -1028,7 +1028,7 @@ cp1610/Z80 allow both BINARY and DECIMAL. Other CPUs signal @code{backend-error}
 @item CPU
 Backend keyword (e.g. @code{:z80}, @code{:6502}).
 @item STMT
-Statement plist whose @code{car} is @code{:add}.
+Statement plist whose @code{car} is @code{:+}.
 @end table"
   (let ((from (getf (rest stmt) :from))
         (to-op (getf (rest stmt) :to))
@@ -1038,7 +1038,7 @@ Statement plist whose @code{car} is @code{:add}.
              :message
              "ADD mixes implied decimal (PIC V/.) fractional scales; widen-only scaling is implemented only for 6502-family USAGE BINARY (or use matching fractional digit counts)"
              :cpu cpu
-             :detail (list :add stmt :from from :to to-op :giving giving)))))
+             :detail (list :+ stmt :from from :to to-op :giving giving)))))
 
 (defun assert-pic-decimal-subtract-compiled (cpu stmt)
   "Signal @code{backend-error} when STMT is SUBTRACT with misaligned PIC decimals this CPU cannot compile."
@@ -1049,7 +1049,7 @@ Statement plist whose @code{car} is @code{:add}.
                :message
                "SUBTRACT mixes implied decimal (PIC V/.) fractional scales; widen-only scaling is implemented only for 6502-family USAGE BINARY (or use matching fractional digit counts)"
                :cpu cpu
-               :detail (list :subtract stmt :minuend minuend :subtrahend subtrahend :giving giving))))))
+               :detail (list :- stmt :minuend minuend :subtrahend subtrahend :giving giving))))))
 
 (defun operand-width (expression &optional (pic-width-table *pic-width-table*))
   "Return byte width (1–8) for EXPRESSION."
@@ -1073,7 +1073,7 @@ Statement plist whose @code{car} is @code{:add}.
          (second expression)
          (loop for el in (subseq expression 1 (1- (length expression)))
                maximize (operand-width el pic-width-table))))
-    ((and (listp expression) (member (first expression) '(:bit-and :bit-or :bit-xor)))
+    ((and (listp expression) (member (first expression) '(:∧ :∨ :⊻)))
      (loop for el in (subseq expression 1)
            maximize (operand-width el pic-width-table)))
     (t (let ((token (slot-token expression)))
@@ -1104,7 +1104,7 @@ Statement plist whose @code{car} is @code{:add}.
 (defun expression-operand-width (expression &optional (pic-width-table *pic-width-table*))
   "Return max byte width (1–8) for EXPRESSION and its leaves.
 
-For composite arithmetic (@code{:add-expression}, @code{:subtract-expression}, @dots{}) returns
+For composite arithmetic (@code{:+-expression}, @code{:--expression}, @dots{}) returns
 the maximum of recursive leaf widths. For other forms, @code{operand-width}.
 Use when MOVE/ADD/SUB sources may be expressions so width matches the widest operand.
 
@@ -1122,19 +1122,19 @@ Integer byte count at least 1."
                ((not (listp e)) (operand-width e))
                ((eql :literal (first e))
                 (expression-operand-width (second e)))
-               ((eql :add (first e))
+               ((eql :+ (first e))
                 (max (rec (getf (rest e) :from)) (rec (getf (rest e) :to))))
-               ((eql :subtract (first e))
+               ((eql :- (first e))
                 (max (rec (getf (rest e) :from)) (rec (getf (rest e) :subtrahend))))
-               ((eql :multiply (first e))
+               ((eql :× (first e))
                 (max (rec (getf (rest e) :multiplier)) (rec (getf (rest e) :by))))
-               ((eql :divide (first e))
+               ((eql :÷ (first e))
                 (max (rec (getf (rest e) :numerator)) (rec (getf (rest e) :denominator))))
 ((member (first e)
-                         '(:add :subtract :multiply :divide))
+                         '(:+ :- :× :÷))
                  (max (rec (getf (rest e) :from)) (rec (getf (rest e) :to))))
                ((member (first e)
-                        '(:shift-left :shift-right :bit-and :bit-or :bit-xor))
+                        '(:ash :ash :∧ :∨ :⊻))
                 (max (rec (second e)) (rec (third e))))
                ((and (stringp (first e))
                      (string= "(" (first e))
@@ -1142,7 +1142,7 @@ Integer byte count at least 1."
                      (string= ")" (lastcar e)))
                 (loop for el in (subseq e 1 (1- (length e)))
                       maximize (rec el)))
-               ((eq (first e) :bit-not)
+               ((eq (first e) :¬)
                 (rec (second e)))
                (t (operand-width e pic-width-table)))))
     (max 1 (rec expression))))
@@ -1150,7 +1150,7 @@ Integer byte count at least 1."
 (defun expression-operand-signed-p (expression)
   "Return max byte width (1–8) for EXPRESSION and its leaves.
 
-For composite arithmetic (@code{:add-expression}, @code{:subtract-expression}, @dots{}) returns
+For composite arithmetic (@code{:+-expression}, @code{:--expression}, @dots{}) returns
 the maximum of recursive leaf widths. For other forms, @code{operand-width}.
 Use when MOVE/ADD/SUB sources may be expressions so width matches the widest operand.
 
@@ -1169,8 +1169,8 @@ Integer byte count at least 1."
                ((eql :literal (first e))
                 (rec (second e)))
                ((member (first e)
-                        '(:add :subtract :multiply :divide
-                          :shift-left :shift-right :bit-and :bit-or :bit-xor)
+                        '(:+ :- :× :÷
+                          :ash :ash :∧ :∨ :⊻)
                         :test #'eq)
                 (or (rec (second e)) (rec (third e))))
                ((and (stringp (first e))
@@ -1178,7 +1178,7 @@ Integer byte count at least 1."
                      (stringp (lastcar e))
                      (string= ")" (lastcar e)))
                 (some (lambda (el) (rec el)) (subseq e 1 (1- (length e)))))
-               ((eq (first e) :bit-not)
+               ((eq (first e) :¬)
                 (rec (second e)))
                (t nil))))
     (rec expression)))

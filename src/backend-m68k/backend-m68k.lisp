@@ -144,12 +144,12 @@
   (let ((statement (cons :if ast-node-data)))
     (compile-m68k-if statement)))
 
-(def-m68k-statement :add
-  (let ((statement (cons :add ast-node-data)))
+(def-m68k-statement :+
+  (let ((statement (cons :+ ast-node-data)))
     (compile-m68k-add statement)))
 
-(def-m68k-statement :subtract
-  (let ((statement (cons :subtract ast-node-data)))
+(def-m68k-statement :-
+  (let ((statement (cons :- ast-node-data)))
     (compile-m68k-subtract statement)))
 
 (def-m68k-statement :compute
@@ -203,7 +203,7 @@
     :message "COPY should have been expanded at lex time"
     :copy-name (getf ast-node-data :name)))
 
-(def-m68k-statement :divide
+(def-m68k-statement :÷
   (let* ((divisor (getf ast-node-data :divisor))
          (into (getf ast-node-data :into))
          (by (getf ast-node-data :by))
@@ -231,7 +231,7 @@
            :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
            :detail (format nil "DIVIDE by ~s" divisor))))
 
-(def-m68k-statement :multiply
+(def-m68k-statement :×
   (let* ((multiplier (getf ast-node-data :multiplier))
          (by (getf ast-node-data :by))
          (giving (getf ast-node-data :giving))
@@ -269,27 +269,19 @@
       :symbol-name *class-id*
       :symbol-type :class)))
 
-(def-m68k-statement :shift-left
-  (let* ((target (getf ast-node-data :target))
-         (count (getf ast-node-data :count 1))
-         (width (operand-width target))
-         (suffix (if (= (or width 1) 2) ".w" ".b")))
-    (compile-m68k-load target)
-    (dotimes (_ count) (format *output-stream* "~&~10tlsl~a   #1, %d0" suffix))
-    (when (stringp target)
-      (format *output-stream* "~&~10tmove~a  %d0, ~a" suffix (m68k-symbol target)))))
-
-(def-m68k-statement :shift-right
+(def-m68k-statement :ash
   (let* ((target (getf ast-node-data :target))
          (count (getf ast-node-data :count 1))
          (signed (operand-signed-p target))
          (width (operand-width target))
          (suffix (if (= (or width 1) 2) ".w" ".b")))
     (compile-m68k-load target)
-    (dotimes (_ count)
-      (if signed
-          (format *output-stream* "~&~10tasr~a   #1, %d0" suffix)
-          (format *output-stream* "~&~10tlsr~a   #1, %d0" suffix)))
+    (if (minusp count)
+        (dotimes (_ (abs count))
+          (if signed
+              (format *output-stream* "~&~10tasr~a   #1, %d0" suffix)
+              (format *output-stream* "~&~10tlsr~a   #1, %d0" suffix)))
+        (dotimes (_ count) (format *output-stream* "~&~10tlsl~a   #1, %d0" suffix)))
     (when (stringp target)
       (format *output-stream* "~&~10tmove~a  %d0, ~a" suffix (m68k-symbol target)))))
 
@@ -325,15 +317,13 @@
          (format *output-stream* "~&~10tadd.w   %d0, %d0"))
        (format *output-stream* "~&~10tmove.l  #~a, %a0" (m68k-symbol (format nil "~a" (second expression))))
        (format *output-stream* "~&~10tmove~a  (%a0,%d0.w), %d0" suffix))
-      ((and (listp expression) (eq (first expression) :shift-left))
+      ((and (listp expression) (eq (first expression) :ash))
        (let ((n (if (numberp (third expression)) (third expression) 1)))
          (compile-m68k-load (second expression))
-         (dotimes (_ n) (format *output-stream* "~&~10tlsl~a   #1, %d0" suffix))))
-      ((and (listp expression) (eq (first expression) :shift-right))
-       (let ((n (if (numberp (third expression)) (third expression) 1)))
-         (compile-m68k-load (second expression))
-         (dotimes (_ n) (format *output-stream* "~&~10tlsr~a   #1, %d0" suffix))))
-      ((and (listp expression) (eq (first expression) :bit-and))
+         (if (minusp n)
+             (dotimes (_ (abs n)) (format *output-stream* "~&~10tlsr~a   #1, %d0" suffix))
+             (dotimes (_ n) (format *output-stream* "~&~10tlsl~a   #1, %d0" suffix)))))
+      ((and (listp expression) (eq (first expression) :∧))
        (compile-m68k-load (second expression))
        (let ((rhs (third expression)))
          (if (m68k-expression-is-constant-p rhs)
@@ -341,7 +331,7 @@
              (progn (format *output-stream* "~&~10tmove~a  %d0, %d1" suffix)
                     (compile-m68k-load rhs)
                     (format *output-stream* "~&~10tand~a   %d1, %d0" suffix)))))
-      ((and (listp expression) (eq (first expression) :bit-or))
+      ((and (listp expression) (eq (first expression) :∨))
        (compile-m68k-load (second expression))
        (let ((rhs (third expression)))
          (if (m68k-expression-is-constant-p rhs)
@@ -349,7 +339,7 @@
              (progn (format *output-stream* "~&~10tmove~a  %d0, %d1" suffix)
                     (compile-m68k-load rhs)
                     (format *output-stream* "~&~10tor~a    %d1, %d0" suffix)))))
-      ((and (listp expression) (eq (first expression) :bit-xor))
+      ((and (listp expression) (eq (first expression) :⊻))
        (compile-m68k-load (second expression))
        (let ((rhs (third expression)))
          (if (m68k-expression-is-constant-p rhs)
@@ -357,7 +347,7 @@
              (progn (format *output-stream* "~&~10tmove~a  %d0, %d1" suffix)
                     (compile-m68k-load rhs)
                     (format *output-stream* "~&~10teor~a   %d1, %d0" suffix)))))
-      ((and (listp expression) (eq (first expression) :bit-not))
+      ((and (listp expression) (eq (first expression) :¬))
        (compile-m68k-load (second expression))
        (format *output-stream* "~&~10tnot~a   %d0" suffix))
       (t (format *output-stream* "~&~10t| Unsupported load ~s" expression)))))
@@ -691,7 +681,7 @@
         (format *output-stream* "~&~10tabcd    %%d1, %%d0")
         (format *output-stream* "~&~10tmove.b  %%d0, ~a+~d" (m68k-symbol result) i))
       (return-from compile-m68k-add))
-    (backend-unsupported-operand-width :m68k :add width 2)
+    (backend-unsupported-operand-width :m68k :+ width 2)
     (compile-m68k-load to)
     (format *output-stream* "~&~10tmove~a  %d0, %d1" suffix)
     (compile-m68k-load from)
@@ -727,7 +717,7 @@
           (format *output-stream* "~&~10tsbcd    %%d0, %%d1")
           (format *output-stream* "~&~10tmove.b  %%d1, ~a+~d" (m68k-symbol dest) i))
         (return-from compile-m68k-subtract))
-      (backend-unsupported-operand-width :m68k :subtract width 2)
+      (backend-unsupported-operand-width :m68k :- width 2)
       (compile-m68k-load minuend)
       (format *output-stream* "~&~10tmove~a  %d0, %d1" suffix)
       (compile-m68k-load subtrahend)

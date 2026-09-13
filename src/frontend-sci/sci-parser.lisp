@@ -91,7 +91,7 @@
 (defun sci-parse-return (&optional val)
   "return [val]"
   (if val
-      (list :exit-method :value val)
+      (list :goback :value val)
       (list :goback)))
 
 (defun sci-parse-print (args)
@@ -224,28 +224,28 @@
 (defun sci-make-exit-method-node (&optional value)
   "Create an EXIT METHOD node."
   (if value
-      (list :exit-method :value value)
-      (list :exit-method)))
+      (list :goback :value value)
+      (list :goback)))
 
 (defun sci-make-exit-program-node ()
   "Create an EXIT PROGRAM node."
-  (list :exit-program))
+  (list :goback))
 
 (defun sci-make-exit-node ()
   "Create an EXIT node."
-  (list :exit))
+  (list :goback))
 
 (defun sci-make-stop-run-node ()
   "Create a STOP RUN node."
-  (list :stop-run))
+  (list :goback))
 
 (defun sci-make-set-node (target value)
   "Create a SET identifier TO value node."
-  (list :set :target target :value value))
+  (list :move :from value :to target))
 
 (defun sci-make-compute-node (target expression)
   "Create a COMPUTE target FROM expression node."
-  (list :compute :target target :expression expression))
+  (list :move :from expression :to target))
 
 (defun sci-make-call-acc-node (func value)
   "Create a CALL with :using clause node."
@@ -312,11 +312,11 @@
 
 (defun sci-make-bitwise-nand (left right)
   "Create a bitwise NAND expression."
-  (list :⊼ left right))
+  (list :¬ (list :∧ left right)))
 
 (defun sci-make-bitwise-nor (left right)
   "Create a bitwise NOR expression."
-  (list :⊽ left right))
+  (list :¬ (list :∨ left right)))
 
 (defun sci-make-shift-arithmetic (value amount)
   "Create an arithmetic shift expression."
@@ -324,11 +324,11 @@
 
 (defun sci-make-shift-left (value amount)
   "Create a shift left expression."
-  (list :asl value amount))
+  (list :ash value amount))
 
 (defun sci-make-shift-right (value amount)
   "Create a shift right expression."
-  (list :asr value amount))
+  (list :ash value (- amount)))
 
 ;;; Create the YACC parser
 (eval-when (:execute :load-toplevel)

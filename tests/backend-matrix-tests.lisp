@@ -63,7 +63,7 @@
     (signals error
       (compile-method-ast-with-tables
        '(:method :method-id "M"
-         :statements ((:add :from "A" :to "B" :giving "C")))
+         :statements ((:+ :from "A" :to "B" :giving "C")))
        "T" :z80 :pic-width-table pic))))
 
 (test matrix/other-cpus-smoke-move
@@ -129,7 +129,7 @@
     (setf (gethash "R" pic) 2)
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "M"
-                  :statements ((:subtract :from "S" :from-target "M" :giving "R")))
+                  :statements ((:- :from "S" :from-target "M" :giving "R")))
                 "T" :z80
                 :pic-width-table pic)))
       (is (null (search "scf" asm)))

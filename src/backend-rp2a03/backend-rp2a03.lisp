@@ -126,20 +126,20 @@
 (def-rp2a03-statement :if
   (compile-6502-if *output-stream* (rp2a03-stmt :if ast-node-data) :rp2a03))
 
-(def-rp2a03-statement :add
-  (compile-rp2a03-add *output-stream* (rp2a03-stmt :add ast-node-data) *class-id*))
+(def-rp2a03-statement :+
+  (compile-rp2a03-add *output-stream* (rp2a03-stmt :+ ast-node-data) *class-id*))
 
-(def-rp2a03-statement :subtract
-  (compile-rp2a03-subtract *output-stream* (rp2a03-stmt :subtract ast-node-data) *class-id*))
+(def-rp2a03-statement :-
+  (compile-rp2a03-subtract *output-stream* (rp2a03-stmt :- ast-node-data) *class-id*))
 
 (def-rp2a03-statement :compute
   (compile-6502-compute *output-stream* (rp2a03-stmt :compute ast-node-data) *class-id*))
 
-(def-rp2a03-statement :divide
-  (compile-6502-divide *output-stream* (rp2a03-stmt :divide ast-node-data) *class-id*))
+(def-rp2a03-statement :÷
+  (compile-6502-divide *output-stream* (rp2a03-stmt :÷ ast-node-data) *class-id*))
 
-(def-rp2a03-statement :multiply
-  (compile-6502-multiply *output-stream* (rp2a03-stmt :multiply ast-node-data) *class-id*))
+(def-rp2a03-statement :×
+  (compile-6502-multiply *output-stream* (rp2a03-stmt :× ast-node-data) *class-id*))
 
 (def-rp2a03-statement :set
   (compile-6502-set *output-stream* (rp2a03-stmt :set ast-node-data) *class-id*))

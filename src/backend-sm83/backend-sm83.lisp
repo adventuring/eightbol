@@ -144,10 +144,10 @@
 (def-sm83-statement :if
   (compile-sm83-if statement))
 
-(def-sm83-statement :add
+(def-sm83-statement :+
   (compile-sm83-add statement))
 
-(def-sm83-statement :subtract
+(def-sm83-statement :-
   (compile-sm83-subtract statement))
 
 (def-sm83-statement :compute
@@ -204,10 +204,10 @@
   (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
          (getf ast-node-data :name)))
 
-(def-sm83-statement :divide
+(def-sm83-statement :÷
    (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :sm83 :detail ast-node-data))
 
- (def-sm83-statement :multiply
+ (def-sm83-statement :×
    (error 'backend-error :message "MULTIPLY/DIVIDE not supported" :cpu :sm83 :detail ast-node-data))
 
 (def-sm83-statement :invoke-super
@@ -219,24 +219,18 @@
             (sm83-symbol (format nil "~a" *method-id*)))
     (error "Can't figure out parent class of ~a" *class-id*)))
 
-(def-sm83-statement :shift-left
-  (let* ((target (getf ast-node-data :target))
-         (count (getf ast-node-data :count 1)))
-    (compile-sm83-load target)
-    (dotimes (_ count)
-      (format *output-stream* "~&~8tsla      a"))
-    (when (stringp target)
-      (format *output-stream* "~&~8tld      (~a), a" (sm83-symbol target)))))
-
-(def-sm83-statement :shift-right
+(def-sm83-statement :ash
   (let* ((target (getf ast-node-data :target))
          (count (getf ast-node-data :count 1))
          (signed (operand-signed-p target)))
     (compile-sm83-load target)
-    (dotimes (_ count)
-      (if signed
-          (format *output-stream* "~&~8tsra      a")
-          (format *output-stream* "~&~8tsrl      a")))
+    (if (minusp count)
+        (dotimes (_ (abs count))
+          (if signed
+              (format *output-stream* "~&~8tsra      a")
+              (format *output-stream* "~&~8tsrl      a")))
+        (dotimes (_ count)
+          (format *output-stream* "~&~8tsla      a")))
     (when (stringp target)
       (format *output-stream* "~&~8tld      (~a), a" (sm83-symbol target)))))
 
@@ -329,15 +323,13 @@
            (format *output-stream* "~&~8tld      l, [hl]")
            (format *output-stream* "~&~8tld      h, a"))
          (format *output-stream* "~&~8tld      a, [hl]")))
-    ((and (listp expression) (eq (first expression) :shift-left))
+    ((and (listp expression) (eq (first expression) :ash))
      (let ((n (if (numberp (third expression)) (third expression) 1)))
        (compile-sm83-load (second expression))
-       (dotimes (_ n) (format *output-stream* "~&~8tadd     a, a"))))
-    ((and (listp expression) (eq (first expression) :shift-right))
-     (let ((n (if (numberp (third expression)) (third expression) 1)))
-       (compile-sm83-load (second expression))
-       (dotimes (_ n) (format *output-stream* "~&~8tsrl     a"))))
-    ((and (listp expression) (eq (first expression) :bit-and))
+       (if (minusp n)
+           (dotimes (_ (abs n)) (format *output-stream* "~&~8tsrl     a"))
+           (dotimes (_ n) (format *output-stream* "~&~8tadd     a, a")))))
+    ((and (listp expression) (eq (first expression) :∧))
      (compile-sm83-load (second expression))
      (let ((rhs (third expression)))
        (if (sm83-expr-is-constant-p rhs)
@@ -345,7 +337,7 @@
            (progn (format *output-stream* "~&~8tld      b, a")
                   (compile-sm83-load rhs)
                   (format *output-stream* "~&~8tand     b")))))
-    ((and (listp expression) (eq (first expression) :bit-or))
+    ((and (listp expression) (eq (first expression) :∨))
      (compile-sm83-load (second expression))
      (let ((rhs (third expression)))
        (if (sm83-expr-is-constant-p rhs)
@@ -353,7 +345,7 @@
            (progn (format *output-stream* "~&~8tld      b, a")
                   (compile-sm83-load rhs)
                   (format *output-stream* "~&~8tor      b")))))
-    ((and (listp expression) (eq (first expression) :bit-xor))
+    ((and (listp expression) (eq (first expression) :⊻))
      (compile-sm83-load (second expression))
      (let ((rhs (third expression)))
        (if (sm83-expr-is-constant-p rhs)
@@ -361,7 +353,7 @@
            (progn (format *output-stream* "~&~8tld      b, a")
                   (compile-sm83-load rhs)
                   (format *output-stream* "~&~8txor     b")))))
-    ((and (listp expression) (eq (first expression) :bit-not))
+    ((and (listp expression) (eq (first expression) :¬))
      (compile-sm83-load (second expression))
      (format *output-stream* "~&~8tcpl"))
     (t (format *output-stream* "~&~8t; Unsupported load ~s" expression))))
@@ -700,7 +692,7 @@
         (format *output-stream* "~&~8tdaa")
         (format *output-stream* "~&~8tld      [~a+~d], a" (bare-data-assembly-symbol result *class-id*) i))
       (return-from compile-sm83-add))
-    (backend-unsupported-operand-width :sm83 :add width 2)
+    (backend-unsupported-operand-width :sm83 :+ width 2)
     (if (= (or width 1) 2)
         (progn
           (compile-sm83-load to 2)
@@ -751,7 +743,7 @@
             (format *output-stream* "~&~8tld      a, b"))
           (format *output-stream* "~&~8tld      [~a+~d], a" (bare-data-assembly-symbol dest *class-id*) i))
         (return-from compile-sm83-subtract))
-      (backend-unsupported-operand-width :sm83 :subtract width 2)
+      (backend-unsupported-operand-width :sm83 :- width 2)
       (if (= (or width 1) 2)
           (progn
             (compile-sm83-load minuend 2)
@@ -816,9 +808,9 @@
          (width (operand-width (or target to-self up-by down-by))))
     (cond
       (up-by
-       (compile-sm83-add (list :add :from by-expression :to up-by :giving nil)))
+       (compile-sm83-add (list :+ :from by-expression :to up-by :giving nil)))
       (down-by
-       (compile-sm83-subtract (list :subtract :from by-expression :from-target down-by :giving nil)))
+       (compile-sm83-subtract (list :- :from by-expression :from-target down-by :giving nil)))
       ((and address-of target)
        (let ((source address-of) (dest target))
          (cond

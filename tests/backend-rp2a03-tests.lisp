@@ -113,28 +113,28 @@
 (test rp2a03/add-literal-to-var
   "ADD literal TO var emits clc and adc."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (rp2a03-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (rp2a03-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "clc" asm))
       (is (search "adc" asm)))))
 
 (test rp2a03/add-16-bit
   "ADD of 2-byte values emits multibyte add sequence."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (rp2a03-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (rp2a03-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "adc" asm))
       (is (search "sta" asm)))))
 
 (test rp2a03/subtract
   "SUBTRACT emits sec and sbc."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (rp2a03-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (rp2a03-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sec" asm))
       (is (search "sbc" asm)))))
 
 (test rp2a03/subtract-16-bit
   "SUBTRACT of 2-byte values emits multibyte subtract sequence."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (rp2a03-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (rp2a03-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sbc" asm))
       (is (search "sta" asm)))))
 
@@ -303,9 +303,9 @@
 (test rp2a03/divide-signals-error
   "DIVIDE on RP2A03 signals backend-error."
   (signals eightbol::backend-error
-    (rp2a03-asm '(:divide :from "A" :into "B"))))
+    (rp2a03-asm '(:÷ :from "A" :into "B"))))
 
 (test rp2a03/multiply-signals-error
   "MULTIPLY on RP2A03 signals backend-error."
   (signals eightbol::backend-error
-    (rp2a03-asm '(:multiply :by "A" :on "B"))))
+    (rp2a03-asm '(:× :by "A" :on "B"))))

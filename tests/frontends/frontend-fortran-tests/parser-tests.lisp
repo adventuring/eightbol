@@ -26,7 +26,7 @@
 (is t))
 
 (test fortran_parser_arithmetic
-  "PARSER: FORTRAN arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: FORTRAN arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test fortran_parser_conditionals

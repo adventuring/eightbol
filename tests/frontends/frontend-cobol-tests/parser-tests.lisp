@@ -31,14 +31,14 @@
     (is (listp result))))
 
 (test cobol_parser_add
-  "COBOL parser: ADD A TO B produces :add AST node"
+  "COBOL parser: ADD A TO B produces :+ AST node"
   (let* ((source "ADD A TO B")
          (result (eightbol:parse-cobol-statement source)))
     (is (not (null result)))
     (is (listp result))))
 
 (test cobol_parser_subtract
-  "COBOL parser: SUBTRACT A FROM B produces :subtract AST node"
+  "COBOL parser: SUBTRACT A FROM B produces :- AST node"
   (let* ((source "SUBTRACT A FROM B")
          (result (eightbol:parse-cobol-statement source)))
     (is (not (null result)))

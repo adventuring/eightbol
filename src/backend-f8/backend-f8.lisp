@@ -192,12 +192,12 @@
   (let ((stmt (cons :if ast-node-data)))
     (compile-f8-if stmt)))
 
-(def-f8-statement :add
-  (let ((stmt (cons :add ast-node-data)))
+(def-f8-statement :+
+  (let ((stmt (cons :+ ast-node-data)))
     (compile-f8-add stmt)))
 
-(def-f8-statement :subtract
-  (let ((stmt (cons :subtract ast-node-data)))
+(def-f8-statement :-
+  (let ((stmt (cons :- ast-node-data)))
     (compile-f8-subtract stmt)))
 
 (def-f8-statement :compute
@@ -249,7 +249,7 @@
   (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
          (getf ast-node-data :name)))
 
-(def-f8-statement :divide
+(def-f8-statement :÷
   (let* ((divisor (getf ast-node-data :divisor))
          (into (getf ast-node-data :into))
          (by (getf ast-node-data :by))
@@ -266,7 +266,7 @@
                :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
                :detail (format nil "DIVIDE by ~s" divisor)))))
 
-(def-f8-statement :multiply
+(def-f8-statement :×
   (let* ((multiplier (getf ast-node-data :multiplier))
          (by (getf ast-node-data :by))
          (giving (getf ast-node-data :giving))
@@ -292,18 +292,13 @@
             (f8-symbol (format nil "~a" *method-id*)))
     (error "Can't figure out parent class of ~a" *class-id*)))
 
-(def-f8-statement :shift-left
+(def-f8-statement :ash
   (let* ((target (getf ast-node-data :target))
          (count (getf ast-node-data :count 1)))
     (compile-f8-load target 1)
-    (dotimes (_ count) (format *output-stream* "~&~10tSL 1"))
-    (%f8-store-dest target)))
-
-(def-f8-statement :shift-right
-  (let* ((target (getf ast-node-data :target))
-         (count (getf ast-node-data :count 1)))
-    (compile-f8-load target 1)
-    (dotimes (_ count) (format *output-stream* "~&~10tSR 1"))
+    (if (minusp count)
+        (dotimes (_ (abs count)) (format *output-stream* "~&~10tSR 1"))
+        (dotimes (_ count) (format *output-stream* "~&~10tSL 1")))
     (%f8-store-dest target)))
 
 (def-f8-statement :dialogue
@@ -407,15 +402,13 @@ Uses BR to loop start for now; proper scope handling requires stack analysis."
              (%f8-load-byte-at-dc0)
              (format *output-stream* "~&~10tLR 11, A"))
            (%f8-load-byte-at-dc0)))
-      ((and (listp expr) (eq (first expr) :shift-left))
+      ((and (listp expr) (eq (first expr) :ash))
        (let ((n (if (numberp (third expr)) (third expr) 1)))
          (compile-f8-load (second expr))
-         (dotimes (_ n) (format *output-stream* "~&~10tSL 1"))))
-      ((and (listp expr) (eq (first expr) :shift-right))
-       (let ((n (if (numberp (third expr)) (third expr) 1)))
-         (compile-f8-load (second expr))
-         (dotimes (_ n) (format *output-stream* "~&~10tSR 1"))))
-      ((and (listp expr) (eq (first expr) :bit-and))
+         (if (minusp n)
+             (dotimes (_ (abs n)) (format *output-stream* "~&~10tSR 1"))
+             (dotimes (_ n) (format *output-stream* "~&~10tSL 1")))))
+      ((and (listp expr) (eq (first expr) :∧))
        (compile-f8-load (second expr))
        (let ((rhs (third expr)))
          (if (f8-expr-is-constant-p rhs)
@@ -423,7 +416,7 @@ Uses BR to loop start for now; proper scope handling requires stack analysis."
              (progn (format *output-stream* "~&~10tLR 8, A")
                     (compile-f8-load rhs)
                     (format *output-stream* "~&~10tNS 8")))))
-      ((and (listp expr) (eq (first expr) :bit-or))
+      ((and (listp expr) (eq (first expr) :∨))
        (compile-f8-load (second expr))
        (let ((rhs (third expr)))
          (if (f8-expr-is-constant-p rhs)
@@ -437,7 +430,7 @@ Uses BR to loop start for now; proper scope handling requires stack analysis."
                (format *output-stream* "~&~10tCOM")
                (format *output-stream* "~&~10tNS 9")
                (format *output-stream* "~&~10tCOM")))))
-      ((and (listp expr) (eq (first expr) :bit-xor))
+      ((and (listp expr) (eq (first expr) :⊻))
        (compile-f8-load (second expr))
        (let ((rhs (third expr)))
          (if (f8-expr-is-constant-p rhs)
@@ -445,7 +438,7 @@ Uses BR to loop start for now; proper scope handling requires stack analysis."
              (progn (format *output-stream* "~&~10tLR 8, A")
                     (compile-f8-load rhs)
                     (format *output-stream* "~&~10tXS 8")))))
-      ((and (listp expr) (eq (first expr) :bit-not))
+      ((and (listp expr) (eq (first expr) :¬))
        (compile-f8-load (second expr))
        (format *output-stream* "~&~10tCOM"))
       (t (format *output-stream* "~&~10t;; Unsupported load ~s" expr)))))
@@ -936,7 +929,7 @@ Uses BR to loop start for now; proper scope handling requires stack analysis."
         (format *output-stream* "~&~10tASD 8")
         (%f8-store-dest result nil))
       (return-from compile-f8-add))
-    (backend-unsupported-operand-width :f8 :add w 2)
+    (backend-unsupported-operand-width :f8 :+ w 2)
     (if (= (or w 1) 2)
         (progn
           (compile-f8-load to 2)
@@ -1040,10 +1033,10 @@ Uses BR to loop start for now; proper scope handling requires stack analysis."
     (cond
       (up-by
        (compile-f8-add
-        (list :add :from by-expr :to up-by :giving nil)))
+        (list :+ :from by-expr :to up-by :giving nil)))
       (down-by
        (compile-f8-subtract
-        (list :subtract :from by-expr :from-target down-by :giving nil)))
+        (list :- :from by-expr :from-target down-by :giving nil)))
       ((and address-of target)
        (let ((src address-of) (dest target))
          (cond

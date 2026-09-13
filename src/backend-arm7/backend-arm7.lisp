@@ -130,8 +130,8 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
      (:call (compile-arm7-call out stmt))
      (:call-acc (compile-arm7-call-acc out stmt))
      (:if (compile-arm7-if out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
-    (:add (compile-arm7-add out stmt class-id slot-table const-table pic-width-table))
-    (:subtract (compile-arm7-subtract out stmt class-id slot-table const-table pic-width-table))
+    (:+ (compile-arm7-add out stmt class-id slot-table const-table pic-width-table))
+    (:- (compile-arm7-subtract out stmt class-id slot-table const-table pic-width-table))
     (:compute (compile-arm7-compute out stmt class-id slot-table const-table pic-width-table))
     (:set (compile-arm7-set out stmt class-id slot-table const-table pic-width-table))
     (:log-fault (format out  "~&~8t@ LOG FAULT ~s" (getf (rest stmt) :code)))
@@ -156,7 +156,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
      (compile-arm7-evaluate out stmt class-id slot-table type-table const-table pic-size-table pic-width-table))
     (:inspect
      (compile-arm7-inspect out stmt class-id slot-table const-table pic-size-table pic-width-table))
-    (:divide
+    (:÷
      (let* ((divisor (getf (rest stmt) :divisor))
             (into (getf (rest stmt) :into))
             (by (getf (rest stmt) :by))
@@ -182,7 +182,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
            (error 'source-error
                   :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
                   :detail (format nil "DIVIDE by ~s" divisor)))))
-    (:multiply
+    (:×
      (let* ((multiplier (getf (rest stmt) :multiplier))
             (by (getf (rest stmt) :by))
             (giving (getf (rest stmt) :giving))
@@ -219,21 +219,16 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
                (arm7-symbol parent-class)
                (arm7-symbol (format nil "~a" *method-id*)))
        (error "Can't figure out parent class of ~a" *class-id*)))
-    (:shift-left
-     (let* ((target (getf (rest stmt) :target))
-            (count (getf (rest stmt) :count 1)))
-       (compile-arm7-load out target class-id slot-table const-table pic-width-table)
-       (format out "~&~8tmov     r0, r0, lsl #~d" count)
-       (when (stringp target)
-         (format out "~&~8tstr     r0, ~a" (arm7-symbol target)))))
-    (:shift-right
+    (:ash
      (let* ((target (getf (rest stmt) :target))
             (count (getf (rest stmt) :count 1))
             (signed (operand-signed-p target)))
        (compile-arm7-load out target class-id slot-table const-table pic-width-table)
-       (if signed
-           (format out "~&~8tmov     r0, r0, asr #~d" count)
-           (format out "~&~8tmov     r0, r0, lsr #~d" count))
+       (if (minusp count)
+           (if signed
+               (format out "~&~8tmov     r0, r0, asr #~d" (abs count))
+               (format out "~&~8tmov     r0, r0, lsr #~d" (abs count)))
+           (format out "~&~8tmov     r0, r0, lsl #~d" count))
        (when (stringp target)
          (format out "~&~8tstr     r0, ~a" (arm7-symbol target)))))
      (:dialogue
@@ -296,15 +291,13 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
          (format out  "~&~8tlsls    r0, r0, #1"))
        (format out  "~&~8tldr     r2, =~a" (arm7-symbol (format nil "~a" (second expr))))
        (format out  "~&~8t~a     r0, [r2, r0]" op))
-      ((and (listp expr) (eq (first expr) :shift-left))
+      ((and (listp expr) (eq (first expr) :ash))
        (let ((n (if (numberp (third expr)) (third expr) 1)))
          (compile-arm7-load out (second expr) class-id slot-table const-table pic-width-table)
-         (dotimes (_ n) (format out  "~&~8tlsls    r0, r0, #1"))))
-      ((and (listp expr) (eq (first expr) :shift-right))
-       (let ((n (if (numberp (third expr)) (third expr) 1)))
-         (compile-arm7-load out (second expr) class-id slot-table const-table pic-width-table)
-         (dotimes (_ n) (format out  "~&~8tlsrs    r0, r0, #1"))))
-      ((and (listp expr) (eq (first expr) :bit-and))
+         (if (minusp n)
+             (dotimes (_ (abs n)) (format out  "~&~8tlsrs    r0, r0, #1"))
+             (dotimes (_ n) (format out  "~&~8tlsls    r0, r0, #1")))))
+      ((and (listp expr) (eq (first expr) :∧))
        (compile-arm7-load out (second expr) class-id slot-table const-table pic-width-table)
        (let ((rhs (third expr)))
          (if (arm7-expr-is-constant-p rhs const-table)
@@ -312,7 +305,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
              (progn (format out  "~&~8tmovs    r1, r0")
                     (compile-arm7-load out rhs class-id slot-table const-table pic-width-table)
                     (format out  "~&~8tands    r0, r0, r1")))))
-      ((and (listp expr) (eq (first expr) :bit-or))
+      ((and (listp expr) (eq (first expr) :∨))
        (compile-arm7-load out (second expr) class-id slot-table const-table pic-width-table)
        (let ((rhs (third expr)))
          (if (arm7-expr-is-constant-p rhs const-table)
@@ -320,7 +313,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
              (progn (format out  "~&~8tmovs    r1, r0")
                     (compile-arm7-load out rhs class-id slot-table const-table pic-width-table)
                     (format out  "~&~8torrs    r0, r0, r1")))))
-      ((and (listp expr) (eq (first expr) :bit-xor))
+      ((and (listp expr) (eq (first expr) :⊻))
        (compile-arm7-load out (second expr) class-id slot-table const-table pic-width-table)
        (let ((rhs (third expr)))
          (if (arm7-expr-is-constant-p rhs const-table)
@@ -328,7 +321,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
              (progn (format out  "~&~8tmovs    r1, r0")
                     (compile-arm7-load out rhs class-id slot-table const-table pic-width-table)
                     (format out  "~&~8teors    r0, r0, r1")))))
-      ((and (listp expr) (eq (first expr) :bit-not))
+      ((and (listp expr) (eq (first expr) :¬))
        (compile-arm7-load out (second expr) class-id slot-table const-table pic-width-table)
        (format out  "~&~8tmvns    r0, r0"))
       ((eq expr :null)
@@ -618,7 +611,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
         (format out  "~&~8taddge   r0, r0, #$60")
         (format out  "~&~8tstrb    r0, [pc, #~a+~d]" (arm7-symbol result) i))
       (return-from compile-arm7-add))
-    (backend-unsupported-operand-width :arm7 :add w 2)
+    (backend-unsupported-operand-width :arm7 :+ w 2)
     (compile-arm7-load out to-op class-id slot-table const-table pic-width-table)
     (format out  "~&~8tmovs    r1, r0")
     (compile-arm7-load out from class-id slot-table const-table pic-width-table)
@@ -670,7 +663,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
           (format out  "~&~8tsubge   r0, r0, #$60")
           (format out  "~&~8tstrb    r0, [pc, #~a+~d]" (arm7-symbol result) i))
         (return-from compile-arm7-subtract))
-      (backend-unsupported-operand-width :arm7 :subtract w 2)
+      (backend-unsupported-operand-width :arm7 :- w 2)
       (compile-arm7-load out minuend class-id slot-table const-table pic-width-table)
       (format out  "~&~8tmovs    r1, r0")
       (compile-arm7-load out subtrahend class-id slot-table const-table pic-width-table)
@@ -718,10 +711,10 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
          (op (arm7-store-op w)))
     (cond
       (up-by
-       (compile-arm7-add out (list :add :from by-expr :to up-by :giving nil)
+       (compile-arm7-add out (list :+ :from by-expr :to up-by :giving nil)
                          class-id slot-table const-table pic-width-table))
       (down-by
-       (compile-arm7-subtract out (list :subtract :from by-expr :from-target down-by :giving nil)
+       (compile-arm7-subtract out (list :- :from by-expr :from-target down-by :giving nil)
                               class-id slot-table const-table pic-width-table))
       ((and address-of target)
        (let ((src address-of) (dest target))

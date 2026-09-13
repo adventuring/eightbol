@@ -26,7 +26,7 @@
 (is t))
 
 (test burgermistress_parser_arithmetic
-  "PARSER: BURGERMISTRESS arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: BURGERMISTRESS arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test burgermistress_parser_conditionals

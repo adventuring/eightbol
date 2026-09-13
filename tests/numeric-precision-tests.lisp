@@ -133,12 +133,12 @@ SBCL's make-hash-table does not accept :initial-contents."
 
 (defun cp1610-shift-asm (var count direction &key (class-id "T") (unsigned nil) pic ws)
   "Compile SHIFT for var via compile-method-ast-with-tables for cp1610.
-DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
+DIRECTION is :left or :right; emitted as :ash/:ash."
   (compile-method-ast-with-tables
    `(:method :method-id "M"
              :statements ((,(ecase direction
-                             (:left :shift-left)
-                             (:right :shift-right))
+                             (:left :ash)
+                             (:right :ash))
                            :target ,var :count ,count :unsigned ,unsigned)))
    class-id :cp1610
    :pic-width-table (or pic (make-hash-table :test 'equalp))
@@ -146,12 +146,12 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
 
 (defun z80-shift-asm (var count direction &key (class-id "T") (unsigned nil) pic ws)
   "Compile SHIFT for var via compile-method-ast-with-tables for Z80.
-DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
+DIRECTION is :left or :right; emitted as :ash/:ash."
   (compile-method-ast-with-tables
    `(:method :method-id "M"
              :statements ((,(ecase direction
-                             (:left :shift-left)
-                             (:right :shift-right))
+                             (:left :ash)
+                             (:right :ash))
                            :target ,var :count ,count :unsigned ,unsigned)))
    class-id :z80
    :pic-width-table (or pic (make-hash-table :test 'equalp))
@@ -331,21 +331,21 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
 (test shift/cp1610-binary-shift-left
   "cp1610: SHIFT-LEFT emits SLL."
   (let ((asm (compile-method-ast-with-tables
-              '(:method :method-id "M" :statements ((:shift-left :target "X" :count 2)))
+              '(:method :method-id "M" :statements ((:ash :target "X" :count 2)))
               "T" :cp1610)))
     (is (search "SLL     R0, 2" asm))))
 
 (test shift/cp1610-binary-shift-right
   "cp1610: SHIFT-RIGHT emits SARC."
   (let ((asm (compile-method-ast-with-tables
-              '(:method :method-id "M" :statements ((:shift-right :target "X" :count 1)))
+              '(:method :method-id "M" :statements ((:ash :target "X" :count 1)))
               "T" :cp1610)))
     (is (search "SARC    R0, 1" asm))))
 
 (test shift/z80-binary-shift-left
   "Z80: SHIFT-LEFT emits add a,a."
   (let ((asm (compile-method-ast-with-tables
-              '(:method :method-id "M" :statements ((:shift-left :target "X" :count 1)))
+              '(:method :method-id "M" :statements ((:ash :target "X" :count 1)))
               "T" :z80)))
     (is (search "add a, a" asm))))
 
@@ -355,7 +355,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
         (ws (make-hash-table :test 'equalp)))
     (setf (gethash "X" ws) (list :usage :binary :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:shift-right :target "X" :count 1)))
+                '(:method :method-id "M" :statements ((:ash :target "X" :count 1)))
                 "T" :z80 :pic-width-table pic :working-storage ws)))
       (is (search "srl" asm)))))
 
@@ -365,7 +365,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
         (ws (make-hash-table :test 'equalp)))
     (setf (gethash "X" ws) (list :usage :binary :signed t :pic "s9"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:shift-right :target "X" :count 1)))
+                '(:method :method-id "M" :statements ((:ash :target "X" :count 1)))
                 "T" :z80 :pic-width-table pic :working-storage ws)))
       (is (search "sra" asm)))))
 
@@ -382,7 +382,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
     (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :cp1610
                 :pic-width-table pic :working-storage ws)))
       (is (search "ADDR" asm)))))
@@ -396,7 +396,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
     (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :z80
                 :pic-width-table pic :working-storage ws)))
       (is (search "add" asm)))))
@@ -410,7 +410,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
     (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :cp1610
                 :pic-width-table pic :working-storage ws)))
       (is (search "ADDR" asm)))))
@@ -424,7 +424,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
     (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :z80
                 :pic-width-table pic :working-storage ws)))
       (is (search "daa" asm)))))
@@ -440,7 +440,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
     (setf (gethash "C" ws) (list :usage :binary :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:subtract :from "A" :from-target "B" :giving "C")))
+                '(:method :method-id "M" :statements ((:- :from "A" :from-target "B" :giving "C")))
                 "T" :cp1610
                 :pic-width-table pic :working-storage ws)))
       (is (search "SUBR" asm)))))
@@ -456,7 +456,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
     (setf (gethash "C" ws) (list :usage :binary :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:subtract :from "A" :from-target "B" :giving "C")))
+                '(:method :method-id "M" :statements ((:- :from "A" :from-target "B" :giving "C")))
                 "T" :z80
                 :pic-width-table pic :working-storage ws)))
       (is (search "sub" asm)))))
@@ -470,7 +470,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "9v9"))
     (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :cp1610
                 :pic-width-table pic :working-storage ws)))
       (is (plusp (length asm))))))
@@ -484,7 +484,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "9v9"))
     (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :z80
                 :pic-width-table pic :working-storage ws)))
       (is (plusp (length asm))))))
@@ -498,7 +498,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :decimal :signed t :pic "s9v9"))
     (setf (gethash "B" ws) (list :usage :decimal :signed t :pic "s99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :cp1610
                 :pic-width-table pic :working-storage ws)))
       (is (plusp (length asm))))))
@@ -512,7 +512,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :decimal :signed t :pic "s9v9"))
     (setf (gethash "B" ws) (list :usage :decimal :signed t :pic "s99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :z80
                 :pic-width-table pic :working-storage ws)))
       (is (plusp (length asm))))))
@@ -526,7 +526,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99v9"))
     (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :cp1610
                 :pic-width-table pic :working-storage ws)))
       (is (plusp (length asm))))))
@@ -540,7 +540,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
     (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99v9"))
     (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
     (let ((asm (compile-method-ast-with-tables
-                '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                 "T" :z80
                 :pic-width-table pic :working-storage ws)))
       (is (plusp (length asm))))))
@@ -578,7 +578,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -592,7 +592,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -606,7 +606,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -620,7 +620,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -638,7 +638,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :binary :signed t :pic "99"))  ; signed
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99")) ; unsigned
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -652,7 +652,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :binary :signed t :pic "99"))  ; signed
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99")) ; unsigned
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:add :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:+ :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -727,7 +727,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:- :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -741,7 +741,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :binary :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :decimal :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:- :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -755,7 +755,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:- :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -769,7 +769,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :decimal :signed nil :pic "99"))
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99"))
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:- :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -787,7 +787,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :binary :signed t :pic "99"))  ; signed
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99")) ; unsigned
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:- :from "A" :to "B")))
                    "T" :cp1610
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -801,7 +801,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
      (setf (gethash "A" ws) (list :usage :binary :signed t :pic "99"))  ; signed
      (setf (gethash "B" ws) (list :usage :binary :signed nil :pic "99")) ; unsigned
      (let ((asm (compile-method-ast-with-tables
-                   '(:method :method-id "M" :statements ((:subtract :from "A" :to "B")))
+                   '(:method :method-id "M" :statements ((:- :from "A" :to "B")))
                    "T" :z80
                    :pic-width-table pic :working-storage ws)))
        (is (plusp (length asm))))))
@@ -863,7 +863,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
    "MULTIPLY by non-power-of-two signals error"
    (signals eightbol::source-error
      (compile-method-ast-with-tables
-       '(:method :method-id "M" :statements ((:multiply :from "A" :by 3)))
+       '(:method :method-id "M" :statements ((:× :from "A" :by 3)))
        "T" :cp1610
        :pic-width-table (%test-ht (cons "A" "9")) 
        :working-storage (%test-ht (cons "A" (list :usage :binary :signed nil :pic "9"))))))
@@ -872,7 +872,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
    "MULTIPLY with USAGE DECIMAL operands signals error"
    (signals eightbol::source-error
      (compile-method-ast-with-tables
-       '(:method :method-id "M" :statements ((:multiply :from "A" :by 2)))
+       '(:method :method-id "M" :statements ((:× :from "A" :by 2)))
        "T" :cp1610
        :pic-width-table (%test-ht (cons "A" "9")) 
        :working-storage (%test-ht (cons "A" (list :usage :decimal :signed nil :pic "9"))))))
@@ -881,7 +881,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
    "DIVIDE by non-power-of-two signals error"
    (signals eightbol::source-error
      (compile-method-ast-with-tables
-       '(:method :method-id "M" :statements ((:divide :from "A" :into 3)))
+       '(:method :method-id "M" :statements ((:÷ :from "A" :into 3)))
        "T" :cp1610
        :pic-width-table (%test-ht (cons "A" "9")) 
        :working-storage (%test-ht (cons "A" (list :usage :binary :signed nil :pic "9"))))))
@@ -890,7 +890,7 @@ DIRECTION is :left or :right; emitted as :shift-left/:shift-right."
    "DIVIDE with USAGE DECIMAL operands signals error"
    (signals eightbol::source-error
      (compile-method-ast-with-tables
-       '(:method :method-id "M" :statements ((:divide :from "A" :into 2)))
+       '(:method :method-id "M" :statements ((:÷ :from "A" :into 2)))
        "T" :cp1610
        :pic-width-table (%test-ht (cons "A" "9")) 
        :working-storage (%test-ht (cons "A" (list :usage :decimal :signed nil :pic "9"))))))

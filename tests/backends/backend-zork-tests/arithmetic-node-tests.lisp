@@ -14,7 +14,7 @@
 
 (test zork/add-integer-literals
   "Zork ADD: integer literal operands produce iadd"
-  (let* ((ast '(:add :from 5 :to 3))
+  (let* ((ast '(:+ :from 5 :to 3))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :zork s))))
     (is (stringp output))
@@ -23,7 +23,7 @@
 
 (test zork/add-variable-to-constant
   "Zork ADD: variable + constant produces correct bytecode"
-  (let* ((ast '(:add :from "X" :to 10))
+  (let* ((ast '(:+ :from "X" :to 10))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :zork s))))
     (is (stringp output))
@@ -32,7 +32,7 @@
 
 (test zork/subtract-variable-from-constant
   "Zork SUBTRACT: constant - variable produces isub"
-  (let* ((ast '(:subtract :from 100 :to "X"))
+  (let* ((ast '(:- :from 100 :to "X"))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :zork s))))
     (is (stringp output))
@@ -41,7 +41,7 @@
 
 (test zork/multiply-by-power-of-two
   "Zork MULTIPLY: multiplication by power of two uses add/shift"
-  (let* ((ast '(:multiply :from "X" :to 8))
+  (let* ((ast '(:× :from "X" :to 8))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :zork s))))
     (is (stringp output))
@@ -49,7 +49,7 @@
 
 (test zork/divide-by-power-of-two
   "Zork DIVIDE: division by power of two uses shift"
-  (let* ((ast '(:divide :from "X" :by 4))
+  (let* ((ast '(:÷ :from "X" :by 4))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :zork s))))
     (is (stringp output))
@@ -57,7 +57,7 @@
 
 (test zork/arithmetic-overflow-handling
   "Zork arithmetic: handles overflow cases appropriately"
-  (let* ((ast '(:add :from 2147483647 :to 1))
+  (let* ((ast '(:+ :from 2147483647 :to 1))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :zork s))))
     (is (stringp output))
@@ -65,7 +65,7 @@
 
 (test zork/fixed-point-arithmetic
   "Zork fixed-point: maintains scale through arithmetic"
-  (let* ((ast '(:add :from (:fixed-point (:var "A") 8 8)
+  (let* ((ast '(:+ :from (:fixed-point (:var "A") 8 8)
                   :to (:fixed-point (:var "B") 8 8)))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :zork s))))
@@ -74,7 +74,7 @@
 
 (test zork/bcd-arithmetic
   "Zork BCD: handles binary-coded decimal operations"
-  (let* ((ast '(:add :from 9 :to 9))
+  (let* ((ast '(:+ :from 9 :to 9))
          (output (with-output-to-string (s)
                    (eightbol:compile-to-assembly ast :zork s))))
     (is (stringp output))

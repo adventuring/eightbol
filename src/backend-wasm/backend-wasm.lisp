@@ -74,7 +74,7 @@
     (compile-wasm-load from)
     (compile-wasm-store to)))
 
-(defmethod compile-statement ((cpu (eql :wasm)) (stmt-type (eql :add)) ast-node-data)
+(defmethod compile-statement ((cpu (eql :wasm)) (stmt-type (eql :+)) ast-node-data)
   (let ((from (getf ast-node-data :from))
         (to (getf ast-node-data :to))
         (giving (getf ast-node-data :giving)))
@@ -83,7 +83,7 @@
     (format *output-stream* "    i32.add~%")
     (compile-wasm-store (or giving to))))
 
-(defmethod compile-statement ((cpu (eql :wasm)) (stmt-type (eql :subtract)) ast-node-data)
+(defmethod compile-statement ((cpu (eql :wasm)) (stmt-type (eql :-)) ast-node-data)
   (let ((from (getf ast-node-data :from))
         (to (getf ast-node-data :to))
         (giving (getf ast-node-data :giving)))

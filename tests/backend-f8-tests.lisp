@@ -84,7 +84,7 @@
 (test f8/add
   "ADD of 16-bit slots emits AS 12 / LNK / AS 13 chain."
   (let ((pic (f8-hash "A" 2 "B" 2)))
-    (let ((asm (f8-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (f8-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "AS 12" asm))
       (is (search "LNK" asm))
       (is (search "AS 13" asm)))))
@@ -92,7 +92,7 @@
 (test f8/subtract
   "SUBTRACT emits two's-complement add (COM/INC/AS 8)."
   (let ((pic (f8-hash "A" 1 "B" 1)))
-    (let ((asm (f8-asm '(:subtract :from "A" :from-target "B" :giving "C") :pic pic)))
+    (let ((asm (f8-asm '(:- :from "A" :from-target "B" :giving "C") :pic pic)))
       (is (search "COM" asm))
       (is (search "INC" asm))
       (is (search "AS 8" asm)))))
@@ -150,9 +150,9 @@
 (test f8/divide-signals-error
   "DIVIDE on F8 signals source-error (non-power-of-two divisor)."
   (signals eightbol::source-error
-    (f8-asm '(:divide :divisor 3 :into "B"))))
+    (f8-asm '(:÷ :divisor 3 :into "B"))))
 
 (test f8/multiply-signals-error
   "MULTIPLY on F8 signals source-error (non-power-of-two multiplier)."
   (signals eightbol::source-error
-    (f8-asm '(:multiply :multiplier 3 :on "B"))))
+    (f8-asm '(:× :multiplier 3 :on "B"))))

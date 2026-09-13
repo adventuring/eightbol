@@ -39,7 +39,7 @@
                                         (list
                                          (list :compute
                                                :target "Result"
-                                               :expression (list :multiply-expr "X" 4)))))))
+                                               :expression (list :×-expr "X" 4)))))))
          (optimized (optimize-ast program)))
     ;; Check that the optimization was applied
     (let* ((methods (getf (rest optimized) :methods))
@@ -47,26 +47,26 @@
            (stmts (getf (rest method) :statements))
            (stmt (first stmts))
            (expr (getf (rest stmt) :expression)))
-      (is (equal expr (list :shift-left "X" 2))))))
+      (is (equal expr (list :ash "X" 2))))))
 
 (test strength_reduction_with_constant_folding
   "REGRESSION: Strength reduction works with constant folding"
   ;; Both optimizers should work together
-  (let* ((expr (list :multiply-expr
-                     (list :add-expr 5 3)  ; Will fold to 8
+  (let* ((expr (list :×-expr
+                     (list :+expr 5 3)  ; Will fold to 8
                      2))                    ; Will shift by 1
          (result (strength-reduce-expression (fold-literal-expression expr))))
     ;; After folding: (multiply-expr 8 2) → after strength reduction
-    (is (equal result (list :shift-left 8 1)))))
+    (is (equal result (list :ash 8 1)))))
 
 (test strength_reduction_preserves_non_matching
   "REGRESSION: Non-matching operations preserved unchanged"
   (let ((expressions (list
-                      (list :multiply-expr "X" 5)   ; Not power of 2
-                      (list :divide-expr "X" 7)     ; Not power of 2
+                      (list :×-expr "X" 5)   ; Not power of 2
+                      (list :÷-expr "X" 7)     ; Not power of 2
                       (list :modulo-expr "X" 3)     ; Not power of 2
-                      (list :add-expr "X" "Y")      ; Not constant operand
-                      (list :subtract-expr "X" 1)   ; Not zero
+                      (list :+expr "X" "Y")      ; Not constant operand
+                      (list :-expr "X" 1)   ; Not zero
                       (list :∧ "X" 5)                ; Not 0
                       (list :∨ "X" 1))))            ; Not 0
     ;; All should remain unchanged
@@ -79,27 +79,27 @@
   (let ((input (list :invoke
                      :object "Object"
                      :method "DoSomething"
-                     :using (list :multiply-expr "X" 8))))
+                     :using (list :×-expr "X" 8))))
     (let ((result (strength-reduce-in-statement input)))
-      (is (equal (getf (rest result) :using) (list :shift-left "X" 3))))))
+      (is (equal (getf (rest result) :using) (list :ash "X" 3))))))
 
 (test strength_reduction_nested_statements
   "REGRESSION: Statement lists with nested :if preserved correctly"
   (let ((input (list
-                (list :compute :target "R1" :expression (list :multiply-expr "X" 2))
+                (list :compute :target "R1" :expression (list :×-expr "X" 2))
                 (list :if
                       :condition (list :> "R1" 0)
-                      :then (list (list :compute :target "R2" :expression (list :divide-expr "Y" 4)))
+                      :then (list (list :compute :target "R2" :expression (list :÷-expr "Y" 4)))
                       :else (list (list :compute :target "R3" :expression (list :modulo-expr "Z" 8)))))))
     (let ((result (strength-reduce-in-list input)))
       (is (= 2 (length result)))
       ;; Check first statement
-      (is (equal (getf (rest (first result)) :expression) (list :shift-left "X" 1)))
+      (is (equal (getf (rest (first result)) :expression) (list :ash "X" 1)))
       ;; Check if statement then branch
       (let* ((if-stmt (second result))
              (then-stmts (getf (rest if-stmt) :then))
              (then-expr (getf (rest (first then-stmts)) :expression)))
-        (is (equal then-expr (list :shift-right "Y" 2))))
+        (is (equal then-expr (list :ash "Y" 2))))
       ;; Check if statement else branch
       (let* ((if-stmt (second result))
              (else-stmts (getf (rest if-stmt) :else))
@@ -110,14 +110,14 @@
 
 (test strength_reduction_multiply_1_priority_over_power_of_2
   "REGRESSION: Multiply-by-1 identity has priority over power-of-2"
-  (let ((input (list :multiply-expr "X" 1)))
+  (let ((input (list :×-expr "X" 1)))
     (let ((result (strength-reduce-expression input)))
-      ;; Should return "X" not (:shift-left "X" 0)
+      ;; Should return "X" not (:ash "X" 0)
       (is (equal result "X")))))
 
 (test strength_reduction_add_zero_priority_over_power_of_2
   "REGRESSION: Add-zero identity has priority over bitwise reduction"
-  (let ((input (list :add-expr "X" 0)))
+  (let ((input (list :+expr "X" 0)))
     (let ((result (strength-reduce-expression input)))
       ;; Should return "X" not something else
       (is (equal result "X")))))

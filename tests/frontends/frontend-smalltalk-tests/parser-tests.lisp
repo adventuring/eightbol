@@ -26,7 +26,7 @@
 (is t))
 
 (test smalltalk_parser_arithmetic
-  "PARSER: SMALLTALK arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: SMALLTALK arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test smalltalk_parser_conditionals

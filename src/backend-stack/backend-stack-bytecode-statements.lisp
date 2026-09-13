@@ -61,7 +61,7 @@ Emits: push source, pop destination as bytecode sequence."
     (forth-emit-set-statement target value)))
 
 ;;; Arithmetic: ADD
-(def-forth-statement :add (ast-node-data)
+(def-forth-statement :+ (ast-node-data)
   "Emit ADD expression TO identifier.
 
 Stack before: target value
@@ -71,7 +71,7 @@ Stack after:  (target + value)"
     (forth-emit-add-statement from to)))
 
 ;;; Arithmetic: SUBTRACT
-(def-forth-statement :subtract (ast-node-data)
+(def-forth-statement :- (ast-node-data)
   "Emit SUBTRACT expression FROM identifier."
   (let ((subtrahend (getf ast-node-data :from))
         (minuend (getf ast-node-data :from-target)))

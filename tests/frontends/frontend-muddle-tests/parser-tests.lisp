@@ -26,7 +26,7 @@
 (is t))
 
 (test muddle_parser_arithmetic
-  "PARSER: MUDDLE arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: MUDDLE arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test muddle_parser_conditionals

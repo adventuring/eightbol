@@ -28,7 +28,7 @@
     ((not (listp stmt)) 1)
     (t (let ((op (first stmt)))
          (case op
-           ((:move :add :subtract :set :compute) 2)
+           ((:move :+ :- :set :compute) 2)
            ((:invoke :call :call-acc) 5)
            ((:string-blt) 8)
            ((:if) (let ((then-size (reduce #'+ (safe-getf (rest stmt) :then)

@@ -189,19 +189,19 @@
 
 (defun make-expression-add (left right)
   "Create an ADD expression node."
-  (list :add :from left :to right))
+  (list :+ :from left :to right))
 
 (defun make-expression-subtract (left right)
   "Create a SUBTRACT expression node."
-  (list :subtract :from left :from-target right))
+  (list :- :from left :from-target right))
 
 (defun make-expression-multiply (left right)
   "Create a MULTIPLY expression node."
-  (list :compute :target 'result :expression (list :* left right)))
+  (list :move :from (list :× left right) :to 'result))
 
 (defun make-expression-divide (left right)
   "Create a DIVIDE expression node."
-  (list :compute :target 'result :expression (list :/ left right)))
+  (list :move :from (list :÷ left right) :to 'result))
 
 (defun parse-hex-literal (hex-str)
   "Parse hexadecimal literal."

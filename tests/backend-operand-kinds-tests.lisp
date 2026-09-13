@@ -149,12 +149,12 @@
     (setf (gethash "B" pw) 1)
     (setf (gethash "C" pw) 1)
     (dolist (cpu +operand-kinds-matrix-cpus+)
-      (let ((asm (compile-one-stmt cpu '(:add :from "A" :to "B" :giving "C")
+      (let ((asm (compile-one-stmt cpu '(:+ :from "A" :to "B" :giving "C")
                                    :pic-width-table pw)))
         (is (plusp (length asm)) "CPU ~s" cpu)))))
 
 (test operand-kinds/matrix-compute-nested-add-expr
-  "COMPUTE X = A + (B + C) — nested :add-expr; max leaf width drives operand-width."
+  "COMPUTE X = A + (B + C) — nested :+expr; max leaf width drives operand-width."
   (let ((pw (ht)))
     (setf (gethash "A" pw) 1)
     (setf (gethash "B" pw) 1)
@@ -164,7 +164,7 @@
       (let ((asm (compile-one-stmt
                   cpu
                   '(:compute :target "X"
-                    :expression (:add :from "A" :to (:add :from "B" :to "C")))
+                    :expression (:+ :from "A" :to (:+ :from "B" :to "C")))
                   :pic-width-table pw)))
         (is (plusp (length asm)) "CPU ~s" cpu)))))
 
@@ -178,7 +178,7 @@
       (let ((asm (compile-one-stmt
                   cpu
                   '(:compute :target "X"
-                    :expression (:add :from "A" :to (:multiply :by 2 :multiplier "B")))
+                    :expression (:+ :from "A" :to (:× :by 2 :multiplier "B")))
                   :pic-width-table pw)))
         (is (plusp (length asm)) "CPU ~s" cpu)))))
 
@@ -193,7 +193,7 @@
              (eightbol::operand-width "EnemyRef"))))))
 
 (test operand-kinds/expression-operand-width-nested-max
-  "expression-operand-width takes max width across nested :add-expr leaves."
+  "expression-operand-width takes max width across nested :+expr leaves."
   (let ((pw (ht)))
     (setf (gethash "A" pw) 1)
     (setf (gethash "B" pw) 1)
@@ -201,7 +201,7 @@
     (is (= 4
            (let ((eightbol::*pic-width-table* pw))
              (eightbol::expression-operand-width
-              '(:add-expr "A" (:add-expr "B" "Wide"))
+              '(:+expr "A" (:+expr "B" "Wide"))
               pw))))))
 
 (test operand-kinds/6502-family-move-four-byte-operands
@@ -224,9 +224,9 @@
     (setf (gethash "A" pw) 3)
     (setf (gethash "B" pw) 3)
     (setf (gethash "C" pw) 3)
-    (signals error (compile-one-stmt :z80 '(:add :from "A" :to "B" :giving "C")
+    (signals error (compile-one-stmt :z80 '(:+ :from "A" :to "B" :giving "C")
                                      :pic-width-table pw))
-    (signals error (compile-one-stmt :sm83 '(:add :from "A" :to "B" :giving "C")
+    (signals error (compile-one-stmt :sm83 '(:+ :from "A" :to "B" :giving "C")
                                       :pic-width-table pw))))
 
 (test operand-kinds/6502-set-address-of-slot-of-self-pointer-target

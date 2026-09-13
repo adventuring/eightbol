@@ -39,7 +39,7 @@
   (let ((pic (make-table)))
     (setf (gethash "A" pic) 1)
     (setf (gethash "B" pic) 1)
-    (let ((asm (parity-asm :cp1610 '(:add :from "A" :to "B") "T" :pic pic)))
+    (let ((asm (parity-asm :cp1610 '(:+ :from "A" :to "B") "T" :pic pic)))
       (is (plusp (length asm))))))
 
 (test parity/if-both-cpus

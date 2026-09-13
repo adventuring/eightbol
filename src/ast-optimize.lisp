@@ -70,12 +70,12 @@
         ((:move)
          (let ((to (safe-getf (rest statement) :to)))
            (when to (list (location-key to)))))
-        ((:add)
+        ((:+)
          (append (when (safe-getf (rest statement) :to)
                    (list (location-key (safe-getf (rest statement) :to))))
                  (when (safe-getf (rest statement) :giving)
                    (list (location-key (safe-getf (rest statement) :giving))))))
-        ((:subtract)
+        ((:-)
          (append (when (safe-getf (rest statement) :from)
                    (list (location-key (safe-getf (rest statement) :from))))
                  (when (safe-getf (rest statement) :giving)
@@ -101,14 +101,14 @@
              (if (and (listp dest) (eq (first dest) :refmod))
                  (list (location-key (safe-getf (rest dest) :base)))
                  (list (location-key dest))))))
-        ((:divide)
+        ((:÷)
          (let ((giving (safe-getf (rest statement) :giving))
                (denominator (safe-getf (rest statement) :denominator)))
            (cond
              (giving (list (location-key giving)))
              (denominator (list (location-key denominator)))
              (t nil))))
-        ((:multiply)
+        ((:×)
          (let ((giving (safe-getf (rest statement) :giving))
                (by (safe-getf (rest statement) :by)))
            (cond
@@ -140,10 +140,10 @@
       (case op
         ((:move)
          (expression-locations (safe-getf (rest statement) :from)))
-        ((:add)
+        ((:+)
          (append (expression-locations (safe-getf (rest statement) :from))
                  (expression-locations (safe-getf (rest statement) :to))))
-        ((:subtract)
+        ((:-)
          (append (expression-locations (safe-getf (rest statement) :from))
                  (expression-locations (safe-getf (rest statement) :subtrahend))))
         ((:compute)
@@ -167,11 +167,11 @@
          (append (expression-locations (safe-getf (rest statement) :source))
                  (expression-locations (safe-getf (rest statement) :dest))
                  (expression-locations (safe-getf (rest statement) :length))))
-        ((:divide)
+        ((:÷)
          (append (expression-locations (safe-getf (rest statement) :numerator))
                  (expression-locations (safe-getf (rest statement) :denominator))
                  (expression-locations (safe-getf (rest statement) :by))))
-        ((:multiply)
+        ((:×)
          (append (expression-locations (safe-getf (rest statement) :multiplier))
                  (expression-locations (safe-getf (rest statement) :by))))
         (t nil)))))
@@ -233,15 +233,17 @@ from STATEMENT, or NIL."
   "Append location keys from STATEMENT onto new statement list HEAD (HEAD is @code{(type ... keys)})."
   (append head (%statement-source-location-suffix statement)))
 
-;;; DIVIDE / MULTIPLY → :compute with shift (shared by all backends)
+;;; DIVIDE / MULTIPLY → :move with :ash (shared by all backends)
+;;; (:ash v n) with n < 0 shifts right, n > 0 shifts left, per canonical form.
 
 (defun rewrite-divide-multiply-statement (statement)
-  "If STATEMENT is DIVIDE/MULTIPLY with constant power-of-two, return equivalent :compute.
-Otherwise return STATEMENT unchanged."
+  "If STATEMENT is DIVIDE/MULTIPLY with constant power-of-two, return equivalent :move.
+DIVIDE by 2^s becomes a right shift (:ash numerator (- s)); MULTIPLY by 2^s a left
+shift (:ash operand s). Otherwise return STATEMENT unchanged."
   (unless (listp statement)
     (return-from rewrite-divide-multiply-statement statement))
   (case (first statement)
-     (:divide
+     (:÷
       (let ((numerator (safe-getf (rest statement) :numerator))
             (denominator (safe-getf (rest statement) :denominator))
             (giving (safe-getf (rest statement) :giving)))
@@ -253,40 +255,38 @@ Otherwise return STATEMENT unchanged."
           (cond
             ((and numerator giving)
              (%append-statement-source-location
-              (list :compute :target giving
-                             :expression (list :shift-right numerator sc))
+              (list :move :from (list :ash numerator (- sc)) :to giving)
               statement))
             ((and numerator (null giving))
              (%append-statement-source-location
-              (list :compute :target numerator
-                             :expression (list :shift-right numerator sc))
+              (list :move :from (list :ash numerator (- sc)) :to numerator)
               statement))
             (t statement)))))
-    (:multiply
+    (:×
      (let ((multiplier (safe-getf (rest statement) :multiplier))
            (by (safe-getf (rest statement) :by))
            (giving (safe-getf (rest statement) :giving)))
-       (when (and (power-of-two-p by) (not (power-of-two-p multiplier)))
-         (return-from rewrite-divide-multiply-statement
-           (rewrite-divide-multiply-statement (list :multiple :multiplier by :by multiplier
-                                                              :giving giving))))
-       (unless (power-of-two-p multiplier)
-         (return-from rewrite-divide-multiply-statement statement))
-       (let ((sc (power-of-two-shift-count (literal-integer-value multiplier))))
-         (unless sc
+       ;; The power-of-two operand determines the shift count; the other operand
+       ;; is shifted. Result lands in GIVING, or back in BY when GIVING is absent.
+       (let ((pow-operand (cond ((power-of-two-p multiplier) multiplier)
+                                ((power-of-two-p by) by)
+                                (t nil))))
+         (unless pow-operand
            (return-from rewrite-divide-multiply-statement statement))
-         (cond
-           ((and by giving)
-            (%append-statement-source-location
-             (list :compute :target giving
-                            :expression (list :shift-left by sc))
-             statement))
-           ((and by (null giving))
-            (%append-statement-source-location
-             (list :compute :target by
-                            :expression (list :shift-left by sc))
-             statement))
-           (t statement)))))
+         (let ((sc (power-of-two-shift-count (literal-integer-value pow-operand))))
+           (unless sc
+             (return-from rewrite-divide-multiply-statement statement))
+           (let ((shifted (list :ash (if (eq pow-operand multiplier) by multiplier) sc)))
+             (cond
+               (giving
+                (%append-statement-source-location
+                 (list :move :from shifted :to giving)
+                 statement))
+               (by
+                (%append-statement-source-location
+                 (list :move :from shifted :to by)
+                 statement))
+               (t statement)))))))
     (t statement)))
 
 (defun rewrite-divide-multiply-in-list (statements)
@@ -307,61 +307,61 @@ Otherwise return STATEMENT unchanged."
 (defun %algebraic-simplify-add (a b)
   "After folding subexpressions A and B, rewrite @code{A + B} for integer constants.
 @code{A + (-k)} → @code{A - k}; @code{(-k) + B} → @code{B - k}; @code{+0} identities.
-Returns an integer or a @code{:add}/@code{:subtract} list."
+Returns an integer or a @code{:+}/@code{:-} list."
   (cond
     ((and (numberp a) (numberp b)) (+ a b))
-    ((and (integerp b) (minusp b)) (list :subtract :subtrahend a :from (- b) :giving nil))
-    ((and (integerp a) (minusp a)) (list :subtract :subtrahend b :from (- a) :giving nil))
+    ((and (integerp b) (minusp b)) (list :- :subtrahend a :from (- b) :giving nil))
+    ((and (integerp a) (minusp a)) (list :- :subtrahend b :from (- a) :giving nil))
     ((and (integerp b) (zerop b)) a)
     ((and (integerp a) (zerop a)) b)
     ((and (expression-constant-p a) (expression-constant-p b))
      (list :literal (format nil "(~a + ~a)"
                             (expression-constant-value a)
                             (expression-constant-value b))))
-    (t (list :add :from a :to b :giving nil))))
+    (t (list :+ :from a :to b :giving nil))))
 
 (defun %algebraic-simplify-subtract (a b)
   "Rewrite @code{A - B}: @code{A - (-k)} → @code{A + k}; @code{A - 0} → @code{A}."
   (cond
     ((and (numberp a) (numberp b)) (- a b))
-    ((and (integerp b) (minusp b)) (list :add a (- b)))
+    ((and (integerp b) (minusp b)) (list :+ a (- b)))
     ((and (integerp b) (zerop b)) a)
     ((and (expression-constant-p a) (expression-constant-p b))
      (list :literal (format nil "(~a - ~a)"
                             (expression-constant-value a)
                             (expression-constant-value b))))
-    (t (list :subtract :subtrahend b :from a :giving nil))))
+    (t (list :- :subtrahend b :from a :giving nil))))
 
 (defun %algebraic-simplify-multiply (a b)
-  "Integer identities: @code{*0}, @code{*1}; else @code{:multiply}."
+  "Integer identities: @code{*0}, @code{*1}; else @code{:×}."
   (cond
     ((and (numberp a) (numberp b)) (* a b))
     ((or (and (integerp a) (zerop a)) (and (integerp b) (zerop b))) 0)
     ((and (integerp a) (= a 1)) b)
     ((and (integerp b) (= b 1)) a)
     ((and (integerp a) (power-of-two-p a))
-     (list :shift-left b (log a 2)))
+     (list :ash b (log a 2)))
     ((and (integerp b) (power-of-two-p b))
-     (list :shift-left a (log b 2)))
+     (list :ash a (log b 2)))
     ((and (expression-constant-p a) (expression-constant-p b))
      (list :literal (format nil "(~a * ~a)"
                             (expression-constant-value a)
                             (expression-constant-value b))))
-    (t (list :multiply :multiplier a :by b :giving nil))))
+    (t (list :× :multiplier a :by b :giving nil))))
 
 (defun %algebraic-simplify-divide (a b)
-  "Integer @code{/1} and @code{0/n}; else @code{:divide}."
+  "Integer @code{/1} and @code{0/n}; else @code{:÷}."
   (cond
     ((and (numberp a) (numberp b)) (/ a b))
     ((and (integerp b) (= b 1)) a)
     ((and (integerp a) (zerop a) (integerp b) (not (zerop b))) 0)
     ((and (integerp b) (power-of-two-p b))
-     (list :shift-right a (log b 2)))
+     (list :ash a (log b 2)))
     ((and (expression-constant-p a) (expression-constant-p b))
      (list :literal (format nil "(~a / ~a)"
                             (expression-constant-value a)
                             (expression-constant-value b))))
-    (t (list :divide :numerator a :dividend b :giving nil))))
+    (t (list :÷ :numerator a :dividend b :giving nil))))
 
 (defun fold-literal-expression (expression)
   "Fold EXPRESSION when all operands are integer or @code{:literal}; apply algebraic
@@ -398,77 +398,77 @@ Integer, simplified list, or EXPRESSION unchanged for non-arithmetic leaves."
     
     (case (first expression)
       
-      (:multiply-expr
+      (:×-expr
        (let ((a (fold-literal-expression (second expression)))
              (b (fold-literal-expression (third expression))))
          (cond ((and (integerp a) (integerp b)) (* a b))
                ((or (= a 0) (= b 0)) 0)
                ((= a 1) b)
                ((= b 1) a)
-               (t (list :multiply-expr a b)))))
+               (t (list :×-expr a b)))))
       
-      (:divide-expr
+      (:÷-expr
        (let ((a (fold-literal-expression (second expression)))
              (b (fold-literal-expression (third expression))))
          (cond ((and (integerp a) (integerp b)) (/ a b))
                ((= b 1) a)
-               (t (list :divide-expr a b)))))
+               (t (list :÷-expr a b)))))
       
-      (:add-expr
+      (:+expr
        (let ((a (fold-literal-expression (second expression)))
              (b (fold-literal-expression (third expression))))
          (cond ((and (integerp a) (integerp b)) (+ a b))
                ((and (numberp b) (minusp b))
-                (list :subtract-expr a (- b)))
-               (t (list :add-expr a b)))))
+                (list :-expr a (- b)))
+               (t (list :+expr a b)))))
       
-      (:subtract-expr
+      (:-expr
        (let ((a (fold-literal-expression (second expression)))
              (b (fold-literal-expression (third expression))))
          (cond ((and (integerp a) (integerp b)) (- a b))
                ((and (numberp b) (minusp b))
-                (list :add-expr a (- b)))
-               (t (list :subtract-expr a b)))))
+                (list :+expr a (- b)))
+               (t (list :-expr a b)))))
       
-      (:add
+      (:+
        (let ((a (fold-literal-expression (getf (rest expression) :from)))
              (b (fold-literal-expression (getf (rest expression) :to))))
          (cond ((and (integerp a) (integerp b)) (+ a b))
                (t (let ((s (%algebraic-simplify-add a b)))
-                    (if (and (listp s) (eq (first s) :subtract))
+                    (if (and (listp s) (eq (first s) :-))
                         (fold-literal-expression s)
                         s))))))
-      (:subtract
+      (:-
        (let ((a (fold-literal-expression (getf (rest expression) :from)))
              (b (fold-literal-expression (getf (rest expression) :subtrahend))))
          (cond ((and (integerp a) (integerp b)) (- a b))
                (t (let ((s (%algebraic-simplify-subtract a b)))
-                    (if (and (listp s) (eq (first s) :add))
+                    (if (and (listp s) (eq (first s) :+))
                         (fold-literal-expression s)
                         s))))))
-      (:multiply
+      (:×
        (let ((a (fold-literal-expression (getf (rest expression) :multiplier)))
              (b (fold-literal-expression (getf (rest expression) :by))))
          (%algebraic-simplify-multiply a b)))
       
-      (:divide
+      (:÷
        (let ((a (fold-literal-expression (getf (rest expression) :numerator)))
              (b (fold-literal-expression (getf (rest expression) :denominator))))
          (%algebraic-simplify-divide a b)))
       
-      (:shift-left
+      (:ash
        (let ((a (fold-literal-expression (second expression)))
              (n (third expression)))
          (if (and (integerp a) (integerp n))
              (ash a n)
-             (list :shift-left a n))))
+             (list :ash a n))))
       
-       (:shift-right
+       (:ash
         (let ((a (fold-literal-expression (second expression)))
               (n (third expression)))
           (if (and (integerp a) (integerp n))
               (ash a (- n))
-              (list :shift-right a n))))
+              (list :ash a n))))
        
        ;; Canonical arithmetic operators
        (:+
@@ -543,77 +543,65 @@ Integer, simplified list, or EXPRESSION unchanged for non-arithmetic leaves."
       (fold-constants-in-list (subseq statement 1 (1- (length statement))))))
   (case (first statement)
     
-    (:divide
+    (:÷
      (let ((numerator (safe-getf (rest statement) :numerator))
-           (dividend (safe-getf (rest statement) :dividend))
-           (giving (getf (rest statement) :giving t)))
-       (if (and numerator dividend (not giving)
-                (expression-constant-p numerator) (expression-constant-p dividend))
-           (list :literal (format nil "(~a / ~a)"
-                                  (expression-constant-value numerator)
-                                  (expression-constant-value dividend)))
-           statement)))
+           (dividend (safe-getf (rest statement) :dividend)))
+       (let* ((n (and numerator dividend
+                      (expression-constant-p numerator) (expression-constant-p dividend)))
+              (num (when n (expression-constant-value numerator)))
+              (den (when n (expression-constant-value dividend))))
+         (if (and num den (not (zerop den)))
+             (multiple-value-bind (q r) (truncate num den)
+               (declare (ignore r))
+               (list :literal q))
+             statement))))
     
-    (:multiply
+    (:×
      (let ((multiplier (safe-getf (rest statement) :multiplier))
-           (by (safe-getf (rest statement) :by))
-           (giving (getf (rest statement) :giving t)))
-       (if (and multiplier by (not giving)
+           (by (safe-getf (rest statement) :by)))
+       (if (and multiplier by
                 (expression-constant-p multiplier) (expression-constant-p by))
-           (list :literal (format nil "(~a * ~a)"
-                                  (expression-constant-value multiplier)
-                                  (expression-constant-value by)))
+           (list :literal (* (expression-constant-value multiplier)
+                             (expression-constant-value by)))
            statement)))
     
-    (:add
+    (:+
      (let ((from (safe-getf (rest statement) :from))
-           (to (safe-getf (rest statement) :to))
-           (giving (getf (rest statement) :giving t)))
-       (if (and from to (not giving)
+           (to (safe-getf (rest statement) :to)))
+       (if (and from to
                 (expression-constant-p from) (expression-constant-p to))
-           (list :literal (format nil "(~a + ~a)"
-                                  (expression-constant-value from)
-                                  (expression-constant-value to)))
+           (list :literal (+ (expression-constant-value from)
+                             (expression-constant-value to)))
            statement)))
     
-    (:subtract
+    (:-
      (let ((from (safe-getf (rest statement) :from))
-           (subtrahend (safe-getf (rest statement) :subtrahend))
-           (giving (getf (rest statement) :giving t)))
-       (if (and from subtrahend (not giving)
+           (subtrahend (safe-getf (rest statement) :subtrahend)))
+       (if (and from subtrahend
                 (expression-constant-p from) (expression-constant-p subtrahend))
-           (list :literal (format nil "(~a - ~a)"
-                                  (expression-constant-value from)
-                                  (expression-constant-value subtrahend)))
+           (list :literal (- (expression-constant-value from)
+                             (expression-constant-value subtrahend)))
            statement)))
 
-    (:shift-left
+    (:ash
      (if (and (expression-constant-p (second statement)) (expression-constant-p (third statement)))
-         (list :literal (format nil "(~a << ~a)"
-                                (expression-constant-value (second statement))
-                                (expression-constant-value (third statement))))
+         (list :literal (ash (expression-constant-value (second statement))
+                             (expression-constant-value (third statement))))
          statement))
     
-    (:shift-right
-     (if (and (expression-constant-p (second statement)) (expression-constant-p (third statement)))
-         (list :literal (format nil "(~a >> ~a)"
-                                (expression-constant-value (second statement))
-                                (expression-constant-value (third statement))))
-         statement))
-    
-    (:bit-or
+    (:∨
      (if (every #'expression-constant-p (rest statement))
          (list :literal (format nil "(~{~a~^ | ~})"
                                 (mapcar #'expression-constant-value (rest statement))))
          statement))
     
-    (:bit-and
+    (:∧
      (if (every #'expression-constant-p (rest statement))
          (list :literal (format nil "(~{~a~^ & ~})"
                                 (mapcar #'expression-constant-value (rest statement))))
          statement))
     
-    (:bit-xor
+    (:⊻
      (if (every #'expression-constant-p (rest statement))
          (list :literal (format nil "(~{~a~^ ^ ~})"
                                 (mapcar #'expression-constant-value (rest statement))))
@@ -873,8 +861,8 @@ A top-level @code{GOBACK} must not drop following paragraphs — they are @code{
   
   (case (first expression)
     
-    ;; Multiplication: (:multiply-expr X Y)
-    (:multiply-expr
+    ;; Multiplication: (:×-expr X Y)
+    (:×-expr
      (let ((a (strength-reduce-expression (second expression)))
            (b (strength-reduce-expression (third expression))))
        ;; Multiply by 0 → 0
@@ -885,14 +873,14 @@ A top-level @code{GOBACK} must not drop following paragraphs — they are @code{
              ;; Multiply by power of 2 → shift left
              ((is-power-of-two-p b)
               (let ((shift (shift-count-for-power-of-two b)))
-                (list :shift-left a shift)))
+                (list :ash a shift)))
              ((is-power-of-two-p a)
               (let ((shift (shift-count-for-power-of-two a)))
-                (list :shift-left b shift)))
-             (t (list :multiply-expr a b)))))
+                (list :ash b shift)))
+             (t (list :×-expr a b)))))
     
-    ;; Division: (:divide-expr X Y)
-    (:divide-expr
+    ;; Division: (:÷-expr X Y)
+    (:÷-expr
      (let ((a (strength-reduce-expression (second expression)))
            (b (strength-reduce-expression (third expression))))
        ;; Divide by 1 → operand
@@ -900,11 +888,11 @@ A top-level @code{GOBACK} must not drop following paragraphs — they are @code{
              ;; Divide by power of 2 (unsigned) → shift right
              ((is-power-of-two-p b)
               (let ((shift (shift-count-for-power-of-two b)))
-                (list :shift-right a shift)))
-             (t (list :divide-expr a b)))))
+                (list :ash a shift)))
+             (t (list :÷-expr a b)))))
     
-    ;; Addition: (:add-expr X Y)
-    (:add-expr
+    ;; Addition: (:+expr X Y)
+    (:+expr
      (let ((a (strength-reduce-expression (second expression)))
            (b (strength-reduce-expression (third expression))))
        ;; Add 0 → operand
@@ -912,19 +900,19 @@ A top-level @code{GOBACK} must not drop following paragraphs — they are @code{
              ((eql a 0) b)
              ;; Convert +(-k) to -(k)
              ((and (numberp b) (minusp b))
-              (list :subtract-expr a (- b)))
-             (t (list :add-expr a b)))))
+              (list :-expr a (- b)))
+             (t (list :+expr a b)))))
     
-    ;; Subtraction: (:subtract-expr X Y)
-    (:subtract-expr
+    ;; Subtraction: (:-expr X Y)
+    (:-expr
      (let ((a (strength-reduce-expression (second expression)))
            (b (strength-reduce-expression (third expression))))
        ;; Subtract 0 → operand
        (cond ((eql b 0) a)
              ;; Subtract -k → add k
              ((and (numberp b) (minusp b))
-              (list :add-expr a (- b)))
-             (t (list :subtract-expr a b)))))
+              (list :+expr a (- b)))
+             (t (list :-expr a b)))))
     
     ;; Modulo: (:modulo-expr X Y)
     (:modulo-expr
@@ -970,19 +958,19 @@ A top-level @code{GOBACK} must not drop following paragraphs — they are @code{
      (let ((a (strength-reduce-expression (second expression))))
        (list :¬ a)))
     
-    ;; Shift left: (:shift-left X N)
-    (:shift-left
+    ;; Shift left: (:ash X N)
+    (:ash
      (let ((a (strength-reduce-expression (second expression)))
            (n (third expression)))
        (cond ((eql n 0) a)
-             (t (list :shift-left a n)))))
+             (t (list :ash a n)))))
     
-    ;; Shift right: (:shift-right X N)
-    (:shift-right
+    ;; Shift right: (:ash X N)
+    (:ash
      (let ((a (strength-reduce-expression (second expression)))
            (n (third expression)))
        (cond ((eql n 0) a)
-             (t (list :shift-right a n)))))
+             (t (list :ash a n)))))
     
     ;; For other expressions, recurse on sublists
     (otherwise
@@ -1007,42 +995,42 @@ A top-level @code{GOBACK} must not drop following paragraphs — they are @code{
            :from (strength-reduce-expression (safe-getf (rest statement) :from))
            :to (safe-getf (rest statement) :to)))
     
-    ;; :add :from expr :to (expr|id) [:giving id]
-    (:add
+    ;; :+ :from expr :to (expr|id) [:giving id]
+    (:+
      (let ((from (safe-getf (rest statement) :from))
            (to (safe-getf (rest statement) :to))
            (giving (safe-getf (rest statement) :giving)))
-       (list* :add
+       (list* :+
               :from (strength-reduce-expression from)
               :to (if (stringp to) to (strength-reduce-expression to))
               (when giving (list :giving giving)))))
     
-    ;; :subtract :minuend expr :subtrahend expr [:giving id]
-    (:subtract
+    ;; :- :minuend expr :subtrahend expr [:giving id]
+    (:-
      (let ((minuend (safe-getf (rest statement) :minuend))
            (subtrahend (safe-getf (rest statement) :subtrahend))
            (giving (safe-getf (rest statement) :giving)))
-       (list* :subtract
+       (list* :-
               :minuend (strength-reduce-expression minuend)
               :subtrahend (strength-reduce-expression subtrahend)
               (when giving (list :giving giving)))))
     
-    ;; :multiply :multiplier expr :by expr [:giving id]
-    (:multiply
+    ;; :× :multiplier expr :by expr [:giving id]
+    (:×
      (let ((multiplier (safe-getf (rest statement) :multiplier))
            (by (safe-getf (rest statement) :by))
            (giving (safe-getf (rest statement) :giving)))
-       (list* :multiply
+       (list* :×
               :multiplier (strength-reduce-expression multiplier)
               :by (strength-reduce-expression by)
               (when giving (list :giving giving)))))
     
-    ;; :divide :numerator expr :denominator expr [:giving id]
-    (:divide
+    ;; :÷ :numerator expr :denominator expr [:giving id]
+    (:÷
      (let ((numerator (safe-getf (rest statement) :numerator))
            (denominator (safe-getf (rest statement) :denominator))
            (giving (safe-getf (rest statement) :giving)))
-       (list* :divide
+       (list* :÷
               :numerator (strength-reduce-expression numerator)
               :denominator (strength-reduce-expression denominator)
               (when giving (list :giving giving)))))

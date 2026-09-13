@@ -61,31 +61,31 @@
 
 (test 6502/add-byte-binary
   "6502 ADD of 1-byte binary emits clc and adc."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :6502 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :6502 '("A" 1 "B" 1))))
     (is (search "clc" asm))
     (is (search "adc" asm))))
 
 (test 6502/add-2byte-binary
   "6502 ADD of 2-byte binary emits multibyte add sequence."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :6502 '("A" 2 "B" 2))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :6502 '("A" 2 "B" 2))))
     (is (search "adc" asm))
     (is (search "sta" asm))))
 
 (test 6502/add-4byte-binary
   "6502 ADD of 4-byte binary emits multibyte add sequence."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :6502 '("A" 4 "B" 4))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :6502 '("A" 4 "B" 4))))
     (is (search "adc" asm))
     (is (search "sta" asm))))
 
 (test 6502/subtract-byte-binary
   "6502 SUBTRACT of 1-byte binary emits sec and sbc."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :6502 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :6502 '("A" 1 "B" 1))))
     (is (search "sec" asm))
     (is (search "sbc" asm))))
 
 (test 6502/subtract-2byte-binary
   "6502 SUBTRACT of 2-byte binary emits multibyte subtract sequence."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :6502 '("A" 2 "B" 2))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :6502 '("A" 2 "B" 2))))
     (is (search "sbc" asm))
     (is (search "sta" asm))))
 
@@ -107,13 +107,13 @@
 
 (test 65c02/add-byte-binary
   "65C02 ADD of 1-byte binary emits clc and adc."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :65c02 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :65c02 '("A" 1 "B" 1))))
     (is (search "clc" asm))
     (is (search "adc" asm))))
 
 (test 65c02/subtract-byte-binary
   "65C02 SUBTRACT of 1-byte binary emits sec and sbc."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :65c02 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :65c02 '("A" 1 "B" 1))))
     (is (search "sec" asm))
     (is (search "sbc" asm))))
 
@@ -123,7 +123,7 @@
 
 (test 65c816/add-byte-binary
   "65C816 ADD of 1-byte binary emits clc and adc."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :65c816 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :65c816 '("A" 1 "B" 1))))
     (is (search "clc" asm))
     (is (search "adc" asm))))
 
@@ -133,7 +133,7 @@
 
 (test huc6280/add-byte-binary
   "HuC6280 ADD of 1-byte binary emits clc and adc."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :huc6280 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :huc6280 '("A" 1 "B" 1))))
     (is (search "clc" asm))
     (is (search "adc" asm))))
 
@@ -143,13 +143,13 @@
 
 (test rp2a03/add-byte-binary
   "RP2A03 ADD of 1-byte binary emits clc and adc."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :rp2a03 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :rp2a03 '("A" 1 "B" 1))))
     (is (search "clc" asm))
     (is (search "adc" asm))))
 
 (test rp2a03/subtract-byte-binary
   "RP2A03 SUBTRACT of 1-byte binary emits sec and sbc."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :rp2a03 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :rp2a03 '("A" 1 "B" 1))))
     (is (search "sec" asm))
     (is (search "sbc" asm))))
 
@@ -159,22 +159,22 @@
 
 (test z80/add-byte-binary
   "Z80 ADD of 1-byte binary emits add instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :z80 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :z80 '("A" 1 "B" 1))))
     (is (search "add" asm))))
 
 (test z80/add-2byte-binary
   "Z80 ADD of 2-byte binary emits add hl,de sequence."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :z80 '("A" 2 "B" 2))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :z80 '("A" 2 "B" 2))))
     (is (search "add" asm))))
 
 (test z80/subtract-byte-binary
   "Z80 SUBTRACT of 1-byte binary emits sub instruction."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :z80 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :z80 '("A" 1 "B" 1))))
     (is (search "sub" asm))))
 
 (test z80/subtract-2byte-binary
   "Z80 SUBTRACT of 2-byte binary emits or a / sbc hl,de."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :z80 '("A" 2 "B" 2))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :z80 '("A" 2 "B" 2))))
     (is (search "or a" asm))
     (is (search "sbc" asm))))
 
@@ -189,12 +189,12 @@
 
 (test cp1610/add-byte-binary
   "cp1610 ADD of 1-byte emits ADDR instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :cp1610 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :cp1610 '("A" 1 "B" 1))))
     (is (search "ADDR" asm))))
 
 (test cp1610/subtract-byte-binary
   "cp1610 SUBTRACT of 1-byte emits SUBR instruction."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :cp1610 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :cp1610 '("A" 1 "B" 1))))
     (is (search "SUBR" asm))))
 
 (test cp1610/move-byte-binary
@@ -209,12 +209,12 @@
 
 (test sm83/add-byte-binary
   "SM83 ADD of 1-byte binary emits add instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :sm83 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :sm83 '("A" 1 "B" 1))))
     (is (search "add" asm))))
 
 (test sm83/subtract-byte-binary
   "SM83 SUBTRACT of 1-byte binary emits sub instruction."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :sm83 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :sm83 '("A" 1 "B" 1))))
     (is (search "sub" asm))))
 
 (test sm83/move-byte-binary
@@ -228,12 +228,12 @@
 
 (test m6800/add-byte-binary
   "m6800 ADD of 1-byte binary emits ABA instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :m6800 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :m6800 '("A" 1 "B" 1))))
     (is (search "ABA" asm))))
 
 (test m6800/subtract-byte-binary
   "m6800 SUBTRACT of 1-byte binary emits SBA instruction."
-  (let ((asm (compile-with-precision (list :subtract :subtrahend "A" :from "B") :m6800 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision (list :- :subtrahend "A" :from "B") :m6800 '("A" 1 "B" 1))))
     (is (search "SBA" asm))))
 
 (test m6800/move-byte-binary
@@ -248,23 +248,23 @@
 
 (test m68k/add-byte-binary
   "m68k ADD of 1-byte binary emits add instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :m68k '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :m68k '("A" 1 "B" 1))))
     (is (search "add" asm))))
 
 (test m68k/add-2byte-binary
   "m68k ADD of 2-byte binary emits add.w instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :m68k '("A" 2 "B" 2))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :m68k '("A" 2 "B" 2))))
     (is (search "add" asm))
     (is (search ".w" asm))))
 
 (test m68k/subtract-byte-binary
   "m68k SUBTRACT of 1-byte binary emits sub instruction."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :m68k '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :m68k '("A" 1 "B" 1))))
     (is (search "sub" asm))))
 
 (test m68k/subtract-2byte-binary
   "m68k SUBTRACT of 2-byte binary emits sub.w instruction."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :m68k '("A" 2 "B" 2))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :m68k '("A" 2 "B" 2))))
     (is (search "sub" asm))
     (is (search ".w" asm))))
 
@@ -286,12 +286,12 @@
 
 (test i286/add-byte-binary
   "i286 ADD of 1-byte binary emits add instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :i286 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :i286 '("A" 1 "B" 1))))
     (is (search "add" asm))))
 
 (test i286/subtract-byte-binary
   "i286 SUBTRACT of 1-byte binary emits sub instruction."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :i286 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :i286 '("A" 1 "B" 1))))
     (is (search "sub" asm))))
 
 (test i286/move-byte-binary
@@ -305,12 +305,12 @@
 
 (test arm7/add-byte-binary
   "ARM7 ADD of 1-byte binary emits add instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :arm7 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :arm7 '("A" 1 "B" 1))))
     (is (search "add" asm))))
 
 (test arm7/subtract-byte-binary
   "ARM7 SUBTRACT of 1-byte binary emits subs instruction."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :arm7 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :arm7 '("A" 1 "B" 1))))
     (is (search "subs" asm))))
 
 (test arm7/move-byte-binary
@@ -324,12 +324,12 @@
 
 (test f8/add-byte-binary
   "F8 ADD of 1-byte binary emits AS instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :f8 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :f8 '("A" 1 "B" 1))))
     (is (search "AS" asm))))
 
 (test f8/subtract-byte-binary
   "F8 SUBTRACT of 1-byte binary emits COM/INC/AS sequence."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :f8 '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :f8 '("A" 1 "B" 1))))
     (is (search "COM" asm))
     (is (search "INC" asm))
     (is (search "AS" asm))))
@@ -346,12 +346,12 @@
 
 (test stack/add-byte-binary
   "Stack ADD of 1-byte binary emits add instruction."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :stack '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :stack '("A" 1 "B" 1))))
     (is (search "add" asm))))
 
 (test stack/subtract-byte-binary
   "Stack SUBTRACT of 1-byte binary emits sub instruction."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :stack '("A" 1 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :stack '("A" 1 "B" 1))))
     (is (search "sub" asm))))
 
 (test stack/move-byte-binary
@@ -365,12 +365,12 @@
 
 (test 6502/add-mixed-scale-1v15-plus-15v1
   "6502 ADD of 1v15 + 15v1 emits scaled binary add with widen."
-  (let ((asm (compile-with-precision '(:add :from "A" :to "B") :6502 '("A" 1 "B" 2))))
+  (let ((asm (compile-with-precision '(:+ :from "A" :to "B") :6502 '("A" 1 "B" 2))))
     (is (search "adc" asm))))
 
 (test 6502/subtract-mixed-scale
   "6502 SUBTRACT of mixed scales emits scaled binary subtract."
-  (let ((asm (compile-with-precision '(:subtract :subtrahend "A" :from "B") :6502 '("A" 2 "B" 1))))
+  (let ((asm (compile-with-precision '(:- :subtrahend "A" :from "B") :6502 '("A" 2 "B" 1))))
     (is (search "sbc" asm))))
 
 ;;;

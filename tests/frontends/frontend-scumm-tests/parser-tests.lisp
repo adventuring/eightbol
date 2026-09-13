@@ -26,7 +26,7 @@
 (is t))
 
 (test scumm_parser_arithmetic
-  "PARSER: SCUMM arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: SCUMM arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test scumm_parser_conditionals

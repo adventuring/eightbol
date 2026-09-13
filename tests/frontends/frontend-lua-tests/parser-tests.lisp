@@ -26,7 +26,7 @@
 (is t))
 
 (test lua_parser_arithmetic
-  "PARSER: LUA arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: LUA arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test lua_parser_conditionals

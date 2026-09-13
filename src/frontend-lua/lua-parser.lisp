@@ -69,7 +69,7 @@
      (|local| ident |=| expression
               (lambda (_local var _eq expr)
                 (declare (ignore _local _eq))
-                (list :set :target var :value expr))))
+                (list :move :from expr :to var))))
 
     ;; Function declaration
     (function-declaration
@@ -113,16 +113,16 @@
              (declare (ignore _for _eq _comma1 _comma2 _do _end))
              (list :perform :body body :varying var :from from :to to :by by))))
 
-   ;; Return statement — emit canonical :exit-method
+   ;; Return statement — emit canonical :goback
    (return-statement
     (|return|
      (lambda (_ret)
        (declare (ignore _ret))
-       (list :exit-method)))
+       (list :goback)))
     (|return| expression
               (lambda (_ret expr)
                 (declare (ignore _ret))
-                (list :exit-method :value expr))))
+                (list :goback :value expr))))
 
    ;; Expression statement (e.g., function call, method call, assignment)
    (expression-statement
@@ -298,27 +298,27 @@
           (expression |&| expression
                       (lambda (left _op right)
                         (declare (ignore _op))
-                        (list :bit-and left right)))
+                        (list :∧ left right)))
           (expression |\|| expression
                       (lambda (left _op right)
                         (declare (ignore _op))
-                        (list :bit-or left right)))
+                        (list :∨ left right)))
           (expression |\^| expression
                       (lambda (left _op right)
                         (declare (ignore _op))
-                        (list :bit-xor left right)))
+                        (list :⊻ left right)))
           (expression |<<| expression
                       (lambda (left _op right)
                         (declare (ignore _op))
-                        (list :ash :value left :shift right)))
+                        (list :ash left right)))
           (expression |>>| expression
                       (lambda (left _op right)
                         (declare (ignore _op))
-                        (list :ash :value left :shift (list :- 0 right))))
+                        (list :ash left (list :- 0 right))))
           (|~| expression
                (lambda (_op expr)
                  (declare (ignore _op))
-                 (list :bit-not expr)))
+                 (list :¬ expr)))
           (|not| expression
                  (lambda (_not expr)
                    (declare (ignore _not))
@@ -326,7 +326,7 @@
          (ident |=| expression
                (lambda (var _eq expr)
                  (declare (ignore _eq))
-                 (list :set :target var :value expr)))
+                 (list :move :from expr :to var)))
        (ident |:| ident function-args
               (lambda (obj _colon method args)
                 (declare (ignore _colon args))
@@ -389,12 +389,12 @@
   (list :invoke obj method))
 
 (defun parse/lua-set (target value)
-  "Convert Lua assignment to EightBol :set node."
-  (list :set target value))
+  "Convert Lua assignment to EightBol :move node."
+  (list :move :from value :to target))
 
 (defun parse/lua-return (&optional value)
-  "Convert Lua return to EightBol :exit-method node."
-  (list :exit-method :value value))
+  "Convert Lua return to EightBol :goback node."
+  (list :goback :value value))
 
 (defun parse/lua-dialogue (text)
   "Create a dialogue AST node."
@@ -475,29 +475,29 @@
          ((string-equal target "bit_and")
           (destructuring-bind (&key args) (cdr ast)
             (when (= (length args) 2)
-              (list :bit-and (first args) (second args)))))
+              (list :∧ (first args) (second args)))))
          ((string-equal target "bit_or")
           (destructuring-bind (&key args) (cdr ast)
             (when (= (length args) 2)
-              (list :bit-or (first args) (second args)))))
+              (list :∨ (first args) (second args)))))
          ((string-equal target "bit_xor")
           (destructuring-bind (&key args) (cdr ast)
             (when (= (length args) 2)
-              (list :bit-xor (first args) (second args)))))
+              (list :⊻ (first args) (second args)))))
          ((string-equal target "bit_not")
           (destructuring-bind (&key args) (cdr ast)
             (when (= (length args) 1)
-              (list :bit-not (first args)))))
+              (list :¬ (first args)))))
          ;; Shift operators
          ((string-equal target "lshift")
           (destructuring-bind (&key args) (cdr ast)
             (when (= (length args) 2)
-              (list :ash :value (first args) :shift (second args)))))
+              (list :ash (first args) (second args)))))
          ((string-equal target "rshift")
           (destructuring-bind (&key args) (cdr ast)
             (when (= (length args) 2)
               ;; Right shift is negative left shift
-              (list :ash :value (first args) :shift (list :- 0 (second args))))))
+              (list :ash (first args) (list :- 0 (second args))))))
          ;; Otherwise, return transformed call
          (t (list* :call (rest (mapcar #'lua-transform-special-calls ast)))))))
     ;; Recursively transform all nested structures

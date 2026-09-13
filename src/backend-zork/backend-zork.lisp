@@ -74,7 +74,7 @@
     (compile-zork-load from)
     (compile-zork-store to)))
 
-(defmethod compile-statement ((cpu (eql :zork)) (stmt-type (eql :add)) ast-node-data)
+(defmethod compile-statement ((cpu (eql :zork)) (stmt-type (eql :+)) ast-node-data)
   (let ((from (getf ast-node-data :from))
         (to (getf ast-node-data :to))
         (giving (getf ast-node-data :giving)))
@@ -82,7 +82,7 @@
     (compile-zork-load from)
     (compile-zork-store (or giving to))))
 
-(defmethod compile-statement ((cpu (eql :zork)) (stmt-type (eql :subtract)) ast-node-data)
+(defmethod compile-statement ((cpu (eql :zork)) (stmt-type (eql :-)) ast-node-data)
   (let ((from (getf ast-node-data :from))
         (to (getf ast-node-data :to))
         (giving (getf ast-node-data :giving)))

@@ -11,7 +11,7 @@
 ;;;   * falls through to Overshoot-Detected.
 ;;;   Overshoot-Detected.
 ;;;
-;;; Bug A: backend-6502 :subtract branch read the rhs from :to instead
+;;; Bug A: backend-6502 :- branch read the rhs from :to instead
 ;;; of :subtrahend, passing NIL to emit-6502-alu-with-memory-rhs and
 ;;; faulting in emit-6502-value: "missing expression (NIL)" (Boat,
 ;;; Intercardinal-Course).
@@ -52,7 +52,7 @@ hermetic tests.  Avoids inheriting state from a previous compile run."
          (eightbol::*6502-x-index-expression* :unknown))
      ,@body))
 
-;;;; Bug A: :subtract rhs from :subtrahend
+;;;; Bug A: :- rhs from :subtrahend
 
 (test repro/subtract-uses-subtrahend-not-to
   "emit-6502-load-expression on (:SUBTRACT :FROM A :SUBTRAHEND B :GIVING NIL)
@@ -66,7 +66,7 @@ Boat.cob / Intercardinal-Course.cob produced
     (let* ((asm (with-output-to-string (out)
                   (eightbol::emit-6502-load-expression
                    out
-                   '(:subtract :from "Foo" :subtrahend "Bar" :giving nil)
+                   '(:- :from "Foo" :subtrahend "Bar" :giving nil)
                    "T"))))
       ;; Must compute Foo - Bar.  Expect lda Foo, sec, sbc Bar.
       (is (search "lda" asm) "lda should be emitted for the :from operand")
@@ -81,7 +81,7 @@ must SBC against the named subtrahend (or its constant), not NIL."
     (let* ((asm (with-output-to-string (out)
                   (eightbol::emit-6502-load-expression
                    out
-                   '(:subtract :from "Width-Mask" :subtrahend 1 :giving nil)
+                   '(:- :from "Width-Mask" :subtrahend 1 :giving nil)
                    "T"))))
       ;; The Boat regression: previously sbc was emitted with no operand
       ;; (NIL -> emit-6502-value missing expression).  Verify sbc names the constant 1.
@@ -215,7 +215,7 @@ production action is #'list, so single-token grammar rules must specify
               (and (listp phrases) (keywordp (first phrases))))
           "WHEN phrases must be a bare expression/keyword, not a wrapping list"))))
 
-;;;; Bug D: emit-6502-load-byte-n ECASE missed :shift-left / :shift-right.
+;;;; Bug D: emit-6502-load-byte-n ECASE missed :ash / :ash.
 
 (test repro/load-byte-n-handles-shift-left
   "emit-6502-load-byte-n must handle (:SHIFT-LEFT V N) and (:SHIFT-RIGHT V N).
@@ -224,7 +224,7 @@ crashed with @code{:SHIFT-LEFT fell through ECASE expression}."
   (with-empty-eightbol-tables
     (setf (gethash "Move-XH" eightbol::*working-storage*)
           '(:usage :binary :pic "99"))
-    (dolist (op '(:shift-left :shift-right))
+    (dolist (op '(:ash :ash))
       (let ((etype
               (handler-case
                   (progn (with-output-to-string (out)
@@ -330,7 +330,7 @@ pattern where @code{*} comments appear mid-method before paragraphs."
 (test repro/boat-draw-frame-complex-expression-compiles
   "The Width BIT-OR / BIT-XOR / SUBTRACT expression from Boat.Draw-Frame
 must compile without @code{emit-6502-value: missing expression (NIL)}.
-Regression: the 6502 backend's :subtract branches in both
+Regression: the 6502 backend's :- branches in both
 emit-6502-load-expression AND emit-6502-load-byte-n read the rhs from
 @code{:to} instead of @code{:subtrahend}."
   (let ((slots (make-hash-table :test 'equalp))
@@ -349,16 +349,16 @@ emit-6502-load-expression AND emit-6502-load-byte-n read the rhs from
                         '(:method :method-id "Draw-Frame"
                           :statements
                           ((:move :to (:subscript "Decal-Pal-Width" "Decal-Index")
-                            :from (:bit-or
-                                   (:bit-xor "Width-Mask"
-                                    (:bit-and "Width-Mask"
-                                     (:subtract :subtrahend 1
-                                      :from (:multiply
-                                             :by (:add :from (:bit-and (:of "Width" "Self") 3)
+                            :from (:∨
+                                   (:⊻ "Width-Mask"
+                                    (:∧ "Width-Mask"
+                                     (:- :subtrahend 1
+                                      :from (:×
+                                             :by (:+ :from (:∧ (:of "Width" "Self") 3)
                                                   :to 1 :giving nil)
                                              :multiplier 2 :giving nil)
                                       :giving nil)))
-                                   (:shift-left 5 5)))
+                                   (:ash 5 5)))
                            (:goback)))
                         "Boat" :6502
                         :slot-table slots
@@ -374,4 +374,3 @@ emit-6502-load-expression AND emit-6502-load-byte-n read the rhs from
       ;; Other errors (e.g. test fixture incompleteness) are tolerated.
       (is (not (eq :missing-expression-nil etype))
           "Boat.Draw-Frame compile regressed to emit-6502-value: missing expression (NIL)"))))
-))

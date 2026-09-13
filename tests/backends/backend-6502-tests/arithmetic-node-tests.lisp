@@ -14,7 +14,7 @@
 
 (test backend_6502_add_8bit
   "6502 backend: 8-bit ADD produces LDA/CLC/ADC/STA sequence"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))
@@ -22,7 +22,7 @@
 
 (test backend_6502_add_16bit
   "6502 backend: 16-bit ADD produces double-byte sequence"
-  (let* ((ast '(:add (:const 1000) (:var x)))
+  (let* ((ast '(:+ (:const 1000) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))
@@ -30,7 +30,7 @@
 
 (test backend_6502_subtract_8bit
   "6502 backend: 8-bit SUBTRACT produces LDA/SEC/SBC/STA sequence"
-  (let* ((ast '(:subtract (:var x) (:const 1)))
+  (let* ((ast '(:- (:var x) (:const 1)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))
@@ -38,7 +38,7 @@
 
 (test backend_6502_multiply_8bit
   "6502 backend: 8-bit MULTIPLY uses multiplication routine or shift"
-  (let* ((ast '(:multiply (:var x) (:const 2)))
+  (let* ((ast '(:× (:var x) (:const 2)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))
@@ -46,7 +46,7 @@
 
 (test backend_6502_divide_8bit
   "6502 backend: 8-bit DIVIDE uses division routine or shift"
-  (let* ((ast '(:divide (:var x) (:const 2)))
+  (let* ((ast '(:÷ (:var x) (:const 2)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))
@@ -54,7 +54,7 @@
 
 (test backend_6502_fixed_point_arithmetic
   "6502 backend: Fixed-point arithmetic maintains scale through shifts"
-  (let* ((ast '(:add (:fixed-point (:var x) 8 8) (:fixed-point (:var y) 8 8)))
+  (let* ((ast '(:+ (:fixed-point (:var x) 8 8) (:fixed-point (:var y) 8 8)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))
@@ -62,7 +62,7 @@
 
 (test backend_6502_arithmetic_overflow
   "6502 backend: Overflow handling uses carry flag"
-  (let* ((ast '(:add (:const 200) (:const 100)))
+  (let* ((ast '(:+ (:const 200) (:const 100)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))
@@ -70,7 +70,7 @@
 
 (test backend_6502_nested_arithmetic
   "6502 backend: Nested arithmetic (A + B) * C produces correct sequence"
-  (let* ((ast '(:multiply (:add (:var x) (:var y)) (:const 2)))
+  (let* ((ast '(:× (:+ (:var x) (:var y)) (:const 2)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))
@@ -78,7 +78,7 @@
 
 (test backend_6502_arithmetic_bcd
   "6502 backend: BCD arithmetic uses decimal mode when appropriate"
-  (let* ((ast '(:add (:const 9) (:const 9)))
+  (let* ((ast '(:+ (:const 9) (:const 9)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))
@@ -86,7 +86,7 @@
 
 (test backend_6502_arithmetic_register_preservation
   "6502 backend: Arithmetic operations don't clobber needed registers"
-  (let* ((ast '(:add (:var x) (:var y)))
+  (let* ((ast '(:+ (:var x) (:var y)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :6502 :output s))))
     (is (stringp output))

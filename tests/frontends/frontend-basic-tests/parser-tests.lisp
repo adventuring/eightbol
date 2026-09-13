@@ -26,7 +26,7 @@
 (is t))
 
 (test basic_parser_arithmetic
-  "PARSER: BASIC arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: BASIC arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test basic_parser_conditionals

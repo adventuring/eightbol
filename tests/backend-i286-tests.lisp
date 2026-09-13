@@ -111,13 +111,13 @@
 (test i286/add-literal-to-var
   "ADD literal TO var emits add instruction."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (i286-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (i286-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "add" asm)))))
 
 (test i286/subtract
   "SUBTRACT emits sub instruction."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (i286-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (i286-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sub" asm)))))
 
 ;;;
@@ -327,9 +327,9 @@
 (test i286/divide-non-power-of-two-signals-error
   "DIVIDE with non-power-of-two on i286 signals source-error."
   (signals eightbol:source-error
-    (i286-asm '(:divide :divisor 3 :into "B"))))
+    (i286-asm '(:÷ :divisor 3 :into "B"))))
 
 (test i286/multiply-non-power-of-two-signals-error
   "MULTIPLY with non-power-of-two on i286 signals source-error."
   (signals eightbol:source-error
-    (i286-asm '(:multiply :multiplier 3 :on "B"))))
+    (i286-asm '(:× :multiplier 3 :on "B"))))

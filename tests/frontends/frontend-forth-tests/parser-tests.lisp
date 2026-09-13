@@ -26,7 +26,7 @@
 (is t))
 
 (test forth_parser_arithmetic
-  "PARSER: FORTH arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: FORTH arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test forth_parser_conditionals

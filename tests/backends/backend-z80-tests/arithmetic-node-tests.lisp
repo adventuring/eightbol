@@ -23,7 +23,7 @@
 
 (test z80_add_8bit
   "ARITHMETIC: Z80 8-bit ADD produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
     (is (stringp output))
@@ -31,7 +31,7 @@
 
 (test z80_add_16bit
   "ARITHMETIC: Z80 16-bit ADD produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
     (is (stringp output))
@@ -39,7 +39,7 @@
 
 (test z80_subtract_8bit
   "ARITHMETIC: Z80 8-bit SUBTRACT produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
     (is (stringp output))
@@ -47,7 +47,7 @@
 
 (test z80_multiply
   "ARITHMETIC: Z80 MULTIPLY produces correct sequence (multiply/divide if available)"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
     (is (stringp output))
@@ -55,7 +55,7 @@
 
 (test z80_divide
   "ARITHMETIC: Z80 DIVIDE produces correct sequence"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
     (is (stringp output))
@@ -63,7 +63,7 @@
 
 (test z80_fixed_point_arithmetic
   "ARITHMETIC: Z80 fixed-point arithmetic maintains correct scale"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :Z80 :output s))))
     (is (stringp output))

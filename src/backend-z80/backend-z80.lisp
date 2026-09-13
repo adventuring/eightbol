@@ -135,9 +135,9 @@
      (compile-z80-call-acc out statement class-id slot-table const-table pic-width-table))
     (:if
      (compile-z80-if out statement class-id slot-table type-table const-table pic-size-table pic-width-table))
-    (:add
+    (:+
      (compile-z80-add out statement class-id slot-table const-table pic-width-table))
-    (:subtract
+    (:-
      (compile-z80-subtract out statement class-id slot-table const-table pic-width-table))
     (:compute
      (compile-z80-compute out statement class-id slot-table const-table pic-width-table))
@@ -186,8 +186,8 @@
              :cpu :z80
              :message "COPY should have been expanded at lex time"
              :copy-name (getf (rest statement) :name)))
-     (:divide (error 'source-error :message "MULTIPLY/DIVIDE not supported on Z80" :detail statement))
-     (:multiply (error 'source-error :message "MULTIPLY/DIVIDE not supported on Z80" :detail statement))
+     (:÷ (error 'source-error :message "MULTIPLY/DIVIDE not supported on Z80" :detail statement))
+     (:× (error 'source-error :message "MULTIPLY/DIVIDE not supported on Z80" :detail statement))
 
     (:invoke-super
      (unless (gethash *class-id* *parent-classes*)
@@ -201,23 +201,18 @@
          :message (format nil "Cannot determine parent class for ~a" *class-id*)
          :symbol-name *class-id*
          :symbol-type :class)))
-    (:shift-left
-     (let* ((target (getf (rest statement) :target))
-            (count (getf (rest statement) :count 1)))
-       (compile-z80-load out target class-id slot-table const-table pic-width-table)
-       (dotimes (_ count)
-         (format out "~&~10tadd a, a"))
-       (when (stringp target)
-         (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))
-    (:shift-right
+    (:ash
      (let* ((target (getf (rest statement) :target))
             (count (getf (rest statement) :count 1))
             (signed (operand-signed-p target)))
        (compile-z80-load out target class-id slot-table const-table pic-width-table)
-       (dotimes (_ count)
-         (if signed
-             (format out "~&~10tsra a")
-             (format out "~&~10tsrl a")))
+       (if (minusp count)
+           (dotimes (_ (abs count))
+             (if signed
+                 (format out "~&~10tsra a")
+                 (format out "~&~10tsrl a")))
+           (dotimes (_ count)
+             (format out "~&~10tadd a, a")))
        (when (stringp target)
          (format out "~&~10tld (~a), a" (bare-data-assembly-symbol target class-id)))))
     (:dialogue
@@ -312,15 +307,13 @@
            (format out "~&~10tld h, (hl)")
            (format out "~&~10tld l, a"))
          (format out "~&~10tld a, (hl)")))
-    ((and (listp expr) (eq (first expr) :shift-left))
+    ((and (listp expr) (eq (first expr) :ash))
      (let ((n (if (numberp (third expr)) (third expr) 1)))
        (compile-z80-load out (second expr) class-id slot-table const-table pic-width-table)
-       (dotimes (_ n) (format out "~&~10tadd a, a"))))
-    ((and (listp expr) (eq (first expr) :shift-right))
-     (let ((n (if (numberp (third expr)) (third expr) 1)))
-       (compile-z80-load out (second expr) class-id slot-table const-table pic-width-table)
-       (dotimes (_ n) (format out "~&~10tsrl a"))))
-    ((and (listp expr) (eq (first expr) :bit-and))
+       (if (minusp n)
+           (dotimes (_ (abs n)) (format out "~&~10tsrl a"))
+           (dotimes (_ n) (format out "~&~10tadd a, a")))))
+    ((and (listp expr) (eq (first expr) :∧))
      (compile-z80-load out (second expr) class-id slot-table const-table pic-width-table)
      (let ((rhs (third expr)))
        (if (z80-expr-is-constant-p rhs const-table)
@@ -328,7 +321,7 @@
            (progn (format out "~&~10tld b, a")
                   (compile-z80-load out rhs class-id slot-table const-table pic-width-table)
                   (format out "~&~10tand b")))))
-    ((and (listp expr) (eq (first expr) :bit-or))
+    ((and (listp expr) (eq (first expr) :∨))
      (compile-z80-load out (second expr) class-id slot-table const-table pic-width-table)
      (let ((rhs (third expr)))
        (if (z80-expr-is-constant-p rhs const-table)
@@ -336,7 +329,7 @@
            (progn (format out "~&~10tld b, a")
                   (compile-z80-load out rhs class-id slot-table const-table pic-width-table)
                   (format out "~&~10tor b")))))
-    ((and (listp expr) (eq (first expr) :bit-xor))
+    ((and (listp expr) (eq (first expr) :⊻))
      (compile-z80-load out (second expr) class-id slot-table const-table pic-width-table)
      (let ((rhs (third expr)))
        (if (z80-expr-is-constant-p rhs const-table)
@@ -344,7 +337,7 @@
            (progn (format out "~&~10tld b, a")
                   (compile-z80-load out rhs class-id slot-table const-table pic-width-table)
                   (format out "~&~10txor b")))))
-    ((and (listp expr) (eq (first expr) :bit-not))
+    ((and (listp expr) (eq (first expr) :¬))
      (compile-z80-load out (second expr) class-id slot-table const-table pic-width-table)
      (format out "~&~10tcpl"))
     (t
@@ -635,7 +628,7 @@
        (format out "~&~a:" label-cond2)
        (compile-z80-condition out (third condition) class-id slot-table type-table const-table pic-width-table branch-label)
        (format out "~&~a:" label-skip)))
-    ((and (listp condition) (eq (first condition) :bit-and))
+    ((and (listp condition) (eq (first condition) :∧))
      (compile-z80-load out condition class-id slot-table const-table pic-width-table)
      (format out "~&~10tor a")
      (format out "~&~10tjp z, ~a" branch-label))
@@ -826,7 +819,7 @@
             (format out "~&~10tdaa")
             (format out "~&~10tld (~a+~d), a" (bare-data-assembly-symbol result class-id) i)))
         (progn
-          (backend-unsupported-operand-width :z80 :add w 2)
+          (backend-unsupported-operand-width :z80 :+ w 2)
           (if (= (or w 1) 2)
               (progn
                 ;; 16-bit: use DE for temp (expression de,hl) instead of stack
@@ -903,7 +896,7 @@
                 (format out "~&~10tld a, b"))
               (format out "~&~10tld (~a+~d), a" (bare-data-assembly-symbol dest class-id) i)))
           (progn
-            (backend-unsupported-operand-width :z80 :subtract w 2)
+            (backend-unsupported-operand-width :z80 :- w 2)
             (if (= (or w 1) 2)
                 (progn
                   ;; 16-bit: use DE for temp; HL=minuend, DE=subtrahend, then expression de,hl for sbc
@@ -960,9 +953,9 @@
          (w (operand-width (or target to-self up-by down-by) pic-width-table)))
     (cond
       (up-by
-       (compile-z80-add out (list :add :from by-expr :to up-by :giving nil) class-id slot-table const-table pic-width-table))
+       (compile-z80-add out (list :+ :from by-expr :to up-by :giving nil) class-id slot-table const-table pic-width-table))
       (down-by
-       (compile-z80-subtract out (list :subtract :from by-expr :from-target down-by :giving nil) class-id slot-table const-table pic-width-table))
+       (compile-z80-subtract out (list :- :from by-expr :from-target down-by :giving nil) class-id slot-table const-table pic-width-table))
        ((and address-of target)
         (let ((src address-of) (dest target))
           (cond

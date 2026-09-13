@@ -151,7 +151,7 @@ COBOL stabby-case supported."
         (compile-statement :stack (first stmt) (rest stmt)))
       (format *output-stream* "~a:~%" end-label))))
 
-(def-stack-statement :add (ast-node-data)
+(def-stack-statement :+ (ast-node-data)
   (let ((from (getf ast-node-data :from))
         (to (getf ast-node-data :to)))
     (format *output-stream* "~10T; ADD ~a to ~a~%" from to)
@@ -160,7 +160,7 @@ COBOL stabby-case supported."
     (format *output-stream* "~10Tadd~%")
     (format *output-stream* "~10Tpop ~a~%" to)))
 
-(def-stack-statement :subtract (ast-node-data)
+(def-stack-statement :- (ast-node-data)
   (let ((subtrahend (getf ast-node-data :subtrahend))
         (minuend (getf ast-node-data :from)))
     (format *output-stream* "~10T; SUBTRACT ~a from ~a~%" subtrahend minuend)
@@ -457,26 +457,19 @@ Reads input and stores into target identifier."
           (stack-symbol *class-id*)
           (stack-symbol (format nil "~a" *method-id*))))
 
-(def-stack-statement :shift-left (ast-node-data)
-  "Emit SHIFT LEFT statement."
+(def-stack-statement :ash (ast-node-data)
+  "Emit SHIFT statement (negative count shifts right, non-negative shifts left)."
   (let ((target (getf ast-node-data :target))
         (count (getf ast-node-data :count 1)))
-    (format *output-stream* "~10T; SHIFT LEFT ~a BY ~d~%" target count)
+    (format *output-stream* "~10T; SHIFT ~a BY ~d~%" target count)
     (format *output-stream* "~10Tpush ~a~%" target)
-    (dotimes (_ count)
-      (format *output-stream* "~10Tpush 2~%")
-      (format *output-stream* "~10Tmul~%"))
-    (format *output-stream* "~10Tpop ~a~%" target)))
-
-(def-stack-statement :shift-right (ast-node-data)
-  "Emit SHIFT RIGHT statement."
-  (let ((target (getf ast-node-data :target))
-        (count (getf ast-node-data :count 1)))
-    (format *output-stream* "~10T; SHIFT RIGHT ~a BY ~d~%" target count)
-    (format *output-stream* "~10Tpush ~a~%" target)
-    (dotimes (_ count)
-      (format *output-stream* "~10Tpush 2~%")
-      (format *output-stream* "~10Tdiv~%"))
+    (if (minusp count)
+        (dotimes (_ (abs count))
+          (format *output-stream* "~10Tpush 2~%")
+          (format *output-stream* "~10Tdiv~%"))
+        (dotimes (_ count)
+          (format *output-stream* "~10Tpush 2~%")
+          (format *output-stream* "~10Tmul~%")))
     (format *output-stream* "~10Tpop ~a~%" target)))
 
 (def-stack-statement :procedure (ast-node-data)
@@ -498,11 +491,11 @@ Reads input and stores into target identifier."
   (error "EIGHTBOL/STACK: COPY ~s should have been expanded at lex time"
          (getf ast-node-data :name)))
 
-(def-stack-statement :divide (ast-node-data)
+(def-stack-statement :÷ (ast-node-data)
   "DIVIDE is unsupported (compile-time error)."
   (error "EIGHTBOL/STACK: DIVIDE is unsupported"))
 
-(def-stack-statement :multiply (ast-node-data)
+(def-stack-statement :× (ast-node-data)
   "MULTIPLY is unsupported (compile-time error)."
   (error "EIGHTBOL/STACK: MULTIPLY is unsupported"))
 

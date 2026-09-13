@@ -26,7 +26,7 @@
 (is t))
 
 (test pascal_parser_arithmetic
-  "PARSER: PASCAL arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: PASCAL arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test pascal_parser_conditionals

@@ -121,12 +121,12 @@
   (let ((stmt (cons :if ast-node-data)))
     (compile-cp1610-if stmt)))
 
-(def-cp1610-statement :add
-  (let ((stmt (cons :add ast-node-data)))
+(def-cp1610-statement :+
+  (let ((stmt (cons :+ ast-node-data)))
     (compile-cp1610-add stmt)))
 
-(def-cp1610-statement :subtract
-  (let ((stmt (cons :subtract ast-node-data)))
+(def-cp1610-statement :-
+  (let ((stmt (cons :- ast-node-data)))
     (compile-cp1610-subtract stmt)))
 
 (def-cp1610-statement :compute
@@ -182,10 +182,10 @@
   (error "EIGHTBOL: COPY ~s should have been expanded at lex time"
          (getf ast-node-data :name)))
 
-(def-cp1610-statement :divide
+(def-cp1610-statement :÷
    (error 'source-error :message "MULTIPLY/DIVIDE not supported" :detail ast-node-data))
 
- (def-cp1610-statement :multiply
+ (def-cp1610-statement :×
    (error 'source-error :message "MULTIPLY/DIVIDE not supported" :detail ast-node-data))
 
 (def-cp1610-statement :invoke-super
@@ -197,19 +197,13 @@
             (cp1610-symbol (format nil "~a" *method-id*)))
     (error "Can't figure out parent class of ~a" *class-id*)))
 
-(def-cp1610-statement :shift-left
+(def-cp1610-statement :ash
   (let* ((target (getf ast-node-data :target))
          (count (getf ast-node-data :count 1)))
     (compile-cp1610-load target)
-    (format *output-stream* "~&~10tSLL     R0, ~d" count)
-    (when (stringp target)
-      (format *output-stream* "~&~10tMVO     R0, ~a" (cp1610-symbol target)))))
-
-(def-cp1610-statement :shift-right
-  (let* ((target (getf ast-node-data :target))
-         (count (getf ast-node-data :count 1)))
-    (compile-cp1610-load target)
-    (format *output-stream* "~&~10tSARC    R0, ~d" count)
+    (if (minusp count)
+        (format *output-stream* "~&~10tSARC    R0, ~d" (abs count))
+        (format *output-stream* "~&~10tSLL     R0, ~d" count))
     (when (stringp target)
       (format *output-stream* "~&~10tMVO     R0, ~a" (cp1610-symbol target)))))
 
@@ -322,15 +316,13 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
              (bare-data-assembly-symbol (second expr) *class-id*))
      (format *output-stream* "~&~10tADDR    ~a, R4" reg)
      (format *output-stream* "~&~10tMVI@    R4, ~a" reg))
-    ((and (listp expr) (eq (first expr) :shift-left))
+    ((and (listp expr) (eq (first expr) :ash))
      (let ((n (if (numberp (third expr)) (third expr) 1)))
        (compile-cp1610-load (second expr) width reg)
-       (dotimes (_ n) (format *output-stream* "~&~10tSLL     ~a, 1" reg))))
-     ((and (listp expr) (eq (first expr) :shift-right))
-      (let ((n (if (numberp (third expr)) (third expr) 1)))
-        (compile-cp1610-load (second expr) width reg)
-        (dotimes (_ n) (format *output-stream* "~&~10tSARC    ~a, 1" reg))))
-    ((and (listp expr) (eq (first expr) :bit-and))
+       (if (minusp n)
+           (dotimes (_ (abs n)) (format *output-stream* "~&~10tSARC    ~a, 1" reg))
+           (dotimes (_ n) (format *output-stream* "~&~10tSLL     ~a, 1" reg)))))
+    ((and (listp expr) (eq (first expr) :∧))
      (compile-cp1610-load (second expr) width)
      (let ((rhs (third expr)))
        (if (cp1610-expr-is-constant-p rhs)
@@ -338,7 +330,7 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
            (progn (format *output-stream* "~&~10tMOVR    R0, R1")
                   (compile-cp1610-load rhs width)
                   (format *output-stream* "~&~10tANDR    R1, R0")))))
-    ((and (listp expr) (eq (first expr) :bit-or))
+    ((and (listp expr) (eq (first expr) :∨))
      (compile-cp1610-load (second expr) width)
      (let ((rhs (third expr)))
        (if (cp1610-expr-is-constant-p rhs)
@@ -346,7 +338,7 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
            (progn (format *output-stream* "~&~10tMOVR    R0, R1")
                   (compile-cp1610-load rhs width)
                   (format *output-stream* "~&~10tORR     R1, R0")))))
-    ((and (listp expr) (eq (first expr) :bit-xor))
+    ((and (listp expr) (eq (first expr) :⊻))
      (compile-cp1610-load (second expr) width)
      (let ((rhs (third expr)))
        (if (cp1610-expr-is-constant-p rhs)
@@ -354,7 +346,7 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
            (progn (format *output-stream* "~&~10tMOVR    R0, R1")
                   (compile-cp1610-load rhs width)
                   (format *output-stream* "~&~10tXORR    R1, R0")))))
-    ((and (listp expr) (eq (first expr) :bit-not))
+    ((and (listp expr) (eq (first expr) :¬))
      (compile-cp1610-load (second expr) width)
      (format *output-stream* "~&~10tCOMR    ~a" reg))
     ((and (listp expr) (eq (first expr) :high))
@@ -364,7 +356,7 @@ WIDTH: 1 (byte) or 2 (word). For :subscript, scales index for element size (0-25
            (progn
              (compile-cp1610-load inner 2 reg)
              (format *output-stream* "~&~10tSARC    ~a, 8" reg)))))
-     ((and (listp expr) (eq (first expr) :add))
+     ((and (listp expr) (eq (first expr) :+))
       (compile-cp1610-load (getf (rest expr) :from) width reg)
       (format *output-stream* "~&~10tMOVR    ~a, R1" reg)
       (compile-cp1610-load (getf (rest expr) :to) width :r0)
@@ -992,9 +984,9 @@ W is the byte width (1 or 2). For w=2, corrects both bytes with carry."
          (target-w (operand-width (or target to-self up-by down-by))))
     (cond
       (up-by
-       (compile-cp1610-add (list :add :from by-expr :to up-by :giving nil)))
+       (compile-cp1610-add (list :+ :from by-expr :to up-by :giving nil)))
       (down-by
-       (compile-cp1610-subtract (list :subtract :from by-expr :from-target down-by :giving nil)))
+       (compile-cp1610-subtract (list :- :from by-expr :from-target down-by :giving nil)))
       ((and address-of target)
        (let ((src address-of) (dest target))
          (cond
@@ -1037,7 +1029,7 @@ W is the byte width (1 or 2). For w=2, corrects both bytes with carry."
               (format *output-stream* "~&~a:" label-loop)
               (when until (compile-cp1610-condition until label-end))
               (emit-body)
-              (compile-statement :cp1610 :add (list :from (or by 1) :to varying :giving nil))
+              (compile-statement :cp1610 :+ (list :from (or by 1) :to varying :giving nil))
               (format *output-stream* "~&~10tB       ~a" label-loop)
               (format *output-stream* "~&~a:" label-end)))
            (until

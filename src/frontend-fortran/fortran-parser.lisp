@@ -108,10 +108,10 @@
 
 (defun fortran-build-arithmetic (op left right)
     (ecase op
-      (:plus (list :add :from left :to right :giving nil))
-      (:minus (list :subtract :subtrahend right :from left :giving nil))
+      (:plus (list :+ :from left :to right :giving nil))
+      (:minus (list :- :subtrahend right :from left :giving nil))
       (:times (list :× left right))
-      (:divide (list :÷ left right))
+      (:÷ (list :÷ left right))
       (:power (fortran-unsupported "power operator (**)"))))
 
 (defun fortran-build-relational (op left right)
@@ -363,7 +363,7 @@
       (expression times expression
         (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :times l r)))
       (expression divide expression
-        (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :divide l r)))
+        (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :÷ l r)))
       (expression power expression
         (lambda (l _ r) (declare (ignore _)) (fortran-build-arithmetic :power l r))))
 

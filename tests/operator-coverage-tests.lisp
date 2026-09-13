@@ -9,8 +9,8 @@
 ;;; all frontends, backends, and AST levels. Tests cover:
 ;;; - Arithmetic operators: :+, :-, :×, :÷
 ;;; - Comparison operators: :=, :≠, :<, :≤, :>, :≥
-;;; - Bitwise operators: :¬, :∧, :∨, :⊻, :⊼, :⊽
-;;; - Shift operators: :ash, :asl, :asr
+;;; - Bitwise operators: :¬, :∧, :∨, :⊻ (NAND/NOR composed as :¬ of :∧/:∨)
+;;; - Shift operators: :ash (signed count; positive = left, negative = right)
 ;;; - Logical operators: :and, :or, :not
 ;;; - Operator precedence and complex expressions
 ;;; - Mixed operator types
@@ -263,73 +263,77 @@
     (is (listp ast))
     (is (eq (first ast) :¬))))
 
-;;; 3.5 Bitwise NAND operator (:⊼)
+;;; 3.5 Bitwise NAND operator (:¬ (:∧ a b))
 (test operator_bitwise_nand_basic
-  "OPERATOR: Bitwise NAND operator (:⊼) recognized in expressions"
-  (let ((ast '(:⊼ (:const 12) (:const 10))))
+  "OPERATOR: Bitwise NAND operator (:¬ (:∧ a b)) recognized in expressions"
+  (let ((ast '(:¬ (:∧ (:const 12) (:const 10)))))
     (is (listp ast))
-    (is (eq (first ast) :⊼))))
+    (is (eq (first ast) :¬))
+    (is (eq (first (second ast)) :∧))))
 
 (test operator_bitwise_nand_variables
-  "OPERATOR: Bitwise NAND operator (:⊼) works with variable operands"
-  (let ((ast '(:⊼ (:var a) (:var b))))
+  "OPERATOR: Bitwise NAND operator (:¬ (:∧ a b)) works with variable operands"
+  (let ((ast '(:¬ (:∧ (:var a) (:var b)))))
     (is (listp ast))
-    (is (eq (first ast) :⊼))))
+    (is (eq (first ast) :¬))
+    (is (eq (first (second ast)) :∧))))
 
-;;; 3.6 Bitwise NOR operator (:⊽)
+;;; 3.6 Bitwise NOR operator (:¬ (:∨ a b))
 (test operator_bitwise_nor_basic
-  "OPERATOR: Bitwise NOR operator (:⊽) recognized in expressions"
-  (let ((ast '(:⊽ (:const 12) (:const 10))))
+  "OPERATOR: Bitwise NOR operator (:¬ (:∨ a b)) recognized in expressions"
+  (let ((ast '(:¬ (:∨ (:const 12) (:const 10)))))
     (is (listp ast))
-    (is (eq (first ast) :⊽))))
+    (is (eq (first ast) :¬))
+    (is (eq (first (second ast)) :∨))))
 
 (test operator_bitwise_nor_variables
-  "OPERATOR: Bitwise NOR operator (:⊽) works with variable operands"
-  (let ((ast '(:⊽ (:var x) (:var y))))
+  "OPERATOR: Bitwise NOR operator (:¬ (:∨ a b)) works with variable operands"
+  (let ((ast '(:¬ (:∨ (:var x) (:var y)))))
     (is (listp ast))
-    (is (eq (first ast) :⊽))))
+    (is (eq (first ast) :¬))
+    (is (eq (first (second ast)) :∨))))
 
 ;;; ============================================================================
 ;;; SECTION 4: SHIFT OPERATOR TESTS
 ;;; ============================================================================
 
-;;; 4.1 Arithmetic Shift Left operator (:asl)
+;;; 4.1 Shift Left via (:ash v count) with positive count
 (test operator_shift_asl_basic
-  "OPERATOR: Arithmetic shift left operator (:asl) recognized in expressions"
-  (let ((ast '(:asl (:var x) (:const 2))))
+  "OPERATOR: Shift left as (:ash v count) with positive count"
+  (let ((ast '(:ash (:var x) (:const 2))))
     (is (listp ast))
-    (is (eq (first ast) :asl))))
+    (is (eq (first ast) :ash))))
 
 (test operator_shift_asl_constants
-  "OPERATOR: Arithmetic shift left operator (:asl) with constant shift amount"
-  (let ((ast '(:asl (:const 5) (:const 3))))
+  "OPERATOR: Shift left (:ash const pos-count) with constant shift amount"
+  (let ((ast '(:ash (:const 5) (:const 3))))
     (is (listp ast))
-    (is (eq (first ast) :asl))))
+    (is (eq (first ast) :ash))))
 
 (test operator_shift_asl_variables
-  "OPERATOR: Arithmetic shift left operator (:asl) with variable shift amount"
-  (let ((ast '(:asl (:var data) (:var shift_count))))
+  "OPERATOR: Shift left (:ash var count) with variable shift amount"
+  (let ((ast '(:ash (:var data) (:var shift_count))))
     (is (listp ast))
-    (is (eq (first ast) :asl))))
+    (is (eq (first ast) :ash))))
 
-;;; 4.2 Arithmetic Shift Right operator (:asr)
+;;; 4.2 Shift Right via (:ash v count) with negative count
 (test operator_shift_asr_basic
-  "OPERATOR: Arithmetic shift right operator (:asr) recognized in expressions"
-  (let ((ast '(:asr (:var x) (:const 1))))
+  "OPERATOR: Shift right as (:ash v count) with negative count"
+  (let ((ast '(:ash (:var x) (:const -1))))
     (is (listp ast))
-    (is (eq (first ast) :asr))))
+    (is (eq (first ast) :ash))))
 
 (test operator_shift_asr_constants
-  "OPERATOR: Arithmetic shift right operator (:asr) with constant shift amount"
-  (let ((ast '(:asr (:const 32) (:const 2))))
+  "OPERATOR: Shift right (:ash const neg-count) with constant shift amount"
+  (let ((ast '(:ash (:const 32) (:const -2))))
     (is (listp ast))
-    (is (eq (first ast) :asr))))
+    (is (eq (first ast) :ash))))
 
 (test operator_shift_asr_variables
-  "OPERATOR: Arithmetic shift right operator (:asr) with variable shift amount"
-  (let ((ast '(:asr (:var data) (:var shift_count))))
+  "OPERATOR: Shift right (:ash var count) with variable shift amount"
+  (let ((ast '(:ash (:var data) (:var shift_count))))
     (is (listp ast))
-    (is (eq (first ast) :asr))))
+    (is (eq (first ast) :ash))))
 
 ;;; 4.3 Arithmetic Shift operator (:ash) — generic
 (test operator_shift_ash_basic
@@ -447,9 +451,9 @@
 ;;; 6.3 Shift precedence: lower than arithmetic but higher than logical
 (test operator_precedence_shift_lower_than_arithmetic
   "PRECEDENCE: Shift operators have lower precedence than arithmetic"
-  (let ((ast '(:asl (:+ (:var x) (:const 1)) (:const 2))))
+  (let ((ast '(:ash (:+ (:var x) (:const 1)) (:const 2))))
     (is (listp ast))
-    (is (eq (first ast) :asl))))
+    (is (eq (first ast) :ash))))
 
 ;;; 6.4 Logical precedence: :and before :or
 (test operator_precedence_logical_and_before_or
@@ -483,7 +487,7 @@
 ;;; 7.3 Bitwise with shifts
 (test operator_complex_bitwise_with_shifts
   "EXPRESSION: Bitwise operations with shifts ((X << 2) & 0xFF)"
-  (let ((ast '(:∧ (:asl (:var x) (:const 2)) (:const #xFF))))
+  (let ((ast '(:∧ (:ash (:var x) (:const 2)) (:const #xFF))))
     (is (listp ast))
     (is (eq (first ast) :∧))))
 
@@ -579,19 +583,16 @@
   (is (member :≥ (list := :≠ :< :≤ :> :≥))))
 
 (test operator_coverage_all_bitwise_defined
-  "AUDIT: All bitwise operators defined in AST (:¬, :∧, :∨, :⊻, :⊼, :⊽)"
-  (is (member :¬ (list :¬ :∧ :∨ :⊻ :⊼ :⊽)))
-  (is (member :∧ (list :¬ :∧ :∨ :⊻ :⊼ :⊽)))
-  (is (member :∨ (list :¬ :∧ :∨ :⊻ :⊼ :⊽)))
-  (is (member :⊻ (list :¬ :∧ :∨ :⊻ :⊼ :⊽)))
-  (is (member :⊼ (list :¬ :∧ :∨ :⊻ :⊼ :⊽)))
-  (is (member :⊽ (list :¬ :∧ :∨ :⊻ :⊼ :⊽))))
+  "AUDIT: All bitwise operators defined in AST (:¬, :∧, :∨, :⊻)"
+  (is (member :¬ (list :¬ :∧ :∨ :⊻)))
+  (is (member :∧ (list :¬ :∧ :∨ :⊻)))
+  (is (member :∨ (list :¬ :∧ :∨ :⊻)))
+  (is (member :⊻ (list :¬ :∧ :∨ :⊻))))
 
 (test operator_coverage_all_shift_defined
-  "AUDIT: All shift operators defined in AST (:ash, :asl, :asr)"
-  (is (member :ash (list :ash :asl :asr)))
-  (is (member :asl (list :ash :asl :asr)))
-  (is (member :asr (list :ash :asl :asr))))
+  "AUDIT: All shift operators defined in AST (:ash, signed count)"
+  (is (member :ash (list :ash)))
+  (is (= 1 (length (list :ash)))))
 
 (test operator_coverage_all_logical_defined
   "AUDIT: All logical operators defined in AST (:and, :or, :not)"
@@ -612,12 +613,12 @@
   (is (= (length (list := :≠ :< :≤ :> :≥)) 6)))
 
 (test operator_coverage_bitwise_count
-  "COUNT: 6 bitwise operators defined (:¬, :∧, :∨, :⊻, :⊼, :⊽)"
-  (is (= (length (list :¬ :∧ :∨ :⊻ :⊼ :⊽)) 6)))
+  "COUNT: 4 bitwise operators defined (:¬, :∧, :∨, :⊻)"
+  (is (= (length (list :¬ :∧ :∨ :⊻)) 4)))
 
 (test operator_coverage_shift_count
-  "COUNT: 3 shift operators defined (:ash, :asl, :asr)"
-  (is (= (length (list :ash :asl :asr)) 3)))
+  "COUNT: 1 shift operator defined (:ash, signed count)"
+  (is (= (length (list :ash)) 1)))
 
 (test operator_coverage_logical_count
   "COUNT: 3 logical operators defined (:and, :or, :not)"

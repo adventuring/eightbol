@@ -182,13 +182,13 @@
 (test expression-too-complex-error
   "Test that expression-too-complex signals error"
   (signals error
-    (signal-expression-too-complex '(:add :from 1 :to 2))))
+    (signal-expression-too-complex '(:+ :from 1 :to 2))))
 
 (test allocate-temp-with-fallback-success
   "Test allocate-temp succeeds with available temps"
   (let ((*used-temporaries* '()))
     (let ((temp (allocate-temp-with-fallback 
-                 '(:add :from 1 :to 2)
+                 '(:+ :from 1 :to 2)
                  :z80
                  nil)))
       ;; Should return a valid temporary

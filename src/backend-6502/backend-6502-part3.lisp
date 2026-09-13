@@ -106,52 +106,61 @@ Uses expression-constant-value when EXPRESSION is a constant expression."
 
 
 (defun emit-6502-load-byte-n-shift-right (out expression class-id n w)
-   (cond
-    ;; Handle numeric literals: compute shifted value literally
-    ((numberp expression)
-     (let* ((value (ash expression (- n))) ; logical right shift (assuming non-negative)
-            (byte-val (ldb (byte 8 (* n 8)) value)))
-       (with-accumulator-value (byte-val)
-         (format out "~%~10Tlda #~a" byte-val))))
-    ;; Handle simple variable references (bare data names): in-place shift then load byte n
-    ((stringp expression)
-     (let* ((addr (to-identifier expression))
-            (low-addr addr)
-            (high-addr (format nil "~a+1" addr)))
-      ;; In-place shift right by n: repeat n times: lsr [high]; ror [low]
-      (with-accumulator-value (nil)
-        (dotimes (_ n)
-          (format out "~%~10Tlsr ~a" high-addr)
-          (format out "~%~10Tror ~a" low-addr)))
-      ;; Load byte n from the shifted variable
-      (format out "~%~10Tldy #~a" n)
-      (format out "~%~10Tlda (~a), y" addr)))
-    ;; Fall back to original behavior for complex expressions, slots, etc.
-    (t (emit-6502-load-expression out expression nil))))
+  "Load byte N of the value shifted right by (ABS (THIRD EXPRESSION))."
+  (let ((amt (abs (if (numberp (third expression)) (third expression) 1))))
+    (cond
+     ;; Literal value: compute shifted byte literally
+     ((numberp (second expression))
+      (let* ((value (ash (second expression) (- amt)))
+             (byte-val (ldb (byte 8 (* n 8)) value)))
+        (with-accumulator-value (byte-val)
+          (format out "~%~10Tlda #~a" byte-val))))
+     ;; Simple variable references (bare data names): in-place shift then load byte n
+     ((stringp (second expression))
+      (let* ((addr (to-identifier (second expression)))
+             (low-addr addr)
+             (high-addr (format nil "~a+1" addr)))
+       ;; In-place shift right by amt: repeat amt times: lsr [high]; ror [low]
+       (with-accumulator-value (nil)
+         (dotimes (_ amt)
+           (format out "~%~10Tlsr ~a" high-addr)
+           (format out "~%~10Tror ~a" low-addr)))
+       ;; Load byte n from the shifted variable
+       (format out "~%~10Tldy #~a" n)
+       (format out "~%~10Tlda (~a), y" addr)))
+     ;; Fall back to original behavior for complex expressions, slots, etc.
+     (t (emit-6502-load-expression out expression nil)))))
 
 (defun emit-6502-load-byte-n-shift-left (out expression class-id n w)
-   (cond
-    ;; Handle numeric literals: compute shifted value literally
-    ((numberp expression)
-     (let* ((value (ash expression n))
-            (byte-val (ldb (byte 8 (* n 8)) value)))
-       (with-accumulator-value (byte-val)
-         (format out "~%~10Tlda #~a" byte-val))))
-    ;; Handle simple variable references (bare data names): in-place shift then load byte n
-    ((stringp expression)
-     (let* ((addr (to-identifier expression))
-            (low-addr addr)
-            (high-addr (format nil "~a+1" addr)))
-      ;; In-place shift left by n: repeat n times: asl [low], rol [high]
-      (with-accumulator-value (nil)
-        (dotimes (_ n)
-          (format out "~%~10Tasl ~a" low-addr)
-          (format out "~%~10Trol ~a" high-addr)))
-      ;; Load byte n from the shifted variable
-      (format out "~%~10Tldy #~a" n)
-      (format out "~%~10Tlda (~a), y" addr)))
-    ;; Fall back to original behavior for complex expressions, slots, etc.
-    (t (emit-6502-load-expression out expression nil))))
+  "Load byte N of the value shifted left by (THIRD EXPRESSION)."
+  (let ((amt (if (numberp (third expression)) (third expression) 1)))
+    (cond
+     ;; Literal value: compute shifted byte literally
+     ((numberp (second expression))
+      (let* ((value (ash (second expression) amt))
+             (byte-val (ldb (byte 8 (* n 8)) value)))
+        (with-accumulator-value (byte-val)
+          (format out "~%~10Tlda #~a" byte-val))))
+     ;; Simple variable references (bare data names): in-place shift then load byte n
+     ((stringp (second expression))
+      (let* ((addr (to-identifier (second expression)))
+             (low-addr addr)
+             (high-addr (format nil "~a+1" addr)))
+       ;; In-place shift left by amt: repeat amt times: asl [low], rol [high]
+       (with-accumulator-value (nil)
+         (dotimes (_ amt)
+           (format out "~%~10Tasl ~a" low-addr)
+           (format out "~%~10Trol ~a" high-addr)))
+       ;; Load byte n from the shifted variable
+       (format out "~%~10Tldy #~a" n)
+       (format out "~%~10Tlda (~a), y" addr)))
+     ;; Fall back to original behavior for complex expressions, slots, etc.
+     (t (emit-6502-load-expression out expression nil)))))
+
+(defun emit-6502-load-byte-n-shift (out expression class-id n w)
+  (if (minusp (third expression))
+      (emit-6502-load-byte-n-shift-right out expression class-id n w)
+      (emit-6502-load-byte-n-shift-left  out expression class-id n w)))
 
 (defun emit-6502-load-byte-n-bit-and (out expression class-id n w)
   (declare (ignore class-id))
@@ -175,18 +184,17 @@ Emit 6502 code: compute pointer into ZP Pointer, then lda (Pointer),y."
     (setf (gethash :of table) #'emit-6502-load-byte-n-of)
     (setf (gethash :on table) #'emit-6502-load-byte-n-on)
     (setf (gethash :address-of table) #'emit-6502-load-byte-n-address-of)
-    (setf (gethash :add table) #'emit-6502-load-byte-n-add)
-    (setf (gethash :subtract table) #'emit-6502-load-byte-n-subtract)
+    (setf (gethash :+ table) #'emit-6502-load-byte-n-add)
+    (setf (gethash :- table) #'emit-6502-load-byte-n-subtract)
     (setf (gethash :low table) #'emit-6502-load-byte-n-low)
     (setf (gethash :high table) #'emit-6502-load-byte-n-high)
-    (setf (gethash :bit-or table) #'emit-6502-load-byte-n-bit-or)
-    (setf (gethash :bit-xor table) #'emit-6502-load-byte-n-bit-xor)
-    (setf (gethash :bit-not table) #'emit-6502-load-byte-n-bit-not)
-    (setf (gethash :multiply table) #'emit-6502-load-byte-n-multiply)
-    (setf (gethash :divide table) #'emit-6502-load-byte-n-divide)
-    (setf (gethash :shift-left table) #'emit-6502-load-byte-n-shift-left)
-    (setf (gethash :shift-right table) #'emit-6502-load-byte-n-shift-right)
-    (setf (gethash :bit-and table) #'emit-6502-load-byte-n-bit-and)
+    (setf (gethash :∨ table) #'emit-6502-load-byte-n-bit-or)
+    (setf (gethash :⊻ table) #'emit-6502-load-byte-n-bit-xor)
+    (setf (gethash :¬ table) #'emit-6502-load-byte-n-bit-not)
+    (setf (gethash :× table) #'emit-6502-load-byte-n-multiply)
+    (setf (gethash :÷ table) #'emit-6502-load-byte-n-divide)
+    (setf (gethash :ash table) #'emit-6502-load-byte-n-shift)
+    (setf (gethash :∧ table) #'emit-6502-load-byte-n-bit-and)
     (setf (gethash :deref table) #'emit-6502-load-byte-n-deref)
     table))
 
@@ -480,8 +488,8 @@ Array fetches use X or Y; when true, avoid using X for temp storage."
   (cond
     ((and (listp expression) (eq (first expression) :subscript)) t)
     ((and (listp expression) (member (first expression)
-			       '(:add :subtract :multiply :divide
-			         :shift-left :shift-right :bit-and :bit-or :bit-xor :bit-not)))
+			       '(:+ :- :× :÷
+			         :ash :∧ :∨ :⊻ :¬)))
      (or (expression-contains-subscript-p (second expression))
          (expression-contains-subscript-p (third expression))))
     ((and (listp expression) (eq (first expression) :of))

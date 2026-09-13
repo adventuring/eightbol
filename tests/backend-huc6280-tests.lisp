@@ -97,28 +97,28 @@
 (test huc6280/add-literal-to-var
   "ADD literal TO var emits clc and adc."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (huc6280-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (huc6280-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "clc" asm))
       (is (search "adc" asm)))))
 
 (test huc6280/add-16-bit
   "ADD of 2-byte values emits multibyte add sequence."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (huc6280-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (huc6280-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "adc" asm))
       (is (search "sta" asm)))))
 
 (test huc6280/subtract
   "SUBTRACT emits sec and sbc."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (huc6280-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (huc6280-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sec" asm))
       (is (search "sbc" asm)))))
 
 (test huc6280/subtract-16-bit
   "SUBTRACT of 2-byte values emits multibyte subtract sequence."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (huc6280-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (huc6280-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sbc" asm))
       (is (search "sta" asm)))))
 
@@ -321,9 +321,9 @@
 (test huc6280/divide-signals-error
   "DIVIDE on HuC6280 signals backend-error."
   (signals eightbol::backend-error
-    (huc6280-asm '(:divide :from "A" :into "B"))))
+    (huc6280-asm '(:÷ :from "A" :into "B"))))
 
 (test huc6280/multiply-signals-error
   "MULTIPLY on HuC6280 signals backend-error."
   (signals eightbol::backend-error
-    (huc6280-asm '(:multiply :by "A" :on "B"))))
+    (huc6280-asm '(:× :by "A" :on "B"))))

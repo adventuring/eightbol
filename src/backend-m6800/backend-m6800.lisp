@@ -208,7 +208,7 @@
      (when name
        (format *output-stream*  "~&~a:" (paragraph-label (format nil "~a" name))))))
 
-(def-m6800-statement :add
+(def-m6800-statement :+
   (let* ((to (getf statement :to))
          (from (getf statement :from))
          (result (or (getf statement :giving) to))
@@ -239,7 +239,7 @@
         (format *output-stream*  "~&~8tLDAA    B")))
     (compile-m6800-store-a result)))
 
-(def-m6800-statement :subtract
+(def-m6800-statement :-
   (assert-pic-decimal-subtract-compiled :m6800 full-statement)
   (multiple-value-bind (minuend subtrahend)
       (subtract-statement-minuend-and-subtrahend full-statement)
@@ -289,7 +289,7 @@
 (def-m6800-statement :debug-break
   (format *output-stream*  "~&~8t; DEBUG BREAK ~s" (getf statement :code)))
 
-(def-m6800-statement :divide
+(def-m6800-statement :÷
   (let* ((divisor (getf statement :divisor))
          (into (getf statement :into))
          (by (getf statement :by))
@@ -312,7 +312,7 @@
                 :message "DIVIDE: divisor must be constant power-of-two (1, 2, 4, 8, ...)"
                 :detail (format nil "DIVIDE by ~s" divisor)))))
 
-(def-m6800-statement :multiply
+(def-m6800-statement :×
   (let* ((multiplier (getf statement :multiplier))
          (by (getf statement :by))
          (giving (getf statement :giving))
@@ -350,23 +350,18 @@
             (m6800-symbol (format nil "~a" *method-id*)))
     (format *output-stream*  "Can't figure out parent class of ~a" *class-id*)))
 
-(def-m6800-statement :shift-left
-  (let* ((target (getf statement :target))
-         (count (getf statement :count 1)))
-    (compile-m6800-load-a target)
-    (dotimes (_ count)
-      (format *output-stream*  "~&~8tASLA"))
-    (compile-m6800-store-a target)))
-
-(def-m6800-statement :shift-right
+(def-m6800-statement :ash
   (let* ((target (getf statement :target))
          (count (getf statement :count 1))
          (signed (operand-signed-p target)))
     (compile-m6800-load-a target)
-    (dotimes (_ count)
-      (if signed
-          (format *output-stream*  "~&~8tASRA")
-          (format *output-stream*  "~&~8tLSRA")))
+    (if (minusp count)
+        (dotimes (_ (abs count))
+          (if signed
+              (format *output-stream*  "~&~8tASRA")
+              (format *output-stream*  "~&~8tLSRA")))
+        (dotimes (_ count)
+          (format *output-stream*  "~&~8tASLA")))
     (compile-m6800-store-a target)))
 
 (def-m6800-statement :copy

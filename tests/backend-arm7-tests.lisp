@@ -112,26 +112,26 @@
 (test arm7/add-literal-to-var
   "ADD literal TO var emits adds instruction."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (arm7-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (arm7-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "adds" asm)))))
 
 (test arm7/add-16-bit
   "ADD of 2-byte values emits multibyte add sequence."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (arm7-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (arm7-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "adds" asm))
       (is (search "str" asm)))))
 
 (test arm7/subtract
   "SUBTRACT emits subs instruction."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (arm7-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (arm7-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "subs" asm)))))
 
 (test arm7/subtract-16-bit
   "SUBTRACT of 2-byte values emits multibyte subtract sequence."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (arm7-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (arm7-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "subs" asm))
       (is (search "str" asm)))))
 
@@ -343,9 +343,9 @@
 (test arm7/divide-non-power-of-two-signals-error
   "DIVIDE with non-power-of-two on ARM7 signals source-error."
   (signals eightbol:source-error
-    (arm7-asm '(:divide :divisor 3 :into "B"))))
+    (arm7-asm '(:÷ :divisor 3 :into "B"))))
 
 (test arm7/multiply-non-power-of-two-signals-error
   "MULTIPLY with non-power-of-two on ARM7 signals source-error."
   (signals eightbol:source-error
-    (arm7-asm '(:multiply :multiplier 3 :on "B"))))
+    (arm7-asm '(:× :multiplier 3 :on "B"))))

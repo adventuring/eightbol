@@ -452,16 +452,16 @@ A holds the other operand."
        (format out "~%~10T~a ~a + ~a" mnemonic pointer offset)))
 
     ((and (listp expression) (member (first expression)
-		       '(:bit-and :bit-or :bit-xor
-		         :add :subtract
-		         :shift-left :shift-right)))
+		       '(:∧ :∨ :⊻
+		         :+ :-
+		         :ash)))
       (format out "~%~10Tpha")
       (emit-6502-load-expression out expression class-id)
       (format out "~%~10Tsta WorkALU")
       (format out "~%~10Tpla")
       (format out "~%~10T~a WorkALU" mnemonic))
 
-    ((and (listp expression) (member (first expression) '(:multiply :divide)))
+    ((and (listp expression) (member (first expression) '(:× :÷)))
      (error 'backend-error
        :message "MULTIPLY/DIVIDE not supported"
        :cpu :6502 :detail expression))

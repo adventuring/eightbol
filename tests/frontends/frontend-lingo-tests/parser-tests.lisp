@@ -26,7 +26,7 @@
 (is t))
 
 (test lingo_parser_arithmetic
-  "PARSER: LINGO arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: LINGO arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test lingo_parser_conditionals

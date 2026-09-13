@@ -23,7 +23,7 @@
 
 (test 65c816_add_8bit
   "ARITHMETIC: 65C816 8-bit ADD produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
     (is (stringp output))
@@ -31,7 +31,7 @@
 
 (test 65c816_add_16bit
   "ARITHMETIC: 65C816 16-bit ADD produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
     (is (stringp output))
@@ -39,7 +39,7 @@
 
 (test 65c816_subtract_8bit
   "ARITHMETIC: 65C816 8-bit SUBTRACT produces correct opcodes"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
     (is (stringp output))
@@ -47,7 +47,7 @@
 
 (test 65c816_multiply
   "ARITHMETIC: 65C816 MULTIPLY produces correct sequence (multiply/divide if available)"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
     (is (stringp output))
@@ -55,7 +55,7 @@
 
 (test 65c816_divide
   "ARITHMETIC: 65C816 DIVIDE produces correct sequence"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
     (is (stringp output))
@@ -63,7 +63,7 @@
 
 (test 65c816_fixed_point_arithmetic
   "ARITHMETIC: 65C816 fixed-point arithmetic maintains correct scale"
-  (let* ((ast '(:add (:const 5) (:var x)))
+  (let* ((ast '(:+ (:const 5) (:var x)))
          (output (with-output-to-string (s)
                    (eightbol:compile-ast-to-asm ast :backend :65C816 :output s))))
     (is (stringp output))

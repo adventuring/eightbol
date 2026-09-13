@@ -233,9 +233,9 @@ Wraps statements in a TopLevel method (canonical form)."
        (string
         (lambda (s) s))
        (expression plus expression
-        (lambda (l r) (list :add l r)))
+        (lambda (l r) (list :+ l r)))
        (expression minus expression
-        (lambda (l r) (list :subtract l r)))
+        (lambda (l r) (list :- l r)))
        (expression times expression
         (lambda (l r) (list :* l r)))
        (expression divide expression

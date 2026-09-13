@@ -37,7 +37,7 @@
   (let ((pic (make-hash-table :test 'equalp)))
     (setf (gethash "A" pic) 1)
     (setf (gethash "B" pic) 1)
-    (let ((asm (z80-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (z80-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "add" asm)))))
 
 (test z80/subtract
@@ -45,18 +45,18 @@
   (let ((pic (make-hash-table :test 'equalp)))
     (setf (gethash "A" pic) 1)
     (setf (gethash "B" pic) 1)
-    (let ((asm (z80-asm '(:subtract :from "A" :from-target "B" :giving "C") :pic pic)))
+    (let ((asm (z80-asm '(:- :from "A" :from-target "B" :giving "C") :pic pic)))
       (is (search "sub" asm)))))
 
 (test z80/divide-signals-error
   "DIVIDE on Z80 signals source-error."
   (signals eightbol:source-error
-    (z80-asm '(:divide :from "A" :into "B"))))
+    (z80-asm '(:÷ :from "A" :into "B"))))
 
 (test z80/multiply-signals-error
   "MULTIPLY on Z80 signals source-error."
   (signals eightbol:source-error
-    (z80-asm '(:multiply :by "A" :on "B"))))
+    (z80-asm '(:× :by "A" :on "B"))))
 
 (test z80/invoke-super
   "INVOKE SUPER emits call to parent class method."

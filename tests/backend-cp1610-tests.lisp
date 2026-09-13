@@ -135,7 +135,7 @@
   (let ((pic (make-table)))
     (setf (gethash "A" pic) 1)
     (setf (gethash "B" pic) 1)
-    (let ((asm (cp1610-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (cp1610-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "ADDR    R1, R0" asm))
       (is (search "MVO" asm)))))
 
@@ -144,7 +144,7 @@
   (let ((pic (make-table)))
     (setf (gethash "M" pic) 1)
     (setf (gethash "S" pic) 1)
-    (let ((asm (cp1610-asm '(:subtract :from "S" :from-target "M" :giving "R") :pic pic)))
+    (let ((asm (cp1610-asm '(:- :from "S" :from-target "M" :giving "R") :pic pic)))
       (is (search "SUBR    R0, R1" asm))
       (is (search "MVO     R0, R" asm)))))
 
@@ -364,12 +364,12 @@
 (test cp1610/divide-signals-error
   "DIVIDE on cp1610 signals source-error."
   (signals eightbol:source-error
-    (cp1610-asm '(:divide :from "A" :into "B"))))
+    (cp1610-asm '(:÷ :from "A" :into "B"))))
 
 (test cp1610/multiply-signals-error
   "MULTIPLY on cp1610 signals source-error."
   (signals eightbol:source-error
-    (cp1610-asm '(:multiply :by "A" :on "B"))))
+    (cp1610-asm '(:× :by "A" :on "B"))))
 
 (test cp1610/invoke-super
   "INVOKE SUPER emits JSR to parent class method."

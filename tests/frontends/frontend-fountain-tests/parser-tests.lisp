@@ -26,7 +26,7 @@
 (is t))
 
 (test fountain_parser_arithmetic
-  "PARSER: FOUNTAIN arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: FOUNTAIN arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test fountain_parser_conditionals

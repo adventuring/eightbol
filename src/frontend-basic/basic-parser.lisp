@@ -130,28 +130,28 @@
     (:ge (list :ge e1 e2))))
 
 (defun basic-parse-expression-add (e1 e2)
-  (list :add e1 e2))
+  (list :+ e1 e2))
 
 (defun basic-parse-expression-sub (e1 e2)
-  (list :subtract e1 e2))
+  (list :- e1 e2))
 
 (defun basic-parse-expression-mul (e1 e2)
-  (list :multiply e1 e2))
+  (list :× e1 e2))
 
 (defun basic-parse-expression-div (e1 e2)
-  (list :divide e1 e2))
+  (list :÷ e1 e2))
 
 (defun basic-parse-expression-bit-and (e1 e2)
-  (list :bit-and e1 e2))
+  (list :∧ e1 e2))
 
 (defun basic-parse-expression-bit-or (e1 e2)
-  (list :bit-or e1 e2))
+  (list :∨ e1 e2))
 
 (defun basic-parse-expression-bit-xor (e1 e2)
-  (list :bit-xor e1 e2))
+  (list :⊻ e1 e2))
 
 (defun basic-parse-expression-bit-not (e1)
-  (list :bit-not e1))
+  (list :¬ e1))
 
 (defun basic-parse-subscript (array index)
   "Array subscript A(index) -> (:subscript A index)"

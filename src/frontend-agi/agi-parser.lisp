@@ -70,12 +70,12 @@
 (defun agi-parse-posn (left top right bottom &optional variable)
   "POSN left top right bottom [variable] — Check bounding box
 Set variable to 1 if a condition is met within bounding box, 0 otherwise.
-Always emit as (:compute :target VAR :expression ...) so the expression
-plumbing reaches the canonical :compute emitter. The predicate itself is
+Always emit as (:move :from (:posn ...) :to VAR) so the expression
+plumbing reaches the canonical emitter. The predicate itself is
 preserved under :expressions as (:posn left top right bottom)."
   (let ((bbox-check (list 'posn left top right bottom)))
     (if variable
-        (list :compute :target variable :expression bbox-check)
+        (list :move :from bbox-check :to variable)
         bbox-check)))
 
 (defun agi-parse-print (message &optional x y)
@@ -103,10 +103,10 @@ preserved under :expressions as (:posn left top right bottom)."
 (defun agi-parse-arithmetic (op left right)
   "Arithmetic operation."
   (case op
-    (:add (make-expression-add left right))
-    (:subtract (make-expression-subtract left right))
+    (:+ (make-expression-add left right))
+    (:- (make-expression-subtract left right))
     (:times (make-expression-multiply left right))
-    (:divide (make-expression-divide left right))
+    (:÷ (make-expression-divide left right))
     (:lshift (make-expression-shift-left left right))
     (:rshift (make-expression-shift-right left right))
     (t (list op left right))))
@@ -140,7 +140,7 @@ preserved under :expressions as (:posn left top right bottom)."
    `(yacc:define-parser *agi-parser*
       (:start-symbol program)
       (:terminals (:lparen :rparen :comma :colon
-                   :plus :minus :times :divide
+                   :plus :minus :times :÷
                    :equal :lt :le :gt :ge :ne
                    :lshift :rshift :dot
                    :if :else :end-if :then
@@ -154,7 +154,7 @@ preserved under :expressions as (:posn left top right bottom)."
                     (:left :not)
                     (:left :equal :ne :lt :le :gt :ge)
                     (:left :plus :minus)
-                    (:left :times :divide)
+                    (:left :times :÷)
                     (:left :lshift :rshift)))
 
       ;; Program is a list of statements
@@ -338,19 +338,19 @@ preserved under :expressions as (:posn left top right bottom)."
        (expression :plus expression
                    (lambda (l kw-op r)
                      (declare (ignore kw-op))
-                     (agi-parse-arithmetic :add l r)))
+                     (agi-parse-arithmetic :+ l r)))
        (expression :minus expression
                    (lambda (l kw-op r)
                      (declare (ignore kw-op))
-                     (agi-parse-arithmetic :subtract l r)))
+                     (agi-parse-arithmetic :- l r)))
        (expression :times expression
                    (lambda (l kw-op r)
                      (declare (ignore kw-op))
                      (agi-parse-arithmetic :times l r)))
-       (expression :divide expression
+       (expression :÷ expression
                    (lambda (l kw-op r)
                      (declare (ignore kw-op))
-                     (agi-parse-arithmetic :divide l r)))
+                     (agi-parse-arithmetic :÷ l r)))
        (expression :lshift expression
                    (lambda (l kw-op r)
                      (declare (ignore kw-op))

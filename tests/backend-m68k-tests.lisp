@@ -110,26 +110,26 @@
 (test m68k/add-literal-to-var
   "ADD literal TO var emits add instruction."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (m68k-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (m68k-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "add" asm)))))
 
 (test m68k/add-16-bit
   "ADD of 2-byte values emits add instruction with word size."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (m68k-asm '(:add :from "A" :to "B") :pic pic)))
+    (let ((asm (m68k-asm '(:+ :from "A" :to "B") :pic pic)))
       (is (search "add" asm))
       (is (search ".w" asm)))))
 
 (test m68k/subtract
   "SUBTRACT emits sub instruction."
   (let ((pic (make-hash "A" 1 "B" 1)))
-    (let ((asm (m68k-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (m68k-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sub" asm)))))
 
 (test m68k/subtract-16-bit
   "SUBTRACT of 2-byte values emits sub instruction with word size."
   (let ((pic (make-hash "A" 2 "B" 2)))
-    (let ((asm (m68k-asm '(:subtract :from "A" :from-target "B") :pic pic)))
+    (let ((asm (m68k-asm '(:- :from "A" :from-target "B") :pic pic)))
       (is (search "sub" asm))
       (is (search ".w" asm)))))
 
@@ -340,9 +340,9 @@
 (test m68k/divide-non-power-of-two-signals-error
   "DIVIDE with non-power-of-two on m68k signals source-error."
   (signals eightbol:source-error
-    (m68k-asm '(:divide :divisor 3 :into "B"))))
+    (m68k-asm '(:÷ :divisor 3 :into "B"))))
 
 (test m68k/multiply-non-power-of-two-signals-error
   "MULTIPLY with non-power-of-two on m68k signals source-error."
   (signals eightbol:source-error
-    (m68k-asm '(:multiply :multiplier 3 :on "B"))))
+    (m68k-asm '(:× :multiplier 3 :on "B"))))

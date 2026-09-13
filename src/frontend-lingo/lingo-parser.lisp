@@ -339,19 +339,19 @@
 
 (defun make-expression-add (left right)
   "Create an addition expression node."
-  (list :add :from left :to right))
+  (list :+ :from left :to right))
 
 (defun make-expression-subtract (left right)
   "Create a subtraction expression node."
-  (list :subtract :subtrahend right :from left))
+  (list :- :subtrahend right :from left))
 
 (defun make-expression-multiply (left right)
   "Create a multiplication expression node."
-  (list :compute :target 'result :expression (list :× left right)))
+  (list :move :from (list :× left right) :to 'result))
 
 (defun make-expression-divide (left right)
   "Create a division expression node."
-  (list :compute :target 'result :expression (list :÷ left right)))
+  (list :move :from (list :÷ left right) :to 'result))
 
 (defun make-qualified-identifier (prop obj)
   "Create a qualified identifier (object.property) AST node."

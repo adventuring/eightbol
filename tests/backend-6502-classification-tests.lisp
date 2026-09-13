@@ -177,7 +177,7 @@
     (setf (gethash "Bump3" pw) 3)
     (let ((asm (compile-method-ast-with-tables
                 '(:method :method-id "M"
-                  :statements ((:add :from "Bump3" :to (:of "Acc3" :self))))
+                  :statements ((:+ :from "Bump3" :to (:of "Acc3" :self))))
                 "Character" :6502
                 :pic-width-table pw)))
       (is (>= (%count-substring "adc" asm) 3))
@@ -204,7 +204,7 @@
                           :statements
                           ((:compute
                             :target "X"
-                            :expression (:bit-or (:shift-left (:on "Self" "Move-XL") 1)
+                            :expression (:∨ (:ash (:on "Self" "Move-XL") 1)
                                                  (:low "Acc16")))))
                 "Character" :6502
                 :slot-table slots :pic-width-table pw)))

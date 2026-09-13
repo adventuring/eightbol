@@ -83,7 +83,7 @@
     (compile-jvm-load from)
     (compile-jvm-store to)))
 
-(defmethod compile-statement ((cpu (eql :jvm)) (stmt-type (eql :add)) ast-node-data)
+(defmethod compile-statement ((cpu (eql :jvm)) (stmt-type (eql :+)) ast-node-data)
   (let ((from (getf ast-node-data :from))
         (to (getf ast-node-data :to))
         (giving (getf ast-node-data :giving)))
@@ -92,7 +92,7 @@
     (format *output-stream* "  iadd~%")
     (compile-jvm-store (or giving to))))
 
-(defmethod compile-statement ((cpu (eql :jvm)) (stmt-type (eql :subtract)) ast-node-data)
+(defmethod compile-statement ((cpu (eql :jvm)) (stmt-type (eql :-)) ast-node-data)
   (let ((from (getf ast-node-data :from))
         (to (getf ast-node-data :to))
         (giving (getf ast-node-data :giving)))

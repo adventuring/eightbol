@@ -26,7 +26,7 @@
 (is t))
 
 (test sci_parser_arithmetic
-  "PARSER: SCI arithmetic expressions produce correct AST with :add/:subtract/:multiply"
+  "PARSER: SCI arithmetic expressions produce correct AST with :+/:-/:×"
 (is t))
 
 (test sci_parser_conditionals

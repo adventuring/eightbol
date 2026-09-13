@@ -112,6 +112,14 @@ Only nil when X is in *working-storage* with a VALUE (a manifest constant, not a
   (and (expression-constant-p (getf (rest expression) :from))
        (expression-constant-p (getf (rest expression) :subtrahend))))
 
+(defun expression-constant-p-multiply (expression)
+  (and (expression-constant-p (or (getf (rest expression) :by) (second expression)))
+       (expression-constant-p (or (getf (rest expression) :multiplier) (third expression)))))
+
+(defun expression-constant-p-divide (expression)
+  (and (expression-constant-p (or (getf (rest expression) :by) (second expression)))
+       (expression-constant-p (or (getf (rest expression) :multiplier) (third expression)))))
+
 (defun expression-constant-p-bit-and (expression)
   (and (expression-constant-p (second expression))
        (expression-constant-p (third expression))))
@@ -141,6 +149,10 @@ Only nil when X is in *working-storage* with a VALUE (a manifest constant, not a
   (and (expression-constant-p (second expression))
        (expression-constant-p (third expression))))
 
+(defun expression-constant-p-shift (expression)
+  (and (expression-constant-p (second expression))
+       (expression-constant-p (third expression))))
+
 (defun expression-constant-p-deref (expression)
   "(:deref addr) is constant when addr is constant — the target address is a
 compile-time-known assembly expression."
@@ -152,16 +164,17 @@ compile-time-known assembly expression."
     (setf (gethash :of table) #'expression-constant-p-of)
     (setf (gethash :subscript table) #'expression-constant-p-subscript)
     (setf (gethash :address-of table) #'expression-constant-p-address-of)
-    (setf (gethash :add table) #'expression-constant-p-add)
-    (setf (gethash :subtract table) #'expression-constant-p-subtract)
-    (setf (gethash :bit-and table) #'expression-constant-p-bit-and)
-    (setf (gethash :bit-or table) #'expression-constant-p-bit-or)
+    (setf (gethash :+ table) #'expression-constant-p-add)
+    (setf (gethash :- table) #'expression-constant-p-subtract)
+    (setf (gethash :× table) #'expression-constant-p-multiply)
+    (setf (gethash :÷ table) #'expression-constant-p-divide)
+    (setf (gethash :∧ table) #'expression-constant-p-bit-and)
+    (setf (gethash :∨ table) #'expression-constant-p-bit-or)
     (setf (gethash :low table) #'expression-constant-p-low)
     (setf (gethash :high table) #'expression-constant-p-high)
-    (setf (gethash :bit-xor table) #'expression-constant-p-bit-xor)
-    (setf (gethash :bit-not table) #'expression-constant-p-bit-not)
-    (setf (gethash :shift-left table) #'expression-constant-p-shift-left)
-    (setf (gethash :shift-right table) #'expression-constant-p-shift-right)
+    (setf (gethash :⊻ table) #'expression-constant-p-bit-xor)
+    (setf (gethash :¬ table) #'expression-constant-p-bit-not)
+    (setf (gethash :ash table) #'expression-constant-p-shift)
     (setf (gethash :deref table) #'expression-constant-p-deref)
     table))
 
@@ -212,46 +225,87 @@ or a @code{string=} type error on the head.
   (emit-6502-value (second expression)))
 
 (defun expression-constant-value-add (expression)
-  (format nil "(~a + ~a)"
-          (emit-6502-value (getf (rest expression) :from))
-          (emit-6502-value (getf (rest expression) :to))))
+  (let ((from (expression-constant-value (getf (rest expression) :from)))
+	(to (expression-constant-value (getf (rest expression) :to))))
+    (if (and (numberp from) (numberp to))
+	(+ from to)
+	(format nil "(~a + ~a)" from to))))
 
 (defun expression-constant-value-subtract (expression)
-  (format nil "(~a - ~a)"
-          (emit-6502-value (getf (rest expression) :from))
-          (emit-6502-value (getf (rest expression) :subtrahend))))
+  (let ((from (expression-constant-value (getf (rest expression) :from)))
+	(sub (expression-constant-value (getf (rest expression) :subtrahend))))
+    (if (and (numberp from) (numberp sub))
+	(- from sub)
+	(format nil "(~a - ~a)" from sub))))
 
 (defun expression-constant-value-multiply (expression)
-  (error 'backend-error
-    :message "MULTIPLY/DIVIDE not supported - unsupported operation"
-    :cpu :6502 :detail expression))
+  (let ((by (expression-constant-value (or (getf (rest expression) :by) (second expression))))
+	(multiplier (expression-constant-value (or (getf (rest expression) :multiplier)
+						   (third expression)))))
+    (if (and (numberp by) (numberp multiplier))
+	(* by multiplier)
+	(error 'backend-error
+	  :message "MULTIPLY/DIVIDE not supported - unsupported operation"
+	  :cpu :6502 :detail expression))))
 
 (defun expression-constant-value-divide (expression)
-  (error 'backend-error
-    :message "MULTIPLY/DIVIDE not supported - unsupported operation"
-    :cpu :6502 :detail expression))
+  (let ((by (expression-constant-value (or (getf (rest expression) :by) (second expression))))
+	(multiplier (expression-constant-value (or (getf (rest expression) :multiplier)
+						   (third expression)))))
+    (if (and (numberp by) (numberp multiplier) (not (zerop multiplier)))
+	(floor by multiplier)
+	(error 'backend-error
+	  :message "MULTIPLY/DIVIDE not supported - unsupported operation"
+	  :cpu :6502 :detail expression))))
 
 (defun expression-constant-value-bit-or (expression)
-  (format nil "(~{~a~^ | ~})"
-          (mapcar #'emit-6502-value (rest expression))))
+  (let ((left (expression-constant-value (second expression)))
+	(right (expression-constant-value (third expression))))
+    (if (and (numberp left) (numberp right))
+	(logior left right)
+	(format nil "(~{~a~^ | ~})"
+		(mapcar #'expression-constant-value (rest expression))))))
 
 (defun expression-constant-value-bit-and (expression)
-  (format nil "(~{~a~^ & ~})"
-          (mapcar #'emit-6502-value (rest expression))))
+  (let ((left (expression-constant-value (second expression)))
+	(right (expression-constant-value (third expression))))
+    (if (and (numberp left) (numberp right))
+	(logand left right)
+	(format nil "(~{~a~^ & ~})"
+		(mapcar #'expression-constant-value (rest expression))))))
 
 (defun expression-constant-value-bit-xor (expression)
-  (format nil "(~{~a~^ ^ ~})"
-          (mapcar #'emit-6502-value (rest expression))))
+  (let ((left (expression-constant-value (second expression)))
+	(right (expression-constant-value (third expression))))
+    (if (and (numberp left) (numberp right))
+	(logxor left right)
+	(format nil "(~{~a~^ ^ ~})"
+		(mapcar #'expression-constant-value (rest expression))))))
+
+(defun expression-constant-value-bit-not (expression)
+  (let ((value (expression-constant-value (second expression))))
+    (if (numberp value)
+	(lognot value)
+	(format nil "(^ ~a)" value))))
 
 (defun expression-constant-value-shift-left (expression)
-  (format nil "(~a << ~a)"
-          (emit-6502-value (second expression))
-          (emit-6502-value (third expression))))
+  (let ((value (expression-constant-value (second expression)))
+	(amount (expression-constant-value (third expression))))
+    (if (and (numberp value) (numberp amount))
+	(ash value amount)
+	(format nil "(~a << ~a)" value amount))))
 
 (defun expression-constant-value-shift-right (expression)
-  (format nil "(~a >> ~a)"
-          (emit-6502-value (second expression))
-          (emit-6502-value (third expression))))
+  (let ((value (expression-constant-value (second expression)))
+	(amount (expression-constant-value (third expression))))
+    (if (and (numberp value) (numberp amount))
+	(ash value (- (abs amount)))
+	(format nil "(~a >> ~a)" value amount))))
+
+(defun expression-constant-value-shift (expression)
+  (if (minusp (third expression))
+      (expression-constant-value-shift-right expression)
+      (expression-constant-value-shift-left expression)))
 
 (defun expression-constant-value-deref (expression)
   "Return the inner address expression as the value — the address IS the value for :deref
@@ -262,13 +316,15 @@ when used in an absolute-store context."
   (let ((table (make-hash-table)))
     (setf (gethash :literal table) #'expression-constant-value-literal)
     (setf (gethash :address-of table) #'expression-constant-value-address-of)
-    (setf (gethash :add table) #'expression-constant-value-add)
-    (setf (gethash :subtract table) #'expression-constant-value-subtract)
-    (setf (gethash :bit-or table) #'expression-constant-value-bit-or)
-    (setf (gethash :bit-and table) #'expression-constant-value-bit-and)
-    (setf (gethash :bit-xor table) #'expression-constant-value-bit-xor)
-    (setf (gethash :shift-left table) #'expression-constant-value-shift-left)
-    (setf (gethash :shift-right table) #'expression-constant-value-shift-right)
+    (setf (gethash :+ table) #'expression-constant-value-add)
+    (setf (gethash :- table) #'expression-constant-value-subtract)
+    (setf (gethash :× table) #'expression-constant-value-multiply)
+    (setf (gethash :÷ table) #'expression-constant-value-divide)
+    (setf (gethash :∨ table) #'expression-constant-value-bit-or)
+    (setf (gethash :∧ table) #'expression-constant-value-bit-and)
+    (setf (gethash :⊻ table) #'expression-constant-value-bit-xor)
+    (setf (gethash :¬ table) #'expression-constant-value-bit-not)
+    (setf (gethash :ash table) #'expression-constant-value-shift)
     (setf (gethash :deref table) #'expression-constant-value-deref)
     table))
 
@@ -378,30 +434,30 @@ treat as bare NAME (immediate lda #), not an instance slot."
          (format out "~%~10Tlda #~a" (expression-constant-value expression)))
        (return-from emit-6502-load-expression))
 
-       ((and (listp expression) (eq (first expression) :bit-or))
+       ((and (listp expression) (eq (first expression) :∨))
         (with-accumulator-value (expression)
           (emit-6502-load-expression out (second expression) class-id)
           (emit-6502-alu-with-memory-rhs out "ora" (third expression) class-id)))
 
-       ((and (listp expression) (eq (first expression) :bit-and))
+       ((and (listp expression) (eq (first expression) :∧))
         (with-accumulator-value (expression)
           (emit-6502-load-expression out (second expression) class-id)
           (emit-6502-alu-with-memory-rhs out "and" (third expression) class-id)))
 
-       ((and (listp expression) (eq (first expression) :bit-xor))
+       ((and (listp expression) (eq (first expression) :⊻))
         (with-accumulator-value (expression)
           (emit-6502-load-expression out (second expression) class-id)
           (emit-6502-alu-with-memory-rhs out "eor" (third expression) class-id)))
 
       ;; Arithmetic: a + b
-      ((and (listp expression) (eq (first expression) :add))
+      ((and (listp expression) (eq (first expression) :+))
        (with-accumulator-value (expression)
          (emit-6502-load-expression out (getf (rest expression) :to) class-id)
          (format out "~%~10Tclc")
          (emit-6502-alu-with-memory-rhs out "adc" (getf (rest expression) :from) class-id)))
 
       ;; Arithmetic: a - b — AST is (:SUBTRACT :FROM minuend :SUBTRAHEND subtrahend [:GIVING …]).
-      ((and (listp expression) (eq (first expression) :subtract))
+      ((and (listp expression) (eq (first expression) :-))
        (with-accumulator-value (expression)
          (emit-6502-load-expression out (getf (rest expression) :from) class-id)
          (format out "~%~10Tsec")
@@ -410,13 +466,13 @@ treat as bare NAME (immediate lda #), not an instance slot."
                                         class-id)))
 
       ;; Arithmetic: a * k — multiply not supported
-      ((and (listp expression) (eq (first expression) :multiply))
+      ((and (listp expression) (eq (first expression) :×))
        (error 'backend-error
          :message "MULTIPLY/DIVIDE not supported - unsupported operation"
          :cpu :6502 :detail expression))
 
       ;; Arithmetic: a / k — divide not supported
-      ((and (listp expression) (eq (first expression) :divide))
+      ((and (listp expression) (eq (first expression) :÷))
        (error 'backend-error
          :message "MULTIPLY/DIVIDE not supported - unsupported operation"
          :cpu :6502 :detail expression))
@@ -441,40 +497,35 @@ treat as bare NAME (immediate lda #), not an instance slot."
 	         (to-identifier (third so))
 	         (apply #'slot-symbol (rest so))))))
 
-      ;; Shift left — asl A, n times
-      ((and (listp expression) (eq (first expression) :shift-left))
+      ;; Shift — negative amount shifts right (lsr), non-negative shifts left (asl)
+      ((and (listp expression) (eq (first expression) :ash))
        (with-accumulator-value (expression)
          (let ((n (if (numberp (third expression)) (third expression) 1)))
 	 (emit-6502-load-expression out (second expression) class-id)
-	 (dotimes (_ n) (format out "~%~10Tasl a")))))
-
-      ;; Shift right — lsr A, n times
-      ((and (listp expression) (eq (first expression) :shift-right))
-       (with-accumulator-value (expression)
-         (let ((n (if (numberp (third expression)) (third expression) 1)))
-	 (emit-6502-load-expression out (second expression) class-id)
-	 (dotimes (_ n) (format out "~%~10Tlsr a")))))
+	 (if (minusp n)
+	     (dotimes (_ (abs n)) (format out "~%~10Tlsr a"))
+	     (dotimes (_ n) (format out "~%~10Tasl a"))))))
 
       ;; Bitwise AND (mask — used for bit testing too)
-      ((and (listp expression) (eq (first expression) :bit-and))
+      ((and (listp expression) (eq (first expression) :∧))
        (with-accumulator-value (expression)
          (emit-6502-load-expression out (second expression) class-id)
          (emit-6502-alu-with-memory-rhs out "and" (third expression) class-id)))
 
       ;; Bitwise OR
-      ((and (listp expression) (eq (first expression) :bit-or))
+      ((and (listp expression) (eq (first expression) :∨))
        (with-accumulator-value (expression)
          (emit-6502-load-expression out (second expression) class-id)
          (emit-6502-alu-with-memory-rhs out "ora" (third expression) class-id)))
 
       ;; Bitwise XOR
-      ((and (listp expression) (eq (first expression) :bit-xor))
+      ((and (listp expression) (eq (first expression) :⊻))
        (with-accumulator-value (expression)
          (emit-6502-load-expression out (second expression) class-id)
          (emit-6502-alu-with-memory-rhs out "eor" (third expression) class-id)))
 
       ;; Bitwise NOT (complement all bits)
-      ((and (listp expression) (eq (first expression) :bit-not))
+      ((and (listp expression) (eq (first expression) :¬))
        (with-accumulator-value (expression)
          (emit-6502-load-expression out (second expression) class-id)
          (format out "~%~10Teor #$ff")))
