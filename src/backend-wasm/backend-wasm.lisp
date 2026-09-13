@@ -170,7 +170,9 @@
      (format *output-stream* "    i32.const ~d~%" expression))
     ((stringp expression)
      (format *output-stream* "    i32.const 0~%"))
-    (t
+    ((and (listp expression) (eq (first expression) :of))
+     (format *output-stream* "    i32.const 0~%"))
+    ((and (listp expression) (eq (first expression) :on))
      (format *output-stream* "    i32.const 0~%"))))
 
 (defun compile-wasm-store (destination)

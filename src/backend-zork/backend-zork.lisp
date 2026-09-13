@@ -176,6 +176,8 @@
      (format *output-stream* "  (literal \"~a\")~%" expression))
     ((and (listp expression) (eq (first expression) :of))
      (format *output-stream* "  (load-slot ~a)~%" (second expression)))
+     ((and (listp expression) (eq (first expression) :on))
+      (format *output-stream* "  (load-field ~a)~%" (second expression)))
     (t
      (format *output-stream* "  (literal 0)~%"))))
 

@@ -181,7 +181,9 @@
     ((stringp expression)
      (format *output-stream* "  ldc \"~a\"~%" expression))
     ((and (listp expression) (eq (first expression) :of))
-     (format *output-stream* "; OF expression~%"))
+     (format *output-stream* "  getfield ~a/~a~%" (jvm-symbol (third expression)) (jvm-symbol (second expression))))
+    ((and (listp expression) (eq (first expression) :on))
+     (format *output-stream* "  getfield ~a/~a~%" (jvm-symbol (third expression)) (jvm-symbol (second expression))))
     (t
      (format *output-stream* "  ldc 0~%"))))
 
