@@ -103,7 +103,7 @@
            (format *output-stream*  "~&~8t; Unsupported ON target ~s for m6800 load" obj))))
     (t
      (format *output-stream*  "~&~8t; Unsupported load ~s for m6800" expression)
-     (format *output-stream*  "~&~8tLDAA    #0"))))
+     (format *output-stream*  "~&~8tLDAA    #0")))))
 
 (defun compile-m6800-store-a (destination)
   (cond
