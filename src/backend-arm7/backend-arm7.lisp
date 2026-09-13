@@ -433,7 +433,7 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
        (ecase op
          ((= equal) (format out  "~&~8tbne     ~a" branch-label))
          ((< less)  (format out  "~&~8tbge     ~a" branch-label))
-         ((> greater) (format out  "~&~8tble     ~a" branch-label))))
+         ((> greater) (format out  "~&~8tble     ~a" branch-label)))))
     ((and (listp condition) (member (first condition) '(:≠ :≤ :≥) :test #'eq))
      (let ((lhs (second condition)) (rhs (third condition)) (op (first condition)))
        (compile-arm7-load out lhs class-id slot-table const-table pic-width-table)
@@ -458,7 +458,8 @@ linked with labels @code{Self}, slot globals, and invoke stubs your runtime prov
     ((and (listp condition) (eq (first condition) :or))
      (let ((lbl-cond2 (arm7-label "or"))
            (lbl-skip (arm7-label "skip")))
-       (compile-arm7-condition out (second condition) class-id slot-table type-table const-table pic-width-table branch-label lbl-cond2)
+       (compile-arm7-condition out (second condition) class-id slot-table type-table const-table
+                               pic-width-table branch-label lbl-cond2)
        (format out  "~&~8tb       ~a" lbl-skip)
        (format out  "~&~a:" lbl-cond2)
        (compile-arm7-condition out (third condition) class-id slot-table type-table const-table pic-width-table branch-label)
