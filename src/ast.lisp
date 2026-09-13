@@ -27,7 +27,6 @@
 ;;   (:perform    :procedure name [:times expr] [:until cond] [:varying ...] [:body stmts])
 ;;   (:log-fault  :code dword-expr)
 ;;   (:debug-break :code expr)
-;;   (:copy       :name "CopybookName")   ; residual after failed expansion
 ;;   (:string-blt :source operand :dest operand [:length expr])  ; STRING DELIMITED BY SIZE
 ;;   (:assembly-entry :label "Symbol")  ; must be first executable-area statement
 ;;
@@ -106,10 +105,6 @@ EXPRESSIONS is a list of values/strings to print."
   "Build an :input AST node for INPUT statements.
 VARIABLES is a list of identifiers to read into."
   (list :input :variables (or variables '())))
-
-(defun make-copy-node (name)
-  "Create a copy statement node."
-  (list :copy :name name))
 
 (defun make-dialogue-node (&rest plist)
   "Build a :dialogue AST node. PLIST is keyword arguments; canonical keys

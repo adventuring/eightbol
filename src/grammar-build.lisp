@@ -3,7 +3,7 @@
 (in-package :eightbol)
 
 ;;; AST node constructors matching src/ast.lisp shapes
-;;; NOTE: make-program-node / make-method-node / make-copy-node live in
+;;; NOTE: make-program-node / make-method-node live in
 ;;; src/ast.lisp (canonical). Keep this file free of duplicates.
 
 ;;; ============================================================================
@@ -250,6 +250,13 @@ alongside."
             (when until `(:until ,until))
             (when varying `(:varying ,varying :from ,from :by ,by))
             (when inline-body `(:body ,inline-body)))))
+
+(defun make-copy-node (name)
+  "Build a canonical :dd placeholder for a COPY statement.
+
+COPY is resolved by the parser/compile pipeline into data-definition nodes.
+This constructor returns a :dd node so no :copy AST node is ever emitted."
+  (list :dd :level 88 :label (string name) :attr nil))
 
 (defun make-set-node (target value)
   "Build an assignment node. :set is desugared to canonical (:move :from value :to target)."
