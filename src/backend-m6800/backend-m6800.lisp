@@ -115,12 +115,12 @@
 ;;; Labels
 
 (defvar *m6800-label-counter* 0)
-
-(defun m6800-label (prefix)
 (defvar *m6800-break-label* nil
   "Label to break to from current PERFORM loop, or NIL if not in a loop.")
 (defvar *m6800-continue-label* nil
   "Label to continue to from current PERFORM loop, or NIL if not in a loop.")
+
+(defun m6800-label (prefix)
   (format nil "L~a~d" prefix (incf *m6800-label-counter*)))
 
 ;;; Condition compilation
