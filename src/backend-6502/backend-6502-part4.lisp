@@ -323,7 +323,7 @@ When ITEM-SYM already has a Service prefix (case-insensitive), return it unchang
         (assert (not jmp-p))
         (if resolved-bank
          (let ((bank-sym (sym-string resolved-bank)))
-           (format out "~%~10T.FarJSR ~a, ~a~%" dispatch-sym bank-sym))
+           (format out "~%~10T.FarJSR ~a, ~a~%" bank-sym dispatch-sym))
          (error "EIGHTBOL: CALL SERVICE ~a requires bank (not in service-bank table)"
                 service)))
        ;; CALL target IN LIBRARY. — always call LastBank library thunk label.

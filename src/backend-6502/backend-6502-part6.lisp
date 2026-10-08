@@ -599,7 +599,7 @@ For w=1, expression may be compound (add, subtract, etc.). For w>1, expression m
       (bank
        ;; far call to bank
        (let ((bank-sym (sym-string bank)))
-         (format *standard-output* "~%~10T.FarJSR ~a, ~a~%" (sym-string target) bank-sym)))
+         (format *standard-output* "~%~10T.FarJSR ~a, ~a~%" bank-sym (sym-string target))))
       (libraryp
        ;; library call (always emit jsr Lib.<RoutineName>)
        (format *standard-output* "~%~10Tjsr Lib.~a~%" (sym-string target)))
